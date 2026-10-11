@@ -1,0 +1,24 @@
+{
+  "name": "@officehere/tablo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@fluentui/react-icons": "^2.0.344",
+    "@officehere/core": "workspace:*",
+    "@officehere/formula": "workspace:*",
+    "@officehere/ui": "workspace:*",
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
+}

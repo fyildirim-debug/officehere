@@ -1,0 +1,207 @@
+/* Uygulama iskeleti ve başlık çubuğu */
+
+.oh-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--oh-canvas-bg);
+}
+
+.oh-shell-main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.oh-shell-backstage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.oh-titlebar {
+  display: flex;
+  align-items: center;
+  height: var(--oh-titlebar-h);
+  min-height: var(--oh-titlebar-h);
+  background: var(--oh-titlebar-bg);
+  color: var(--oh-titlebar-fg);
+  user-select: none;
+  -webkit-app-region: drag;
+  app-region: drag;
+  padding-left: 6px;
+}
+
+.oh-titlebar button,
+.oh-titlebar input,
+.oh-titlebar label {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.oh-titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 0 auto;
+}
+
+.oh-titlebar-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  color: var(--oh-titlebar-fg);
+}
+
+
+.oh-applogo {
+  display: block;
+  color: inherit;
+}
+
+.oh-qat {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 4px;
+}
+
+.oh-qat-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--oh-radius);
+  background: transparent;
+  color: var(--oh-titlebar-fg);
+  cursor: pointer;
+}
+
+.oh-qat-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.oh-qat-btn:hover:not(:disabled) {
+  background: var(--oh-titlebar-hover);
+}
+
+.oh-qat-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.oh-titlebar-center {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  padding: 0 12px;
+}
+
+.oh-titlebar-title {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.oh-titlebar-app {
+  opacity: 0.85;
+}
+
+.oh-titlebar-dirty {
+  opacity: 0.75;
+  font-size: 11.5px;
+}
+
+.oh-titlebar-search {
+  flex: 0 1 380px;
+  min-width: 120px;
+  display: flex;
+  justify-content: center;
+}
+
+.oh-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 380px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--oh-radius);
+  background: var(--oh-titlebar-search-bg);
+  color: var(--oh-titlebar-search-fg);
+}
+
+.oh-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+}
+
+.oh-search input::placeholder {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.oh-titlebar-right {
+  flex: 1 1 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+/* Electron "titleBarOverlay" pencere düğmeleri için yer */
+.oh-titlebar-controls-space {
+  width: env(titlebar-area-x, 0px);
+  flex: none;
+}
+
+:root.oh-native-frame .oh-titlebar-controls-space {
+  width: 138px;
+}
+
+.oh-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Çalışma alanı için ortak kaydırma çubuğu */
+.oh-scroll::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+
+.oh-scroll::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border: 3px solid var(--oh-canvas-bg);
+  border-radius: 7px;
+}
+
+.oh-scroll::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
+}
+
+.oh-scroll::-webkit-scrollbar-track,
+.oh-scroll::-webkit-scrollbar-corner {
+  background: var(--oh-canvas-bg);
+}

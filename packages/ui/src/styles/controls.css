@@ -1,0 +1,472 @@
+/* Açılır katman, menü, ipucu, renk paleti, tablo ızgarası */
+
+.oh-popover {
+  position: fixed;
+  z-index: 1000;
+  font-size: 12px;
+  color: var(--oh-text);
+}
+
+.oh-menu {
+  min-width: 180px;
+  padding: 4px;
+  background: var(--oh-menu-bg);
+  border: 1px solid var(--oh-border);
+  border-radius: 6px;
+  box-shadow: var(--oh-menu-shadow);
+  user-select: none;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+
+.oh-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 3px 10px 3px 6px;
+  border: 0;
+  border-radius: var(--oh-radius);
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.oh-menu-item:hover:not(:disabled),
+.oh-menu-item.is-open {
+  background: var(--oh-hover);
+}
+
+.oh-menu-item:disabled {
+  color: var(--oh-text-disabled);
+  cursor: default;
+}
+
+.oh-menu-item.is-checked {
+  background: var(--oh-checked);
+}
+
+.oh-menu-item.is-danger {
+  color: #c50f1f;
+}
+
+.oh-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex: none;
+  color: var(--oh-icon);
+}
+
+.oh-menu-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.oh-menu-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.oh-menu-desc {
+  color: var(--oh-text-muted);
+  font-size: 11px;
+  white-space: normal;
+}
+
+.oh-menu-shortcut {
+  color: var(--oh-text-muted);
+  font-size: 11px;
+  margin-left: 16px;
+}
+
+.oh-menu-chevron {
+  font-size: 14px;
+  color: var(--oh-icon);
+}
+
+.oh-menu-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--oh-separator);
+}
+
+.oh-menu-header {
+  padding: 6px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--oh-text-muted);
+  background: transparent;
+}
+
+.oh-menu-section {
+  padding: 4px 6px;
+}
+
+/* İpucu */
+
+.oh-tooltip {
+  position: fixed;
+  z-index: 2000;
+  max-width: 280px;
+  padding: 8px 10px;
+  background: var(--oh-menu-bg);
+  color: var(--oh-text);
+  border: 1px solid var(--oh-border);
+  border-radius: 6px;
+  box-shadow: var(--oh-menu-shadow);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.oh-tooltip-title {
+  font-weight: 600;
+}
+
+.oh-tooltip-key {
+  font-weight: 400;
+}
+
+.oh-tooltip-desc {
+  margin-top: 4px;
+  color: var(--oh-text-muted);
+  line-height: 1.35;
+}
+
+/* Renk paleti */
+
+.oh-menu-palette {
+  padding: 4px 6px 6px;
+  min-width: 0;
+}
+
+.oh-palette {
+  width: 204px;
+}
+
+.oh-palette-theme {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.oh-palette > .oh-palette-grid {
+  padding: 0 4px;
+}
+
+.oh-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 16px);
+  gap: 2px 4px;
+}
+
+.oh-palette-grid.is-shades {
+  gap: 0 4px;
+}
+
+.oh-palette-grid.is-highlight {
+  grid-template-columns: repeat(5, 22px);
+  gap: 4px;
+  padding: 6px 4px;
+}
+
+.oh-palette-grid.is-highlight .oh-swatch {
+  width: 22px;
+  height: 22px;
+}
+
+.oh-swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+
+.oh-swatch:hover {
+  outline: 1px solid #f29436;
+  border-color: #fff;
+  position: relative;
+  z-index: 1;
+}
+
+.oh-swatch.is-selected {
+  outline: 2px solid var(--oh-accent);
+  z-index: 1;
+  position: relative;
+}
+
+.oh-swatch-none {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--oh-border-strong);
+  background: linear-gradient(to top right, transparent calc(50% - 1px), #e81123 calc(50% - 0.5px), #e81123 calc(50% + 0.5px), transparent calc(50% + 1px));
+}
+
+/* Tablo ızgarası */
+
+.oh-tablegrid {
+  padding: 2px 6px 8px;
+}
+
+.oh-tablegrid .oh-menu-header {
+  padding-left: 0;
+}
+
+.oh-tablegrid-cells {
+  display: grid;
+  gap: 2px;
+}
+
+.oh-tablegrid-cell {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--oh-border-strong);
+  background: var(--oh-surface);
+  cursor: pointer;
+}
+
+.oh-tablegrid-cell.is-on {
+  border-color: #f29436;
+  background: #fde7d1;
+}
+
+/* İletişim kutusu */
+
+.oh-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.oh-dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  background: var(--oh-surface);
+  color: var(--oh-text);
+  border: 1px solid var(--oh-border);
+  border-radius: 8px;
+  box-shadow: var(--oh-dialog-shadow);
+  font-size: 12px;
+}
+
+.oh-dialog-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 4px 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: move;
+  user-select: none;
+}
+
+.oh-dialog-close {
+  width: 32px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--oh-radius);
+  background: transparent;
+  color: var(--oh-icon);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.oh-dialog-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.oh-dialog-body {
+  padding: 6px 16px 12px;
+  overflow: auto;
+}
+
+.oh-dialog-message {
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.oh-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--oh-separator);
+  background: var(--oh-surface-2);
+  border-radius: 0 0 8px 8px;
+}
+
+.oh-btn {
+  min-width: 80px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--oh-border-strong);
+  border-radius: var(--oh-radius);
+  background: var(--oh-surface);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.oh-btn:hover:not(:disabled) {
+  background: var(--oh-hover);
+}
+
+.oh-btn.is-primary {
+  background: var(--oh-accent);
+  border-color: var(--oh-accent);
+  color: var(--oh-accent-fg);
+}
+
+.oh-btn.is-primary:hover:not(:disabled) {
+  background: var(--oh-accent-hover);
+}
+
+.oh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.oh-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.oh-field.is-inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.oh-field-label {
+  color: var(--oh-text);
+}
+
+.oh-field input[type="text"],
+.oh-field input[type="number"],
+.oh-field input:not([type]),
+.oh-field select,
+.oh-field textarea {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--oh-border);
+  border-radius: var(--oh-radius);
+  background: var(--oh-surface);
+  font-size: 12px;
+  min-width: 0;
+}
+
+.oh-field textarea {
+  height: auto;
+  padding: 6px;
+  resize: vertical;
+}
+
+.oh-field input:focus,
+.oh-field select:focus,
+.oh-field textarea:focus {
+  outline: 0;
+  border-bottom: 2px solid var(--oh-accent);
+}
+
+.oh-fieldset {
+  margin: 8px 0;
+  padding: 6px 10px 8px;
+  border: 1px solid var(--oh-separator);
+  border-radius: 6px;
+}
+
+.oh-fieldset legend {
+  padding: 0 4px;
+  font-weight: 600;
+  color: var(--oh-text-muted);
+}
+
+.oh-dialog-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--oh-separator);
+  margin-bottom: 8px;
+}
+
+.oh-dialog-tabs button {
+  border: 0;
+  background: transparent;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.oh-dialog-tabs button.is-active {
+  border-bottom-color: var(--oh-accent);
+  font-weight: 600;
+}
+
+/* Bilgi çubuğu */
+
+.oh-messagebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 4px 8px 4px 12px;
+  border-bottom: 1px solid var(--oh-border);
+  font-size: 12px;
+  background: #fff4ce;
+  color: #242424;
+}
+
+.oh-messagebar.is-info {
+  background: #ebf3fc;
+}
+
+.oh-messagebar.is-error {
+  background: #fde7e9;
+}
+
+.oh-messagebar.is-success {
+  background: #dff6dd;
+}
+
+.oh-messagebar-text {
+  flex: 1;
+}
+
+.oh-messagebar .oh-btn {
+  height: 24px;
+  min-width: 0;
+}
+
+.oh-messagebar-close {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--oh-radius);
+}
+
+.oh-messagebar-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}

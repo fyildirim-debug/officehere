@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dist-electron/
+release/
+out/
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+.vite/
+.env
+.env.*
+!.env.example
+playwright-report/
+test-results/
+*.tsbuildinfo

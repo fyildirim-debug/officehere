@@ -1,0 +1,204 @@
+/* Tasarım belirteçleri. Uygulama vurgusu <html data-app="..."> ile,
+   arayüz teması <html data-oh-theme="..."> ile seçilir. */
+
+:root {
+  --oh-font-ui: "Segoe UI", "Segoe UI Variable Text", system-ui, -apple-system, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  --oh-font-size: 12px;
+
+  --oh-accent: #1f5fbf;
+  --oh-accent-hover: #1a52a6;
+  --oh-accent-pressed: #15448a;
+  --oh-accent-soft: #dbe7f8;
+  --oh-accent-fg: #ffffff;
+
+  --oh-titlebar-bg: var(--oh-accent);
+  --oh-titlebar-fg: #ffffff;
+  --oh-titlebar-hover: rgba(255, 255, 255, 0.16);
+  --oh-titlebar-search-bg: rgba(255, 255, 255, 0.82);
+  --oh-titlebar-search-fg: #242424;
+
+  --oh-chrome-bg: #f3f3f3;
+  --oh-ribbon-bg: #ffffff;
+  --oh-ribbon-border: #e0e0e0;
+  --oh-canvas-bg: #e6e6e6;
+  --oh-surface: #ffffff;
+  --oh-surface-2: #fafafa;
+
+  --oh-text: #242424;
+  --oh-text-muted: #616161;
+  --oh-text-disabled: #a6a6a6;
+  --oh-icon: #424242;
+  --oh-border: #d1d1d1;
+  --oh-border-strong: #b3b3b3;
+  --oh-separator: #e0e0e0;
+
+  --oh-hover: #ebebeb;
+  --oh-pressed: #d6d6d6;
+  --oh-checked: #d6e3f3;
+  --oh-checked-border: #9fbbe0;
+  --oh-focus: #0f6cbd;
+
+  --oh-menu-bg: #ffffff;
+  --oh-menu-shadow: 0 8px 16px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.12);
+  --oh-dialog-shadow: 0 24px 48px rgba(0, 0, 0, 0.22), 0 0 4px rgba(0, 0, 0, 0.14);
+
+  --oh-statusbar-bg: #f3f3f3;
+  --oh-statusbar-fg: #424242;
+
+  --oh-radius: 4px;
+  --oh-titlebar-h: 32px;
+  --oh-tabs-h: 30px;
+  --oh-ribbon-h: 96px;
+  --oh-statusbar-h: 24px;
+
+  color-scheme: light;
+}
+
+/* Uygulama vurguları */
+:root[data-app="belge"] {
+  --oh-accent: #1f5fbf;
+  --oh-accent-hover: #1a52a6;
+  --oh-accent-pressed: #15448a;
+  --oh-accent-soft: #dbe7f8;
+}
+
+:root[data-app="tablo"] {
+  --oh-accent: #1d7a46;
+  --oh-accent-hover: #186a3c;
+  --oh-accent-pressed: #135731;
+  --oh-accent-soft: #d7efe0;
+  --oh-checked: #d4ecdd;
+  --oh-checked-border: #8cc4a2;
+}
+
+:root[data-app="sunum"] {
+  --oh-accent: #c4462b;
+  --oh-accent-hover: #ac3c24;
+  --oh-accent-pressed: #93321e;
+  --oh-accent-soft: #f8ddd6;
+  --oh-checked: #f6dcd5;
+  --oh-checked-border: #e0a493;
+}
+
+:root[data-app="baslangic"] {
+  --oh-accent: #3d3d8f;
+  --oh-accent-hover: #34347c;
+  --oh-accent-pressed: #2a2a66;
+  --oh-accent-soft: #e2e2f3;
+}
+
+/* "Beyaz" tema: başlık çubuğu da açık renk */
+:root[data-oh-theme="white"] {
+  --oh-titlebar-bg: #ffffff;
+  --oh-titlebar-fg: #242424;
+  --oh-titlebar-hover: #ebebeb;
+  --oh-titlebar-search-bg: #f0f0f0;
+  --oh-chrome-bg: #ffffff;
+  --oh-ribbon-bg: #ffffff;
+}
+
+/* "Koyu Gri" ve "Siyah" temalar */
+:root[data-oh-theme="dark"],
+:root[data-oh-theme="black"] {
+  --oh-titlebar-bg: #2b2b2b;
+  --oh-titlebar-fg: #f5f5f5;
+  --oh-titlebar-hover: rgba(255, 255, 255, 0.1);
+  --oh-titlebar-search-bg: #3d3d3d;
+  --oh-titlebar-search-fg: #f5f5f5;
+  --oh-chrome-bg: #2b2b2b;
+  --oh-ribbon-bg: #333333;
+  --oh-ribbon-border: #444444;
+  --oh-canvas-bg: #1f1f1f;
+  --oh-surface: #2d2d2d;
+  --oh-surface-2: #333333;
+  --oh-text: #f0f0f0;
+  --oh-text-muted: #b5b5b5;
+  --oh-text-disabled: #707070;
+  --oh-icon: #e0e0e0;
+  --oh-border: #4d4d4d;
+  --oh-border-strong: #666666;
+  --oh-separator: #484848;
+  --oh-hover: #3e3e3e;
+  --oh-pressed: #4a4a4a;
+  --oh-checked: #3a4a5e;
+  --oh-checked-border: #5b7aa3;
+  --oh-menu-bg: #2d2d2d;
+  --oh-statusbar-bg: #2b2b2b;
+  --oh-statusbar-fg: #d0d0d0;
+  color-scheme: dark;
+}
+
+:root[data-oh-theme="black"] {
+  --oh-titlebar-bg: #0a0a0a;
+  --oh-chrome-bg: #0a0a0a;
+  --oh-ribbon-bg: #1a1a1a;
+  --oh-canvas-bg: #000000;
+  --oh-statusbar-bg: #0a0a0a;
+}
+
+/* Sistem koyu moddaysa ve tema "system" ise koyu gri */
+@media (prefers-color-scheme: dark) {
+  :root[data-oh-theme="system"] {
+    --oh-titlebar-bg: #2b2b2b;
+    --oh-titlebar-fg: #f5f5f5;
+    --oh-titlebar-hover: rgba(255, 255, 255, 0.1);
+    --oh-titlebar-search-bg: #3d3d3d;
+    --oh-titlebar-search-fg: #f5f5f5;
+    --oh-chrome-bg: #2b2b2b;
+    --oh-ribbon-bg: #333333;
+    --oh-ribbon-border: #444444;
+    --oh-canvas-bg: #1f1f1f;
+    --oh-surface: #2d2d2d;
+    --oh-surface-2: #333333;
+    --oh-text: #f0f0f0;
+    --oh-text-muted: #b5b5b5;
+    --oh-text-disabled: #707070;
+    --oh-icon: #e0e0e0;
+    --oh-border: #4d4d4d;
+    --oh-border-strong: #666666;
+    --oh-separator: #484848;
+    --oh-hover: #3e3e3e;
+    --oh-pressed: #4a4a4a;
+    --oh-checked: #3a4a5e;
+    --oh-checked-border: #5b7aa3;
+    --oh-menu-bg: #2d2d2d;
+    --oh-statusbar-bg: #2b2b2b;
+    --oh-statusbar-fg: #d0d0d0;
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--oh-font-ui);
+  font-size: var(--oh-font-size);
+  color: var(--oh-text);
+  background: var(--oh-canvas-bg);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--oh-focus);
+  outline-offset: -2px;
+}
