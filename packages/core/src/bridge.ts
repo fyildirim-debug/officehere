@@ -44,6 +44,10 @@ export interface OfficehereNative {
   onOpenPath(callback: (path: string) => void): () => void;
   /** Pencere kapatılmak istendiğinde; false dönerse kapanma iptal edilir. */
   onBeforeClose(callback: () => boolean | Promise<boolean>): () => void;
+  /** Başlık çubuğu üstündeki yerel pencere düğmelerinin renkleri (Windows/Linux). */
+  setTitleBarOverlay?(color: string, symbolColor: string): void;
+  /** Geçerli sayfayı yazdırma CSS'iyle PDF olarak kaydeder (konum sorar). */
+  exportPdf?(suggestedName: string, options?: { landscape?: boolean; pageSize?: "A4" | "A3" | "A5" | "Letter" | "Legal" | { width: number; height: number } }): Promise<NativeSaveResult | null>;
 }
 
 declare global {

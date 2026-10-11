@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { AppKind } from "@officehere/core";
+import { getNative, type AppKind } from "@officehere/core";
 import { TooltipLayer, tipProps } from "./Tooltip";
 
 export const APP_NAMES: Record<AppKind | "baslangic", string> = {
@@ -16,14 +16,24 @@ const APP_LETTER: Record<AppKind | "baslangic", string> = {
   baslangic: "O",
 };
 
-/** Uygulama simgesi: köşesi kıvrık sayfa üzerinde harf. Microsoft logolarıyla ilgisi yoktur. */
+/** Uygulama simgesi: köşesi kıvrık sayfanın alt bandında harf. */
 export function AppLogo({ app, size = 20 }: { app: AppKind | "baslangic"; size?: number }) {
+  if (app === "baslangic") {
+    return (
+      <svg className="oh-applogo" width={size} height={size} viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="1" y="1" width="18" height="18" rx="4.5" fill="#3d3d8f" stroke="rgba(255,255,255,0.6)" strokeWidth="0.8" />
+        <rect x="4.5" y="5" width="11" height="2.4" rx="0.8" fill="#6d9bff" />
+        <rect x="4.5" y="8.8" width="11" height="2.4" rx="0.8" fill="#48c98a" />
+        <rect x="4.5" y="12.6" width="11" height="2.4" rx="0.8" fill="#ff8a66" />
+      </svg>
+    );
+  }
   return (
-    <svg className="oh-applogo" width={size} height={size} viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M4 1.5h8.5L17 6v12.5H4z" fill="#fff" stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
-      <path d="M12.5 1.5V6H17" fill="none" stroke="rgba(0,0,0,0.3)" strokeWidth="1" />
-      <rect x="0.5" y="6.5" width="12" height="11" rx="2" fill="var(--oh-logo, var(--oh-accent))" stroke="#fff" strokeWidth="1" />
-      <text x="6.5" y="15.2" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#fff" fontFamily="Segoe UI, Arial, sans-serif">
+    <svg className="oh-applogo" data-app={app} width={size} height={size} viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M3.5 1h9L17 5.5V19H3.5z" fill="#fff" stroke="rgba(0,0,0,0.35)" strokeWidth="1" />
+      <path d="M12.5 1v4.5H17" fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="1" />
+      <path d="M3.5 11H17v8H3.5z" fill="var(--oh-logo, var(--oh-accent))" />
+      <text x="10.25" y="17.6" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="#fff" fontFamily="Segoe UI, Arial, sans-serif">
         {APP_LETTER[app]}
       </text>
     </svg>
@@ -62,8 +72,30 @@ export function TitleBar({ app, title, dirty, quickAccess, onSearch, searchPlace
     document.title = `${dirty ? "● " : ""}${title} - ${APP_NAMES[app]}`;
   }, [title, dirty, app]);
 
+  // Masaüstünde yerel pencere düğmelerini başlık çubuğu rengine uydur.
+  const barRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const native = getNative();
+    if (!native?.setTitleBarOverlay) return;
+    const sync = () => {
+      const el = barRef.current;
+      if (!el) return;
+      const cs = getComputedStyle(el);
+      native.setTitleBarOverlay?.(cs.backgroundColor, cs.color);
+    };
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-oh-theme", "data-app"] });
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    mq.addEventListener("change", sync);
+    return () => {
+      mo.disconnect();
+      mq.removeEventListener("change", sync);
+    };
+  }, []);
+
   return (
-    <header className="oh-titlebar">
+    <header className="oh-titlebar" ref={barRef}>
       <div className="oh-titlebar-left">
         <span className="oh-titlebar-logo">
           <AppLogo app={app} />

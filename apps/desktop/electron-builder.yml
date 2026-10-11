@@ -1,0 +1,95 @@
+# OfficeHere masaüstü paketleme yapılandırması (electron-builder).
+appId: com.officehere.suite
+productName: OfficeHere
+copyright: Copyright © 2026 Furkan YILDIRIM
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist-electron/**/*
+  - "!dist-electron/launcher/**"
+  - package.json
+
+asar: true
+
+# Web uygulamaları kaynak dizinine kopyalanır; ana süreç resources/apps/<uygulama> altından yükler.
+extraResources:
+  - from: ../belge/dist
+    to: apps/belge
+  - from: ../tablo/dist
+    to: apps/tablo
+  - from: ../sunum/dist
+    to: apps/sunum
+  - from: dist-electron/launcher
+    to: apps/baslangic
+  - from: build/icon.png
+    to: icon.png
+
+fileAssociations:
+  - ext: docx
+    name: OfficeHere.Belge
+    description: Belge
+    role: Editor
+    icon: filetypes/belge
+    mimeType: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  - ext: xlsx
+    name: OfficeHere.Tablo
+    description: Çalışma Kitabı
+    role: Editor
+    icon: filetypes/tablo
+    mimeType: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+  - ext: csv
+    name: OfficeHere.CSV
+    description: Virgülle Ayrılmış Değerler
+    role: Editor
+    icon: filetypes/tablo
+    mimeType: text/csv
+  - ext: pptx
+    name: OfficeHere.Sunum
+    description: Sunu
+    role: Editor
+    icon: filetypes/sunum
+    mimeType: application/vnd.openxmlformats-officedocument.presentationml.presentation
+
+win:
+  icon: icon.ico
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+    - target: portable
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: OfficeHere
+  license: ../../LICENSE
+  installerLanguages: [tr_TR, en_US]
+  language: "1055"
+  multiLanguageInstaller: true
+
+portable:
+  artifactName: ${productName}-${version}-tasinabilir.${ext}
+
+linux:
+  icon: icons
+  executableName: officehere
+  category: Office
+  synopsis: Açık kaynak ofis paketi
+  target:
+    - AppImage
+    - deb
+
+deb:
+  depends: ["libnss3", "libgtk-3-0", "libxss1", "libasound2t64 | libasound2"]
+
+mac:
+  icon: icon.png
+  category: public.app-category.productivity
+  target: dmg

@@ -1,0 +1,195 @@
+import { useEffect, useState } from "react";
+import { FolderOpen24Regular, Home20Regular, DocumentAdd20Regular, FolderOpen20Regular, Settings20Regular } from "@fluentui/react-icons";
+import { getNative, getRecentFiles, openFile, type AppKind, type RecentFile } from "@officehere/core";
+import {
+  AppLogo,
+  AppShell,
+  Backstage,
+  BackstageAction,
+  BackstageHeading,
+  BackstageSubheading,
+  RecentFileList,
+  TemplateRow,
+  TemplateTile,
+  TitleBar,
+  UI_THEMES,
+  useUiTheme,
+} from "@officehere/ui";
+
+const APPS: { app: AppKind; label: string; name: string; shape: "portrait" | "landscape" | "square" }[] = [
+  { app: "belge", label: "Boş belge", name: "Belge", shape: "portrait" },
+  { app: "tablo", label: "Boş çalışma kitabı", name: "Tablo", shape: "square" },
+  { app: "sunum", label: "Boş sunu", name: "Sunum", shape: "landscape" },
+];
+
+const EXT_APP: Record<string, AppKind> = {
+  docx: "belge", dotx: "belge", txt: "belge", html: "belge", htm: "belge", md: "belge",
+  xlsx: "tablo", xltx: "tablo", csv: "tablo", tsv: "tablo",
+  pptx: "sunum", potx: "sunum",
+};
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return "Günaydın";
+  if (h >= 12 && h < 18) return "İyi günler";
+  if (h >= 18 && h < 22) return "İyi akşamlar";
+  return "İyi geceler";
+}
+
+/** Masaüstünde yeni pencere açar; web'de ilgili uygulamaya gider. */
+function launch(app: AppKind, path?: string) {
+  const native = getNative();
+  if (native) {
+    void native.newWindow(app, path);
+    return;
+  }
+  window.location.href = `./${app}/`;
+}
+
+function Preview({ app }: { app: AppKind }) {
+  if (app === "belge") {
+    return (
+      <svg viewBox="0 0 130 168" className="ohl-preview">
+        <rect width="130" height="168" fill="#fff" />
+      </svg>
+    );
+  }
+  if (app === "tablo") {
+    return (
+      <svg viewBox="0 0 150 120" className="ohl-preview">
+        <rect width="150" height="120" fill="#fff" />
+        {Array.from({ length: 7 }, (_, i) => (
+          <line key={`h${i}`} x1="0" x2="150" y1={i * 18 + 12} y2={i * 18 + 12} stroke="#e1e1e1" />
+        ))}
+        {Array.from({ length: 5 }, (_, i) => (
+          <line key={`v${i}`} y1="0" y2="120" x1={i * 34 + 14} x2={i * 34 + 14} stroke="#e1e1e1" />
+        ))}
+        <rect x="14" y="12" width="34" height="18" fill="none" stroke="#1d7a46" strokeWidth="2" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 196 110" className="ohl-preview">
+      <rect width="196" height="110" fill="#fff" />
+      <rect x="38" y="36" width="120" height="16" fill="none" stroke="#c8c8c8" strokeDasharray="3 2" />
+      <rect x="58" y="60" width="80" height="10" fill="none" stroke="#c8c8c8" strokeDasharray="3 2" />
+    </svg>
+  );
+}
+
+export function Launcher() {
+  const [page, setPage] = useState("home");
+  const [recent, setRecent] = useState<RecentFile[]>([]);
+  const [theme, setTheme] = useUiTheme();
+  const native = getNative();
+
+  useEffect(() => {
+    getRecentFiles().then(setRecent).catch(() => setRecent([]));
+    const onFocus = () => getRecentFiles().then(setRecent).catch(() => {});
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
+
+  const browse = async () => {
+    const f = await openFile([
+      { name: "Tüm desteklenen dosyalar", extensions: Object.keys(EXT_APP) },
+      { name: "Belgeler", extensions: ["docx", "dotx", "txt", "html", "md"] },
+      { name: "Çalışma kitapları", extensions: ["xlsx", "xltx", "csv", "tsv"] },
+      { name: "Sunular", extensions: ["pptx", "potx"] },
+    ]);
+    if (!f) return;
+    const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+    const app = EXT_APP[ext];
+    if (app && f.path) launch(app, f.path);
+    else if (app) launch(app);
+  };
+
+  const newRow = (
+    <TemplateRow>
+      {APPS.map((a) => (
+        <TemplateTile key={a.app} label={a.label} shape={a.shape} preview={<Preview app={a.app} />} onClick={() => launch(a.app)} />
+      ))}
+    </TemplateRow>
+  );
+
+  let content;
+  if (page === "home") {
+    content = (
+      <>
+        <BackstageHeading>{greeting()}</BackstageHeading>
+        <div className="ohl-apps">
+          {APPS.map((a) => (
+            <button key={a.app} type="button" className={`ohl-app is-${a.app}`} onClick={() => launch(a.app)}>
+              <AppLogo app={a.app} size={40} />
+              <span>{a.name}</span>
+            </button>
+          ))}
+        </div>
+        <BackstageSubheading>Yeni</BackstageSubheading>
+        {newRow}
+        <BackstageSubheading>Son Kullanılanlar</BackstageSubheading>
+        <RecentFileList files={recent.slice(0, 15)} onOpen={(f) => launch(f.app, f.path)} emptyText={native ? "Henüz dosya açmadınız." : "Son kullanılan dosyalar masaüstü uygulamasında listelenir."} />
+      </>
+    );
+  } else if (page === "new") {
+    content = (
+      <>
+        <BackstageHeading>Yeni</BackstageHeading>
+        {newRow}
+      </>
+    );
+  } else if (page === "open") {
+    content = (
+      <>
+        <BackstageHeading>Aç</BackstageHeading>
+        <BackstageAction icon={<FolderOpen24Regular />} title="Gözat" description="Belge, çalışma kitabı ya da sunu açın" onClick={browse} />
+        <BackstageSubheading>Son Kullanılanlar</BackstageSubheading>
+        <RecentFileList files={recent} onOpen={(f) => launch(f.app, f.path)} />
+      </>
+    );
+  } else {
+    content = (
+      <>
+        <BackstageHeading>Seçenekler</BackstageHeading>
+        <label className="oh-field is-inline" style={{ maxWidth: 420 }}>
+          <span className="oh-field-label">Office teması</span>
+          <select value={theme} onChange={(e) => setTheme(e.target.value as typeof theme)}>
+            {UI_THEMES.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="oh-bs-note">
+          OfficeHere açık kaynaklı (MIT) bağımsız bir projedir; Microsoft Corporation ile bağlantılı değildir. Microsoft, Word, Excel ve PowerPoint, Microsoft
+          Corporation'ın ticari markalarıdır.
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <AppShell
+      app="baslangic"
+      titleBar={<TitleBar app="baslangic" title="Başlangıç" />}
+      backstage={
+        <Backstage
+          items={[
+            { id: "home", label: "Giriş", icon: <Home20Regular /> },
+            { id: "new", label: "Yeni", icon: <DocumentAdd20Regular /> },
+            { id: "open", label: "Aç", icon: <FolderOpen20Regular /> },
+            { id: "options", label: "Seçenekler", icon: <Settings20Regular />, bottom: true },
+          ]}
+          activeId={page}
+          onSelect={setPage}
+          onBack={() => setPage("home")}
+        >
+          {content}
+        </Backstage>
+      }
+    >
+      <div />
+    </AppShell>
+  );
+}

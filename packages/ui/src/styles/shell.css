@@ -64,6 +64,22 @@
   color: inherit;
 }
 
+.oh-applogo[data-app="belge"] {
+  --oh-logo: #1f5fbf;
+}
+
+.oh-applogo[data-app="tablo"] {
+  --oh-logo: #1d7a46;
+}
+
+.oh-applogo[data-app="sunum"] {
+  --oh-logo: #c4462b;
+}
+
+.oh-applogo[data-app="baslangic"] {
+  --oh-logo: #3d3d8f;
+}
+
 .oh-qat {
   display: flex;
   align-items: center;
@@ -204,4 +220,9 @@
 .oh-scroll::-webkit-scrollbar-track,
 .oh-scroll::-webkit-scrollbar-corner {
   background: var(--oh-canvas-bg);
+}
+
+/* macOS: trafik ışıkları için solda boşluk */
+:root.oh-platform-darwin .oh-titlebar {
+  padding-left: 78px;
 }
