@@ -9,5 +9,7 @@ export * from "./components/TableGridPicker";
 export * from "./components/Backstage";
 export * from "./components/StatusBar";
 export * from "./components/Dialog";
+export * from "./components/OfficeBackstage";
 export * from "./hooks/useHotkeys";
 export * from "./hooks/useUiTheme";
+export * from "./hooks/useDocumentLifecycle";

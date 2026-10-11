@@ -425,3 +425,50 @@
 .oh-zoom-pct:hover {
   background: var(--oh-hover);
 }
+
+.oh-bs-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.oh-bs-file svg {
+  color: var(--oh-accent);
+}
+
+.oh-bs-filepath {
+  color: var(--oh-text-muted);
+  font-size: 12px;
+}
+
+.oh-bs-note {
+  color: var(--oh-text-muted);
+  max-width: 640px;
+  line-height: 1.5;
+}
+
+.oh-bs-options {
+  max-width: 520px;
+}
+
+.oh-bs-print {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+.oh-bs-print-side {
+  width: 320px;
+  flex: none;
+}
+
+.oh-bs-print-preview {
+  flex: 1;
+  min-width: 0;
+  max-height: calc(100vh - 200px);
+  overflow: auto;
+  background: var(--oh-canvas-bg);
+  padding: 16px;
+  border-radius: 6px;
+}

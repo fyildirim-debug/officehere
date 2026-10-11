@@ -63,3 +63,14 @@ odağı editörden çalmaz.
 
 - `useHotkeys({ "Mod+S": save, "Mod+Shift+Z": redo, F12: saveAs })` — `Mod` Ctrl/Cmd.
 - `useUiTheme()` → Renkli / Beyaz / Koyu Gri / Siyah / Sistem; tüm uygulamalarda ortak.
+
+## Hazır Dosya görünümü ve belge yaşam döngüsü
+
+- `OfficeBackstage` — üç uygulamada ortak Dosya menüsü (Giriş, Yeni, Aç, Bilgi,
+  Kaydet, Farklı Kaydet, Yazdır, Dışarı Aktar, Kapat, Hakkında, Seçenekler).
+  Uygulama yalnız şablonları, dışa aktarma biçimlerini ve eylemleri verir.
+- `useDocumentLifecycle({ title, dirty, onOpenPath, onSave })` → `{ dialog, confirmDiscard }`.
+  Masaüstü kabuğuna başlık/kirli durumunu bildirir, pencere kapanırken
+  "Değişiklikler kaydedilsin mi?" sorar, `?file=<yol>` ve dosya ilişkilendirme
+  isteklerini `onOpenPath`'e iletir; tarayıcıda sayfadan ayrılma uyarısı verir.
+  `confirmDiscard()` "Yeni" / "Aç" / "Kapat" öncesinde çağrılır.
