@@ -1,6 +1,6 @@
 /** Slayt Boyutu, Bul/Değiştir, Yazı Tiplerini Değiştir, Yakınlaştır, Boyut ve Konum, Gösteri Ayarları, Kısayollar, Hakkında. */
 import { useState } from "react";
-import { Dialog, DialogButton, Field } from "@officehere/ui";
+import { DeveloperCredit, Dialog, DialogButton, Field } from "@officehere/ui";
 import { FONT_LIST } from "@officehere/core";
 import { resizePresentation } from "../model/presentation";
 import type { Actions } from "../state/actions";
@@ -380,6 +380,7 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
         <strong>OfficeHere Sunum</strong> — OfficeHere açık kaynak ofis paketinin sunu uygulaması.
       </p>
       <p>MIT lisansıyla dağıtılır. Dosya biçimi desteği açık ECMA-376 / ISO/IEC 29500 (Office Open XML) standardına dayanır.</p>
+      <DeveloperCredit />
       <p>
         <a href="./THIRD_PARTY_NOTICES.txt" target="_blank" rel="noopener noreferrer">
           Üçüncü taraf yazılım bildirimleri

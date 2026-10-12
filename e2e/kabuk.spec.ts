@@ -56,6 +56,9 @@ for (const c of cases) {
       await page.locator(".oh-bs-item", { hasText: "Hakkında" }).first().click();
       const link = page.getByRole("link", { name: "Üçüncü taraf yazılım bildirimleri" });
       await expect(link).toBeVisible();
+      // Geliştirici satırı
+      await expect(page.locator(".oh-credit")).toContainText("Furkan YILDIRIM");
+      await expect(page.getByRole("link", { name: "furkanyildirim.com" })).toHaveAttribute("href", "https://furkanyildirim.com");
       const res = await page.request.get(new globalThis.URL((await link.getAttribute("href")) ?? "", page.url()).toString());
       expect(res.ok()).toBe(true);
       const body = await res.text();

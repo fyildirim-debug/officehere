@@ -32,6 +32,7 @@ import { APP_NAMES } from "./AppShell";
 import { UI_THEMES, useUiTheme } from "../hooks/useUiTheme";
 import { UpdateSection } from "./Updates";
 import { useAutoSavePref } from "../hooks/useAutoSave";
+import { DeveloperCredit } from "./DeveloperCredit";
 
 export interface BackstageTemplate {
   id: string;
@@ -222,6 +223,7 @@ export function OfficeBackstage(props: OfficeBackstageProps) {
               github.com/fyildirim-debug/officehere
             </a>
           </p>
+          <DeveloperCredit />
           <p>
             Kullanılan açık kaynak bileşenlerin lisansları:{" "}
             <a href="./THIRD_PARTY_NOTICES.txt" target="_blank" rel="noopener noreferrer">

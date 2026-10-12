@@ -141,7 +141,7 @@ açık ECMA-376 / ISO/IEC 29500 standardına dayanır. Ayrıntılar: [HUKUKI.md]
 
 ## Lisans
 
-[MIT](LICENSE) © 2026 Furkan YILDIRIM
+[MIT](LICENSE) © 2026 [Furkan YILDIRIM](https://furkanyildirim.com)
 
 Kullanılan açık kaynak bileşenlerin lisans metinleri her derlemede otomatik
 üretilen `THIRD_PARTY_NOTICES.txt` dosyasındadır (uygulamalarda Dosya → Hakkında).

@@ -8,6 +8,7 @@ import {
   BackstageAction,
   BackstageHeading,
   BackstageSubheading,
+  DeveloperCredit,
   RecentFileList,
   TemplateRow,
   TemplateTile,
@@ -161,6 +162,7 @@ export function Launcher() {
         {newRow}
         <BackstageSubheading>Son Kullanılanlar</BackstageSubheading>
         <RecentFileList files={recent.slice(0, 15)} onOpen={(f) => launch(f.app, f.path)} emptyText={native ? "Henüz dosya açmadınız." : "Son kullanılan dosyalar masaüstü uygulamasında listelenir."} />
+        <DeveloperCredit variant="footer" />
       </>
     );
   } else if (page === "new") {
@@ -195,6 +197,7 @@ export function Launcher() {
         </label>
         <SessionOption />
         <UpdateSection />
+        <DeveloperCredit />
         <p className="oh-bs-note">
           OfficeHere açık kaynaklı (MIT) bağımsız bir projedir; Microsoft Corporation ile bağlantılı değildir. Microsoft, Word, Excel ve PowerPoint, Microsoft
           Corporation'ın ticari markalarıdır.

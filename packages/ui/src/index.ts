@@ -21,3 +21,4 @@ export * from "./hooks/saveStatus";
 export * from "./hooks/autoSaveCore";
 export * from "./hooks/useAutoSave";
 export * from "./components/MiniToolbar";
+export * from "./components/DeveloperCredit";
