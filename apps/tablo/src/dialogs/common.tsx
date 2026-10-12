@@ -1,5 +1,5 @@
 /** İletişim kutuları için küçük ortak denetimler. */
-import { useRef, useState, type ReactNode } from "react";
+import { Component, useRef, useState, type ReactNode } from "react";
 import { ColorPalette, Dialog, DialogButton, MenuProvider, Popover } from "@officehere/ui";
 
 export interface BaseDialogProps {
@@ -72,4 +72,25 @@ export function ColorDrop({ value, onChange, noneLabel = "Otomatik", width = 120
       </Popover>
     </>
   );
+}
+
+/** İletişim kutusu çizimindeki beklenmeyen hata tüm uygulamayı düşürmesin. */
+export class DialogErrorBoundary extends Component<{ children: ReactNode; onError: (e: Error) => void; resetKey: unknown }, { failed: boolean; key: unknown }> {
+  state = { failed: false, key: undefined as unknown };
+
+  static getDerivedStateFromProps(props: { resetKey: unknown }, state: { failed: boolean; key: unknown }) {
+    return props.resetKey !== state.key ? { failed: false, key: props.resetKey } : null;
+  }
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error) {
+    this.props.onError(error);
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
 }

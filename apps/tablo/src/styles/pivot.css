@@ -1,0 +1,286 @@
+/* Çalışma alanı: ızgara + sağ bölmeler (PivotTable Alanları, İzleme Penceresi) */
+.tb-workarea {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.tb-workarea > .tb-grid,
+.tb-workarea > .tb-pagelayout {
+  flex: 1;
+  min-width: 0;
+}
+
+.tb-pane {
+  width: 290px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--oh-border);
+  background: var(--oh-surface);
+  color: var(--oh-text);
+  font-size: 12px;
+}
+@media (max-width: 1000px) {
+  .tb-pane {
+    width: 240px;
+  }
+}
+.tb-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.tb-pane-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--oh-icon);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.tb-pane-close:hover {
+  background: var(--oh-hover);
+}
+
+/* PivotTable Alanları */
+.tb-pv-sub {
+  padding: 4px 10px;
+  color: var(--oh-text-muted);
+}
+.tb-pv-error {
+  padding: 10px;
+  color: #a4262c;
+}
+.tb-pv-search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 2px 10px 4px;
+  padding: 0 6px;
+  height: 24px;
+  border: 1px solid var(--oh-border);
+  border-radius: 3px;
+  background: var(--oh-surface);
+  color: var(--oh-icon);
+}
+.tb-pv-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--oh-text);
+  font: inherit;
+}
+.tb-pv-fields {
+  flex: 1 1 35%;
+  min-height: 90px;
+  overflow: auto;
+  margin: 0 10px;
+  border: 1px solid var(--oh-separator);
+}
+.tb-pv-field {
+  display: flex;
+  align-items: center;
+  padding: 1px 4px;
+  cursor: grab;
+}
+.tb-pv-field:hover {
+  background: var(--oh-hover);
+}
+.tb-pv-field label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: inherit;
+}
+.tb-pv-field .is-bold {
+  font-weight: 600;
+}
+.tb-pv-funnel {
+  color: var(--oh-icon);
+  margin-right: 2px;
+}
+.tb-pv-more {
+  visibility: hidden;
+  border: none;
+  background: transparent;
+  color: var(--oh-icon);
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.tb-pv-field:hover .tb-pv-more,
+.tb-pv-more:focus-visible {
+  visibility: visible;
+}
+.tb-pv-more:hover {
+  background: var(--oh-pressed);
+}
+.tb-pv-areas {
+  flex: 1 1 45%;
+  min-height: 160px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 6px;
+  margin: 0 10px;
+}
+.tb-pv-area {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--oh-separator);
+  background: var(--oh-surface-2);
+}
+.tb-pv-area.is-over {
+  outline: 2px solid var(--oh-accent);
+  outline-offset: -2px;
+}
+.tb-pv-area-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  color: var(--oh-text-muted);
+}
+.tb-pv-sigma {
+  font-weight: 700;
+  width: 16px;
+  text-align: center;
+}
+.tb-pv-chips {
+  flex: 1;
+  overflow: auto;
+  padding: 0 4px 4px;
+}
+.tb-pv-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 3px;
+  padding: 3px 6px;
+  border: 1px solid var(--oh-border);
+  border-radius: 2px;
+  background: var(--oh-surface);
+  cursor: grab;
+  white-space: nowrap;
+}
+.tb-pv-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tb-pv-chip:hover {
+  border-color: var(--oh-border-strong);
+  background: var(--oh-hover);
+}
+.tb-pv-chip.is-drop-before {
+  box-shadow: 0 -2px 0 var(--oh-accent);
+}
+.tb-pv-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--oh-separator);
+}
+.tb-pv-footer label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.tb-pv-itemfilter {
+  width: 230px;
+  padding: 8px;
+}
+.tb-pv-itemfilter > input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+}
+.tb-pv-itemlist {
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--oh-border);
+  padding: 4px;
+}
+.tb-pv-itemlist label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+  white-space: nowrap;
+}
+.tb-pv-itembtns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+.tb-pv-fnlist {
+  height: 150px;
+}
+.tb-ribbon-value {
+  display: inline-block;
+  min-width: 120px;
+  max-width: 160px;
+  height: 22px;
+  line-height: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--oh-border);
+  border-radius: 3px;
+  background: var(--oh-surface-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Boş PivotTable yer tutucusu */
+.tb-pv-placeholder {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #9bc2e6;
+  background: rgba(221, 235, 247, 0.55);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 10px;
+  color: #3b3b3b;
+  font: 12px var(--oh-font-ui);
+  pointer-events: none;
+  overflow: hidden;
+}
+.tb-pv-placeholder strong {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.tb-pv-btnmenu {
+  padding: 4px 0 0;
+}
+.tb-pv-btnmenu .tb-pv-itemfilter {
+  box-shadow: none;
+  border: none;
+}
+.tb-pv-btnfield {
+  padding: 4px 10px 6px;
+  color: var(--oh-text-muted);
+}

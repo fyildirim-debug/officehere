@@ -125,8 +125,8 @@ export function HomeTab({ ctl }: { ctl: Controller }) {
       <RibbonGroup label="Yazı Tipi" icon={<TextFont24Regular />} onLauncher={() => ctl.openDialog("formatCells", { tab: "font" })} launcherTip="Hücreleri Biçimlendir: Yazı Tipi">
         <RibbonStack>
           <RibbonRow>
-            <RibbonCombo value={st.font ?? DEFAULT_FONT} width={124} options={FONT_LIST.map((f) => ({ value: f, style: { fontFamily: fontStack(f) } }))} onCommit={(f) => F.setFont(ctl, f)} tip="Yazı Tipi" shortcut="Ctrl+Shift+F" />
-            <RibbonCombo value={String(st.size ?? DEFAULT_SIZE).replace(".", ",")} width={46} options={FONT_SIZES.map((s) => String(s).replace(".", ","))} onCommit={(s) => F.setFontSize(ctl, Number(s.replace(",", ".")))} tip="Yazı Tipi Boyutu" />
+            <RibbonCombo value={st.font ?? DEFAULT_FONT} width={124} options={FONT_LIST.map((f) => ({ value: f, style: { fontFamily: fontStack(f) } }))} onCommit={(f) => (F.setFont(ctl, f), requestAnimationFrame(() => ctl.focusGrid()))} tip="Yazı Tipi" shortcut="Ctrl+Shift+F" />
+            <RibbonCombo value={String(st.size ?? DEFAULT_SIZE).replace(".", ",")} width={46} options={FONT_SIZES.map((s) => String(s).replace(".", ","))} onCommit={(s) => (F.setFontSize(ctl, Number(s.replace(",", "."))), requestAnimationFrame(() => ctl.focusGrid()))} tip="Yazı Tipi Boyutu" />
             <RibbonButton size="small" icon={<FontIncrease20Regular />} tip="Yazı Tipi Boyutunu Büyüt" shortcut="Ctrl+Shift+>" onClick={() => F.growFont(ctl, 1)} />
             <RibbonButton size="small" icon={<FontDecrease20Regular />} tip="Yazı Tipi Boyutunu Küçült" shortcut="Ctrl+Shift+<" onClick={() => F.growFont(ctl, -1)} />
           </RibbonRow>

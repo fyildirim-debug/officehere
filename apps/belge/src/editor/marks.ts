@@ -217,3 +217,22 @@ export const Deletion = Mark.create({
     return ["del", mergeAttributes({ class: "bl-del" }, HTMLAttributes), 0];
   },
 });
+
+/** İzlenen değişiklik: biçim değişikliği (DOCX w:rPrChange). "old", önceki biçim işaretlerinin JSON'udur. */
+export const FormatChange = Mark.create({
+  name: "formatChange",
+  inclusive: false,
+  addAttributes() {
+    return {
+      author: { default: "", parseHTML: (el) => el.getAttribute("data-author"), renderHTML: (a) => ({ "data-author": a.author }) },
+      date: { default: "", parseHTML: (el) => el.getAttribute("data-date"), renderHTML: (a) => ({ "data-date": a.date }) },
+      old: { default: "[]", parseHTML: (el) => el.getAttribute("data-old") ?? "[]", renderHTML: (a) => ({ "data-old": a.old }) },
+    };
+  },
+  parseHTML() {
+    return [{ tag: "span[data-fmtchange]" }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ["span", mergeAttributes({ class: "bl-fmtchg", "data-fmtchange": "" }, HTMLAttributes), 0];
+  },
+});

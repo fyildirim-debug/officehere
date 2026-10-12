@@ -13,10 +13,14 @@ import { CreateNamesDialog, DefineNameDialog, NameManagerDialog } from "./NameDi
 import { ChartDataDialog, ChartTypeDialog, MoveChartDialog } from "./ChartDialogs";
 import { PageSetupDialog } from "./PageSetupDialog";
 import { ShortcutsDialog, WorkbookStatsDialog } from "./HelpDialogs";
+import { DialogErrorBoundary } from "./common";
+import { ChangePivotSourceDialog, CreatePivotDialog, MovePivotDialog, PivotOptionsDialog, ValueFieldDialog } from "../pivot/PivotDialogs";
 
 export interface DialogState {
   id: string;
   arg?: unknown;
+  /** Yığındaki benzersiz anahtar (aynı anda birden çok iletişim kutusu: ör. Bul + uyarı). */
+  key?: number;
 }
 
 /** Dialog açmadan doğrudan çalışan eylemler. */
@@ -24,10 +28,29 @@ const ACTIONS: Record<string, (ctl: Controller) => void> = {
   toggleFilter: (ctl) => D.toggleAutoFilter(ctl),
 };
 
-export function DialogHost({ ctl, state, onClose, files, onBackstage }: { ctl: Controller; state: DialogState | null; onClose: () => void; files: FileActions; onBackstage?: (page: string) => void }) {
-  const id = state?.id;
+/** İletişim kutusu yığını: en üstteki etkindir; uyarılar alttakini kapatmadan üstte açılır. */
+export function DialogHost({ ctl, stack, onClose, files, onBackstage }: { ctl: Controller; stack: DialogState[]; onClose: (key: number | undefined) => void; files: FileActions; onBackstage?: (page: string) => void }) {
+  return (
+    <>
+      {stack.map((st) => (
+        <DialogErrorBoundary
+          key={st.key}
+          resetKey={st}
+          onError={(e) => {
+            onClose(st.key);
+            ctl.alert(`İletişim kutusu açılamadı: ${e.message}`);
+          }}
+        >
+          <OneDialog ctl={ctl} state={st} onClose={() => onClose(st.key)} files={files} onBackstage={onBackstage} />
+        </DialogErrorBoundary>
+      ))}
+    </>
+  );
+}
+
+function OneDialog({ ctl, state, onClose, files, onBackstage }: { ctl: Controller; state: DialogState; onClose: () => void; files: FileActions; onBackstage?: (page: string) => void }) {
+  const id = state.id;
   useEffect(() => {
-    if (!id) return;
     if (ACTIONS[id]) {
       ACTIONS[id](ctl);
       onClose();
@@ -39,16 +62,16 @@ export function DialogHost({ ctl, state, onClose, files, onBackstage }: { ctl: C
   }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
   // Ortak iletişim kutusu ilk denetimi odaklar; işaretli alan varsa ona geç
   useEffect(() => {
-    if (!state) return;
     const raf = requestAnimationFrame(() => {
-      const el = document.querySelector<HTMLInputElement>(".oh-dialog [data-autofocus]");
+      const boxes = document.querySelectorAll(".oh-dialog");
+      const el = boxes[boxes.length - 1]?.querySelector<HTMLInputElement>("[data-autofocus]");
       if (!el) return;
       el.focus();
       if (typeof el.select === "function") el.select();
     });
     return () => cancelAnimationFrame(raf);
   }, [state]);
-  if (!state || ACTIONS[state.id] || state.id === "printPreview" || state.id === "about") return null;
+  if (ACTIONS[state.id] || state.id === "printPreview" || state.id === "about") return null;
   const p = { ctl, onClose, arg: state.arg };
   switch (state.id) {
     case "alert":
@@ -134,6 +157,16 @@ export function DialogHost({ ctl, state, onClose, files, onBackstage }: { ctl: C
       return <ShortcutsDialog {...p} />;
     case "workbookStats":
       return <WorkbookStatsDialog {...p} />;
+    case "createPivot":
+      return <CreatePivotDialog {...p} />;
+    case "pivotValueField":
+      return <ValueFieldDialog {...p} />;
+    case "pivotMove":
+      return <MovePivotDialog {...p} />;
+    case "pivotSource":
+      return <ChangePivotSourceDialog {...p} />;
+    case "pivotOptions":
+      return <PivotOptionsDialog {...p} />;
   }
   return <M.AlertDialog {...p} arg={{ message: `"${state.id}" iletişim kutusu bulunamadı.` }} />;
 }

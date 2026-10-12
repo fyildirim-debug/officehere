@@ -1,6 +1,7 @@
 /** Veri sekmesi: Veri Al, Sırala ve Filtre Uygula, Veri Araçları. */
 import {
   ArrowSync20Regular,
+  ArrowSync24Regular,
   DocumentText24Regular,
   Filter24Regular,
   FilterDismiss20Regular,
@@ -15,6 +16,7 @@ import { openFile } from "@officehere/core";
 import { Menu, MenuItem, RibbonButton, RibbonGroup, RibbonSplitButton, RibbonStack } from "@officehere/ui";
 import type { Controller } from "../controller";
 import * as D from "../actions/data";
+import { refreshAll } from "../pivot/pivotOps";
 
 export async function importText(ctl: Controller): Promise<void> {
   const f = await openFile([{ name: "Metin dosyaları", extensions: ["csv", "txt", "tsv"] }]);
@@ -30,6 +32,9 @@ export function DataTab({ ctl }: { ctl: Controller }) {
     <>
       <RibbonGroup label="Veri Al ve Dönüştür" icon={<DocumentText24Regular />}>
         <RibbonButton size="large" icon={<DocumentText24Regular />} label="Metinden/ CSV'den" description="Metin, virgülle ya da noktalı virgülle ayrılmış değer dosyasından veri alır." onClick={() => void importText(ctl)} />
+      </RibbonGroup>
+      <RibbonGroup label="Sorgular ve Bağlantılar" icon={<ArrowSync24Regular />}>
+        <RibbonButton size="large" icon={<ArrowSync24Regular />} label="Tümünü Yenile" shortcut="Ctrl+Alt+F5" description="Çalışma kitabındaki tüm PivotTable raporlarını kaynak verilerinden yeniden hesaplar." disabled={!ctl.wb.sheets.some((s) => s.pivots.length)} onClick={() => refreshAll(ctl)} />
       </RibbonGroup>
       <RibbonGroup label="Sırala ve Filtre Uygula" icon={<Filter24Regular />}>
         <RibbonStack>

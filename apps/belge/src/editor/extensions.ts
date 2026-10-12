@@ -8,7 +8,7 @@ import Highlight from "@tiptap/extension-highlight";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import { ParagraphFormat } from "./paragraphFormat";
-import { CharStyle, CommentMark, Deletion, Insertion, TextStyleExtras, Underline } from "./marks";
+import { CharStyle, CommentMark, Deletion, FormatChange, Insertion, TextStyleExtras, Underline } from "./marks";
 import { Bookmark, ListStyles, PageBreak, PageField, TableOfContents } from "./nodes";
 import { BelgeTable, BelgeTableCell, BelgeTableHeader, BelgeTableRow } from "./table";
 import { BelgeImage } from "./image";
@@ -19,6 +19,7 @@ import { TrackChanges } from "./trackChanges";
 import { createWordKeymap, type EditorHooks } from "./keymap";
 import { Note, Notes } from "./notes";
 import { PasteRules } from "./paste";
+import { TextBox } from "./textbox";
 import { BelgeDocument, ColumnBreak, Section, SectionKeys, createSectionLayout } from "./sections";
 
 /** Yazı tipi adı yedek zinciriyle (yüklü olmayan yazı tiplerinde ölçü uyumlu açık yazı tipine düşer). */
@@ -80,6 +81,7 @@ function contentExtensions(): AnyExtension[] {
     CommentMark,
     Insertion,
     Deletion,
+    FormatChange,
     ParagraphFormat,
     ListStyles,
     PageBreak,
@@ -92,6 +94,7 @@ function contentExtensions(): AnyExtension[] {
     BelgeTableCell,
     BelgeImage,
     Note,
+    TextBox,
   ];
 }
 

@@ -5,7 +5,7 @@ import { Dialog, DialogButton, Field, FieldSet } from "@officehere/ui";
 import { useBelge } from "../state/context";
 import { DATE_FORMATS, collectHeadings, insertText, wordAt } from "../editor/commands";
 import { insertTable } from "../ribbon/tableUtil";
-import { pageMetrics } from "../model/document";
+import { columnWidthAt } from "../state/pageSetup";
 
 const okCancel = (ok: () => void, close: () => void, okLabel = "Tamam") => (
   <>
@@ -154,13 +154,13 @@ export function LinkDialog({ onClose }: { onClose: () => void }) {
 }
 
 export function InsertTableDialog({ onClose }: { onClose: () => void }) {
-  const { editor, settings } = useBelge();
+  const { editor, settings, mainEditor } = useBelge();
   const [cols, setCols] = useState(5);
   const [rows, setRows] = useState(2);
   const [fit, setFit] = useState<"fixed" | "content" | "window">("fixed");
   const [colW, setColW] = useState("Otomatik");
   const apply = () => {
-    const m = pageMetrics(settings.page);
+    const m = { contentW: columnWidthAt(mainEditor, settings.page) };
     const c = Math.max(1, Math.min(63, cols));
     const r = Math.max(1, Math.min(500, rows));
     const cm = parseFloat(colW.replace(",", "."));

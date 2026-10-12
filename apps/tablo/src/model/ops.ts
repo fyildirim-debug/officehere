@@ -16,6 +16,11 @@ export class Ops {
   readonly history = new UndoManager();
   /** Değişiklik sonrası çağrılır (yeniden çizim, kirli işareti). */
   onChange: (label: string) => void = () => {};
+  /**
+   * Hücre içeriği/stili değişince otomatik satır yüksekliklerini ayarlar
+   * (arayüz katmanı ölçüm yapar). [satır, eski, yeni] listesi döndürür.
+   */
+  afterCells: ((sheet: SheetModel, rects: Rect[]) => [number, number | undefined, number | undefined][]) | null = null;
 
   constructor(public wb: WorkbookModel) {}
 
@@ -56,6 +61,14 @@ export class Ops {
     const before = new Map<number, CellState>();
     for (const k of collect()) before.set(k, wb.cellState(sheet, k));
     mutate();
+    const rowChanges = this.afterCells ? this.afterCells(sheet, rects) : [];
+    const applyRows = (which: 1 | 2) => {
+      for (const ch of rowChanges) {
+        const v = ch[which];
+        if (v === undefined) sheet.rows.reset(ch[0]);
+        else sheet.rows.set(ch[0], v, false);
+      }
+    };
     const after = new Map<number, CellState>();
     for (const k of collect()) after.set(k, wb.cellState(sheet, k));
     for (const k of before.keys()) if (!after.has(k)) after.set(k, wb.cellState(sheet, k));
@@ -71,8 +84,8 @@ export class Ops {
     this.history.push({
       label,
       cost: before.size + after.size,
-      undo: () => apply(before, after, linesBefore),
-      redo: () => apply(after, before, linesAfter),
+      undo: () => (apply(before, after, linesBefore), applyRows(1)),
+      redo: () => (apply(after, before, linesAfter), applyRows(2)),
     });
     this.done(label);
   }
@@ -374,6 +387,7 @@ export class Ops {
     this.snapshotOp("Satır Ekle", () => {
       this.wb.engine.insertRows(sheet.id, at, count);
       sheet.shiftStructure("row", at, count);
+      this.wb.shiftPivotSources(sheet, "row", at, count);
       // Yeni satırlar üstteki satırın biçimini alır
       if (at > 0) {
         const h = sheet.rows.isCustom(at - 1) ? sheet.rows.rawSize(at - 1) : undefined;
@@ -394,6 +408,7 @@ export class Ops {
     this.snapshotOp("Satır Sil", () => {
       this.wb.engine.deleteRows(sheet.id, at, count);
       sheet.shiftStructure("row", at, -count);
+      this.wb.shiftPivotSources(sheet, "row", at, -count);
     });
   }
 
@@ -401,6 +416,7 @@ export class Ops {
     this.snapshotOp("Sütun Ekle", () => {
       this.wb.engine.insertCols(sheet.id, at, count);
       sheet.shiftStructure("col", at, count);
+      this.wb.shiftPivotSources(sheet, "col", at, count);
       if (at > 0) {
         const w = sheet.cols.isCustom(at - 1) ? sheet.cols.rawSize(at - 1) : undefined;
         const cs = sheet.colStyles.get(at - 1);
@@ -416,6 +432,7 @@ export class Ops {
     this.snapshotOp("Sütun Sil", () => {
       this.wb.engine.deleteCols(sheet.id, at, count);
       sheet.shiftStructure("col", at, -count);
+      this.wb.shiftPivotSources(sheet, "col", at, -count);
     });
   }
 
@@ -651,6 +668,12 @@ export class Ops {
       copy.charts = copy.charts.map((c) => ({ ...c, id: wb.newId("chart"), range: c.range.replace(new RegExp(`^'?${src.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}'?!`), `'${base}'!`) }));
       copy.images = copy.images.map((i) => ({ ...i, id: wb.newId("img") }));
       copy.tables = copy.tables.map((t) => ({ ...t, id: wb.newId("tbl"), name: uniqueTableName(wb, t.name) }));
+      copy.pivots = copy.pivots.map((p) => {
+        const names = new Set(wb.sheets.flatMap((s) => s.pivots.map((x) => x.name.toLocaleUpperCase("tr-TR"))));
+        let n = 1;
+        while (names.has(`PIVOTTABLE${n}`)) n++;
+        return { ...p, id: wb.newId("pivot"), name: `PivotTable${n}`, sourceSheet: p.sourceSheet === src.id ? copy.id : p.sourceSheet };
+      });
       wb.engine.forEachCell(src.id, (row, col, rec) => {
         if (rec.formula) wb.engine.setFormula(copy.id, row, col, rec.formula.text);
         else wb.engine.setValue(copy.id, row, col, rec.value);

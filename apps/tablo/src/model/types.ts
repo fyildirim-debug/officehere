@@ -224,6 +224,8 @@ export interface PivotDef {
   bandedCols: boolean;
   /** Son çizilen çıktı aralığı (filtre satırları dahil). */
   output?: Rect;
+  /** Sayfadaki filtre açılır düğmeleri (rapor filtresi, satır/sütun etiketleri). */
+  buttons?: { row: number; col: number; field: number }[];
   /** Sıralama: alan → azalan mı. */
   sort?: Record<number, boolean>;
 }

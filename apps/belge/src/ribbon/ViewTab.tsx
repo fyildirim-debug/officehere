@@ -25,6 +25,9 @@ import { getNative } from "@officehere/core";
 import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonStack } from "@officehere/ui";
 import { useBelge } from "../state/context";
 import { FOOTER_PRESETS, HEADER_PRESETS, pageNumberDoc } from "../templates/parts";
+import { hfKey, hfVariantOf } from "../views/PageSheets";
+import { applyPageSetup, sectionPageAt } from "../state/pageSetup";
+import type { PageSetup } from "../model/document";
 
 export function ViewTab({ zoomTo }: { zoomTo: (kind: "100" | "onePage" | "multi" | "width") => void }) {
   const ctx = useBelge();
@@ -86,12 +89,20 @@ const CM_PER_TW = 2.54 / 1440;
 
 export function HeaderFooterTab() {
   const ctx = useBelge();
-  const { updateSettings, settings } = ctx;
-  const m = settings.page.margin;
-  // Hazır içerik uygulanınca açık düzenleyici yeni içerikle yeniden kurulur.
-  const setPart = (which: "header" | "footer", json: typeof settings.header) => {
-    updateSettings((s) => ({ ...s, [which]: json }));
-    ctx.editHeaderFooter(which);
+  const { updateSettings, settings, mainEditor, controller } = ctx;
+  const which = ctx.headerFooterEditing ?? "header";
+  const pageIndex = ctx.headerFooterPage;
+  const pg = controller.info.pages[pageIndex];
+  const variant = hfVariantOf(pg, pageIndex, settings);
+  const secIndex = pg?.section ?? 0;
+  const page = sectionPageAt(mainEditor, settings.page, secIndex);
+  const m = page.margin;
+  const setSection = (fn: (p: PageSetup) => PageSetup) => applyPageSetup(mainEditor, settings, updateSettings, fn, "auto", secIndex);
+  // Hazır içerik, düzenlenen türdeki (ilk/çift/varsayılan) üst ya da alt bilgiye uygulanır; düzenleyici yeniden kurulur.
+  const setPart = (w: "header" | "footer", json: typeof settings.header) => {
+    const key = hfKey(w, variant);
+    updateSettings((s) => ({ ...s, [key]: json }));
+    ctx.editHeaderFooter(w);
   };
   return (
     <>
@@ -142,14 +153,20 @@ export function HeaderFooterTab() {
       </RibbonGroup>
       <RibbonGroup label="Gezinti" icon={<ArrowUp20Regular />}>
         <RibbonStack>
-          <RibbonButton icon={<ArrowUp20Regular />} label="Üst Bilgiye Git" checked={ctx.headerFooterEditing === "header"} onClick={() => ctx.editHeaderFooter("header")} />
-          <RibbonButton icon={<ArrowDown20Regular />} label="Alt Bilgiye Git" checked={ctx.headerFooterEditing === "footer"} onClick={() => ctx.editHeaderFooter("footer")} />
+          <RibbonButton icon={<ArrowUp20Regular />} label="Üst Bilgiye Git" checked={which === "header"} onClick={() => ctx.editHeaderFooter("header")} />
+          <RibbonButton icon={<ArrowDown20Regular />} label="Alt Bilgiye Git" checked={which === "footer"} onClick={() => ctx.editHeaderFooter("footer")} />
+        </RibbonStack>
+      </RibbonGroup>
+      <RibbonGroup label="Seçenekler" icon={<DocumentHeader32Regular />}>
+        <RibbonStack>
+          <RibbonCheckbox label="Farklı İlk Sayfa" checked={!!page.titlePage} onChange={(v) => setSection((p) => ({ ...p, titlePage: v || undefined }))} />
+          <RibbonCheckbox label="Tek ve Çift Sayfalarda Farklı" checked={settings.oddEven} onChange={(v) => updateSettings((s) => ({ ...s, oddEven: v }))} />
         </RibbonStack>
       </RibbonGroup>
       <RibbonGroup label="Konum" icon={<DocumentHeader32Regular />}>
         <RibbonStack>
-          <RibbonSpinner label="Üst Bilgi Üstten:" value={m.header * CM_PER_TW} step={0.1} min={0} max={10} unit="cm" decimals={2} width={76} onChange={(v) => updateSettings((s) => ({ ...s, page: { ...s.page, margin: { ...s.page.margin, header: Math.round(v / CM_PER_TW) } } }))} />
-          <RibbonSpinner label="Alt Bilgi Alttan:" value={m.footer * CM_PER_TW} step={0.1} min={0} max={10} unit="cm" decimals={2} width={76} onChange={(v) => updateSettings((s) => ({ ...s, page: { ...s.page, margin: { ...s.page.margin, footer: Math.round(v / CM_PER_TW) } } }))} />
+          <RibbonSpinner label="Üst Bilgi Üstten:" value={m.header * CM_PER_TW} step={0.1} min={0} max={10} unit="cm" decimals={2} width={76} onChange={(v) => setSection((p) => ({ ...p, margin: { ...p.margin, header: Math.round(v / CM_PER_TW) } }))} />
+          <RibbonSpinner label="Alt Bilgi Alttan:" value={m.footer * CM_PER_TW} step={0.1} min={0} max={10} unit="cm" decimals={2} width={76} onChange={(v) => setSection((p) => ({ ...p, margin: { ...p.margin, footer: Math.round(v / CM_PER_TW) } }))} />
         </RibbonStack>
       </RibbonGroup>
       <RibbonGroup label="Kapat" icon={<Dismiss32Regular />}>
@@ -158,4 +175,3 @@ export function HeaderFooterTab() {
     </>
   );
 }
-

@@ -185,7 +185,7 @@ export function TextToColumnsDialog({ ctl, onClose }: P) {
   const delims = [...tab, ...(other ? [other] : [])];
   const preview = useMemo(() => {
     const out: string[][] = [];
-    for (let row = src.r1; row <= Math.min(src.r2, src.r1 + 6); row++) out.push(D.splitDelimited(ctl.wb.editText(ctl.sheet, row, src.c1), delims, consecutive, qual));
+    for (let row = src.r1; row <= Math.min(src.r2, src.r1 + 6); row++) out.push(D.splitDelimited(ctl.wb.plainText(ctl.sheet, row, src.c1), delims, consecutive, qual));
     return out;
   }, [delims.join(""), consecutive, qual]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = (d: string, on: boolean) => setTab(on ? [...tab, d] : tab.filter((x) => x !== d));

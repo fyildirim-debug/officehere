@@ -24,6 +24,12 @@ import { FileView, useFileActions } from "./FileView";
 import { FilterMenu } from "./grid/FilterMenu";
 import { PageLayoutView } from "./grid/PageLayoutView";
 import { installTestHook } from "./testHook";
+import { pivotAt, pivotButtons } from "./pivot/pivotOps";
+import { PivotAnalyzeTab, PivotDesignTab } from "./pivot/PivotTabs";
+import { PivotButtonMenu, PivotFieldsPane } from "./pivot/PivotFieldsPane";
+import { PivotCellMenu } from "./pivot/PivotMenu";
+
+let dialogSeq = 0;
 
 export function App() {
   const ctl = useMemo(() => new Controller(), []);
@@ -33,7 +39,15 @@ export function App() {
   useSyncExternalStore(ctl.subscribe, ctl.getVersion);
   const [tab, setTab] = useState("home");
   const [collapsed, setCollapsed] = useState(false);
-  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [dialogs, setDialogs] = useState<DialogState[]>([]);
+  // İletişim kutuları yığın olarak tutulur: uyarı/onay, açık iletişim kutusunun üstünde açılır
+  const pushDialog = (d: DialogState) =>
+    setDialogs((st) => {
+      // Modsuz Bul ve Değiştir zaten açıksa yenisi açılmaz, sekmesi değişir
+      const isFind = (x: string) => x === "find" || x === "replace";
+      if (isFind(d.id) && st.some((x) => isFind(x.id))) return st.map((x) => (isFind(x.id) ? { ...d, key: ++dialogSeq } : x));
+      return [...st, { ...d, key: ++dialogSeq }];
+    });
   const [backstage, setBackstage] = useState<string | null>(null);
   const [filterMenu, setFilterMenu] = useState<{ row: number; col: number; x: number; y: number } | null>(null);
   const ctx = useContextMenu();
@@ -56,9 +70,9 @@ export function App() {
       }
       // İletişim kutuları hücre içeriğiyle çalışır: süren düzenleme önce onaylanır
       if (ctl.edit && id !== "insertFunction" && id !== "alert" && id !== "confirm") ctl.commitEdit(null);
-      setDialog({ id, arg });
+      pushDialog({ id, arg });
     };
-    ctl.alert = (message, title) => setDialog({ id: "alert", arg: { message, title } });
+    ctl.alert = (message, title) => pushDialog({ id: "alert", arg: { message, title } });
   });
 
   // Pano olayları (Ctrl+C / X / V)
@@ -96,7 +110,7 @@ export function App() {
     "Mod+O": () => setBackstage("open"),
     "Mod+N": () => void files.newBook("blank"),
     "Mod+P": () => setBackstage("print"),
-    "Mod+Alt+V": () => !ctl.edit && setDialog({ id: "pasteSpecial" }),
+    "Mod+Alt+V": () => !ctl.edit && pushDialog({ id: "pasteSpecial" }),
     "Mod+F1": () => setCollapsed((c) => !c),
   });
 
@@ -104,12 +118,19 @@ export function App() {
   const sheet = ctl.sheet;
   const activeTable = sheet.tableAt(ctl.sel.active.row, ctl.sel.active.col);
   const activeChart = ctl.selObj?.kind === "chart" ? sheet.charts.find((c) => c.id === ctl.selObj!.id) : undefined;
+  const activePivot = !ctl.selObj ? pivotAt(sheet, ctl.sel.active.row, ctl.sel.active.col) : undefined;
   useEffect(() => {
-    if ((tab === "tableDesign" && !activeTable) || ((tab === "chartDesign" || tab === "chartFormat") && !activeChart)) setTab("home");
-  }, [tab, activeTable, activeChart]);
+    if ((tab === "tableDesign" && !activeTable) || ((tab === "chartDesign" || tab === "chartFormat") && !activeChart) || ((tab === "pivotAnalyze" || tab === "pivotDesign") && !activePivot)) setTab("home");
+  }, [tab, activeTable, activeChart, activePivot]);
   useEffect(() => {
     if (activeChart && tab !== "chartFormat") setTab("chartDesign");
   }, [activeChart?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (ctl.requestTab) {
+      setTab(ctl.requestTab);
+      ctl.requestTab = null;
+    }
+  });
 
   const tabs: RibbonTabDef[] = [
     { id: "home", label: "Giriş", content: <HomeTab ctl={ctl} /> },
@@ -123,12 +144,17 @@ export function App() {
     { id: "tableDesign", label: "Tablo Tasarımı", contextual: true, contextualGroup: "Tablo Araçları", hidden: !activeTable, content: activeTable ? <TableDesignTab ctl={ctl} table={activeTable} /> : null },
     { id: "chartDesign", label: "Grafik Tasarımı", contextual: true, contextualGroup: "Grafik Araçları", hidden: !activeChart, content: activeChart ? <ChartDesignTab ctl={ctl} chart={activeChart} /> : null },
     { id: "chartFormat", label: "Biçim", contextual: true, contextualGroup: "Grafik Araçları", hidden: !activeChart, content: activeChart ? <ChartFormatTab ctl={ctl} chart={activeChart} /> : null },
+    { id: "pivotAnalyze", label: "PivotTable Analiz", contextual: true, contextualGroup: "PivotTable Araçları", hidden: !activePivot, content: activePivot ? <PivotAnalyzeTab ctl={ctl} def={activePivot} /> : null },
+    { id: "pivotDesign", label: "Tasarım", contextual: true, contextualGroup: "PivotTable Araçları", hidden: !activePivot, content: activePivot ? <PivotDesignTab ctl={ctl} def={activePivot} /> : null },
   ];
 
   const openContext = (e: { clientX: number; clientY: number; preventDefault: () => void }, kind: "cell" | "col" | "row" | "tab", index?: number) => {
     if (ctl.edit) return;
     if (kind === "tab") ctx.open(e, <TabMenu ctl={ctl} index={index ?? ctl.wb.activeIndex} />);
-    else if (kind === "cell") ctx.open(e, <CellMenu ctl={ctl} />);
+    else if (kind === "cell") {
+      const pv = pivotAt(ctl.sheet, ctl.sel.active.row, ctl.sel.active.col);
+      ctx.open(e, pv && pv.output && pv.rows.length + pv.cols.length + pv.values.length > 0 ? <PivotCellMenu ctl={ctl} def={pv} /> : <CellMenu ctl={ctl} />);
+    }
     else ctx.open(e, <HeaderMenu ctl={ctl} axis={kind === "col" ? "col" : "row"} />);
   };
 
@@ -141,7 +167,7 @@ export function App() {
           title={baseName(ctl.fileName)}
           dirty={ctl.dirty}
           onSearch={(q) => {
-            if (q.trim()) setDialog({ id: "find", arg: { query: q } });
+            if (q.trim()) pushDialog({ id: "find", arg: { query: q } });
           }}
           searchPlaceholder="Ara (Alt+Q)"
           quickAccess={
@@ -159,15 +185,36 @@ export function App() {
       backstage={backstage ? <FileView ctl={ctl} files={files} page={backstage} onClose={() => (setBackstage(null), requestAnimationFrame(() => ctl.focusGrid()))} /> : undefined}
     >
       <div className="tb-root">
-        {sheet.viewMode === "pageLayout" ? (
-          <PageLayoutView ctl={ctl} />
-        ) : (
-          <Grid ctl={ctl} onContextMenu={openContext} onFilterButton={(row, col, x, y) => setFilterMenu({ row, col, x, y })} />
-        )}
+        <div className="tb-workarea">
+          {sheet.viewMode === "pageLayout" ? (
+            <PageLayoutView ctl={ctl} />
+          ) : (
+            <Grid ctl={ctl} onContextMenu={openContext} onFilterButton={(row, col, x, y) => setFilterMenu({ row, col, x, y })} />
+          )}
+          {activePivot && ctl.showFieldList && <PivotFieldsPane ctl={ctl} sheet={sheet} def={activePivot} />}
+        </div>
       </div>
-      {filterMenu && <FilterMenu ctl={ctl} {...filterMenu} onClose={() => (setFilterMenu(null), ctl.focusGrid())} />}
+      {filterMenu &&
+        (() => {
+          const close = () => (setFilterMenu(null), ctl.focusGrid());
+          const pb = pivotButtons(sheet).find((b) => b.row === filterMenu.row && b.col === filterMenu.col);
+          if (pb) return <PivotButtonMenu ctl={ctl} sheet={sheet} pivotId={pb.pivotId} field={pb.field} x={filterMenu.x} y={filterMenu.y} onClose={close} />;
+          return <FilterMenu ctl={ctl} {...filterMenu} onClose={close} />;
+        })()}
       {ctx.element}
-      <DialogHost ctl={ctl} state={dialog} onClose={() => (setDialog(null), requestAnimationFrame(() => ctl.focusGrid()))} files={files} onBackstage={setBackstage} />
+      <DialogHost
+        ctl={ctl}
+        stack={dialogs}
+        onClose={(key) => {
+          setDialogs((st) => {
+            const next = st.filter((d) => d.key !== key);
+            if (!next.length) requestAnimationFrame(() => ctl.focusGrid());
+            return next;
+          });
+        }}
+        files={files}
+        onBackstage={setBackstage}
+      />
       {lifecycle.dialog}
     </AppShell>
   );

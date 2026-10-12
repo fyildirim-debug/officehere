@@ -36,6 +36,7 @@ describe.skipIf(!OUT)("örnek dışa aktarım", () => {
               { type: "text", text: " silinen", marks: [{ type: "deletion", attrs: { author: "Test", date: "2026-10-11T10:00:00Z" } }] },
               { type: "image", attrs: { src: PNG, width: 40, height: 30 } },
               { type: "text", text: " bağlantı", marks: [{ type: "link", attrs: { href: "https://ornek.com" } }] },
+              { type: "text", text: " biçimi değişen", marks: [{ type: "bold" }, { type: "formatChange", attrs: { author: "Test", date: "2026-10-11T10:00:00Z", old: JSON.stringify([{ type: "italic" }]) } }] },
             ],
           },
           { type: "bulletList", content: [{ type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: "Madde" }] }] }] },
@@ -54,5 +55,31 @@ describe.skipIf(!OUT)("örnek dışa aktarım", () => {
       },
     };
     writeFileSync(join(OUT!, "karma.docx"), await writeDocx(doc));
+
+    // Bölümler: dikey (ilk sayfa farklı), yatay, iki sütunlu sürekli bölüm, tek/çift üst bilgiler.
+    const s2 = defaultSettings();
+    s2.page = { ...s2.page, titlePage: true };
+    s2.header = { type: "doc", content: [{ type: "paragraph", attrs: { textAlign: "right" }, content: [{ type: "text", text: "Tek sayfa üst bilgisi" }] }] };
+    s2.headerFirst = { type: "doc", content: [{ type: "paragraph", attrs: { textAlign: "center" }, content: [{ type: "text", text: "İlk sayfa üst bilgisi" }] }] };
+    s2.headerEven = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Çift sayfa üst bilgisi" }] }] };
+    s2.footer = { type: "doc", content: [{ type: "paragraph", attrs: { textAlign: "center" }, content: [{ type: "text", text: "Sayfa " }, { type: "pageField", attrs: { field: "PAGE" } }] }] };
+    s2.oddEven = true;
+    const lorem = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ";
+    const para = (t: string) => ({ type: "paragraph", content: [{ type: "text", text: t }] });
+    const land = { ...s2.page, width: 16838, height: 11906, orientation: "landscape" as const, titlePage: false };
+    const cols = { ...s2.page, columns: 2, columnSpace: 708, columnLine: true };
+    const doc2 = {
+      settings: s2,
+      content: {
+        type: "doc",
+        content: [
+          { type: "section", attrs: { kind: "nextPage", page: null }, content: [{ type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Dikey bölüm" }] }, { type: "textBox", attrs: { x: 300, y: 10, w: 260, h: 120, border: "#C00000", borderWidth: 1.5, fill: "#DAE9F7" }, content: [{ type: "paragraph", content: [{ type: "text", text: "Metin kutusu: " }, { type: "text", text: "kalın", marks: [{ type: "bold" }] }] }] }, para("Birinci sayfa."), { type: "pageBreak" }, para("İkinci sayfa (çift).")] },
+          { type: "section", attrs: { kind: "nextPage", page: land }, content: [{ type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "Yatay bölüm" }] }, para(lorem.repeat(4))] },
+          { type: "section", attrs: { kind: "continuous", page: { ...land, columns: 2, columnSpace: 708, columnLine: true } }, content: Array.from({ length: 6 }, (_, i) => para(`${i + 1}. ${lorem.repeat(2)}`)) },
+          { type: "section", attrs: { kind: "nextPage", page: cols }, content: [para("Sütun bir."), { type: "columnBreak" }, para("Sütun iki.")] },
+        ],
+      },
+    };
+    writeFileSync(join(OUT!, "bolumler.docx"), await writeDocx(doc2));
   });
 });

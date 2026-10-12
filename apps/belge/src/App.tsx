@@ -1,28 +1,31 @@
 // OfficeHere Belge: uygulama kabuğu (başlık, şerit, çalışma alanı, durum çubuğu, Dosya görünümü).
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { flushSync } from "react-dom";
 import { useEditor, useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
 import { NodeSelection, TextSelection } from "@tiptap/pm/state";
-import { ArrowRedo20Regular, ArrowUndo20Regular, Save20Regular, Print20Regular, DocumentPdf24Regular, Code24Regular, DocumentText24Regular, Document24Regular } from "@fluentui/react-icons";
-import { AppShell, MessageBar, OfficeBackstage, QatButton, Ribbon, TitleBar, getUserName, useContextMenu, useDocumentLifecycle, useHotkeys, type OfficeBackstagePage } from "@officehere/ui";
-import { defaultSettings, emptyDoc, pageMetrics, type DocSettings } from "./model/document";
+import { ArrowRedo20Regular, ArrowUndo20Regular, Save20Regular, Print20Regular } from "@fluentui/react-icons";
+import { AppShell, MessageBar, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, useHotkeys, type OfficeBackstagePage } from "@officehere/ui";
+import { defaultSettings, emptyDoc, type DocSettings } from "./model/document";
 import { setActiveNoteEditor, useActiveNoteEditor } from "./state/activeNote";
-import { sectionAt, sectionGeoms } from "./editor/sections";
+import { columnWidthAt as colWidthAt } from "./state/pageSetup";
 import { renderNoteHtml } from "./views/noteHtml";
 import { resolveStyles, styleSheetCss } from "./model/styles";
 import { editorExtensions } from "./editor/extensions";
 import { PaginationController } from "./editor/pagination";
 import { computeFormat, sameFormat } from "./editor/formatState";
-import { collectHeadings, copyFormat, docStats, pasteFormat, wordAt, type CopiedFormat } from "./editor/commands";
+import { collectHeadings, docStats } from "./editor/commands";
 import { setShowMarks } from "./editor/showMarks";
-import { isTracking, setTracking } from "./editor/trackChanges";
 import { readImageFile } from "./editor/image";
 import { annotateNotesHtml } from "./editor/notes";
 import { BelgeContext, type BelgeCtx, type DialogKind, type DialogState, type ViewOptions } from "./state/context";
 import { clearDraft, readDraft, useFileOps, type Draft } from "./state/useFileOps";
 import { DocumentView, TILE_GAP } from "./views/DocumentView";
-import { buildPrintRoot, removePrintRoot } from "./views/printRender";
+import { BelgeBackstage } from "./views/BelgeBackstage";
+import { DraftBar } from "./views/DraftBar";
+import { usePrint } from "./state/usePrint";
+import { useComments } from "./state/useComments";
+import { useEditorClicks } from "./state/useEditorClicks";
+import { useFormatPainter } from "./state/useFormatPainter";
 import { ReadMode } from "./views/ReadMode";
 import { BelgeStatusBar } from "./views/BelgeStatusBar";
 import { buildContextMenu } from "./views/contextMenu";
@@ -37,8 +40,6 @@ import { ReviewTab } from "./ribbon/ReviewTab";
 import { HeaderFooterTab, HelpTab, ViewTab } from "./ribbon/ViewTab";
 import { TableDesignTab, TableLayoutTab } from "./ribbon/TableTabs";
 import { PictureTab } from "./ribbon/PictureTab";
-import { TEMPLATES } from "./templates/templates";
-import { initialsOf } from "./io/docx/reader";
 import "./styles/belge.css";
 import "./styles/document.css";
 
@@ -60,11 +61,8 @@ export function App() {
     setHfEditingState(w);
   }, []);
   const [hfEditor, setHfEditor] = useState<Editor | null>(null);
-  const [activeComment, setActiveComment] = useState<string | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const [draft, setDraft] = useState<Draft | null>(() => readDraft());
-  const [printing, setPrinting] = useState(false);
-  const [painter, setPainter] = useState<{ active: boolean; locked: boolean; fmt: CopiedFormat | null }>({ active: false, locked: false, fmt: null });
   const [version, setVersion] = useState(0);
   const [navFocus, setNavFocus] = useState(0);
   const [spellcheck, setSpellcheck] = useState(true);
@@ -73,6 +71,7 @@ export function App() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const insertImageFileRef = useRef<(f: File, pos: number | null, view: import("@tiptap/pm/view").EditorView) => Promise<void>>(async () => {});
   const imageInput = useRef<HTMLInputElement>(null);
+  const openFileRef = useRef<(f: File) => Promise<void>>(async () => {});
   const ctxMenu = useContextMenu();
 
   const styles = useMemo(() => resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing), [settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing]);
@@ -120,6 +119,13 @@ export function App() {
       },
       handleDrop: (view, event, _slice, moved) => {
         if (moved) return false;
+        // Belge dosyası bırakılırsa açılır (Word'deki gibi).
+        const doc = Array.from(event.dataTransfer?.files ?? []).find((f) => /\.(docx|docm|dotx|html?|txt)$/i.test(f.name));
+        if (doc) {
+          event.preventDefault();
+          void openFileRef.current(doc);
+          return true;
+        }
         const files = Array.from(event.dataTransfer?.files ?? []).filter((f) => f.type.startsWith("image/"));
         if (!files.length) return false;
         event.preventDefault();
@@ -135,6 +141,26 @@ export function App() {
   useEffect(() => {
     if (import.meta.env.DEV) (window as unknown as { __belge: unknown }).__belge = { editor, controller };
   }, [editor, controller]);
+
+  // Pencereye bırakılan belge dosyası açılır (editör dışına bırakılsa da).
+  useEffect(() => {
+    const isFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+    const over = (e: DragEvent) => {
+      if (isFiles(e)) e.preventDefault();
+    };
+    const drop = (e: DragEvent) => {
+      if (!isFiles(e) || (e.target as HTMLElement).closest?.(".ProseMirror")) return;
+      const f = Array.from(e.dataTransfer?.files ?? []).find((x) => /\.(docx|docm|dotx|html?|txt)$/i.test(x.name));
+      e.preventDefault();
+      if (f) void openFileRef.current(f);
+    };
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", drop);
+    };
+  }, []);
 
   // Açılışta belgeye hemen odaklan.
   useEffect(() => {
@@ -190,6 +216,9 @@ export function App() {
     setShowMarks(editor.view, view.showMarks);
   }, [editor, view.showMarks, version === 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Açıklamalar ve değişiklik izleme
+  const { activeComment, setActiveComment, newComment, deleteComment, deleteAllComments, toggleTrack } = useComments({ editor, updateSettings, setView, notify });
+
   const onLoaded = useCallback(() => {
     setHfEditing(null);
     setActiveComment(null);
@@ -217,7 +246,10 @@ export function App() {
       const t = e.target as HTMLElement;
       if (t.closest?.(".bl-body, .bl-hf-edit, input, textarea, select, .oh-dialog, .bl-nav, .bl-comments, .oh-titlebar, .oh-backstage, .bl-read")) return;
       window.setTimeout(() => {
-        if ((document.activeElement === document.body || document.activeElement === null) && !document.querySelector(".oh-dialog, [data-oh-popover]")) activeRef.current.view.focus();
+        const ae = document.activeElement as HTMLElement | null;
+        // Şerit sekmesine tıklamak da klavye odağını belgeden almaz (Word'deki gibi).
+        const idle = !ae || ae === document.body || !!ae.closest?.(".oh-ribbon-tabs [role=tab]");
+        if (idle && !document.querySelector(".oh-dialog, [data-oh-popover]")) activeRef.current.view.focus();
       }, 0);
     };
     document.addEventListener("pointerup", onUp, true);
@@ -236,49 +268,6 @@ export function App() {
     hadDialog.current = !!dialog;
   }, [dialog]);
 
-  /* ---------------- Açıklamalar ve değişiklik izleme ---------------- */
-
-  const newComment = useCallback(() => {
-    let { from, to } = editor.state.selection;
-    if (from === to) {
-      const w = wordAt(editor.state.doc, from);
-      if (!w) return notify("Açıklama eklemek için metin seçin.");
-      from = w.from;
-      to = w.to;
-    }
-    const id = `c${Date.now().toString(36)}`;
-    const author = getUserName();
-    editor.chain().setTextSelection({ from, to }).setComment(id).run();
-    updateSettings((s) => ({ ...s, comments: { ...s.comments, [id]: { id, author, initials: initialsOf(author), date: new Date().toISOString(), text: "" } } }));
-    setActiveComment(id);
-    setView({ showComments: true });
-  }, [editor, notify, updateSettings, setView]);
-
-  const deleteComment = useCallback(
-    (id: string) => {
-      editor.commands.unsetComment(id);
-      updateSettings((s) => {
-        const c = { ...s.comments };
-        delete c[id];
-        return { ...s, comments: c };
-      });
-      setActiveComment(null);
-    },
-    [editor, updateSettings],
-  );
-
-  const deleteAllComments = useCallback(() => {
-    const type = editor.state.schema.marks.comment;
-    const tr = editor.state.tr.removeMark(0, editor.state.doc.content.size, type);
-    editor.view.dispatch(tr);
-    updateSettings((s) => ({ ...s, comments: {} }));
-  }, [editor, updateSettings]);
-
-  const toggleTrack = useCallback(() => {
-    const on = !isTracking(editor.state);
-    setTracking(editor.view, on, getUserName());
-  }, [editor]);
-
   const openDialog = useCallback((kind: DialogKind, arg?: string) => setDialog({ kind, arg }), []);
   const openFind = useCallback(() => {
     setView({ navPane: true });
@@ -294,33 +283,7 @@ export function App() {
   };
   const insertNoteRef = useRef<(k: "footnote" | "endnote") => void>(() => {});
 
-  /* ---------------- Biçim Boyacısı ---------------- */
-
-  const startFormatPainter = useCallback(
-    (lock: boolean) => {
-      if (painter.active && !lock) return setPainter({ active: false, locked: false, fmt: null });
-      setPainter({ active: true, locked: lock, fmt: copyFormat(editor) });
-    },
-    [editor, painter.active],
-  );
-
-  useEffect(() => {
-    if (!painter.active || !painter.fmt) return;
-    const dom = editor.view.dom;
-    const onUp = () => {
-      requestAnimationFrame(() => {
-        pasteFormat(editor, painter.fmt!);
-        if (!painter.locked) setPainter({ active: false, locked: false, fmt: null });
-      });
-    };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPainter({ active: false, locked: false, fmt: null });
-    dom.addEventListener("mouseup", onUp);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      dom.removeEventListener("mouseup", onUp);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [editor, painter]);
+  const { painter, startFormatPainter } = useFormatPainter(editor);
 
   /* ---------------- Ekle yardımcıları ---------------- */
 
@@ -386,51 +349,12 @@ export function App() {
     [controller, editor, view.zoom, setView],
   );
 
-  const preparePrint = useCallback(() => {
-    const pagesEl = document.querySelector<HTMLElement>(".bl-pages");
-    if (!pagesEl) return false;
-    return !!buildPrintRoot(pagesEl, { pages: controller.info.pages, scale: view.zoom / 100, pageColor: settings.pageColor });
-  }, [settings.pageColor, controller, view.zoom]);
-
-  const finishPrint = useCallback(() => {
-    removePrintRoot();
-  }, []);
-
-  const print = useCallback(async () => {
-    flushSync(() => {
-      setBackstage(null);
-      setHfEditing(null);
-      setView({ mode: "print", focusMode: false });
-    });
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    controller.measureNow?.();
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    if (!preparePrint()) return;
-    setPrinting(true);
-    try {
-      window.print();
-    } finally {
-      finishPrint();
-      setPrinting(false);
-    }
-  }, [controller, setView, preparePrint, finishPrint]);
-
-  useEffect(() => {
-    if (import.meta.env.DEV) Object.assign((window as unknown as { __belge: object }).__belge ?? {}, { preparePrint, finishPrint });
-  }, [preparePrint, finishPrint]);
-
-  // Tarayıcı menüsünden yazdırma.
-  useEffect(() => {
-    const before = () => {
-      if (!document.getElementById("bl-print-root")) preparePrint();
-    };
-    window.addEventListener("beforeprint", before);
-    window.addEventListener("afterprint", finishPrint);
-    return () => {
-      window.removeEventListener("beforeprint", before);
-      window.removeEventListener("afterprint", finishPrint);
-    };
-  }, [preparePrint, finishPrint]);
+  const leaveModes = useCallback(() => {
+    setBackstage(null);
+    setHfEditing(null);
+    setView({ mode: "print", focusMode: false });
+  }, [setHfEditing, setView]);
+  const { printing, print } = usePrint({ controller, settings, zoom: view.zoom, fileName: files.fileName, leaveModes, notify });
 
   /* ---------------- Kısayollar ---------------- */
 
@@ -451,42 +375,7 @@ export function App() {
   });
 
   // Ctrl+tıklama ile köprüyü aç.
-  const openLink = useCallback(
-    (href: string) => {
-      if (href.startsWith("#")) {
-        const name = href.slice(1);
-        let target = -1;
-        editor.state.doc.descendants((n, pos) => {
-          if (target < 0 && n.type.name === "bookmark" && n.attrs.name === name) target = pos;
-          return target < 0;
-        });
-        if (name === "_top") target = 0;
-        if (target >= 0) editor.view.dispatch(editor.state.tr.setSelection(TextSelection.near(editor.state.doc.resolve(target))).scrollIntoView());
-        return;
-      }
-      window.open(href, "_blank", "noopener");
-    },
-    [editor],
-  );
-
-  useEffect(() => {
-    const dom = editor.view.dom;
-    const onClick = (e: MouseEvent) => {
-      const a = (e.target as HTMLElement).closest("a[href]");
-      if (a && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        openLink(a.getAttribute("href") ?? "");
-      } else if (a) e.preventDefault();
-      const toc = (e.target as HTMLElement).closest(".bl-toc-entry");
-      if (toc && (e.ctrlKey || e.metaKey)) {
-        const pos = Number(toc.getAttribute("data-pos"));
-        const heading = collectHeadings(editor.state.doc).find((h) => h.pos === pos) ?? collectHeadings(editor.state.doc).find((h) => h.text === toc.querySelector(".bl-toc-text")?.textContent);
-        if (heading) editor.view.dispatch(editor.state.tr.setSelection(TextSelection.near(editor.state.doc.resolve(heading.pos + 1))).scrollIntoView());
-      }
-    };
-    dom.addEventListener("click", onClick);
-    return () => dom.removeEventListener("click", onClick);
-  }, [editor, openLink]);
+  const openLink = useEditorClicks(editor);
 
   // Odak modu ve Okuma Modu'nda şerit gizlenir.
   const onContextMenu = (e: React.MouseEvent) => {
@@ -507,6 +396,8 @@ export function App() {
     (which: "header" | "footer" | null) => {
       setHfEditing(null);
       if (which) {
+        // Belge gövdesi hemen odağı bırakır: üst bilgi açılana dek basılan tuşlar gövdeye yazılmasın.
+        editor.view.dom.blur();
         setView({ mode: "print" });
         // İmleçteki sayfanın üst/alt bilgisi açılır.
         const page = controller.pageOf(editor.state.selection.from);
@@ -518,6 +409,7 @@ export function App() {
 
   const ctx: BelgeCtx = {
     editor: active,
+    mainEditor: editor,
     fmt: fmt ?? computeFormat(active, styles),
     settings,
     updateSettings,
@@ -564,10 +456,7 @@ export function App() {
   }, [hfEditing]);
 
   /** Konumdaki bölümün sütun genişliği (resimler buna sığdırılır). */
-  const columnWidthAt = (pos: number) => {
-    const at = sectionAt(editor.state.doc, pos);
-    return sectionGeoms(editor.state.doc, settings.page)[at?.index ?? 0]?.colW ?? pageMetrics(settings.page).contentW;
-  };
+  const columnWidthAt = (pos: number) => colWidthAt(editor, settings.page, pos);
 
   insertImageFileRef.current = async (file, pos, view) => {
     try {
@@ -579,6 +468,18 @@ export function App() {
       notify((err as Error).message, "error");
     }
   };
+
+  const openLocalFile = async (file: File) => {
+    if (!(await confirmDiscard())) return;
+    setBackstage(null);
+    await files.openData(file.name, await file.arrayBuffer(), { name: file.name });
+  };
+  const onOpenFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) await openLocalFile(file);
+  };
+  openFileRef.current = openLocalFile;
 
   const onImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -594,109 +495,38 @@ export function App() {
 
   const backstageEl =
     backstage !== null ? (
-      <OfficeBackstage
-        app="belge"
-        initialPage={backstage}
-        fileName={files.fileName}
-        filePath={files.fileRef?.path}
-        templates={TEMPLATES.map((t) => ({ id: t.id, label: t.label, preview: t.preview }))}
-        onNew={async (id) => {
-          if (await files.newDocument(id)) setBackstage(null);
-        }}
-        onOpen={async () => {
-          setBackstage(null);
-          await files.openDialog();
-        }}
-        onOpenRecent={async (f) => {
-          setBackstage(null);
-          if (f.path !== f.name) await files.openPath(f.path);
-          else await files.openDialog();
-        }}
-        onSave={async () => {
-          if (await files.save()) setBackstage(null);
-        }}
-        onSaveAs={async () => {
-          if (await files.saveAs()) setBackstage(null);
-        }}
+      <BelgeBackstage
+        page={backstage}
+        files={files}
+        settings={settings}
+        pageCount={pageCount}
+        stats={stats}
+        previewHtml={backstage === "print" ? editor.getHTML() : ""}
+        autosave={autosave}
+        setAutosave={setAutosave}
+        spellcheck={spellcheck}
+        setSpellcheck={setSpellcheck}
         onPrint={() => void print()}
-        exports={[
-          { id: "pdf", title: "PDF Belgesi Oluştur", description: "Yazdır iletişim kutusunda hedef olarak “PDF olarak kaydet” seçin.", icon: <DocumentPdf24Regular /> },
-          { id: "docx", title: "Belge (.docx)", description: "Office Open XML belgesi olarak indirin.", icon: <Document24Regular /> },
-          { id: "html", title: "Web Sayfası (.html)", description: "Stilleriyle birlikte tek dosyalık web sayfası.", icon: <Code24Regular /> },
-          { id: "txt", title: "Düz Metin (.txt)", description: "Biçimlendirme olmadan yalnızca metin (UTF-8).", icon: <DocumentText24Regular /> },
-        ]}
-        onExport={async (id) => {
-          if (id === "pdf") return void print();
-          await files.exportAs(id);
-          setBackstage(null);
-        }}
-        onClose={async () => {
-          await files.closeDocument();
-          setBackstage(null);
-        }}
-        onBack={() => setBackstage(null)}
-        info={[
-          ["Sayfalar", String(pageCount)],
-          ["Sözcükler", stats.words.toLocaleString("tr-TR")],
-          ["Karakterler", stats.chars.toLocaleString("tr-TR")],
-          ["Başlık", settings.properties.title || "Başlık ekleyin"],
-          ["Yazar", settings.properties.author || getUserName()],
-          ["Oluşturulma", new Date(settings.properties.created).toLocaleString("tr-TR")],
-          ["Son Değiştirme", new Date(settings.properties.modified).toLocaleString("tr-TR")],
-        ]}
-        printPreview={<div className="bl-print-preview bl-doc" dangerouslySetInnerHTML={{ __html: editor.getHTML() }} />}
-        extraOptions={
-          <>
-            <label className="oh-field is-inline">
-              <span className="oh-field-label">Otomatik kurtarma bilgilerini her 5 saniyede bir kaydet</span>
-              <input type="checkbox" checked={autosave} onChange={(e) => setAutosave(e.target.checked)} />
-            </label>
-            <label className="oh-field is-inline">
-              <span className="oh-field-label">Yazarken yazım denetimi yap</span>
-              <input type="checkbox" checked={spellcheck} onChange={(e) => setSpellcheck(e.target.checked)} />
-            </label>
-          </>
-        }
+        onPdf={() => void print("pdf")}
+        onClose={() => setBackstage(null)}
       />
     ) : undefined;
 
   const belowRibbon = (
     <>
       {draft && (
-        <MessageBar
-          kind="warning"
-          onClose={() => {
+        <DraftBar
+          draft={draft}
+          onRestore={() => {
+            files.load({ content: draft.content, settings: { ...defaultSettings(), ...draft.settings } }, draft.fileName, null);
+            setDirty(true);
+            setDraft(null);
+          }}
+          onDiscard={() => {
             clearDraft();
             setDraft(null);
           }}
-          actions={
-            <>
-              <button
-                type="button"
-                className="oh-btn is-primary"
-                onClick={() => {
-                  files.load({ content: draft.content, settings: { ...defaultSettings(), ...draft.settings } }, draft.fileName, null);
-                  setDirty(true);
-                  setDraft(null);
-                }}
-              >
-                Geri Yükle
-              </button>
-              <button
-                type="button"
-                className="oh-btn"
-                onClick={() => {
-                  clearDraft();
-                  setDraft(null);
-                }}
-              >
-                Sil
-              </button>
-            </>
-          }
-        >
-          <strong>Kurtarılan belge</strong> “{draft.fileName}” için kaydedilmemiş değişiklikler bulundu ({new Date(draft.savedAt).toLocaleString("tr-TR")}).
-        </MessageBar>
+        />
       )}
       {note && (
         <MessageBar kind={note.kind} onClose={() => setNote(null)}>
@@ -803,6 +633,8 @@ export function App() {
       {ctxMenu.element}
       {lifecycleDialog}
       <input ref={imageInput} type="file" accept="image/*" className="oh-hidden-input" onChange={onImageFile} />
+      {/* Dosya açma girişi (sürükle-bırak ve dosya seçicisi olmayan ortamlar için de kullanılır). */}
+      <input id="bl-open-input" type="file" accept=".docx,.docm,.dotx,.html,.htm,.txt" className="oh-hidden-input" aria-label="Belge aç" onChange={onOpenFile} />
       {view.focusMode && (
         <button type="button" className="bl-focus-exit" onClick={() => setView({ focusMode: false })}>
           Odaktan çık (Esc)

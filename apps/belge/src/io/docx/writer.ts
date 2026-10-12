@@ -1,453 +1,15 @@
 // DOCX yazıcı: ProseMirror JSON + belge ayarları → OOXML paketi (ECMA-376).
 import JSZip from "jszip";
 import type { JSONContent } from "@tiptap/core";
-import type { BelgeDocument, CommentData, DocSettings } from "../../model/document";
+import type { BelgeDocument, CommentData, DocSettings, HfVariant, PageSetup, SectionKind } from "../../model/document";
+import { normalizeDoc } from "../../model/document";
 import { resolveStyles, type BorderSpec } from "../../model/styles";
-import type { ParaBorders } from "../../editor/paragraphFormat";
-import type { TocEntry } from "../../editor/nodes";
-import { NS, REL, XML_HEAD, cleanText, esc, hex6, highlightName } from "./xml";
-import { borderXml, buildStylesXml, fontsXml, tableStyleId } from "./styleXml";
-import { levelDef, sigKey, type ListSig } from "./numbering";
+import { NS, REL, XML_HEAD, cleanText, esc, hex6 } from "./xml";
+import { borderXml, buildStylesXml, fontsXml } from "./styleXml";
+import { levelDef } from "./numbering";
 
-type Mark = { type: string; attrs?: Record<string, unknown> };
+import { Ctx, DOC_NS, PartWriter, Rels, type NoteData } from "./partWriter";
 
-const DOC_NS = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="${NS.mc}" xmlns:o="${NS.o}" xmlns:r="${NS.r}" xmlns:v="${NS.v}" xmlns:w10="${NS.w10}" xmlns:wp="${NS.wp}" xmlns:a="${NS.a}" xmlns:pic="${NS.pic}" xmlns:w="${NS.w}"`;
-
-const EMU_PER_PX = 9525;
-
-interface Media {
-  name: string;
-  data: Uint8Array;
-  ext: string;
-}
-
-/** Bir parça (belge, üst/alt bilgi) için ilişki tablosu. */
-class Rels {
-  private list: { id: string; type: string; target: string; external?: boolean }[] = [];
-  add(type: string, target: string, external = false): string {
-    const hit = this.list.find((r) => r.type === type && r.target === target);
-    if (hit) return hit.id;
-    const id = `rId${this.list.length + 1}`;
-    this.list.push({ id, type, target, external });
-    return id;
-  }
-  xml(): string {
-    return `${XML_HEAD}<Relationships xmlns="${NS.rel}">${this.list
-      .map((r) => `<Relationship Id="${r.id}" Type="${r.type}" Target="${esc(r.target)}"${r.external ? ' TargetMode="External"' : ""}/>`)
-      .join("")}</Relationships>`;
-  }
-  get size() {
-    return this.list.length;
-  }
-}
-
-function dataUrlToBytes(src: string): { data: Uint8Array; ext: string } | null {
-  const m = /^data:([^;,]+)(;base64)?,(.*)$/s.exec(src);
-  if (!m) return null;
-  const mime = m[1].toLowerCase();
-  const ext = mime.includes("png") ? "png" : mime.includes("jpeg") || mime.includes("jpg") ? "jpeg" : mime.includes("gif") ? "gif" : mime.includes("bmp") ? "bmp" : mime.includes("svg") ? "svg" : mime.includes("webp") ? "webp" : "png";
-  let bytes: Uint8Array;
-  if (m[2]) {
-    const bin = atob(m[3]);
-    bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  } else bytes = new TextEncoder().encode(decodeURIComponent(m[3]));
-  return { data: bytes, ext };
-}
-
-const ptTw = (pt: number) => Math.round(pt * 20);
-
-/** Yazım bağlamı: belge genelinde sayaçlar. */
-class Ctx {
-  media: Media[] = [];
-  numbering = new Map<string, { abstractId: number; sig: ListSig }>();
-  nums: { numId: number; abstractId: number; start: number }[] = [];
-  bookmarkId = 0;
-  drawingId = 1;
-  commentIds = new Map<string, number>();
-  openComments = new Set<string>();
-  usedComments = new Set<string>();
-  revId = 1;
-  footnotes: string[] = [];
-  endnotes: string[] = [];
-  constructor(public settings: DocSettings) {}
-
-  commentNum(id: string): number {
-    let n = this.commentIds.get(id);
-    if (n === undefined) {
-      n = this.commentIds.size;
-      this.commentIds.set(id, n);
-    }
-    return n;
-  }
-
-  numFor(sig: ListSig, start: number): number {
-    const key = sigKey(sig);
-    let abs = this.numbering.get(key);
-    if (!abs) {
-      abs = { abstractId: this.numbering.size, sig };
-      this.numbering.set(key, abs);
-    }
-    const numId = this.nums.length + 1;
-    this.nums.push({ numId, abstractId: abs.abstractId, start });
-    return numId;
-  }
-}
-
-/** Bir parçanın (gövde/üst bilgi/alt bilgi) bloklarını yazar. */
-class PartWriter {
-  constructor(
-    private ctx: Ctx,
-    private rels: Rels,
-    private contentWidthTw: number,
-  ) {}
-
-  blocks(nodes: JSONContent[] | undefined, list?: { numId: number; ilvl: number }): string {
-    let out = "";
-    for (const n of nodes ?? []) out += this.block(n, list);
-    return out;
-  }
-
-  block(n: JSONContent, list?: { numId: number; ilvl: number }): string {
-    switch (n.type) {
-      case "paragraph":
-      case "heading":
-        return this.paragraph(n, list);
-      case "bulletList":
-      case "orderedList":
-        return this.list(n, list ? list.ilvl + 1 : 0);
-      case "table":
-        return this.table(n);
-      case "horizontalRule":
-        return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr></w:pPr></w:p>';
-      case "pageBreak":
-        return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
-      case "toc":
-        return this.toc(n);
-      default:
-        return n.content ? this.blocks(n.content, list) : "";
-    }
-  }
-
-  list(n: JSONContent, ilvl: number): string {
-    const sig: ListSig = {
-      type: n.type === "bulletList" ? "bullet" : "ordered",
-      style: (n.attrs?.listStyle as string | null) ?? null,
-      multilevel: (n.attrs?.multilevel as string | null) ?? null,
-    };
-    const numId = this.ctx.numFor(sig, (n.attrs?.start as number | undefined) ?? 1);
-    let out = "";
-    for (const li of n.content ?? []) {
-      (li.content ?? []).forEach((child, i) => {
-        if (i === 0 && (child.type === "paragraph" || child.type === "heading")) out += this.paragraph(child, { numId, ilvl });
-        else if (child.type === "paragraph" || child.type === "heading") out += this.paragraph(child, undefined, 720 * (ilvl + 1));
-        else out += this.block(child, { numId, ilvl });
-      });
-    }
-    return out;
-  }
-
-  pPr(n: JSONContent, list?: { numId: number; ilvl: number }, contIndent?: number, extra = ""): string {
-    const a = (n.attrs ?? {}) as Record<string, unknown>;
-    let x = "";
-    let style: string | null = null;
-    if (n.type === "heading") style = `Heading${a.level ?? 1}`;
-    else if (a.styleId) style = a.styleId as string;
-    else if (list || contIndent) style = "ListParagraph";
-    if (style) x += `<w:pStyle w:val="${esc(style)}"/>`;
-    if (a.keepNext) x += "<w:keepNext/>";
-    if (a.keepLines) x += "<w:keepLines/>";
-    if (a.pageBreakBefore) x += "<w:pageBreakBefore/>";
-    if (list) x += `<w:numPr><w:ilvl w:val="${list.ilvl}"/><w:numId w:val="${list.numId}"/></w:numPr>`;
-    const b = a.borders as ParaBorders | null;
-    if (b && (b.top || b.left || b.bottom || b.right)) {
-      x += `<w:pBdr>${b.top ? borderXml("top", b.top) : ""}${b.left ? borderXml("left", b.left as BorderSpec) : ""}${b.bottom ? borderXml("bottom", b.bottom) : ""}${b.right ? borderXml("right", b.right as BorderSpec) : ""}</w:pBdr>`;
-    }
-    if (a.shading) x += `<w:shd w:val="clear" w:color="auto" w:fill="${hex6(a.shading as string) ?? "auto"}"/>`;
-    x += extra;
-    const sp: string[] = [];
-    if (a.spaceBefore != null) sp.push(`w:before="${ptTw(a.spaceBefore as number)}"`);
-    if (a.spaceAfter != null) sp.push(`w:after="${ptTw(a.spaceAfter as number)}"`);
-    if (a.lineHeight != null) {
-      const rule = (a.lineRule as string | null) ?? "auto";
-      if (rule === "auto") sp.push(`w:line="${Math.round((a.lineHeight as number) * 240)}" w:lineRule="auto"`);
-      else sp.push(`w:line="${ptTw(a.lineHeight as number)}" w:lineRule="${rule === "exact" ? "exact" : "atLeast"}"`);
-    }
-    if (sp.length) x += `<w:spacing ${sp.join(" ")}/>`;
-    const ind: string[] = [];
-    if (contIndent) ind.push(`w:left="${contIndent}"`);
-    else if (a.indentLeft != null && !list) ind.push(`w:left="${ptTw(a.indentLeft as number)}"`);
-    if (a.indentRight != null) ind.push(`w:right="${ptTw(a.indentRight as number)}"`);
-    if (a.indentFirst != null && !list) {
-      const f = a.indentFirst as number;
-      ind.push(f >= 0 ? `w:firstLine="${ptTw(f)}"` : `w:hanging="${ptTw(-f)}"`);
-    }
-    if (ind.length) x += `<w:ind ${ind.join(" ")}/>`;
-    const al = a.textAlign as string | null;
-    if (al) x += `<w:jc w:val="${al === "justify" ? "both" : al === "left" ? "left" : al}"/>`;
-    return x ? `<w:pPr>${x}</w:pPr>` : "";
-  }
-
-  paragraph(n: JSONContent, list?: { numId: number; ilvl: number }, contIndent?: number): string {
-    return `<w:p>${this.pPr(n, list, contIndent)}${this.inline(n.content ?? [])}</w:p>`;
-  }
-
-  /** Satır içi içerik: köprü, izlenen değişiklik ve açıklama sarmalayıcılarıyla koşular. */
-  inline(nodes: JSONContent[]): string {
-    let out = "";
-    let link: string | null = null;
-    let rev: "ins" | "del" | null = null;
-    const closeRev = () => {
-      if (rev) out += rev === "ins" ? "</w:ins>" : "</w:del>";
-      rev = null;
-    };
-    const closeLink = () => {
-      closeRev();
-      if (link !== null) out += "</w:hyperlink>";
-      link = null;
-    };
-    for (const node of nodes) {
-      const marks = (node.marks ?? []) as Mark[];
-      // Açıklama aralıkları
-      const cids = new Set(marks.filter((m) => m.type === "comment").map((m) => String(m.attrs?.id ?? "")));
-      for (const id of [...this.ctx.openComments]) {
-        if (!cids.has(id)) {
-          closeLink();
-          const num = this.ctx.commentNum(id);
-          out += `<w:commentRangeEnd w:id="${num}"/><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${num}"/></w:r>`;
-          this.ctx.openComments.delete(id);
-        }
-      }
-      for (const id of cids) {
-        if (!this.ctx.openComments.has(id)) {
-          closeLink();
-          out += `<w:commentRangeStart w:id="${this.ctx.commentNum(id)}"/>`;
-          this.ctx.openComments.add(id);
-          this.ctx.usedComments.add(id);
-        }
-      }
-      if (node.type === "bookmark") {
-        const id = this.ctx.bookmarkId++;
-        out += `<w:bookmarkStart w:id="${id}" w:name="${esc(String(node.attrs?.name ?? ""))}"/><w:bookmarkEnd w:id="${id}"/>`;
-        continue;
-      }
-      const lm = marks.find((m) => m.type === "link");
-      const href = lm ? String(lm.attrs?.href ?? "") : null;
-      if (href !== link) {
-        closeLink();
-        if (href !== null) {
-          if (href.startsWith("#")) out += `<w:hyperlink w:anchor="${esc(href.slice(1))}" w:history="1">`;
-          else out += `<w:hyperlink r:id="${this.rels.add(REL.hyperlink, href, true)}" w:history="1">`;
-          link = href;
-        }
-      }
-      const r: "ins" | "del" | null = marks.some((m) => m.type === "insertion") ? "ins" : marks.some((m) => m.type === "deletion") ? "del" : null;
-      if (r !== rev) {
-        closeRev();
-        if (r) {
-          const m = marks.find((x) => x.type === (r === "ins" ? "insertion" : "deletion"))!;
-          out += `<w:${r} w:id="${this.ctx.revId++}" w:author="${esc(String(m.attrs?.author || "Kullanıcı"))}" w:date="${esc(String(m.attrs?.date || new Date().toISOString().replace(/\.\d+Z$/, "Z")))}">`;
-          rev = r;
-        }
-      }
-      out += this.run(node, marks, link !== null, rev === "del");
-    }
-    closeLink();
-    return out;
-  }
-
-  rPr(marks: Mark[], isLink: boolean): string {
-    let x = "";
-    const has = (t: string) => marks.find((m) => m.type === t);
-    const ts = (has("textStyle")?.attrs ?? {}) as Record<string, unknown>;
-    const cs = has("charStyle");
-    if (cs) x += `<w:rStyle w:val="${esc(String(cs.attrs?.styleId))}"/>`;
-    else if (isLink) x += '<w:rStyle w:val="Hyperlink"/>';
-    if (ts.fontFamily) x += fontsXml(String(ts.fontFamily).replace(/["']/g, "").split(",")[0].trim());
-    if (has("bold")) x += "<w:b/><w:bCs/>";
-    if (has("italic")) x += "<w:i/><w:iCs/>";
-    if (ts.caps) x += "<w:caps/>";
-    if (ts.smallCaps) x += "<w:smallCaps/>";
-    if (has("strike")) x += "<w:strike/>";
-    if (ts.doubleStrike) x += "<w:dstrike/>";
-    if (ts.hidden) x += "<w:vanish/>";
-    const color = hex6(ts.color as string | undefined);
-    if (color) x += `<w:color w:val="${color}"/>`;
-    if (ts.letterSpacing) x += `<w:spacing w:val="${ptTw(Number(ts.letterSpacing))}"/>`;
-    if (ts.fontSize) {
-      const pt = parseFloat(String(ts.fontSize));
-      if (pt > 0) x += `<w:sz w:val="${Math.round(pt * 2)}"/><w:szCs w:val="${Math.round(pt * 2)}"/>`;
-    }
-    const hl = has("highlight");
-    let shdFill: string | null = hex6(ts.backgroundColor as string | undefined);
-    if (hl) {
-      const c = hex6((hl.attrs?.color as string | undefined) ?? "#FFFF00") ?? "FFFF00";
-      const name = highlightName(`#${c}`);
-      if (name) x += `<w:highlight w:val="${name}"/>`;
-      else shdFill = c;
-    }
-    const u = has("underline");
-    if (u) {
-      const t = String(u.attrs?.type ?? "single");
-      const val = t === "dashed" ? "dash" : t === "wave" ? "wave" : t;
-      const uc = hex6(u.attrs?.color as string | undefined);
-      x += `<w:u w:val="${val}"${uc ? ` w:color="${uc}"` : ""}/>`;
-    }
-    if (shdFill) x += `<w:shd w:val="clear" w:color="auto" w:fill="${shdFill}"/>`;
-    if (has("superscript")) x += '<w:vertAlign w:val="superscript"/>';
-    else if (has("subscript")) x += '<w:vertAlign w:val="subscript"/>';
-    return x ? `<w:rPr>${x}</w:rPr>` : "";
-  }
-
-  run(node: JSONContent, marks: Mark[], isLink: boolean, deleted: boolean): string {
-    const rpr = this.rPr(marks, isLink);
-    switch (node.type) {
-      case "text": {
-        const text = cleanText(node.text ?? "");
-        let body = "";
-        const tTag = deleted ? "w:delText" : "w:t";
-        for (const [i, seg] of text.split("\t").entries()) {
-          if (i > 0) body += "<w:tab/>";
-          if (seg) body += `<${tTag} xml:space="preserve">${esc(seg)}</${tTag}>`;
-        }
-        return `<w:r>${rpr}${body}</w:r>`;
-      }
-      case "hardBreak":
-        return `<w:r>${rpr}<w:br/></w:r>`;
-      case "pageField": {
-        const f = node.attrs?.field === "NUMPAGES" ? "NUMPAGES" : "PAGE";
-        return `<w:fldSimple w:instr=" ${f} \\* MERGEFORMAT "><w:r>${rpr}<w:t>1</w:t></w:r></w:fldSimple>`;
-      }
-      case "image":
-        return this.image(node, rpr);
-      case "note": {
-        const end = node.attrs?.kind === "endnote";
-        const list = end ? this.ctx.endnotes : this.ctx.footnotes;
-        list.push(String(node.attrs?.text ?? ""));
-        const id = list.length;
-        return end
-          ? `<w:r><w:rPr><w:rStyle w:val="EndnoteReference"/></w:rPr><w:endnoteReference w:id="${id}"/></w:r>`
-          : `<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr><w:footnoteReference w:id="${id}"/></w:r>`;
-      }
-      default:
-        return "";
-    }
-  }
-
-  image(node: JSONContent, rpr: string): string {
-    const a = (node.attrs ?? {}) as Record<string, unknown>;
-    const src = String(a.src ?? "");
-    const bin = dataUrlToBytes(src);
-    if (!bin) return "";
-    const name = `image${this.ctx.media.length + 1}.${bin.ext}`;
-    this.ctx.media.push({ name, data: bin.data, ext: bin.ext });
-    const rid = this.rels.add(REL.image, `media/${name}`);
-    const w = Math.max(1, Math.round(Number(a.width) || 200));
-    const h = Math.max(1, Math.round(Number(a.height) || 150));
-    const cx = w * EMU_PER_PX;
-    const cy = h * EMU_PER_PX;
-    const id = this.ctx.drawingId++;
-    const descr = a.alt ? ` descr="${esc(String(a.alt))}"` : "";
-    const rot = Number(a.rotate) || 0;
-    const xfrmAttr = `${rot ? ` rot="${rot * 60000}"` : ""}${a.flipH ? ' flipH="1"' : ""}${a.flipV ? ' flipV="1"' : ""}`;
-    return (
-      `<w:r>${rpr}<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
-      `<wp:docPr id="${id}" name="Resim ${id}"${descr}/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>` +
-      `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="${name}"${descr}/><pic:cNvPicPr/></pic:nvPicPr>` +
-      `<pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
-      `<pic:spPr><a:xfrm${xfrmAttr}><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`
-    );
-  }
-
-  table(n: JSONContent): string {
-    const a = (n.attrs ?? {}) as Record<string, unknown>;
-    const rows = n.content ?? [];
-    // Izgara: sütun sayısı ve genişlikler (ilk satırdan).
-    const colWidths: (number | null)[] = [];
-    for (const cell of rows[0]?.content ?? []) {
-      const span = (cell.attrs?.colspan as number) ?? 1;
-      const cw = (cell.attrs?.colwidth as number[] | null) ?? null;
-      for (let j = 0; j < span; j++) colWidths.push(cw?.[j] ?? null);
-    }
-    const ncols = colWidths.length || 1;
-    const known = colWidths.filter((w): w is number => !!w);
-    const autoW = Math.round(this.contentWidthTw / ncols);
-    const gridTw = colWidths.map((w) => (w ? Math.round(w * 15) : known.length === ncols ? autoW : autoW));
-    const style = tableStyleId(a.tableStyle as string | null);
-    const fr = a.headerRow === false ? 0 : 1;
-    const lr = a.totalRow ? 1 : 0;
-    const fc = a.firstColumn ? 1 : 0;
-    const nh = a.bandedRows === false ? 1 : 0;
-    const lookVal = (fr * 0x20) | (lr * 0x40) | (fc * 0x80) | (nh * 0x200) | 0x400;
-    const look = `<w:tblLook w:val="${lookVal.toString(16).toUpperCase().padStart(4, "0")}" w:firstRow="${fr}" w:lastRow="${lr}" w:firstColumn="${fc}" w:lastColumn="0" w:noHBand="${nh}" w:noVBand="1"/>`;
-    const allFixed = known.length === ncols;
-    const tblW = allFixed ? `<w:tblW w:w="${gridTw.reduce((s, x) => s + x, 0)}" w:type="dxa"/>` : '<w:tblW w:w="5000" w:type="pct"/>';
-    const jc = a.align ? `<w:jc w:val="${a.align}"/>` : "";
-    let x = `<w:tbl><w:tblPr><w:tblStyle w:val="${style}"/>${tblW}${jc}<w:tblLayout w:type="fixed"/>${look}</w:tblPr>`;
-    x += `<w:tblGrid>${gridTw.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>`;
-    // rowspan → vMerge: her satırda dolu ızgara sütunlarını izle.
-    const pending: { col: number; span: number; left: number; width: number }[] = [];
-    rows.forEach((row) => {
-      x += "<w:tr>";
-      let col = 0;
-      const cells = row.content ?? [];
-      let ci = 0;
-      const emitContinue = (p: { col: number; span: number; width: number }) => {
-        x += `<w:tc><w:tcPr><w:tcW w:w="${p.width}" w:type="dxa"/>${p.span > 1 ? `<w:gridSpan w:val="${p.span}"/>` : ""}<w:vMerge/></w:tcPr><w:p/></w:tc>`;
-      };
-      while (ci < cells.length || pending.some((p) => p.col >= col && p.left > 0)) {
-        const cont = pending.find((p) => p.col === col && p.left > 0);
-        if (cont) {
-          emitContinue(cont);
-          cont.left--;
-          col += cont.span;
-          continue;
-        }
-        if (ci >= cells.length) break;
-        const cell = cells[ci++];
-        const ca = (cell.attrs ?? {}) as Record<string, unknown>;
-        const span = (ca.colspan as number) ?? 1;
-        const rowspan = (ca.rowspan as number) ?? 1;
-        const width = gridTw.slice(col, col + span).reduce((s, w) => s + w, 0);
-        let tcPr = `<w:tcW w:w="${width}" w:type="dxa"/>`;
-        if (span > 1) tcPr += `<w:gridSpan w:val="${span}"/>`;
-        if (rowspan > 1) {
-          tcPr += '<w:vMerge w:val="restart"/>';
-          pending.push({ col, span, left: rowspan - 1, width });
-        }
-        const bg = hex6(ca.background as string | undefined);
-        if (bg) tcPr += `<w:shd w:val="clear" w:color="auto" w:fill="${bg}"/>`;
-        if (ca.verticalAlign) tcPr += `<w:vAlign w:val="${ca.verticalAlign === "middle" ? "center" : ca.verticalAlign}"/>`;
-        let inner = this.blocks(cell.content);
-        if (!inner.endsWith("</w:p>")) inner += "<w:p/>";
-        x += `<w:tc><w:tcPr>${tcPr}</w:tcPr>${inner}</w:tc>`;
-        col += span;
-      }
-      for (let i = pending.length - 1; i >= 0; i--) if (pending[i].left <= 0) pending.splice(i, 1);
-      x += "</w:tr>";
-    });
-    return `${x}</w:tbl>`;
-  }
-
-  toc(n: JSONContent): string {
-    const entries = (n.attrs?.entries as TocEntry[]) ?? [];
-    const title = String(n.attrs?.title ?? "İçindekiler");
-    const tab = `<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="${this.contentWidthTw}"/></w:tabs>`;
-    let x = `<w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery w:val="Table of Contents"/><w:docPartUnique/></w:docPartObj></w:sdtPr><w:sdtContent>`;
-    x += `<w:p><w:pPr><w:pStyle w:val="TOCHeading"/></w:pPr><w:r><w:t xml:space="preserve">${esc(title)}</w:t></w:r></w:p>`;
-    const begin = '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> TOC \\o "1-3" \\h \\z \\u </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>';
-    const end = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
-    if (!entries.length) {
-      x += `<w:p>${begin}<w:r><w:t>İçindekiler girdisi bulunamadı.</w:t></w:r>${end}</w:p>`;
-    } else {
-      entries.forEach((e, i) => {
-        const lvl = Math.min(3, Math.max(1, e.level));
-        x += `<w:p><w:pPr><w:pStyle w:val="TOC${lvl}"/>${tab}</w:pPr>${i === 0 ? begin : ""}<w:r><w:t xml:space="preserve">${esc(cleanText(e.text))}</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t>${e.page}</w:t></w:r>${i === entries.length - 1 ? end : ""}</w:p>`;
-      });
-    }
-    return `${x}</w:sdtContent></w:sdt>`;
-  }
-}
 
 /** Filigran: üst bilgiye VML WordArt şekli (ECMA-376 Bölüm 4, VML). */
 function watermarkXml(s: DocSettings, pageWTw: number): string {
@@ -480,18 +42,23 @@ function commentsXml(ctx: Ctx, comments: Record<string, CommentData>): string {
   return `${x}</w:comments>`;
 }
 
-/** Dipnot / son not parçası (ayraçlar + notlar). */
-function notesXml(kind: "footnote" | "endnote", texts: string[]): string {
+/** Dipnot / son not parçası (ayraçlar + notlar). Zengin içerik paragraf paragraf yazılır. */
+function notesXml(kind: "footnote" | "endnote", notes: NoteData[], ctx: Ctx, rels: Rels): string {
   const tag = kind === "footnote" ? "footnote" : "endnote";
   const root = kind === "footnote" ? "footnotes" : "endnotes";
   const style = kind === "footnote" ? "Footnote" : "Endnote";
   const sep = (id: number, type: string, el: string) => `<w:${tag} w:type="${type}" w:id="${id}"><w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:${el}/></w:r></w:p></w:${tag}>`;
-  let x = `${XML_HEAD}<w:${root} xmlns:w="${NS.w}" xmlns:r="${NS.r}">${sep(-1, "separator", "separator")}${sep(0, "continuationSeparator", "continuationSeparator")}`;
-  texts.forEach((t, i) => {
-    const paras = t.split("\n");
+  let x = `${XML_HEAD}<w:${root} ${DOC_NS}>${sep(-1, "separator", "separator")}${sep(0, "continuationSeparator", "continuationSeparator")}`;
+  const ref = `<w:r><w:rPr><w:rStyle w:val="${style}Reference"/></w:rPr><w:${tag}Ref/></w:r><w:r><w:t xml:space="preserve"> </w:t></w:r>`;
+  const pw = new PartWriter(ctx, rels, 9000);
+  notes.forEach((n, i) => {
     x += `<w:${tag} w:id="${i + 1}">`;
-    paras.forEach((line, k) => {
-      x += `<w:p><w:pPr><w:pStyle w:val="${style}Text"/></w:pPr>${k === 0 ? `<w:r><w:rPr><w:rStyle w:val="${style}Reference"/></w:rPr><w:${tag}Ref/></w:r><w:r><w:t xml:space="preserve"> </w:t></w:r>` : ""}<w:r><w:t xml:space="preserve">${esc(cleanText(line))}</w:t></w:r></w:p>`;
+    const paras: JSONContent[] = n.content?.length ? n.content : (n.text || "").split("\n").map((t) => ({ type: "paragraph", ...(t ? { content: [{ type: "text", text: t }] } : {}) }));
+    paras.forEach((p, k) => {
+      if (p.type === "paragraph" || p.type === "heading") {
+        const body = pw.inline(p.content ?? []);
+        x += `<w:p><w:pPr><w:pStyle w:val="${style}Text"/></w:pPr>${k === 0 ? ref : ""}${body}</w:p>`;
+      } else x += pw.block(p);
     });
     x += `</w:${tag}>`;
   });
@@ -515,20 +82,51 @@ function numberingXml(ctx: Ctx): string {
   return `${x}</w:numbering>`;
 }
 
-function sectPr(s: DocSettings, headerRid: string | null, footerRid: string | null): string {
-  const p = s.page;
+interface HfRefs {
+  header: Partial<Record<HfVariant, string>>;
+  footer: Partial<Record<HfVariant, string>>;
+}
+
+const SECT_TYPE: Record<SectionKind, string> = { nextPage: "nextPage", continuous: "continuous", evenPage: "evenPage", oddPage: "oddPage" };
+
+/** Bölüm özellikleri (üst/alt bilgiler belge genelidir; her bölüm aynı parçalara başvurur). */
+function sectPr(s: DocSettings, p: PageSetup, kind: SectionKind, refs: HfRefs | null): string {
   const m = p.margin;
   let x = "<w:sectPr>";
-  if (headerRid) x += `<w:headerReference w:type="default" r:id="${headerRid}"/>`;
-  if (footerRid) x += `<w:footerReference w:type="default" r:id="${footerRid}"/>`;
+  if (refs) {
+    for (const v of ["default", "first", "even"] as const) {
+      if (refs.header[v]) x += `<w:headerReference w:type="${v}" r:id="${refs.header[v]}"/>`;
+      if (refs.footer[v]) x += `<w:footerReference w:type="${v}" r:id="${refs.footer[v]}"/>`;
+    }
+  }
+  if (kind !== "nextPage") x += `<w:type w:val="${SECT_TYPE[kind]}"/>`;
   x += `<w:pgSz w:w="${p.width}" w:h="${p.height}"${p.orientation === "landscape" ? ' w:orient="landscape"' : ""}/>`;
   x += `<w:pgMar w:top="${m.top}" w:right="${m.right}" w:bottom="${m.bottom}" w:left="${m.left}" w:header="${m.header}" w:footer="${m.footer}" w:gutter="${m.gutter}"/>`;
   if (s.pageBorder) {
     const b: BorderSpec = { style: s.pageBorder.style, size: s.pageBorder.width, color: s.pageBorder.color, space: 24 };
     x += `<w:pgBorders w:offsetFrom="page">${borderXml("top", b)}${borderXml("left", b)}${borderXml("bottom", b)}${borderXml("right", b)}</w:pgBorders>`;
   }
-  x += `<w:cols w:space="${p.columnSpace}"${p.columns > 1 ? ` w:num="${p.columns}"` : ""}/><w:docGrid w:linePitch="360"/></w:sectPr>`;
+  x += `<w:cols w:space="${p.columnSpace}"${p.columns > 1 ? ` w:num="${p.columns}"` : ""}${p.columns > 1 && p.columnLine ? ' w:sep="1"' : ""}/>`;
+  if (p.titlePage) x += "<w:titlePg/>";
+  x += `<w:docGrid w:linePitch="360"/></w:sectPr>`;
   return x;
+}
+
+/** Belgenin bölümleri (bölümsüz eski içerik tek bölüme sarılır). */
+function sectionsOf(content: JSONContent): JSONContent[] {
+  return normalizeDoc(content).content ?? [];
+}
+
+/** Bölümün sectPr'ının yazılacağı son paragraf (liste içindeyse son liste paragrafı). */
+function lastParagraph(nodes: JSONContent[] | undefined): JSONContent | null {
+  const last = nodes?.[nodes.length - 1];
+  if (!last) return null;
+  if (last.type === "paragraph" || last.type === "heading") return last;
+  if (last.type === "bulletList" || last.type === "orderedList") {
+    const li = last.content?.[last.content.length - 1];
+    return lastParagraph(li?.content);
+  }
+  return null;
 }
 
 function hasHfContent(json: JSONContent | null): boolean {
@@ -547,8 +145,67 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
   docRels.add(REL.settings, "settings.xml");
   docRels.add(REL.numbering, "numbering.xml");
 
+  // Üst / alt bilgi parçaları (varsayılan, ilk sayfa, çift sayfa). Filigran tüm üst bilgilere yazılır.
+  const hdrNs = `<w:hdr ${DOC_NS}>`;
+  const refs: HfRefs = { header: {}, footer: {} };
+  const anyTitle = sectionsOf(doc.content).some((sec) => !!((sec.attrs?.page as PageSetup | null) ?? settings.page).titlePage);
+  let hfNo = 0;
+  const writeHf = (which: "header" | "footer", v: HfVariant, json: JSONContent | null) => {
+    const has = hasHfContent(json);
+    const needWm = which === "header" && !!settings.watermark && (v === "default" || (v === "first" && anyTitle) || (v === "even" && settings.oddEven));
+    if (!has && !needWm && !(v !== "default" && json)) return;
+    const rels = new Rels();
+    const pw = new PartWriter(ctx, rels, contentWidthTw);
+    hfNo++;
+    const name = `${which}${hfNo}.xml`;
+    if (which === "header") {
+      let inner = has ? pw.blocks(json?.content) : "";
+      inner = watermarkXml(settings, settings.page.width) + (inner || '<w:p><w:pPr><w:pStyle w:val="Header"/></w:pPr></w:p>');
+      zip.file(`word/${name}`, `${XML_HEAD}${hdrNs}${inner}</w:hdr>`);
+      refs.header[v] = docRels.add(REL.header, name);
+    } else {
+      const inner = (has ? pw.blocks(json?.content) : "") || '<w:p><w:pPr><w:pStyle w:val="Footer"/></w:pPr></w:p>';
+      zip.file(`word/${name}`, `${XML_HEAD}<w:ftr ${DOC_NS}>${inner}</w:ftr>`);
+      refs.footer[v] = docRels.add(REL.footer, name);
+    }
+    if (rels.size) zip.file(`word/_rels/${name}.rels`, rels.xml());
+    hfParts.push({ name, kind: which });
+  };
+  const hfParts: { name: string; kind: "header" | "footer" }[] = [];
+  writeHf("header", "default", settings.header);
+  writeHf("footer", "default", settings.footer);
+  writeHf("header", "first", settings.headerFirst);
+  writeHf("footer", "first", settings.footerFirst);
+  if (settings.oddEven) {
+    writeHf("header", "even", settings.headerEven);
+    writeHf("footer", "even", settings.footerEven);
+  }
+
+  // Gövde: her bölümün sectPr'ı son paragrafına, son bölümünkü gövdenin sonuna yazılır.
   const body = new PartWriter(ctx, docRels, contentWidthTw);
-  let bodyXml = body.blocks(doc.content.content);
+  const sections = sectionsOf(doc.content);
+  let bodyXml = "";
+  let finalSect = "";
+  sections.forEach((sec, i) => {
+    const page = (sec.attrs?.page as PageSetup | null) ?? settings.page;
+    const kind = ((sec.attrs?.kind as SectionKind | undefined) ?? "nextPage") as SectionKind;
+    // Başvurular her bölüme yazılır (aynı parçalar): devralmayı tam desteklemeyen okuyucular için.
+    const xml = sectPr(settings, page, i === 0 ? "nextPage" : kind, refs);
+    const blocks = sec.content ?? [];
+    body.contentWidthTw = Math.round((page.width - page.margin.left - page.margin.right - page.margin.gutter - (page.columns > 1 ? (page.columns - 1) * page.columnSpace : 0)) / Math.max(1, page.columns));
+    if (i === sections.length - 1) {
+      finalSect = xml;
+      body.sectTarget = null;
+      bodyXml += body.blocks(blocks);
+      return;
+    }
+    const target = lastParagraph(blocks);
+    body.sectTarget = target;
+    body.sectXml = xml;
+    bodyXml += body.blocks(blocks);
+    if (!target) bodyXml += `<w:p><w:pPr>${xml}</w:pPr></w:p>`;
+    body.sectTarget = null;
+  });
   // Kapanmamış açıklama aralıkları
   for (const id of [...ctx.openComments]) {
     const num = ctx.commentNum(id);
@@ -558,49 +215,29 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
   const lastIsTable = /<\/w:tbl>$/.test(bodyXml) || /<\/w:sdt>$/.test(bodyXml);
   if (!bodyXml || lastIsTable) bodyXml += "<w:p/>";
 
-  // Üst / alt bilgi
-  let headerRid: string | null = null;
-  let footerRid: string | null = null;
-  const hdrNs = `<w:hdr ${DOC_NS}>`;
-  if (hasHfContent(settings.header) || settings.watermark) {
-    const rels = new Rels();
-    const pw = new PartWriter(ctx, rels, contentWidthTw);
-    let inner = hasHfContent(settings.header) ? pw.blocks(settings.header?.content) : "";
-    inner = watermarkXml(settings, settings.page.width) + (inner || '<w:p><w:pPr><w:pStyle w:val="Header"/></w:pPr></w:p>');
-    zip.file("word/header1.xml", `${XML_HEAD}${hdrNs}${inner}</w:hdr>`);
-    if (rels.size) zip.file("word/_rels/header1.xml.rels", rels.xml());
-    headerRid = docRels.add(REL.header, "header1.xml");
-  }
-  if (hasHfContent(settings.footer)) {
-    const rels = new Rels();
-    const pw = new PartWriter(ctx, rels, contentWidthTw);
-    const inner = pw.blocks(settings.footer?.content) || "<w:p/>";
-    zip.file("word/footer1.xml", `${XML_HEAD}<w:ftr ${DOC_NS}>${inner}</w:ftr>`);
-    if (rels.size) zip.file("word/_rels/footer1.xml.rels", rels.xml());
-    footerRid = docRels.add(REL.footer, "footer1.xml");
-  }
-
   const bg = settings.pageColor ? `<w:background w:color="${hex6(settings.pageColor)}"/>` : "";
-  zip.file("word/document.xml", `${XML_HEAD}<w:document ${DOC_NS} mc:Ignorable="w10">${bg}<w:body>${bodyXml}${sectPr(settings, headerRid, footerRid)}</w:body></w:document>`);
+  zip.file("word/document.xml", `${XML_HEAD}<w:document ${DOC_NS} mc:Ignorable="w14 wp14"><w:body>${bodyXml}${finalSect}</w:body></w:document>`.replace("<w:body>", `${bg}<w:body>`));
 
   const styles = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing);
   zip.file("word/styles.xml", buildStylesXml(styles));
   zip.file("word/numbering.xml", numberingXml(ctx));
   zip.file(
     "word/settings.xml",
-    `${XML_HEAD}<w:settings xmlns:w="${NS.w}" xmlns:r="${NS.r}"><w:zoom w:percent="100"/>${settings.pageColor ? "<w:displayBackgroundShape/>" : ""}<w:defaultTabStop w:val="708"/><w:hyphenationZone w:val="425"/><w:characterSpacingControl w:val="doNotCompress"/>${ctx.footnotes.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}${ctx.endnotes.length ? '<w:endnotePr><w:endnote w:id="-1"/><w:endnote w:id="0"/></w:endnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat><w:themeFontLang w:val="tr-TR"/></w:settings>`,
+    `${XML_HEAD}<w:settings xmlns:w="${NS.w}" xmlns:r="${NS.r}"><w:zoom w:percent="100"/>${settings.pageColor ? "<w:displayBackgroundShape/>" : ""}<w:defaultTabStop w:val="708"/><w:hyphenationZone w:val="425"/><w:characterSpacingControl w:val="doNotCompress"/>${settings.oddEven ? "<w:evenAndOddHeaders/>" : ""}${ctx.footnotes.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}${ctx.endnotes.length ? '<w:endnotePr><w:endnote w:id="-1"/><w:endnote w:id="0"/></w:endnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat><w:themeFontLang w:val="tr-TR"/></w:settings>`,
   );
   if (ctx.usedComments.size) {
     zip.file("word/comments.xml", commentsXml(ctx, settings.comments));
     docRels.add(REL.comments, "comments.xml");
   }
-  if (ctx.footnotes.length) {
-    zip.file("word/footnotes.xml", notesXml("footnote", ctx.footnotes));
-    docRels.add(REL.footnotes, "footnotes.xml");
-  }
-  if (ctx.endnotes.length) {
-    zip.file("word/endnotes.xml", notesXml("endnote", ctx.endnotes));
-    docRels.add(REL.endnotes, "endnotes.xml");
+  for (const [kind, list, part, rel] of [
+    ["footnote", ctx.footnotes, "footnotes.xml", REL.footnotes],
+    ["endnote", ctx.endnotes, "endnotes.xml", REL.endnotes],
+  ] as const) {
+    if (!list.length) continue;
+    const rels = new Rels();
+    zip.file(`word/${part}`, notesXml(kind, list, ctx, rels));
+    if (rels.size) zip.file(`word/_rels/${part}.rels`, rels.xml());
+    docRels.add(rel, part);
   }
   for (const m of ctx.media) zip.file(`word/media/${m.name}`, m.data);
   zip.file("word/_rels/document.xml.rels", docRels.xml());
@@ -622,8 +259,7 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
       ov("word/styles.xml", "wordprocessingml.styles+xml") +
       ov("word/settings.xml", "wordprocessingml.settings+xml") +
       ov("word/numbering.xml", "wordprocessingml.numbering+xml") +
-      (headerRid ? ov("word/header1.xml", "wordprocessingml.header+xml") : "") +
-      (footerRid ? ov("word/footer1.xml", "wordprocessingml.footer+xml") : "") +
+      hfParts.map((h) => ov(`word/${h.name}`, `wordprocessingml.${h.kind}+xml`)).join("") +
       (ctx.usedComments.size ? ov("word/comments.xml", "wordprocessingml.comments+xml") : "") +
       (ctx.footnotes.length ? ov("word/footnotes.xml", "wordprocessingml.footnotes+xml") : "") +
       (ctx.endnotes.length ? ov("word/endnotes.xml", "wordprocessingml.endnotes+xml") : "") +

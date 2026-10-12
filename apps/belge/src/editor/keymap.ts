@@ -1,7 +1,9 @@
 // Kelime işlemci kısayolları (editör odaklıyken).
 import { Extension, type Editor } from "@tiptap/core";
 import { Selection, TextSelection } from "@tiptap/pm/state";
+import { CellSelection, TableMap, nextCell } from "@tiptap/pm/tables";
 import type { StyleDef } from "../model/styles";
+import { toggleList } from "./listApply";
 import { applyStyle, changeIndent, clearCharFormatting, copyFormat, cycleCase, pasteFormat, setLineSpacing, setParaAttrs, stepFontSize, currentPara, type CopiedFormat } from "./commands";
 
 export interface EditorHooks {
@@ -45,6 +47,27 @@ function paragraphBeforeTable(editor: Editor): boolean {
 }
 
 /** Sonraki paragrafı Normal olan stiller (Word'deki "Sonraki paragraf stili"). */
+/**
+ * Hücre seçimi satır sonunda/başında Shift+Sağ/Sol ile sonraki/önceki satıra uzar (Word: tüm satırlar seçilir).
+ * Tablo eklentisi bu durumda olayı tarayıcıya bırakır ve seçim çöker.
+ */
+function extendCellRows(editor: Editor, dir: -1 | 1): boolean {
+  const { state, view } = editor;
+  const sel = state.selection;
+  if (!(sel instanceof CellSelection)) return false;
+  const $head = sel.$headCell;
+  if (nextCell($head, "horiz", dir)) return false;
+  const table = $head.node(-1);
+  const start = $head.start(-1);
+  const map = TableMap.get(table);
+  const rect = map.findCell($head.pos - start);
+  const row = dir > 0 ? rect.bottom : rect.top - 1;
+  if (row < 0 || row >= map.height) return true;
+  const cell = start + map.map[row * map.width + (dir > 0 ? 0 : map.width - 1)];
+  view.dispatch(state.tr.setSelection(CellSelection.rowSelection(sel.$anchorCell, state.doc.resolve(cell))));
+  return true;
+}
+
 const NEXT_NORMAL = new Set(["Title", "Subtitle", "Quote", "IntenseQuote"]);
 
 export function createWordKeymap(hooks: EditorHooks) {
@@ -103,7 +126,7 @@ export function createWordKeymap(hooks: EditorHooks) {
         "Mod-k": () => (hooks.openDialog("link"), true),
         "Mod-Shift-8": () => (hooks.toggleShowMarks(), true),
         "Mod-*": () => (hooks.toggleShowMarks(), true),
-        "Mod-Shift-l": () => ed().chain().focus().toggleBulletList().run(),
+        "Mod-Shift-l": () => toggleList(ed(), "bulletList"),
         "Mod-m": () => (changeIndent(ed(), 1), true),
         "Mod-Shift-m": () => (changeIndent(ed(), -1), true),
         "Mod-t": () => {
@@ -138,6 +161,8 @@ export function createWordKeymap(hooks: EditorHooks) {
         "Mod-End": () => docEdge(ed(), 1, false),
         "Mod-Shift-Home": () => docEdge(ed(), -1, true),
         "Mod-Shift-End": () => docEdge(ed(), 1, true),
+        "Shift-ArrowRight": () => extendCellRows(ed(), 1),
+        "Shift-ArrowLeft": () => extendCellRows(ed(), -1),
         Tab: () => {
           const e = ed();
           if (e.isActive("listItem") || e.isActive("table")) return false;

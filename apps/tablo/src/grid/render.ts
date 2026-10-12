@@ -34,7 +34,7 @@ export interface RenderState {
   pageBreaks?: { rows: number[]; cols: number[] } | null;
 }
 
-const COLORS = {
+const LIGHT = {
   grid: "#D4D4D4",
   headerBg: "#F5F5F5",
   headerText: "#3B3B3B",
@@ -44,10 +44,28 @@ const COLORS = {
   headerFullBg: "#A8D2B8",
   accent: "#107C41",
   selFill: "rgba(20, 110, 60, 0.12)",
+  corner: "#B4B4B4",
+  freeze: "#9E9E9E",
 };
+
+/** Koyu arayüz temalarında başlıklar koyu, hücre alanı beyaz kalır (Excel gibi). */
+const DARK: typeof LIGHT = {
+  ...LIGHT,
+  headerBg: "#2B2B2B",
+  headerText: "#D2D2D2",
+  headerLine: "#464646",
+  headerSelBg: "#38503F",
+  headerSelText: "#8FD8A8",
+  headerFullBg: "#2F6B47",
+  corner: "#6E6E6E",
+  freeze: "#7A7A7A",
+};
+
+let COLORS = LIGHT;
 
 export function renderGrid(ctx: CanvasRenderingContext2D, st: RenderState): void {
   const { layout: L, dpr } = st;
+  COLORS = st.dark ? DARK : LIGHT;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = "#FFFFFF";
   ctx.fillRect(0, 0, L.width, L.height);
@@ -57,7 +75,7 @@ export function renderGrid(ctx: CanvasRenderingContext2D, st: RenderState): void
   for (const q of quads) drawOverlays(ctx, st, q);
   drawHeaders(ctx, st, quads);
   // Dondurulmuş bölme çizgileri
-  ctx.fillStyle = "#9E9E9E";
+  ctx.fillStyle = COLORS.freeze;
   if (L.fr > 0) ctx.fillRect(0, snap(L.cellsY, dpr) - 1 / dpr, L.width, 1 / dpr);
   if (L.fc > 0) ctx.fillRect(snap(L.cellsX, dpr) - 1 / dpr, 0, 1 / dpr, L.height);
 }
@@ -538,7 +556,7 @@ function drawHeaders(ctx: CanvasRenderingContext2D, st: RenderState, quads: Quad
   // Köşe (Tümünü Seç)
   ctx.fillStyle = COLORS.headerBg;
   ctx.fillRect(0, 0, L.headerW - px, L.headerH - px);
-  ctx.fillStyle = "#B4B4B4";
+  ctx.fillStyle = COLORS.corner;
   ctx.beginPath();
   const t = Math.min(L.headerW, L.headerH) * 0.55;
   ctx.moveTo(L.headerW - 3, L.headerH - 3 - t);

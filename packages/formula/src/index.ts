@@ -18,4 +18,5 @@ export * from "./locale";
 export * from "./transform";
 export * from "./engine";
 export * from "./input";
+export * from "./audit";
 export { FUNCTIONS, CATEGORY_LABELS, getFunction, resolveFunctionName, trNameOf, argNames, type FnDef, type Category } from "./functions/registry";

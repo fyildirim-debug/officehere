@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "@officehere/ui/styles.css";
 import "./styles/tablo.css";
 import "./styles/dialogs.css";
+import "./styles/pivot.css";
 import { App } from "./App";
 
 createRoot(document.getElementById("root")!).render(

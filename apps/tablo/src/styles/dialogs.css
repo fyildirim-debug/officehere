@@ -987,3 +987,15 @@
   color: #000;
   text-align: center;
 }
+
+/* Bul ve Değiştir modsuzdur (Excel gibi): arkadaki ızgara kullanılabilir */
+.oh-dialog-backdrop:has(> .oh-dialog[aria-label="Bul ve Değiştir"]) {
+  pointer-events: none;
+  background: transparent;
+}
+.oh-dialog[aria-label="Bul ve Değiştir"] {
+  pointer-events: auto;
+}
+.oh-dialog[aria-label="Bul ve Değiştir"] .oh-dialog-footer .oh-btn {
+  white-space: nowrap;
+}

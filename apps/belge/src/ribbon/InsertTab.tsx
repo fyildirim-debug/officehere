@@ -19,12 +19,15 @@ import {
   TableAdd20Regular,
   Delete20Regular,
   Edit20Regular,
+  Textbox24Regular,
+  Textbox32Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonStack, TableGridPicker, useMenuClose } from "@officehere/ui";
 import { useBelge } from "../state/context";
 import { COMMON_SYMBOLS, COVER_PAGES, FOOTER_PRESETS, HEADER_PRESETS, pageNumberDoc, stripPageFields } from "../templates/parts";
 import { SHAPES, shapeSvg, svgToPng, type ShapeKind } from "../editor/image";
 import { insertTable } from "./tableUtil";
+import { columnWidthAt } from "../state/pageSetup";
 
 function SymbolGrid({ onPick }: { onPick: (s: string) => void }) {
   const close = useMenuClose();
@@ -82,8 +85,9 @@ export function InsertTab() {
     editor
       .chain()
       .focus()
-      .insertContentAt(0, [...def.build(title, date, author), { type: "pageBreak" }])
-      .setTextSelection(1)
+      // İlk bölümün başına (konum 1: belge > bölüm içi).
+      .insertContentAt(1, [...def.build(title, date, author), { type: "pageBreak" }])
+      .setTextSelection(2)
       .run();
   };
 
@@ -219,6 +223,23 @@ export function InsertTab() {
       </RibbonGroup>
 
       <RibbonGroup label="Metin" icon={<TextAddT20Regular />}>
+        <RibbonMenuButton
+          size="large"
+          icon={<Textbox32Regular />}
+          label="Metin Kutusu"
+          menu={
+            <Menu width={260}>
+              <MenuHeader>Yerleşik</MenuHeader>
+              <MenuItem icon={<Textbox24Regular />} label="Basit Metin Kutusu" onClick={() => chain().insertTextBox().run()} />
+              <MenuItem
+                icon={<Textbox24Regular />}
+                label="Kenar Çubuğu"
+                description="Sayfanın sağında renkli dolgulu dikey metin alanı."
+                onClick={() => chain().insertTextBox({ x: Math.max(0, columnWidthAt(ctx.mainEditor, settings.page) - 200), y: 0, w: 200, h: 420, fill: "#DAE9F7", border: null }, "Kenar çubuğu başlığı ve metni buraya yazın.").run()}
+              />
+            </Menu>
+          }
+        />
         <RibbonStack>
           <RibbonButton icon={<Calendar20Regular />} label="Tarih ve Saat" onClick={() => ctx.openDialog("dateTime")} />
           <RibbonButton icon={<LineHorizontal120Regular />} label="Yatay Çizgi" onClick={() => chain().setHorizontalRule().run()} />

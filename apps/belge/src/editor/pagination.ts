@@ -124,16 +124,23 @@ function makeWidget(b: PageBreakMark) {
     return () => {
       const s = document.createElement("span");
       s.className = b.kind === "line" ? "bl-pg bl-pg-line" : "bl-pg bl-pg-line bl-pg-span";
-      s.style.height = `${b.h}px`;
-      if (b.tileRow) s.appendChild(Object.assign(document.createElement("span"), { className: "bl-pg-tilerow" }));
+      if (b.tileRow) {
+        // Boşluk önce, satır başı ara parçası sonda (sütun kümesi boşlukla birlikte biter).
+        const fill = Object.assign(document.createElement("span"), { className: "bl-pg-fill" });
+        fill.style.height = `${b.h}px`;
+        s.append(fill, Object.assign(document.createElement("span"), { className: "bl-pg-tilerow" }));
+      } else s.style.height = `${b.h}px`;
       return s;
     };
   }
   return () => {
     const d = document.createElement("div");
     d.className = b.kind === "span" ? "bl-pg bl-pg-span" : "bl-pg";
-    d.style.height = `${b.h}px`;
-    if (b.tileRow) d.appendChild(Object.assign(document.createElement("div"), { className: "bl-pg-tilerow" }));
+    if (b.tileRow) {
+      const fill = Object.assign(document.createElement("div"), { className: "bl-pg-fill" });
+      fill.style.height = `${b.h}px`;
+      d.append(fill, Object.assign(document.createElement("div"), { className: "bl-pg-tilerow" }));
+    } else d.style.height = `${b.h}px`;
     return d;
   };
 }
@@ -229,7 +236,6 @@ class PaginationView {
       span.innerHTML = noteHtml(key) || "​";
       row.append(sup, span);
       this.measurer.appendChild(row);
-      const dom = this.view.dom as HTMLElement;
       const h = row.getBoundingClientRect().height / (this.ctrl.geometry.scale || 1);
       this.noteCache.set(key, h);
       return h;
@@ -307,7 +313,8 @@ class PaginationView {
         return { ...u, top: Y(rr.top), bottom: Y(rr.bottom) };
       });
       const noteH = this.noteMeasurer(geoms[0].contentW);
-      const res = layoutFlow({ view, units, geoms, bodyW, gap: g.gap, Y, screenY, scale, noteH, columns: (u, c) => this.columns(u, c, geoms, Y, screenY) });
+      const slotH = g.tiles > 0 ? Math.max(...geoms.map((x) => x.h)) : 0;
+      const res = layoutFlow({ view, units, geoms, bodyW, gap: g.gap, Y, screenY, scale, noteH, slotH, columns: (u, c) => this.columns(u, c, geoms, Y, screenY) });
       breaks = res.breaks;
       styles = res.styles;
       info = res.info;

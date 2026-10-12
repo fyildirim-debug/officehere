@@ -145,7 +145,8 @@ export function collectUnits(view: EditorView, geoms: SecGeom[]): RawUnit[] {
     secStart = true;
     const g = geoms[si];
     if (g && g.cols > 1) {
-      push(section, secOff, secOff + 1, "section");
+      // Bölümden önceki boşluk bölümler arasına (sütunların dışına) konur.
+      push(section, secOff, secOff, "section");
       return;
     }
     section.forEach((child, off) => visit(child, secOff + 1 + off, secOff + 1 + off));
@@ -192,6 +193,8 @@ export interface FlowCtx {
   screenY: (y: number) => number;
   scale: number;
   noteH: (key: string) => number;
+  /** Birden Çok Sayfa: her sayfa en büyük sayfa yüksekliğinde bir yuvaya yerleşir (0 = kapalı). */
+  slotH: number;
   /** Çok sütunlu bölüm: dar ölçüm ve sayfalara bölme (dışarıda uygulanır). */
   columns: (u: Unit, ctx: ColumnCtx) => ColumnResult;
 }
@@ -230,7 +233,7 @@ export function layoutFlow(ctx: FlowCtx) {
 
   const addPage = (g: SecGeom, first: boolean, start: number): number => {
     const prev = pages[pages.length - 1];
-    const top = prev ? prev.top + prev.h + gap : 0;
+    const top = prev ? prev.top + (ctx.slotH || prev.h) + gap : 0;
     pages.push({ top, left: (bodyW - g.w) / 2, w: g.w, h: g.h, mt: g.mt, mb: g.mb, ml: g.ml, mr: g.mr, headerY: g.headerY, footerY: g.footerY, section: g.index, first, titlePage: g.titlePage });
     pageStarts.push(start);
     footnotes.push([]);
@@ -288,6 +291,8 @@ export function layoutFlow(ctx: FlowCtx) {
     // Önceki uzun birim sayfalar boyunca taşmışsa sayfa ekle.
     while (top > pages[p].top + pages[p].h + gap / 2) p = addPage(g, false, u.pos);
     const secForce = u.secStart && u.sec > 0 && g.kind !== "continuous";
+    // Açık sayfa sonu her zaman sayfayı bitirir (sayfanın tek içeriği olsa bile; Word'deki gibi boş sayfa kalır).
+    const hard = forceNext;
     const force = forceNext || u.breakBefore || secForce;
     forceNext = u.pageBreak || (u.colBreak && g.cols === 1);
     const ownNotes = u.notes.length ? notesH(u) + (footnotes[p].length ? 0 : FOOTNOTE_SEP) : 0;
@@ -296,7 +301,7 @@ export function layoutFlow(ctx: FlowCtx) {
     const oTop = () => outerTop(u) + S;
     const atTop = () => oTop() <= pages[p].top + pages[p].mt + 1;
     // Zorunlu kesme ama birim zaten sayfanın başında: yeni sayfa gerekmez (bölüm başında geometri/parite uymalı).
-    const startHere = force && atTop() && (!secForce || (sameGeom(pages[p], g) && (g.kind === "nextPage" || (pages.length % 2 === 0) === (g.kind === "evenPage"))));
+    const startHere = force && !hard && atTop() && (!secForce || (sameGeom(pages[p], g) && (g.kind === "nextPage" || (pages.length % 2 === 0) === (g.kind === "evenPage"))));
 
     if (u.kind === "section") {
       // Çok sütunlu bölüm
@@ -309,8 +314,7 @@ export function layoutFlow(ctx: FlowCtx) {
         sp = sectionPage(g, u.pos, secForce);
         const h = pages[sp].top + pages[sp].mt - oTop();
         if (h > 0) {
-          // Sütun kümesi bu parçadan sonra başlasın diye tüm sütunları keser.
-          breaks.push({ pos: u.breakPos, kind: "span", h });
+          breaks.push({ pos: u.breakPos, kind: "block", h });
           S += h;
         }
       }

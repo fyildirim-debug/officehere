@@ -27,6 +27,7 @@ import {
 import { Menu, MenuItem, MenuSeparator } from "@officehere/ui";
 import type { DialogKind } from "../state/context";
 import { execClipboard, pasteFromClipboard } from "../ribbon/clipboard";
+import { toggleList } from "../editor/listApply";
 
 interface Deps {
   editor: Editor;
@@ -101,8 +102,8 @@ export function buildContextMenu({ editor, openDialog, newComment, notify, openL
       <MenuItem icon={<TextParagraph20Regular />} label="Paragraf..." onClick={() => openDialog("paragraph")} />
       {!inTable && (
         <>
-          <MenuItem icon={<TextBulletListLtr20Regular />} label="Madde İşaretleri" checked={editor.isActive("bulletList")} onClick={() => chain().toggleBulletList().run()} />
-          <MenuItem icon={<TextNumberListLtr20Regular />} label="Numaralandırma" checked={editor.isActive("orderedList")} onClick={() => chain().toggleOrderedList().run()} />
+          <MenuItem icon={<TextBulletListLtr20Regular />} label="Madde İşaretleri" checked={editor.isActive("bulletList")} onClick={() => toggleList(editor, "bulletList")} />
+          <MenuItem icon={<TextNumberListLtr20Regular />} label="Numaralandırma" checked={editor.isActive("orderedList")} onClick={() => toggleList(editor, "orderedList")} />
         </>
       )}
       <MenuSeparator />

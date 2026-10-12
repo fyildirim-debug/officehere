@@ -19,6 +19,7 @@ import type { Controller } from "../controller";
 import { insertChart, insertShape, pickAndInsertImage, SHAPE_KINDS } from "../actions/objects";
 import { CHART_FAMILIES, ChartTypeIcon } from "../dialogs/ChartDialogs";
 import type { ShapeDef } from "../model/types";
+import { PivotGlyph } from "./glyphs";
 
 function ChartMenu({ ctl, families }: { ctl: Controller; families: string[] }) {
   return (
@@ -60,6 +61,7 @@ export function InsertTab({ ctl }: { ctl: Controller }) {
   return (
     <>
       <RibbonGroup label="Tablolar" icon={<Table24Regular />}>
+        <RibbonButton size="large" icon={<PivotGlyph />} label="PivotTable" description="Karmaşık verileri PivotTable ile kolayca düzenleyip özetleyin." onClick={() => ctl.openDialog("createPivot")} />
         <RibbonButton size="large" icon={<Table24Regular />} label="Tablo" shortcut="Ctrl+T" description="Verileri düzenlemek ve çözümlemek için tablo oluşturur." onClick={() => ctl.openDialog("createTable")} />
       </RibbonGroup>
       <RibbonGroup label="Çizimler" icon={<ImageAdd24Regular />}>

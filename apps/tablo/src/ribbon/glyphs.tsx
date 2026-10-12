@@ -37,3 +37,29 @@ export function CalcGlyph({ size = 32 }: { size?: number }) {
     </svg>
   );
 }
+
+/** PivotTable: başlık satırı/sütunu vurgulu tablo ve döndürme oku (özgün çizim). */
+export function PivotGlyph({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="9" y="9" width="19" height="19" fill="#fff" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="9" y="9" width="19" height="5" fill="#CFE8D9" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="9" y="9" width="6" height="19" fill="#CFE8D9" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M15 19h13M15 24h13M21 14v14" stroke="currentColor" strokeWidth="0.9" />
+      <path d="M4 14V7a2 2 0 0 1 2-2h7" fill="none" stroke="#107C41" strokeWidth="1.5" />
+      <path d="M11 2.5L13.5 5 11 7.5M1.5 11.5L4 14l2.5-2.5" fill="none" stroke="#107C41" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+/** Mini grafik (Çizgi / Sütun) simgesi. */
+export function SparkGlyph({ kind, size = 32 }: { kind: "line" | "column" | "winLoss"; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="3" y="8" width="26" height="16" fill="#fff" stroke="currentColor" strokeWidth="1.1" />
+      {kind === "line" && <path d="M6 20l5-6 4 3 5-7 6 5" fill="none" stroke="#107C41" strokeWidth="1.6" strokeLinejoin="round" />}
+      {kind === "column" && [6, 11, 16, 21, 25].map((x, i) => <rect key={x} x={x} y={[14, 11, 17, 12, 15][i]} width="3" height={[8, 11, 5, 10, 7][i]} fill="#107C41" />)}
+      {kind === "winLoss" && [6, 11, 16, 21, 25].map((x, i) => <rect key={x} x={x} y={i % 2 ? 16 : 11} width="3" height="5" fill={i % 2 ? "#C00000" : "#107C41"} />)}
+    </svg>
+  );
+}

@@ -10,9 +10,9 @@ export function freeze(ctl: Controller, kind: "panes" | "topRow" | "firstCol" | 
     kind === "none"
       ? { rows: 0, cols: 0 }
       : kind === "topRow"
-        ? { rows: sheet.scroll.row + 1, cols: 0 }
+        ? { rows: 1, cols: 0 }
         : kind === "firstCol"
-          ? { rows: 0, cols: sheet.scroll.col + 1 }
+          ? { rows: 0, cols: 1 }
           : row === 0 && col === 0
             ? { rows: sheet.scroll.row + 10, cols: 0 }
             : { rows: row, cols: col };

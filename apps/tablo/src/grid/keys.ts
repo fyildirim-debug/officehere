@@ -4,6 +4,7 @@ import * as F from "../actions/format";
 import * as E from "../actions/edit";
 import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import { validationList } from "../controller";
+import { pivotAt, refreshAll, refreshPivot } from "../pivot/pivotOps";
 
 export interface GridKeyContext {
   pageRows: () => number;
@@ -40,13 +41,15 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
     }
     case "Enter":
       if (alt) return false;
-      ctl.advance(shift ? "up" : "down");
+      // Kopyalama çerçevesi varken Enter seçili hücreye yapıştırır (seçim ilerlemez)
       if (ctl.clip) {
         E.pasteData(ctl, "", undefined);
         ctl.clip = null;
         ctl.status = "";
         ctl.emit();
+        return true;
       }
+      ctl.advance(shift ? "up" : "down");
       return true;
     case "Tab":
       ctl.advance(shift ? "left" : "right");
@@ -62,7 +65,7 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
       E.clearContents(ctl);
       return true;
     case "Backspace":
-      E.clearContents(ctl);
+      // Excel: içerik boş metinle düzenlemeye girer; Esc'de eski içerik korunur
       ctl.startEdit("");
       return true;
     case "Escape":
@@ -99,9 +102,19 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
       if (ctrl) return false;
       ctl.ops.redo();
       return true;
-    case "F5":
+    case "F5": {
+      // Alt+F5: PivotTable'ı yenile, Ctrl+Alt+F5: tümünü yenile
+      if (alt) {
+        if (ctrl) refreshAll(ctl);
+        else {
+          const pv = pivotAt(sheet, ctl.sel.active.row, ctl.sel.active.col);
+          if (pv) refreshPivot(ctl, sheet, pv.id);
+        }
+        return true;
+      }
       ctl.openDialog("goto");
       return true;
+    }
     case "F9":
       ctl.wb.engine.recalc(!shift);
       ctl.emit();

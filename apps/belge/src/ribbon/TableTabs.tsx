@@ -23,7 +23,7 @@ import { useState } from "react";
 import { useBelge } from "../state/context";
 import { TABLE_STYLES } from "../editor/table";
 import { alignCells, autoFitContents, distributeColumns, selectTablePart, tableInfo } from "./tableUtil";
-import { pageMetrics } from "../model/document";
+import { columnWidthAt } from "../state/pageSetup";
 
 function TablePreview({ id }: { id: string }) {
   const s = TABLE_STYLES.find((x) => x.id === id)!;
@@ -101,7 +101,7 @@ export function TableLayoutTab() {
   const ctx = useBelge();
   const { editor, settings } = ctx;
   const chain = () => editor.chain().focus();
-  const m = pageMetrics(settings.page);
+  const m = { contentW: columnWidthAt(ctx.mainEditor, settings.page) };
   const alignBtn = (v: "top" | "middle" | "bottom", h: "left" | "center" | "right", tip: string) => (
     <RibbonButton size="small" icon={<span className={`bl-cellalign v-${v} h-${h}`}><i /><i /><i /></span>} tip={tip} onClick={() => alignCells(editor, v, h)} />
   );

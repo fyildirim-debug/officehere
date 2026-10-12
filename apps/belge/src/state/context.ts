@@ -51,7 +51,10 @@ export interface ViewOptions {
 }
 
 export interface BelgeCtx {
+  /** Şeridin hedefi (belge gövdesi, üst/alt bilgi ya da not düzenleyicisi). */
   editor: Editor;
+  /** Belge gövdesi düzenleyicisi (bölümler, sayfa yapısı). */
+  mainEditor: Editor;
   fmt: FormatState;
   settings: DocSettings;
   updateSettings: (fn: (s: DocSettings) => DocSettings) => void;

@@ -11,7 +11,7 @@ import { buildClipboard, pastePayload } from "../model/clipboard";
 import { MAX_COLS, MAX_ROWS, contains, rect, rectCols, rectRows } from "../model/rect";
 import { expandForMerges } from "../model/selection";
 import type { CellPos, Rect } from "../model/types";
-import { widthPxToChars, pxToPt } from "../model/axis";
+import { widthPxToChars, pxToPt, type AxisSizes } from "../model/axis";
 import { CellEditor } from "./CellEditor";
 import { handleGridKey } from "./keys";
 import { GridLayout } from "./layout";
@@ -19,6 +19,8 @@ import { measureText, renderGrid, type RenderState } from "./render";
 import { SheetTabs } from "./SheetTabs";
 import { autoFitCols, autoFitRows } from "./autofit";
 import { FloatingLayer } from "../charts/FloatingLayer";
+import { PivotPlaceholders } from "../pivot/PivotPlaceholder";
+import { pivotButtons } from "../pivot/pivotOps";
 import { AllNotes, ValidationUi } from "./ValidationUi";
 import { computePageBreaks } from "../io/print";
 import { filterAt, filtersOf } from "../actions/data";
@@ -27,8 +29,8 @@ type Drag =
   | { kind: "select"; add: boolean }
   | { kind: "colsel"; start: number; add: boolean }
   | { kind: "rowsel"; start: number; add: boolean }
-  | { kind: "colresize"; col: number; startX: number; startW: number }
-  | { kind: "rowresize"; row: number; startY: number; startH: number }
+  | { kind: "colresize"; col: number; startX: number; startW: number; saved: AxisSizes }
+  | { kind: "rowresize"; row: number; startY: number; startH: number; saved: AxisSizes }
   | { kind: "fill"; src: Rect; target: Rect | null }
   | { kind: "point"; anchor: CellPos; sheetId: number }
   | { kind: "move"; src: Rect; grab: CellPos; target: Rect | null; copy: boolean };
@@ -72,6 +74,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
   const [tip, setTip] = useState<{ x: number; y: number; text: string; title?: string } | null>(null);
   const [cursor, setCursor] = useState("cell");
   const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  const darkUi = useDarkUi();
 
   const scroll = () => {
     let s = scrolls.current.get(sheet.id);
@@ -105,6 +108,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
           : [];
       const filterButtons: { row: number; col: number; active: boolean }[] = [];
       for (const f of filtersOf(sheet)) for (let col = f.range.c1; col <= f.range.c2; col++) filterButtons.push({ row: f.range.r1, col, active: !!f.columns[col - f.range.c1] });
+      for (const b of pivotButtons(sheet)) filterButtons.push({ row: b.row, col: b.col, active: b.active });
       const spillInfo = ctl.wb.engine.getSpill(sheet.id, ctl.sel.active.row, ctl.sel.active.col);
       const st: RenderState = {
         wb: ctl.wb,
@@ -121,13 +125,13 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         editing: e && e.sheetId === sheet.id ? { row: e.row, col: e.col } : null,
         filterButtons,
         spill: spillInfo ? rect(spillInfo.anchorRow, spillInfo.anchorCol, spillInfo.anchorRow + spillInfo.rows - 1, spillInfo.anchorCol + spillInfo.cols - 1) : null,
-        dark: false,
+        dark: darkUi,
         pageBreaks: sheet.viewMode === "pageBreak" ? computePageBreaks(ctl.wb, sheet) : null,
       };
       renderGrid(ctx, st);
       syncScrollbars(L);
     });
-  }, [ctl, sheet, makeLayout, dpr]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ctl, sheet, makeLayout, dpr, darkUi]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const syncScrollbars = (L: GridLayout) => {
     const ext = ctl.wb.dataExtent(sheet);
@@ -262,7 +266,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
       if ((onV || onH) && last.r2 < MAX_ROWS - 1 && last.c2 < MAX_COLS - 1) hit.selBorder = true;
     }
     // Filtre düğmesi
-    if (filterAt(sheet, row, col)) {
+    if (filterAt(sheet, row, col) || (sheet.pivots.length && sheet.pivots.some((p) => p.buttons?.some((b) => b.row === row && b.col === col)))) {
       const rc = L.cellRect(row, col);
       const s = Math.min(rc.h, 18 * z);
       if (x >= rc.x + rc.w - s - 1 && y >= rc.y) hit.filterButton = true;
@@ -316,7 +320,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         return;
       case "colHeader":
         if (hit.colBorder !== undefined) {
-          drag.current = { kind: "colresize", col: hit.colBorder, startX: x, startW: sheet.cols.size(hit.colBorder) };
+          drag.current = { kind: "colresize", col: hit.colBorder, startX: x, startW: sheet.cols.size(hit.colBorder), saved: sheet.cols.clone() };
           return;
         }
         if (e.shiftKey) ctl.selectColumns(ctl.sel.anchor.col, hit.col);
@@ -325,7 +329,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         return;
       case "rowHeader":
         if (hit.rowBorder !== undefined) {
-          drag.current = { kind: "rowresize", row: hit.rowBorder, startY: y, startH: sheet.rows.size(hit.rowBorder) };
+          drag.current = { kind: "rowresize", row: hit.rowBorder, startY: y, startH: sheet.rows.size(hit.rowBorder), saved: sheet.rows.clone() };
           return;
         }
         if (e.shiftKey) ctl.selectRows(ctl.sel.anchor.row, hit.row);
@@ -521,9 +525,13 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
     }
     if (!d) return;
     switch (d.kind) {
+      case "select":
+        // Biçim Boyacısı tek tıkla da uygulanır (sürükleme setSelection'da uygulanmış olabilir)
+        if (ctl.painter) ctl.applyPainter();
+        break;
       case "colresize": {
         const w = sheet.cols.size(d.col);
-        sheet.cols.set(d.col, d.startW);
+        sheet.cols.assign(d.saved);
         const items = selectedLines(ctl, "col", d.col);
         ctl.ops.setSizes(sheet, "col", items, w, "Sütun Genişliği");
         setTip(null);
@@ -531,7 +539,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
       }
       case "rowresize": {
         const h = sheet.rows.size(d.row);
-        sheet.rows.set(d.row, d.startH);
+        sheet.rows.assign(d.saved);
         const items = selectedLines(ctl, "row", d.row);
         ctl.ops.setSizes(sheet, "row", items, h, "Satır Yüksekliği");
         setTip(null);
@@ -634,6 +642,13 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
 
   const gridKey = (ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const L = layoutRef.current!;
+    // Sayfa Aşağı/Yukarı görünümü de bir ekran kaydırır (etkin hücre ekrandaki yerinde kalır)
+    if ((ev.key === "PageDown" || ev.key === "PageUp") && !ev.ctrlKey && !ev.metaKey) {
+      const d = ev.key === "PageDown" ? 1 : -1;
+      const s = scroll();
+      if (ev.altKey) setScroll(s.x + d * L.paneW, s.y);
+      else setScroll(s.x, s.y + d * L.paneH);
+    }
     const handled = handleGridKey(ctl, ev, {
       pageRows: () => Math.max(1, L.visibleRows()[1] - L.visibleRows()[0]),
       pageCols: () => Math.max(1, L.visibleCols()[1] - L.visibleCols()[0]),
@@ -672,6 +687,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         >
           <canvas ref={canvasRef} className="tb-canvas" />
           <CellEditor ctl={ctl} layout={layout} inputRef={inputRef} onGridKey={gridKey} />
+          <PivotPlaceholders ctl={ctl} layout={layout} />
           <FloatingLayer ctl={ctl} layout={layout} />
           {ctl.showAllNotes && <AllNotes ctl={ctl} layout={layout} />}
           <ValidationUi ctl={ctl} layout={layout} />
@@ -727,4 +743,27 @@ export function openLink(ctl: Controller, link: string): void {
     return;
   }
   window.open(link, "_blank", "noopener");
+}
+
+/** Arayüz teması koyu mu (Koyu Gri / Siyah ya da sistem koyu)? */
+function useDarkUi(): boolean {
+  const read = () => {
+    if (typeof document === "undefined") return false;
+    const t = document.documentElement.getAttribute("data-oh-theme");
+    if (t === "dark" || t === "black") return true;
+    return t === "system" && typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: dark)").matches;
+  };
+  const [dark, setDark] = useState(read);
+  useEffect(() => {
+    const update = () => setDark(read());
+    const mo = new MutationObserver(update);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-oh-theme"] });
+    const mq = typeof matchMedia !== "undefined" ? matchMedia("(prefers-color-scheme: dark)") : null;
+    mq?.addEventListener("change", update);
+    return () => {
+      mo.disconnect();
+      mq?.removeEventListener("change", update);
+    };
+  }, []);
+  return dark;
 }

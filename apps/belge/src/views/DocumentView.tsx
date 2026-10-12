@@ -83,12 +83,12 @@ export function DocumentView(props: Props) {
   const flowH = lastPage ? lastPage.top + lastPage.h : first.h;
 
   // Birden Çok Sayfa: sayfa boyları eşitse ve pencereye en az iki sayfa sığıyorsa yan yana dizilir.
-  const uniform = pages.length > 1 && pages.every((p) => Math.abs(p.h - pages[0].h) < 0.5 && Math.abs(p.mt - pages[0].mt) < 0.5);
   const perRowFit = Math.floor((scrollW / scale - 2 * CANVAS_PAD + TILE_GAP) / (bodyW + TILE_GAP));
-  const tiled = print && !printing && !hfEditing && !view.focusMode && uniform && perRowFit >= 2;
+  const tiled = print && !printing && !hfEditing && !view.focusMode && pages.length > 1 && perRowFit >= 2;
   // Satır kaydırılamıyorsa (tablo satırı ya da çok sütunlu bölüm sınırı) sayfalar tek satırda dizilir.
   const perRow = tiled ? (tileOk ? Math.min(perRowFit, pageCount) : pageCount) : 1;
-  const stride = (pages[0]?.h ?? first.h) + gap;
+  // Yan yana dizimde her sayfa en yüksek sayfa kadar bir yuvaya yerleşir.
+  const stride = (tiled ? Math.max(...geoms.map((g) => g.h)) : (pages[0]?.h ?? first.h)) + gap;
   const rows = tiled ? Math.ceil(pageCount / perRow) : pageCount;
 
   // Sayfa geometrisini sayfalama eklentisine bildir.

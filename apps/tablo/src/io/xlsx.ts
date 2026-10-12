@@ -11,6 +11,7 @@ import type { CondRule, PageSetup, Rect, ValidationRule } from "../model/types";
 import { WorkbookModel, type SheetModel } from "../model/workbook";
 import { ColorResolver, fromXStyle, toXStyle } from "./xlsxStyles";
 import { readCharts, postProcess } from "./xlsxCharts";
+import { readPivotsFromData } from "./xlsxPivot";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -81,6 +82,12 @@ export async function readXlsx(data: ArrayBuffer): Promise<WorkbookModel> {
     /* grafikler okunamazsa yok say */
   }
   wb.engine.recalc(true);
+  // PivotTable tanımları (kaynak değerleri hesaplandıktan sonra)
+  try {
+    await readPivotsFromData(data, wb);
+  } catch {
+    /* PivotTable okunamazsa hücre değerleri kalır */
+  }
   return wb;
 }
 
@@ -107,7 +114,7 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
   ws.eachRow({ includeEmpty: true }, (row: any, rn: number) => {
     const r = rn - 1;
     if (r >= MAX_ROWS) return;
-    if (row.height !== undefined && row.height !== null && (row.customHeight || Math.abs(row.height - 15) > 0.1)) sheet.rows.set(r, ptToPx(row.height));
+    if (row.height !== undefined && row.height !== null && (row.customHeight || Math.abs(row.height - 15) > 0.1)) sheet.rows.set(r, ptToPx(row.height), !!row.customHeight);
     if (row.hidden) sheet.rows.setHidden(r, true);
     row.eachCell({ includeEmpty: true }, (cell: any, cn: number) => {
       const c = cn - 1;

@@ -10,6 +10,9 @@ export const NS = {
   o: "urn:schemas-microsoft-com:office:office",
   w10: "urn:schemas-microsoft-com:office:word",
   mc: "http://schemas.openxmlformats.org/markup-compatibility/2006",
+  wps: "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+  wp14: "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing",
+  w14: "http://schemas.microsoft.com/office/word/2010/wordml",
   rel: "http://schemas.openxmlformats.org/package/2006/relationships",
   ct: "http://schemas.openxmlformats.org/package/2006/content-types",
 };

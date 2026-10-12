@@ -564,6 +564,14 @@ table[data-table-style="light-purple"][data-banded-rows="true"] tr:nth-child(eve
   text-decoration: line-through;
 }
 
+/* Biçim değişikliği: metnin altında ince noktalı çizgi */
+.bl-fmtchg {
+  background-image: linear-gradient(to right, rgba(192, 0, 0, 0.7) 50%, transparent 50%);
+  background-size: 4px 1px;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+}
+
 /* İçindekiler */
 .bl-toc {
   margin: 0 0 8pt;
@@ -721,3 +729,117 @@ table[data-table-style="light-purple"][data-banded-rows="true"] tr:nth-child(eve
 .bl-note-text:focus {
   background: rgba(0, 120, 215, 0.06);
 }
+
+
+/* Metin kutusu: sıfır yükseklikli çapa + metnin önünde mutlak konumlu kutu */
+.bl-doc .bl-tb-anchor {
+  position: relative;
+  height: 0;
+  margin: 0;
+  z-index: 2;
+}
+
+.bl-doc .bl-textbox {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 3.6pt 7.2pt;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.bl-doc .bl-tb-content {
+  outline: none;
+  min-height: 1em;
+}
+
+.bl-doc .bl-tb-content > * {
+  min-width: 0;
+}
+
+.bl-tb-handles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+}
+
+.bl-tb-anchor:hover .bl-tb-handles,
+.bl-tb-anchor:focus-within .bl-tb-handles,
+.bl-tb-anchor.ProseMirror-selectednode .bl-tb-handles {
+  display: block;
+}
+
+.bl-tb-anchor:focus-within .bl-textbox,
+.bl-tb-anchor.ProseMirror-selectednode .bl-textbox {
+  overflow: visible;
+}
+
+.bl-tb-anchor:focus-within .bl-tb-handles {
+  outline: 1px dashed #5a5a5a;
+}
+
+.bl-tb-anchor.ProseMirror-selectednode .bl-tb-handles {
+  outline: 1px solid #5a5a5a;
+}
+
+.bl-tb-edge {
+  position: absolute;
+  pointer-events: auto;
+  cursor: move;
+}
+
+.bl-tb-edge.is-top,
+.bl-tb-edge.is-bottom {
+  left: 0;
+  right: 0;
+  height: 7px;
+}
+
+.bl-tb-edge.is-top {
+  top: -4px;
+}
+
+.bl-tb-edge.is-bottom {
+  bottom: -4px;
+}
+
+.bl-tb-edge.is-left,
+.bl-tb-edge.is-right {
+  top: 0;
+  bottom: 0;
+  width: 7px;
+}
+
+.bl-tb-edge.is-left {
+  left: -4px;
+}
+
+.bl-tb-edge.is-right {
+  right: -4px;
+}
+
+.bl-tb-h {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -5px;
+  background: #fff;
+  border: 1px solid #5a5a5a;
+  border-radius: 50%;
+  pointer-events: auto;
+  display: none;
+}
+
+.bl-tb-anchor:focus-within .bl-tb-h,
+.bl-tb-anchor.ProseMirror-selectednode .bl-tb-h {
+  display: block;
+}
+
+.bl-tb-h.is-nw { left: 0; top: 0; cursor: nwse-resize; }
+.bl-tb-h.is-n { left: 50%; top: 0; cursor: ns-resize; }
+.bl-tb-h.is-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.bl-tb-h.is-e { left: 100%; top: 50%; cursor: ew-resize; }
+.bl-tb-h.is-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.bl-tb-h.is-s { left: 50%; top: 100%; cursor: ns-resize; }
+.bl-tb-h.is-sw { left: 0; top: 100%; cursor: nesw-resize; }
+.bl-tb-h.is-w { left: 0; top: 50%; cursor: ew-resize; }

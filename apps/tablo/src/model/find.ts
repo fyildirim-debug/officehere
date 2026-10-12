@@ -32,7 +32,7 @@ export function findPattern(o: Pick<FindOptions, "query" | "matchCase" | "wholeC
 /** Aranacak hücre metni. */
 export function cellSearchText(wb: WorkbookModel, sheet: SheetModel, row: number, col: number, lookIn: FindOptions["lookIn"]): string {
   if (lookIn === "notes") return sheet.noteAt(row, col)?.text ?? "";
-  if (lookIn === "formulas") return wb.editText(sheet, row, col) || displayText(wb, sheet, row, col);
+  if (lookIn === "formulas") return wb.plainText(sheet, row, col) || displayText(wb, sheet, row, col);
   return displayText(wb, sheet, row, col);
 }
 

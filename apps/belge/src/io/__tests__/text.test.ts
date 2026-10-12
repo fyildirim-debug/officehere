@@ -38,9 +38,12 @@ describe("HTML", () => {
     const body = extractHtmlBody(html);
     expect(body).toContain("<h1>Başlık</h1>");
     const doc = htmlToDoc(html);
-    expect(doc.content![0].type).toBe("heading");
-    expect(doc.content![1].attrs?.textAlign).toBe("center");
-    expect(doc.content![2].type).toBe("bulletList");
+    // belge > bölüm > bloklar
+    expect(doc.content![0].type).toBe("section");
+    const b = doc.content![0].content!;
+    expect(b[0].type).toBe("heading");
+    expect(b[1].attrs?.textAlign).toBe("center");
+    expect(b[2].type).toBe("bulletList");
   });
 
   it("dış HTML: satır içi biçimler ve tablolar", () => {

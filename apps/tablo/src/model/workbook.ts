@@ -3,7 +3,7 @@
  * içeriklerini tutar; bu katman stilleri, boyutları, birleştirmeleri,
  * notları ve sayfa düzeyindeki nesneleri yönetir.
  */
-import { FormulaEngine, cellKey, keyCol, keyRow, toLocalFormula, numberToText, isDateFormat, isTimeOnlyFormat, formatValue, isError, localErrorName, type Scalar } from "@officehere/formula";
+import { FormulaEngine, cellKey, keyCol, keyRow, toLocalFormula, numberToText, isDateFormat, isTimeOnlyFormat, formatValue, isError, localErrorName, parseCellInput, type Scalar } from "@officehere/formula";
 import { AxisSizes } from "./axis";
 import { MAX_COLS, MAX_ROWS, contains, intersects, shiftIndex, shiftRect } from "./rect";
 import { StyleTable, type CellStyle } from "./styles";
@@ -197,6 +197,27 @@ export class SheetModel {
       else a.col = Math.max(0, shiftIndex(a.col, at, count) ?? at);
     };
     for (const o of [...this.charts, ...this.images, ...this.shapes]) shiftAnchor(o.anchor);
+    // PivotTable konumu ve çıktısı; mini grafik hücreleri
+    for (const p of this.pivots) {
+      shiftAnchor(p.anchor);
+      if (p.output) p.output = sr(p.output) ?? undefined;
+      if (p.buttons)
+        p.buttons = p.buttons
+          .map((b) => {
+            const ni = shiftIndex(axis === "row" ? b.row : b.col, at, count);
+            return ni === null ? null : { ...b, row: axis === "row" ? ni : b.row, col: axis === "col" ? ni : b.col };
+          })
+          .filter((b): b is { row: number; col: number; field: number } => !!b);
+    }
+    for (const g of this.sparklines) {
+      g.items = g.items
+        .map((it) => {
+          const ni = shiftIndex(axis === "row" ? it.row : it.col, at, count);
+          return ni === null ? null : { ...it, row: axis === "row" ? ni : it.row, col: axis === "col" ? ni : it.col };
+        })
+        .filter((x): x is { row: number; col: number; range: string } => !!x);
+    }
+    this.sparklines = this.sparklines.filter((g) => g.items.length);
     if (this.page.printArea) this.page.printArea = sr(this.page.printArea) ?? undefined;
   }
 }
@@ -370,6 +391,12 @@ export class WorkbookModel {
     return valueEditText(v, this.styleAt(sheet, row, col).numFmt);
   }
 
+  /** Düzenleme metni, metin değerlerinde kesme işareti öneki olmadan (arama, metni sütunlara bölme). */
+  plainText(sheet: SheetModel, row: number, col: number): string {
+    const t = this.editText(sheet, row, col);
+    return t.startsWith("'") && typeof this.getValue(sheet, row, col) === "string" ? t.slice(1) : t;
+  }
+
   /** Aralıktaki kayıtlı hücre konumları (içerik, stil, not, bağlantı). */
   cellKeysIn(sheet: SheetModel, r: Rect): Set<number> {
     const keys = new Set<number>();
@@ -437,6 +464,16 @@ export class WorkbookModel {
     return v === null;
   }
 
+  /** Satır/sütun ekleme-silmede bu sayfayı kaynak alan PivotTable aralıklarını kaydırır. */
+  shiftPivotSources(sheet: SheetModel, axis: "row" | "col", at: number, count: number): void {
+    for (const s of this.sheets)
+      for (const p of s.pivots) {
+        if (p.sourceSheet !== sheet.id) continue;
+        const r = shiftRect(p.source, axis, at, count);
+        if (r) p.source = r;
+      }
+  }
+
   /** Tüm sayfaların anlık görüntüsü (yapısal işlemleri geri almak için). */
   snapshot(): WorkbookSnapshot {
     return {
@@ -471,7 +508,12 @@ export function valueEditText(v: Scalar, numFmt: string | undefined): string {
   if (v === null) return "";
   if (typeof v === "boolean") return v ? "DOĞRU" : "YANLIŞ";
   if (isError(v)) return localErrorName(v.code);
-  if (typeof v === "string") return v;
+  if (typeof v === "string") {
+    // Sayı/tarih/formül gibi okunacak metinler kesme işaretiyle gösterilir ('123): yeniden onaylanınca metin kalır
+    if (v === "" || numFmt === "@") return v;
+    const p = parseCellInput(v, { numFmt });
+    return p.kind === "value" && p.value === v ? v : "'" + v;
+  }
   if (numFmt && isDateFormat(numFmt)) {
     if (isTimeOnlyFormat(numFmt)) return formatValue(v, "h:mm:ss").text;
     const frac = v - Math.floor(v);

@@ -6,6 +6,8 @@
 export class AxisSizes {
   private sizes = new Map<number, number>();
   private hiddenSet = new Set<number>();
+  /** Kullanıcının elle boyutlandırdığı öğeler (satırda customHeight); diğerleri içeriğe göre otomatik. */
+  private manualSet = new Set<number>();
   private idx: number[] | null = null;
   private pre: number[] = [];
 
@@ -43,16 +45,26 @@ export class AxisSizes {
     return this.sizes.has(i);
   }
 
-  set(i: number, px: number): void {
+  /** Boyut atar; manual=false otomatik boyuttur (içerik değişince yeniden hesaplanabilir). */
+  set(i: number, px: number, manual = true): void {
     const v = Math.max(0, Math.round(px * 100) / 100);
-    if (v === this.defaultSize) this.sizes.delete(i);
+    if (v === this.defaultSize && !manual) this.sizes.delete(i);
+    else if (v === this.defaultSize) this.sizes.delete(i);
     else this.sizes.set(i, v);
+    if (manual) this.manualSet.add(i);
+    else this.manualSet.delete(i);
     this.invalidate();
   }
 
   reset(i: number): void {
     this.sizes.delete(i);
+    this.manualSet.delete(i);
     this.invalidate();
+  }
+
+  /** Elle boyutlandırılmış mı (otomatik sığdırma bunu değiştirmez). */
+  isManual(i: number): boolean {
+    return this.manualSet.has(i);
   }
 
   setDefault(px: number): void {
@@ -132,6 +144,9 @@ export class AxisSizes {
     const hs = new Map<number, true>();
     for (const k of this.hiddenSet) hs.set(k, true);
     this.hiddenSet = new Set(move(hs).keys());
+    const ms = new Map<number, true>();
+    for (const k of this.manualSet) ms.set(k, true);
+    this.manualSet = new Set(move(ms).keys());
     this.invalidate();
   }
 
@@ -139,6 +154,7 @@ export class AxisSizes {
     const a = new AxisSizes(this.defaultSize, this.count);
     a.sizes = new Map(this.sizes);
     a.hiddenSet = new Set(this.hiddenSet);
+    a.manualSet = new Set(this.manualSet);
     return a;
   }
 
@@ -146,6 +162,7 @@ export class AxisSizes {
     this.defaultSize = other.defaultSize;
     this.sizes = new Map(other.sizes);
     this.hiddenSet = new Set(other.hiddenSet);
+    this.manualSet = new Set(other.manualSet);
     this.invalidate();
   }
 }

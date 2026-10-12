@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // Çekirdek düzenleme mantığı: büyük/küçük harf, arama, stiller, izlenen değişiklikler, komutlar.
 import { afterEach, describe, expect, it } from "vitest";
-import { Editor } from "@tiptap/core";
+import { Editor, type JSONContent } from "@tiptap/core";
+import { normalizeDoc } from "../../model/document";
 import { TextSelection } from "@tiptap/pm/state";
 import { schemaExtensions } from "../extensions";
 import { Search, adaptCase, findMatches, foldTr, getSearch, replaceAll, setSearch } from "../search";
@@ -17,9 +18,12 @@ afterEach(() => {
 });
 
 function make(content: object) {
-  editor = new Editor({ extensions: [...schemaExtensions(), Search, TrackChanges], content });
+  editor = new Editor({ extensions: [...schemaExtensions(), Search, TrackChanges], content: normalizeDoc(content as JSONContent) });
   return editor;
 }
+
+/** Tek bölümlü belgenin blokları. */
+const blocks = (json: JSONContent) => json.content![0].content!;
 
 const para = (text: string) => ({ type: "paragraph", content: text ? [{ type: "text", text }] : undefined });
 const doc = (...c: object[]) => ({ type: "doc", content: c });
@@ -42,8 +46,8 @@ describe("Türkçe büyük/küçük harf", () => {
     ed.commands.selectAll();
     changeCase(ed, "upper");
     const json = ed.getJSON();
-    expect(json.content![0].content![0]).toEqual({ type: "text", text: "KALIN ", marks: [{ type: "bold" }] });
-    expect((json.content![0].content![1] as { text?: string }).text).toBe("İNCE");
+    expect(blocks(json)[0].content![0]).toEqual({ type: "text", text: "KALIN ", marks: [{ type: "bold" }] });
+    expect((blocks(json)[0].content![1] as { text?: string }).text).toBe("İNCE");
   });
 });
 
@@ -90,11 +94,11 @@ describe("stiller ve paragraf komutları", () => {
   it("Başlık uygulama ve Normal'e dönüş", () => {
     const ed = make(doc(para("Metin")));
     applyStyle(ed, styles, "Heading2");
-    expect(ed.getJSON().content![0]).toMatchObject({ type: "heading", attrs: { level: 2 } });
+    expect(blocks(ed.getJSON())[0]).toMatchObject({ type: "heading", attrs: { level: 2 } });
     applyStyle(ed, styles, "Title");
-    expect(ed.getJSON().content![0]).toMatchObject({ type: "paragraph", attrs: { styleId: "Title" } });
+    expect(blocks(ed.getJSON())[0]).toMatchObject({ type: "paragraph", attrs: { styleId: "Title" } });
     applyStyle(ed, styles, "Normal");
-    expect(ed.getJSON().content![0].attrs?.styleId).toBeNull();
+    expect(blocks(ed.getJSON())[0].attrs?.styleId).toBeNull();
   });
   it("karakter stili açılıp kapanır", () => {
     const ed = make(doc(para("vurgulu")));
@@ -108,14 +112,14 @@ describe("stiller ve paragraf komutları", () => {
     const ed = make(doc(para("a")));
     changeIndent(ed, 1);
     changeIndent(ed, 1);
-    expect(ed.getJSON().content![0].attrs?.indentLeft).toBeCloseTo(70.8);
+    expect(blocks(ed.getJSON())[0].attrs?.indentLeft).toBeCloseTo(70.8);
     changeIndent(ed, -1);
-    expect(ed.getJSON().content![0].attrs?.indentLeft).toBeCloseTo(35.4);
+    expect(blocks(ed.getJSON())[0].attrs?.indentLeft).toBeCloseTo(35.4);
     setLineSpacing(ed, 1.5);
-    expect(ed.getJSON().content![0].attrs?.lineHeight).toBe(1.5);
+    expect(blocks(ed.getJSON())[0].attrs?.lineHeight).toBe(1.5);
     clearFormatting(ed);
-    expect(ed.getJSON().content![0].attrs?.indentLeft).toBeNull();
-    expect(ed.getJSON().content![0].attrs?.lineHeight).toBeNull();
+    expect(blocks(ed.getJSON())[0].attrs?.indentLeft).toBeNull();
+    expect(blocks(ed.getJSON())[0].attrs?.lineHeight).toBeNull();
   });
   it("yazı tipini büyült/küçült boyut listesini izler", () => {
     const ed = make(doc(para("abc")));
@@ -131,7 +135,7 @@ describe("stiller ve paragraf komutları", () => {
     const ed = make(doc(para("Çilek"), para("Armut"), para("Üzüm"), para("Ceviz")));
     ed.commands.selectAll();
     sortParagraphs(ed, false);
-    expect(ed.getJSON().content!.map((p) => (p.content?.[0] as { text?: string } | undefined)?.text)).toEqual(["Armut", "Ceviz", "Çilek", "Üzüm"]);
+    expect(blocks(ed.getJSON()).map((p) => (p.content?.[0] as { text?: string } | undefined)?.text)).toEqual(["Armut", "Ceviz", "Çilek", "Üzüm"]);
   });
 });
 
@@ -152,9 +156,9 @@ describe("Değişiklikleri İzle", () => {
     const ed = make(doc(para("merhaba dünya")));
     setTracking(ed.view, true, "Test");
     // "dünya" sonuna ekle
-    ed.view.dispatch(ed.state.tr.insertText("!", ed.state.doc.content.size - 1));
-    // "merhaba" sil
-    ed.view.dispatch(ed.state.tr.delete(1, 8));
+    ed.view.dispatch(ed.state.tr.insertText("!", ed.state.doc.content.size - 2));
+    // "merhaba" sil (belge > bölüm > paragraf: metin 2'de başlar)
+    ed.view.dispatch(ed.state.tr.delete(2, 9));
     const changes = listChanges(ed.state.doc);
     expect(changes.map((c) => [c.kind, c.text])).toEqual([
       ["deletion", "merhaba"],
@@ -170,11 +174,43 @@ describe("Değişiklikleri İzle", () => {
   it("reddetme eklenenleri kaldırır, silinenleri geri getirir", () => {
     const ed = make(doc(para("abc")));
     setTracking(ed.view, true, "Test");
-    ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 2, 3)));
+    ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, 3, 4)));
     ed.view.dispatch(ed.state.tr.insertText("X"));
     expect(ed.state.doc.textContent).toBe("abXc");
     ed.view.dispatch(resolveChanges(ed.state, 0, ed.state.doc.content.size, false));
     expect(ed.state.doc.textContent).toBe("abc");
+  });
+});
+
+describe("Değişiklikleri İzle: biçim değişiklikleri", () => {
+  it("kalın yapma izlenir; reddetme önceki biçimi geri yükler", () => {
+    const ed = make(doc({ type: "paragraph", content: [{ type: "text", text: "ab", marks: [{ type: "italic" }] }, { type: "text", text: "cd" }] }));
+    setTracking(ed.view, true, "Test");
+    ed.view.dispatch(ed.state.tr.addMark(2, 6, ed.state.schema.marks.bold.create()));
+    const changes = listChanges(ed.state.doc);
+    expect(changes.map((c) => [c.kind, c.text, c.author])).toEqual([["formatChange", "abcd", "Test"]]);
+    // Metin değişmez; yalnız biçim kaydı eklenir.
+    expect(ed.state.doc.textContent).toBe("abcd");
+    ed.view.dispatch(resolveChanges(ed.state, 0, ed.state.doc.content.size, false));
+    const c = blocks(ed.getJSON())[0].content!;
+    expect(c).toEqual([
+      { type: "text", text: "ab", marks: [{ type: "italic" }] },
+      { type: "text", text: "cd" },
+    ]);
+  });
+  it("kabul etme yeni biçimi tutar; geri alınan biçim kaydı siler", () => {
+    const ed = make(doc(para("abcd")));
+    setTracking(ed.view, true, "Test");
+    const bold = ed.state.schema.marks.bold.create();
+    ed.view.dispatch(ed.state.tr.addMark(2, 4, bold));
+    ed.view.dispatch(resolveChanges(ed.state, 0, ed.state.doc.content.size, true));
+    expect(listChanges(ed.state.doc).length).toBe(0);
+    expect(blocks(ed.getJSON())[0].content![0]).toEqual({ type: "text", text: "ab", marks: [{ type: "bold" }] });
+    // Kalın yapıp yeniden kaldırınca değişiklik kalmaz.
+    ed.view.dispatch(ed.state.tr.addMark(4, 6, bold));
+    expect(listChanges(ed.state.doc).length).toBe(1);
+    ed.view.dispatch(ed.state.tr.removeMark(4, 6, bold));
+    expect(listChanges(ed.state.doc).length).toBe(0);
   });
 });
 
@@ -190,5 +226,22 @@ describe("numaralandırma eşlemesi", () => {
     }
     // Word'ün Symbol yazı tipi madde işareti
     expect(sigFromLevel("bullet", "", 0)).toEqual({ type: "bullet", style: null, multilevel: null });
+  });
+});
+
+describe("liste uygulama", () => {
+  it("liste ve paragrafa yayılan seçimde hepsi numaralı listeye döner (Tümünü Seç)", async () => {
+    const { toggleList } = await import("../listApply");
+    const ed = make(doc({ type: "bulletList", content: [{ type: "listItem", content: [para("Elma")] }, { type: "listItem", content: [para("Armut")] }] }, para("Liste dışı"), para("Son")));
+    ed.commands.selectAll();
+    toggleList(ed, "orderedList");
+    const b = blocks(ed.getJSON());
+    expect(b.length).toBe(1);
+    expect(b[0].type).toBe("orderedList");
+    expect(b[0].content!.length).toBe(4);
+    // Hepsi numaralıyken yeniden uygulamak listeyi kaldırır.
+    ed.commands.selectAll();
+    toggleList(ed, "orderedList");
+    expect(blocks(ed.getJSON()).map((x) => x.type)).toEqual(["paragraph", "paragraph", "paragraph", "paragraph"]);
   });
 });

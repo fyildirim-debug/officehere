@@ -6,7 +6,7 @@ import { addRecentFile, baseName, downloadBlob, extensionOf, getNative, openFile
 import type { Controller } from "./controller";
 import { readXlsx, writeXlsx } from "./io/xlsx";
 import { readCsv, writeCsv } from "./io/csv";
-import { printRange, printSheet, rangeToHtml } from "./io/print";
+import { exportPdf, printRange, printSheet, rangeToHtml } from "./io/print";
 import { buildTemplate, TEMPLATES } from "./templates";
 import type { WorkbookModel } from "./model/workbook";
 
@@ -108,7 +108,7 @@ export function useFileActions(ctl: Controller): FileActions {
         } else if (kind === "csv-comma") {
           await saveFileAs(`${base}.csv`, [{ name: "CSV (Virgülle ayrılmış)", extensions: ["csv"] }], writeCsv(ctl.wb, ctl.sheet, { delimiter: "," }));
         } else if (kind === "pdf") {
-          printSheet(ctl.wb, ctl.sheet);
+          await exportPdf(ctl.wb, ctl.sheet, `${base}.pdf`);
         } else if (kind === "html") {
           const r = printRange(ctl.wb, ctl.sheet);
           const body = r ? rangeToHtml(ctl.wb, ctl.sheet, r, { gridlines: true, objects: true }) : "";
@@ -209,7 +209,7 @@ export function FileView({ ctl, files, page, onClose }: { ctl: Controller; files
         { id: "xlsx", title: "Çalışma kitabını indir (.xlsx)", description: "Çalışma kitabının bir kopyasını Office Open XML biçiminde indirir.", icon: <ArrowDownload24Regular /> },
         { id: "csv", title: "CSV (Noktalı virgülle ayrılmış)", description: "Etkin sayfayı UTF-8 ve ; ayırıcıyla metin dosyası olarak kaydeder.", icon: <DocumentTable24Regular /> },
         { id: "csv-comma", title: "CSV (Virgülle ayrılmış)", description: "Etkin sayfayı virgül ayırıcıyla kaydeder.", icon: <DocumentTable24Regular /> },
-        { id: "pdf", title: "PDF/XPS Belgesi Oluştur", description: "Yazdırma iletişim kutusunda “PDF olarak kaydet” seçeneğini kullanın.", icon: <DocumentPdf24Regular /> },
+        { id: "pdf", title: "PDF/XPS Belgesi Oluştur", description: getNative()?.exportPdf ? "Etkin sayfayı Sayfa Yapısı ayarlarıyla PDF dosyası olarak kaydeder." : "Yazdırma iletişim kutusunda “PDF olarak kaydet” seçeneğini kullanın.", icon: <DocumentPdf24Regular /> },
         { id: "html", title: "Web Sayfası (.html)", description: "Kullanılan aralığı HTML tablosu olarak dışarı aktarır.", icon: <Globe24Regular /> },
       ]}
       onExport={(id) => {

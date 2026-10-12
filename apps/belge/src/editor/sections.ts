@@ -1,8 +1,8 @@
 // Bölümler (OOXML sectPr karşılığı): belge = bölüm+, her bölüm kendi sayfa yapısını ve sütun
 // düzenini taşır. Bölüm sonu = iki bölüm düğümü arasındaki sınır. Sütun sonu ayrı bir düğümdür.
-import { Extension, Node, mergeAttributes } from "@tiptap/core";
+import { Extension, Node, mergeAttributes, type ChainedCommands, type Editor } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
+import { AllSelection, Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { SECTION_KIND_LABEL, pageMetrics, sectionPage, type PageSetup, type SectionAttrs, type SectionKind } from "../model/document";
 import { insertBreak } from "./nodes";
@@ -376,4 +376,39 @@ export function isolateSelection(state: EditorState, dispatch: (tr: Transaction)
   tr.setSelection(state.selection.map(tr.doc, tr.mapping));
   dispatch(tr);
   return mid;
+}
+
+/**
+ * Blok saran komutları (listeler) bölüm sınırını aşamaz: Tümünü Seç ya da birden çok bölüme yayılan
+ * seçimde komut her bölümün seçili kısmına ayrı ayrı (sondan başa, konumlar kaymasın diye) uygulanır.
+ * Hepsi tek işlemde yapılır (tek Geri Al adımı).
+ */
+export function sectionWise(editor: Editor, apply: (c: ChainedCommands) => ChainedCommands): boolean {
+  const sel = editor.state.selection;
+  const all = sel instanceof AllSelection;
+  const count = editor.state.doc.childCount;
+  const first = sel.$from.depth ? sel.$from.index(0) : 0;
+  const last = Math.min(count - 1, sel.$to.depth ? sel.$to.index(0) : count - 1);
+  if (!all && first === last) return apply(editor.chain().focus()).run();
+  const size = editor.state.doc.content.size;
+  let c = editor.chain().focus();
+  for (let i = last; i >= first; i--) {
+    c = c.command(({ tr }) => {
+      let start = 0;
+      for (let k = 0; k < i; k++) start += tr.doc.child(k).nodeSize;
+      const end = start + tr.doc.child(i).nodeSize;
+      const from = i === first ? Math.max(sel.from, start + 1) : start + 1;
+      const to = i === last ? Math.min(sel.to + (end - (start + editor.state.doc.child(i).nodeSize)), end - 1) : end - 1;
+      tr.setSelection(TextSelection.between(tr.doc.resolve(from), tr.doc.resolve(Math.max(from, to))));
+      return true;
+    });
+    c = apply(c);
+  }
+  // Seçim geri kurulur (Tümünü Seç korunur).
+  c = c.command(({ tr }) => {
+    const doc = tr.doc;
+    tr.setSelection(all ? new AllSelection(doc) : TextSelection.between(doc.resolve(Math.min(sel.from, doc.content.size)), doc.resolve(Math.max(0, doc.content.size - (size - sel.to)))));
+    return true;
+  });
+  return c.run();
 }

@@ -8,10 +8,11 @@ import { formatQualifiedRange, parseQualifiedRange } from "@officehere/formula";
 import { PALETTES, extractChartData, seriesRefs } from "../charts/chartData";
 import type { ChartDef, ChartType, Rect } from "../model/types";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
+import { writePivotsInto } from "./xlsxPivot";
+import { NS_R, esc, nextRid, relsPathOf, resolveTarget, sheetPaths, unescapeXml } from "./ooxmlZip";
 
 const NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 const NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
-const NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const NS_XDR = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
 const REL_DRAWING = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
 const REL_CHART = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
@@ -20,56 +21,9 @@ const CT_DRAWING = "application/vnd.openxmlformats-officedocument.drawing+xml";
 
 const EMU = 9525;
 
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
 function absRef(sheetName: string, r: Rect): string {
   const a = formatQualifiedRange(sheetName, r);
   return a.replace(/(!|^)([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/, (_m, p, c1, r1, c2, r2) => `${p}$${c1}$${r1}${c2 ? `:$${c2}$${r2}` : ""}`);
-}
-
-async function sheetPaths(zip: JSZip): Promise<Map<string, string>> {
-  const wbXml = await zip.file("xl/workbook.xml")!.async("string");
-  const relsXml = await zip.file("xl/_rels/workbook.xml.rels")!.async("string");
-  const rels = new Map<string, string>();
-  for (const m of relsXml.matchAll(/<Relationship\b[^>]*>/g)) {
-    const id = /Id="([^"]+)"/.exec(m[0])?.[1];
-    const target = /Target="([^"]+)"/.exec(m[0])?.[1];
-    if (id && target) rels.set(id, target.replace(/^\/?xl\//, "").replace(/^\//, ""));
-  }
-  const out = new Map<string, string>();
-  for (const m of wbXml.matchAll(/<sheet\b[^>]*>/g)) {
-    const name = /name="([^"]+)"/.exec(m[0])?.[1];
-    const rid = /r:id="([^"]+)"/.exec(m[0])?.[1];
-    if (name && rid && rels.has(rid)) out.set(unescapeXml(name), "xl/" + rels.get(rid)!);
-  }
-  return out;
-}
-
-function unescapeXml(s: string): string {
-  return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
-}
-
-function relsPathOf(part: string): string {
-  const i = part.lastIndexOf("/");
-  return `${part.slice(0, i)}/_rels/${part.slice(i + 1)}.rels`;
-}
-
-function resolveTarget(fromPart: string, target: string): string {
-  if (target.startsWith("/")) return target.slice(1);
-  const parts = fromPart.split("/").slice(0, -1);
-  for (const seg of target.split("/")) {
-    if (seg === "..") parts.pop();
-    else if (seg !== ".") parts.push(seg);
-  }
-  return parts.join("/");
-}
-
-function nextRid(relsXml: string): string {
-  let n = 1;
-  for (const m of relsXml.matchAll(/Id="rId(\d+)"/g)) n = Math.max(n, Number(m[1]) + 1);
-  return `rId${n}`;
 }
 
 /* ------------------------------ Yazma ------------------------------ */
@@ -184,12 +138,17 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise
     const rows = new Set<number>([...sheet.rows.customItems().map(([r]) => r), ...sheet.rows.hiddenItems()]);
     if (!rows.size) continue;
     let xml = await zip.file(sheetPath)!.async("string");
+    // İçeriğe göre (otomatik) yükseklikteki satırlar customHeight taşımaz
+    xml = xml.replace(/<row r="(\d+)"([^>]*?) customHeight="1"/g, (m0, r: string, rest: string) => (sheet.rows.isManual(Number(r) - 1) ? m0 : `<row r="${r}"${rest}`));
     const existing = new Set<number>([...xml.matchAll(/<row r="(\d+)"/g)].map((m) => Number(m[1]) - 1));
     const missing = [...rows].filter((r) => !existing.has(r)).sort((a, b) => a - b);
-    if (!missing.length) continue;
+    if (!missing.length) {
+      zip.file(sheetPath, xml);
+      continue;
+    }
     if (/<sheetData\/>/.test(xml)) xml = xml.replace("<sheetData/>", "<sheetData></sheetData>");
     for (const r of missing) {
-      const attrs = `${sheet.rows.isCustom(r) ? ` ht="${Math.round(((sheet.rows.rawSize(r) * 72) / 96) * 100) / 100}" customHeight="1"` : ""}${sheet.rows.isHidden(r) ? ' hidden="1"' : ""}`;
+      const attrs = `${sheet.rows.isCustom(r) ? ` ht="${Math.round(((sheet.rows.rawSize(r) * 72) / 96) * 100) / 100}"${sheet.rows.isManual(r) ? ' customHeight="1"' : ""}` : ""}${sheet.rows.isHidden(r) ? ' hidden="1"' : ""}`;
       const tag = `<row r="${r + 1}"${attrs}/>`;
       const re = /<row r="(\d+)"/g;
       let pos = -1;
@@ -205,6 +164,7 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise
     zip.file(sheetPath, xml);
   }
   if (wb.sheets.some((s) => s.charts.length)) await writeChartsInto(zip, wb, paths);
+  if (wb.sheets.some((s) => s.pivots.length)) await writePivotsInto(zip, wb, paths);
   return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
 }
 

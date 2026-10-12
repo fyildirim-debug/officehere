@@ -2,7 +2,7 @@
 // (Word: "Uygulama yeri: Bu bölüm / Bu noktadan sonra / Tüm belge").
 import type { Editor } from "@tiptap/core";
 import { samePage, type DocSettings, type PageSetup, type SectionAttrs } from "../model/document";
-import { insertSectionBreak, sectionAt } from "../editor/sections";
+import { insertSectionBreak, sectionAt, sectionGeoms } from "../editor/sections";
 
 export type PageScope = "auto" | "section" | "all" | "forward";
 
@@ -61,4 +61,11 @@ export function applyPageSetup(
   const next = fn(own ?? settings.page);
   const page = samePage(next, settings.page) ? null : next;
   editor.view.dispatch(editor.state.tr.setNodeMarkup(off, undefined, { ...(sec.attrs as SectionAttrs), page }));
+}
+
+/** İmleçteki bölümün metin sütunu genişliği (px): tablolar ve resimler buna sığdırılır. */
+export function columnWidthAt(editor: Editor, def: PageSetup, pos?: number): number {
+  const doc = editor.state.doc;
+  const at = sectionAt(doc, pos ?? editor.state.selection.from);
+  return sectionGeoms(doc, def)[at?.index ?? 0]?.colW ?? sectionGeoms(doc, def)[0].colW;
 }

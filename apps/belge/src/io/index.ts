@@ -39,7 +39,10 @@ export const DOCX_FILTER = [{ name: "Belge (.docx)", extensions: ["docx"] }];
 /** Dosyayı uzantısına göre açar. DOCX ayrıştırılamazsa mammoth ile yedek dönüşüm yapılır. */
 export async function openDocument(name: string, data: ArrayBuffer): Promise<{ doc: BelgeDocument; warning?: string }> {
   const ext = extensionOf(name);
-  if (ext === "docx" || ext === "docm" || ext === "dotx") {
+  // Uzantı yanlış ya da eksikse içerik belirleyicidir: ZIP imzası (PK\x03\x04) DOCX paketidir.
+  const head = new Uint8Array(data, 0, Math.min(4, data.byteLength));
+  const zip = head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04;
+  if (ext === "docx" || ext === "docm" || ext === "dotx" || zip) {
     try {
       const doc = await readDocx(data);
       validateContent(doc.content);

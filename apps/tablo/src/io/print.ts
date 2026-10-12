@@ -1,5 +1,5 @@
 /** Yazdırma: kullanılan alan (ya da yazdırma alanı) HTML tablosu olarak basılır; sayfa sonları hesabı. */
-import { PAGE_SIZES } from "@officehere/core";
+import { getNative, PAGE_SIZES } from "@officehere/core";
 import { colToName, formatValue } from "@officehere/formula";
 import { styleToCss } from "../model/clipboard";
 import { computeView } from "../model/display";
@@ -109,8 +109,8 @@ export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts:
   return `<div class="tb-print-sheet">${table}${objectsHtml(wb, sheet, r, !!opts.headings)}</div>`;
 }
 
-/** Tarayıcının yazdırma iletişim kutusunu açar (PDF olarak kaydet dahil). */
-export function printSheet(wb: WorkbookModel, sheet: SheetModel): void {
+/** Yazdırma kökünü (#tb-print) ve @page kuralını hazırlar; temizleme işlevini döndürür. */
+export function preparePrint(wb: WorkbookModel, sheet: SheetModel): () => void {
   const r = printRange(wb, sheet);
   let host = document.getElementById("tb-print");
   if (!host) {
@@ -131,7 +131,34 @@ export function printSheet(wb: WorkbookModel, sheet: SheetModel): void {
   const size = page.paper === "Letter" ? "letter" : page.paper === "Legal" ? "legal" : page.paper;
   const box = (where: string, text?: string) => (text ? `@${where} { content: ${hfCss(text, sheet.name, wb.props.title ?? "")}; font: 9pt sans-serif; color: #333; }` : "");
   st.textContent = `@page { size: ${size} ${page.orientation}; margin: ${m.top}in ${m.right}in ${m.bottom}in ${m.left}in; ${box("top-center", page.header)} ${box("bottom-center", page.footer)} }`;
+  const host2 = host;
+  return () => {
+    host2.innerHTML = "";
+  };
+}
+
+/** Tarayıcının yazdırma iletişim kutusunu açar (PDF olarak kaydet dahil). */
+export function printSheet(wb: WorkbookModel, sheet: SheetModel): void {
+  preparePrint(wb, sheet);
   window.print();
+}
+
+/**
+ * PDF olarak dışarı aktarır: masaüstü kabuğu exportPdf sunuyorsa doğrudan
+ * .pdf kaydedilir; yoksa yazdırma iletişim kutusu ("PDF olarak kaydet") açılır.
+ */
+export async function exportPdf(wb: WorkbookModel, sheet: SheetModel, suggestedName: string): Promise<void> {
+  const native = getNative();
+  if (!native?.exportPdf) {
+    printSheet(wb, sheet);
+    return;
+  }
+  const cleanup = preparePrint(wb, sheet);
+  try {
+    await native.exportPdf(suggestedName, { landscape: sheet.page.orientation === "landscape", pageSize: sheet.page.paper });
+  } finally {
+    cleanup();
+  }
 }
 
 /** Üst/alt bilgi kodlarını (&[Sayfa], &[Sayfalar], &[Sekme], &[Dosya], &[Tarih]) metne çevirir. */

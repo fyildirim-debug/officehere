@@ -83,7 +83,7 @@ export function FindDialog({ ctl, onClose, arg }: P) {
       open
       title="Bul ve Değiştir"
       onClose={onClose}
-      width={more || list ? 560 : 460}
+      width={more || list ? 580 : 520}
       onSubmit={() => findNext()}
       footer={
         <>

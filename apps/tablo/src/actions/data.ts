@@ -161,9 +161,12 @@ function extendFilterRange(wb: WorkbookModel, sheet: SheetModel, f: AutoFilter):
 
 export function criteriaMatch(c: FilterCriteria, v: Scalar, text: string, fill: string | undefined, colNums: number[]): boolean {
   switch (c.kind) {
-    case "values":
+    case "values": {
       if (v === null || text === "") return c.blanks;
-      return c.values.includes(text);
+      // Excel değer filtresi büyük/küçük harf duyarsızdır (İzmir = izmir)
+      const u = text.toLocaleUpperCase("tr-TR");
+      return c.values.some((x) => x === text || x.toLocaleUpperCase("tr-TR") === u);
+    }
     case "color":
       return (fill ?? "") === c.color;
     case "top10": {
@@ -288,6 +291,14 @@ export function setColumnFilter(ctl: Controller, f: AutoFilter, col: number, cri
     else delete f.columns[k];
     recomputeFilters(ctl);
   });
+  // Durum çubuğu: "5 kayıttan 2 tanesi bulundu"
+  const total = Math.max(0, f.range.r2 - f.range.r1);
+  if (Object.keys(f.columns).length) {
+    let hidden = 0;
+    for (let r = f.range.r1 + 1; r <= f.range.r2; r++) if (ctl.sheet.filterHidden.has(r)) hidden++;
+    ctl.status = `${total.toLocaleString("tr-TR")} kayıttan ${(total - hidden).toLocaleString("tr-TR")} tanesi bulundu`;
+  } else ctl.status = "";
+  ctl.emit();
 }
 
 export function clearAllFilters(ctl: Controller): void {
@@ -304,15 +315,19 @@ export function reapplyFilters(ctl: Controller): void {
 /** Filtre sütunundaki benzersiz görünen metinler. */
 export function columnValues(wb: WorkbookModel, sheet: SheetModel, f: AutoFilter, col: number): { values: string[]; hasBlank: boolean } {
   const range = extendFilterRange(wb, sheet, f);
-  const set = new Map<string, Scalar>();
+  // Büyük/küçük harf farkı olan metinler tek öğe olarak listelenir (ilk görülen yazım)
+  const set = new Map<string, [string, Scalar]>();
   let hasBlank = false;
   for (let row = range.r1 + 1; row <= range.r2; row++) {
     const v = wb.getValue(sheet, row, col);
     const t = displayText(wb, sheet, row, col);
     if (v === null || t === "") hasBlank = true;
-    else if (!set.has(t)) set.set(t, v);
+    else {
+      const k = t.toLocaleUpperCase("tr-TR");
+      if (!set.has(k)) set.set(k, [t, v]);
+    }
   }
-  const values = [...set.entries()].sort((a, b) => compareForSort(a[1], b[1], false)).map((e) => e[0]);
+  const values = [...set.values()].sort((a, b) => compareForSort(a[1], b[1], false)).map((e) => e[0]);
   return { values, hasBlank };
 }
 

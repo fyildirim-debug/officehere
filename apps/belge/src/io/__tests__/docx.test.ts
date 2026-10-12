@@ -5,7 +5,7 @@ import JSZip from "jszip";
 import type { JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { belgeSchema, readDocx, writeDocx } from "../index";
-import { defaultSettings, type BelgeDocument } from "../../model/document";
+import { defaultSettings, normalizeDoc, type BelgeDocument } from "../../model/document";
 
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGM4IScHRww4OQD1xwwxB+utmQAAAABJRU5ErkJggg==";
 
@@ -14,7 +14,7 @@ const p = (content: JSONContent[] | string, attrs: Record<string, unknown> = {})
 
 /** Şema üzerinden normalleştirme: varsayılan öznitelikler doldurulur, bitişik metinler birleşir. */
 function norm(json: JSONContent) {
-  return PMNode.fromJSON(belgeSchema(), json).toJSON();
+  return PMNode.fromJSON(belgeSchema(), normalizeDoc(json)).toJSON();
 }
 
 async function roundtrip(doc: BelgeDocument) {
@@ -116,7 +116,8 @@ describe("DOCX gidiş-dönüş", () => {
       p(""),
     ];
     const back = await roundtrip(docOf(...content));
-    const cell = back.content.content![0].content![0].content![0];
+    // belge > bölüm > tablo > satır > hücre
+    const cell = back.content.content![0].content![0].content![0].content![0];
     expect(cell.attrs?.colwidth).toBeNull();
   });
 
@@ -142,6 +143,19 @@ describe("DOCX gidiş-dönüş", () => {
     expect(norm(back.content)).toEqual(norm(doc.content));
     expect(back.settings.comments.c0.text).toBe("Bunu kontrol et.\nİkinci satır.");
     expect(back.settings.comments.c0.author).toBe("Furkan Yıldırım");
+  });
+
+  it("izlenen biçim değişikliği (w:rPrChange)", async () => {
+    const date = "2026-10-11T10:00:00Z";
+    const old = JSON.stringify([{ type: "italic" }]);
+    const content = [p([t("biçimi değişen", [{ type: "bold" }, { type: "formatChange", attrs: { author: "Ayşe", date, old } }]), t(" metin")])];
+    const bytes = await writeDocx(docOf(...content));
+    const xml = await (await JSZip.loadAsync(bytes)).file("word/document.xml")!.async("string");
+    expect(xml).toMatch(/<w:rPr><w:b\/><w:bCs\/><w:rPrChange w:id="\d+" w:author="Ayşe" w:date="2026-10-11T10:00:00Z"><w:rPr><w:i\/><w:iCs\/><\/w:rPr><\/w:rPrChange><\/w:rPr>/);
+    const back = await readDocx(bytes);
+    const run = back.content.content![0].content![0].content![0];
+    expect(run.marks!.map((m) => m.type)).toEqual(["bold", "formatChange"]);
+    expect(JSON.parse(String(run.marks![1].attrs!.old))).toEqual([{ type: "italic" }]);
   });
 
   it("dipnotlar ve son notlar", async () => {
@@ -209,6 +223,94 @@ describe("DOCX gidiş-dönüş", () => {
     }
     // Tablo gövdenin sonundaysa ardından paragraf gelmeli.
     const docXml = await zip.file("word/document.xml")!.async("string");
-    expect(docXml).toMatch(/<\/w:tbl><w:p\/><w:sectPr>/);
+    expect(docXml).toMatch(/<\/w:tbl><w:p(\/>|><\/w:p>)<w:sectPr>/);
+  });
+});
+
+describe("DOCX bölümler", () => {
+  const land = { ...defaultSettings().page, width: 16838, height: 11906, orientation: "landscape" as const };
+  const cols = { ...defaultSettings().page, columns: 2, columnSpace: 567, columnLine: true };
+
+  it("bölüm sonları, yönlendirme, sütunlar ve ilk sayfa farklı gidiş-dönüş", async () => {
+    const doc: BelgeDocument = {
+      settings: defaultSettings(),
+      content: {
+        type: "doc",
+        content: [
+          { type: "section", attrs: { kind: "nextPage", page: { ...defaultSettings().page, titlePage: true } }, content: [p("Birinci bölüm")] },
+          { type: "section", attrs: { kind: "nextPage", page: land }, content: [p("Yatay bölüm")] },
+          { type: "section", attrs: { kind: "continuous", page: cols }, content: [p("Sütun 1"), { type: "columnBreak" }, p("Sütun 2")] },
+          { type: "section", attrs: { kind: "oddPage", page: null }, content: [{ type: "bulletList", content: [{ type: "listItem", content: [p("madde")] }] }] },
+        ],
+      },
+    };
+    const bytes = await writeDocx(doc);
+    const xml = await (await JSZip.loadAsync(bytes)).file("word/document.xml")!.async("string");
+    expect(xml.match(/<w:sectPr>/g)?.length).toBe(4);
+    expect(xml).toContain('<w:type w:val="continuous"/>');
+    expect(xml).toContain('<w:type w:val="oddPage"/>');
+    expect(xml).toContain('w:orient="landscape"');
+    expect(xml).toContain('w:num="2"');
+    expect(xml).toContain('w:sep="1"');
+    expect(xml).toContain("<w:titlePg/>");
+    expect(xml).toContain('<w:br w:type="column"/>');
+    // sectPr son paragrafın pPr'ında (ayrı boş paragraf yok)
+    expect(xml).toMatch(/Birinci bölüm<\/w:t><\/w:r><\/w:p>/);
+    const back = await readDocx(bytes);
+    expect(norm(back.content)).toEqual(norm(doc.content));
+  });
+
+  it("ilk sayfa ve çift sayfa üst/alt bilgileri", async () => {
+    const doc = docOf(p("Gövde"));
+    doc.settings.header = { type: "doc", content: [p("Tek üst")] };
+    doc.settings.headerFirst = { type: "doc", content: [p("İlk üst")] };
+    doc.settings.headerEven = { type: "doc", content: [p("Çift üst")] };
+    doc.settings.footerEven = { type: "doc", content: [p("Çift alt")] };
+    doc.settings.oddEven = true;
+    doc.settings.page = { ...doc.settings.page, titlePage: true };
+    const bytes = await writeDocx(doc);
+    const zip = await JSZip.loadAsync(bytes);
+    expect(await zip.file("word/settings.xml")!.async("string")).toContain("<w:evenAndOddHeaders/>");
+    const xml = await zip.file("word/document.xml")!.async("string");
+    expect(xml).toContain('w:type="first"');
+    expect(xml).toContain('w:type="even"');
+    const back = await readDocx(bytes);
+    expect(back.settings.oddEven).toBe(true);
+    expect(back.settings.page.titlePage).toBe(true);
+    expect(JSON.stringify(back.settings.headerFirst)).toContain("İlk üst");
+    expect(JSON.stringify(back.settings.headerEven)).toContain("Çift üst");
+    expect(JSON.stringify(back.settings.footerEven)).toContain("Çift alt");
+    expect(JSON.stringify(back.settings.header)).toContain("Tek üst");
+  });
+
+  it("zengin dipnot metni", async () => {
+    const rich = [p([t("Kalın", [{ type: "bold" }]), t(" ve "), t("italik", [{ type: "italic" }])])];
+    const content = [p([t("Metin"), { type: "note", attrs: { id: "n1", kind: "footnote", text: "Kalın ve italik", content: rich } }])];
+    const back = await roundtrip(docOf(...content));
+    const s = JSON.stringify(back.content);
+    expect(s).toContain('"bold"');
+    expect(s).toContain('"italic"');
+    expect(s).toContain("Kalın ve italik");
+  });
+});
+
+describe("DOCX metin kutusu", () => {
+  it("konum, boyut, kenarlık, dolgu ve zengin içerik gidiş-dönüş", async () => {
+    const content = [
+      { type: "textBox", attrs: { x: 120, y: 30, w: 260, h: 140, border: "#C00000", borderWidth: 1.5, fill: "#DAE9F7" }, content: [p([t("Kutu ", []), t("kalın", [{ type: "bold" }])])] },
+      p("Kutunun bağlı olduğu paragraf"),
+      { type: "textBox", attrs: { x: 0, y: 0, w: 200, h: 100, border: null, borderWidth: 0.75, fill: null }, content: [p("Kenarsız")] },
+      p("İkinci çapa"),
+      { type: "table", content: [{ type: "tableRow", content: [{ type: "tableCell", content: [p("hücre")] }] }] },
+      { type: "paragraph" },
+    ];
+    const bytes = await writeDocx(docOf(...content));
+    const xml = await (await JSZip.loadAsync(bytes)).file("word/document.xml")!.async("string");
+    expect(xml).toContain("<wps:txbx><w:txbxContent>");
+    expect(xml).toContain("<v:textbox><w:txbxContent>");
+    // Çapa sonraki paragrafın içinde (ayrı boş paragraf yok)
+    expect(xml).toMatch(/<\/mc:AlternateContent><\/w:r><w:r><w:t xml:space="preserve">Kutunun/);
+    const back = await readDocx(bytes);
+    expect(norm(back.content)).toEqual(norm({ type: "doc", content }));
   });
 });

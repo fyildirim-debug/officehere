@@ -7,8 +7,12 @@ import { DEFAULT_SIZE, fontCss, type BorderSide, type CellStyle } from "../model
 let measureCtx: CanvasRenderingContext2D | null = null;
 
 export function measureText(text: string, font: string): number {
-  if (!measureCtx) measureCtx = document.createElement("canvas").getContext("2d");
-  if (!measureCtx) return text.length * 7;
+  if (!measureCtx && typeof document !== "undefined") measureCtx = document.createElement("canvas").getContext("2d");
+  if (!measureCtx) {
+    // DOM yok (birim testleri): yazı tipi boyutuna göre yaklaşık genişlik
+    const px = Number(/([\d.]+)px/.exec(font)?.[1] ?? 14.67);
+    return text.length * px * 0.5;
+  }
   measureCtx.font = font;
   return measureCtx.measureText(text).width;
 }

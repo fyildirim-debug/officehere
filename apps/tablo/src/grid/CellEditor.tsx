@@ -187,11 +187,13 @@ export function CellEditor({ ctl, layout, inputRef, onGridKey }: Props) {
   useLayoutEffect(() => {
     const ta = inputRef.current;
     if (!ta) return;
-    const want = editingHere ? e!.text : "";
+    // Başka sayfadaki hücreye işaret ederken de metin düzenleyicide kalır (yazmaya devam edilebilir)
+    const active = !!e && !e.inBar;
+    const want = active ? e!.text : "";
     if (ta.value !== want && !composing.current) {
       ta.value = want;
-      if (editingHere && document.activeElement === ta) ta.setSelectionRange(e!.caret, e!.caret);
-    } else if (editingHere && document.activeElement === ta && ta.selectionStart !== e!.caret && e!.pointSpan) {
+      if (active && document.activeElement === ta) ta.setSelectionRange(e!.caret, e!.caret);
+    } else if (active && document.activeElement === ta && ta.selectionStart !== e!.caret && e!.pointSpan) {
       ta.setSelectionRange(e!.caret, e!.caret);
     }
   });

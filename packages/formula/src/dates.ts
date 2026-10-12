@@ -137,17 +137,25 @@ export function parseDateTime(text: string): { serial: number; hasDate: boolean;
       d = +mm[1];
       m = MONTH_LOOKUP[mm[2].toLocaleLowerCase("tr-TR")];
       y = +mm[3];
-      format = "d mmmm yyyy";
+      // Excel yerleşik biçimi 15 (tr: gg.aaa.yy)
+      format = "dd.mmm.yy";
     } else if ((mm = /^(\d{1,2})[\s.-]+([\p{L}]+)$/u.exec(datePart))) {
       d = +mm[1];
       m = MONTH_LOOKUP[mm[2].toLocaleLowerCase("tr-TR")];
       y = new Date().getFullYear();
-      format = "d mmm";
+      // Excel yerleşik biçimi 16 (tr: gg.aaa)
+      format = "dd.mmm";
     } else if ((mm = /^(\d{1,2})[./](\d{1,2})$/.exec(datePart)) && timePart === "") {
       d = +mm[1];
       m = +mm[2];
       y = new Date().getFullYear();
-      format = "d mmm";
+      format = "dd.mmm";
+    } else if ((mm = /^([\p{L}]+)\.?[\s.-]+(\d{4})$/u.exec(datePart)) && MONTH_LOOKUP[mm[1].toLocaleLowerCase("tr-TR")]) {
+      // "Ekim 2026" → ayın ilk günü, Excel yerleşik biçimi 17 (tr: aaa.yy)
+      d = 1;
+      m = MONTH_LOOKUP[mm[1].toLocaleLowerCase("tr-TR")];
+      y = +mm[2];
+      format = "mmm.yy";
     } else {
       return null;
     }

@@ -53,8 +53,9 @@ export function parseCellInput(raw: string, opts: InputOptions = {}): ParsedInpu
     const n = parseLocalNumber(m[2], dec) ?? (/^\d+(\.\d+)?$/.test(m[2]) ? parseFloat(m[2]) : null);
     if (n !== null) {
       const v = (m[1] === "-" ? -n : n) / 100;
+      // Excel yalnız yerleşik biçimleri atar: 0% ya da 0.00%
       const decimals = (m[2].split(dec)[1] ?? "").length;
-      return { kind: "value", value: v, numFmt: decimals ? `0.${"0".repeat(decimals)}%` : "0%" };
+      return { kind: "value", value: v, numFmt: decimals ? "0.00%" : "0%" };
     }
   }
   // Para birimi
@@ -82,13 +83,14 @@ export function parseCellInput(raw: string, opts: InputOptions = {}): ParsedInpu
       const [d, mo] = t.split(".").map(Number);
       if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) {
         const y = new Date().getFullYear();
-        return { kind: "value", value: dateToSerial(y, mo, d), numFmt: "d mmm" };
+        return { kind: "value", value: dateToSerial(y, mo, d), numFmt: "dd.mmm" };
       }
     }
     const grouped = t.includes(thou) && new RegExp(`\\d\\${thou}\\d{3}`).test(t);
     if (grouped) {
+      // Yerleşik biçimler: #,##0 ya da #,##0.00
       const decimals = (t.split(dec)[1] ?? "").length;
-      return { kind: "value", value: n, numFmt: decimals ? `#,##0.${"0".repeat(decimals)}` : "#,##0" };
+      return { kind: "value", value: n, numFmt: decimals ? "#,##0.00" : "#,##0" };
     }
     if (/[eE]/.test(t)) return { kind: "value", value: n, numFmt: "0.00E+00" };
     return { kind: "value", value: n };
@@ -117,7 +119,7 @@ export function parseCellInput(raw: string, opts: InputOptions = {}): ParsedInpu
   if (m) {
     const d = +m[1];
     const mo = +m[2];
-    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) return { kind: "value", value: dateToSerial(new Date().getFullYear(), mo, d), numFmt: "d mmm" };
+    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) return { kind: "value", value: dateToSerial(new Date().getFullYear(), mo, d), numFmt: "dd.mmm" };
   }
   return { kind: "value", value: raw };
 }

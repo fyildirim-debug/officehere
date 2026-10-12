@@ -271,11 +271,11 @@ describe("hücre girişi ayrıştırma", () => {
   it("sayılar ve biçimler", () => {
     expect(parseCellInput("12")).toEqual({ kind: "value", value: 12 });
     expect(parseCellInput("12,5")).toEqual({ kind: "value", value: 12.5 });
-    expect(parseCellInput("1.234,5")).toEqual({ kind: "value", value: 1234.5, numFmt: "#,##0.0" });
+    expect(parseCellInput("1.234,5")).toEqual({ kind: "value", value: 1234.5, numFmt: "#,##0.00" });
     expect(parseCellInput("-3")).toEqual({ kind: "value", value: -3 });
     expect(parseCellInput("(3)")).toEqual({ kind: "value", value: -3 });
     expect(parseCellInput("%15")).toMatchObject({ value: 0.15, numFmt: "0%" });
-    expect(parseCellInput("12,5%")).toMatchObject({ value: 0.125, numFmt: "0.0%" });
+    expect(parseCellInput("12,5%")).toMatchObject({ value: 0.125, numFmt: "0.00%" });
     expect(parseCellInput("₺1.500")).toMatchObject({ value: 1500, numFmt: '#,##0 "₺"' });
     expect(parseCellInput("99,90 TL")).toMatchObject({ value: 99.9, numFmt: '#,##0.00 "₺"' });
     expect(parseCellInput("1,5E+3")).toMatchObject({ value: 1500 });

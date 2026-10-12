@@ -2,6 +2,7 @@
 import type { Editor } from "@tiptap/core";
 import { MenuHeader, MenuItem, MenuSeparator, useMenuClose } from "@officehere/ui";
 import { BULLET_STYLES, MULTILEVEL_STYLES, NUMBER_STYLES } from "../editor/nodes";
+import { toggleList } from "../editor/listApply";
 
 function listNodeAttrs(editor: Editor, type: "bulletList" | "orderedList", attrs: Record<string, unknown>) {
   const { state } = editor;
@@ -17,39 +18,39 @@ function listNodeAttrs(editor: Editor, type: "bulletList" | "orderedList", attrs
 }
 
 export function applyBulletMain(editor: Editor) {
-  editor.chain().focus().toggleBulletList().run();
+  toggleList(editor, "bulletList");
 }
 
 export function applyNumberMain(editor: Editor) {
-  editor.chain().focus().toggleOrderedList().run();
+  toggleList(editor, "orderedList");
 }
 
 export function applyBullet(editor: Editor, style: string | null) {
   if (style === null) {
-    if (editor.isActive("bulletList")) editor.chain().focus().toggleBulletList().run();
+    if (editor.isActive("bulletList")) toggleList(editor, "bulletList");
     return;
   }
-  if (!editor.isActive("bulletList")) editor.chain().focus().toggleBulletList().run();
+  if (!editor.isActive("bulletList")) toggleList(editor, "bulletList");
   listNodeAttrs(editor, "bulletList", { listStyle: style === "disc" ? null : style, multilevel: null });
   editor.commands.focus();
 }
 
 export function applyNumbering(editor: Editor, style: string | null) {
   if (style === null) {
-    if (editor.isActive("orderedList")) editor.chain().focus().toggleOrderedList().run();
+    if (editor.isActive("orderedList")) toggleList(editor, "orderedList");
     return;
   }
-  if (!editor.isActive("orderedList")) editor.chain().focus().toggleOrderedList().run();
+  if (!editor.isActive("orderedList")) toggleList(editor, "orderedList");
   listNodeAttrs(editor, "orderedList", { listStyle: style === "decimal" ? null : style, multilevel: null });
   editor.commands.focus();
 }
 
 export function applyMultilevel(editor: Editor, id: string) {
   if (id === "bullets") {
-    if (!editor.isActive("bulletList")) editor.chain().focus().toggleBulletList().run();
+    if (!editor.isActive("bulletList")) toggleList(editor, "bulletList");
     listNodeAttrs(editor, "bulletList", { listStyle: null, multilevel: "bullets" });
   } else {
-    if (!editor.isActive("orderedList")) editor.chain().focus().toggleOrderedList().run();
+    if (!editor.isActive("orderedList")) toggleList(editor, "orderedList");
     listNodeAttrs(editor, "orderedList", { listStyle: null, multilevel: id });
   }
   editor.commands.focus();

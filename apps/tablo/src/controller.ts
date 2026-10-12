@@ -6,10 +6,12 @@ import { addr, colToName, findRefSpans, parseLocalFormula, TR_SYNTAX, quoteSheet
 import type { FileRef } from "@officehere/core";
 import { CondFormatter } from "./model/condfmt";
 import { Ops } from "./model/ops";
-import { rect, rectToA1 } from "./model/rect";
+import { intersects as intersectsRect, rect, rectToA1 } from "./model/rect";
+import { isPivotCell, PIVOT_EDIT_MESSAGE } from "./pivot/pivotOps";
 import { expandForMerges, extendTo, jumpCell, nextInSelection, singleSelection, stepCell } from "./model/selection";
 import type { CellPos, Rect, Selection } from "./model/types";
 import { WorkbookModel, type SheetModel } from "./model/workbook";
+import { adjustRowHeights, widenForNumber } from "./grid/autofit";
 
 export type EditMode = "enter" | "edit";
 
@@ -53,12 +55,18 @@ export class Controller {
   clip: ClipData | null = null;
   /** Shift ile genişletmede hareket eden köşe. */
   corner: CellPos = { row: 0, col: 0 };
+  /** Sekme (Tab) dizisinin başladığı sütun: ardından Enter bu sütunun altına döner. */
+  tabStartCol: number | null = null;
   showFormulaBar = true;
   formulaBarExpanded = false;
   /** Durum çubuğu iletisi (ör. "Hedefi seçin ve ENTER tuşuna basın"). */
   status = "";
   /** Gözden Geçir > Tüm Notları Göster. */
   showAllNotes = false;
+  /** PivotTable Alanları bölmesi (PivotTable içindeyken). */
+  showFieldList = true;
+  /** Şeridin geçmesi istenen sekme (ör. PivotTable oluşturulunca "PivotTable Analiz"). */
+  requestTab: string | null = null;
   /** Veri doğrulama açılan listesi açık mı. */
   listDropdown = false;
   /** Seçili yüzen nesne (grafik, resim, şekil). */
@@ -78,25 +86,27 @@ export class Controller {
 
   constructor(wb = new WorkbookModel()) {
     this.wb = wb;
-    this.ops = new Ops(wb);
+    this.ops = this.makeOps(wb);
     this.cf = new CondFormatter(wb);
-    this.ops.onChange = () => {
+  }
+
+  private makeOps(wb: WorkbookModel): Ops {
+    const ops = new Ops(wb);
+    ops.onChange = () => {
       this.dirty = true;
       this.pristine = false;
       this.emit();
     };
+    // Tarayıcıda ölçüm yapılabildiğinde otomatik satır yüksekliği
+    if (typeof document !== "undefined") ops.afterCells = (sheet, rects) => adjustRowHeights(wb, sheet, rects);
+    return ops;
   }
 
   /** Yeni çalışma kitabı yükler. */
   load(wb: WorkbookModel, fileName: string, ref: FileRef | null): void {
     this.wb = wb;
-    this.ops = new Ops(wb);
+    this.ops = this.makeOps(wb);
     this.cf = new CondFormatter(wb);
-    this.ops.onChange = () => {
-      this.dirty = true;
-      this.pristine = false;
-      this.emit();
-    };
     wb.engine.recalc();
     wb.sheets.forEach((s) => this.ops.syncHiddenRows(s));
     this.fileName = fileName;
@@ -144,15 +154,18 @@ export class Controller {
 
   setSelection(sel: Selection, scroll = true): void {
     this.selObj = null;
+    this.tabStartCol = null;
     this.sheet.selection = sel;
     if (scroll) this.scrollIntoView(this.corner.row, this.corner.col);
-    if (this.painter) this.applyPainter();
     this.emit();
   }
 
   selectCell(row: number, col: number, scroll = true): void {
     const s = singleSelection(this.sheet, row, col);
     this.selObj = null;
+    this.tabStartCol = null;
+    // Filtre sonucu iletisi bir sonraki gezinmede silinir
+    if (this.status.endsWith("tanesi bulundu")) this.status = "";
     this.corner = { row, col };
     this.sheet.selection = s;
     if (scroll) this.scrollIntoView(row, col);
@@ -169,21 +182,43 @@ export class Controller {
   /** Ok tuşları: hareket ya da Shift ile genişletme. */
   move(dr: number, dc: number, extend: boolean, jump: boolean): void {
     const sh = this.sheet;
+    // Sayfa Aşağı/Yukarı gibi çok adımlı hareketler gizli satırları atlayarak adım adım
+    const step = (from: CellPos): CellPos => {
+      let p = from;
+      const n = Math.max(Math.abs(dr), Math.abs(dc));
+      if (n <= 1) return stepCell(sh, from, dr, dc);
+      for (let i = 0; i < n; i++) {
+        const q = stepCell(sh, p, Math.sign(dr), Math.sign(dc));
+        if (q.row === p.row && q.col === p.col) break;
+        p = q;
+      }
+      return p;
+    };
     if (extend) {
       const from = this.corner;
-      const next = jump ? jumpCell(this.wb, sh, from, dr, dc) : stepCell(sh, from, dr, dc);
+      const next = jump ? jumpCell(this.wb, sh, from, dr, dc) : step(from);
       this.corner = next;
       this.sheet.selection = extendTo(sh, this.sel, next);
       this.scrollIntoView(next.row, next.col);
       this.emit();
       return;
     }
-    const next = jump ? jumpCell(this.wb, sh, this.sel.active, dr, dc) : stepCell(sh, this.sel.active, dr, dc);
+    const next = jump ? jumpCell(this.wb, sh, this.sel.active, dr, dc) : step(this.sel.active);
     this.selectCell(next.row, next.col);
   }
 
   /** Enter/Tab sonrası seçim içinde ilerleme. */
   advance(dir: "down" | "up" | "right" | "left"): void {
+    const single = this.sel.ranges.length === 1 && rectIsCell(this.sheet, this.range);
+    if (single && (dir === "right" || dir === "left")) {
+      if (this.tabStartCol === null && dir === "right") this.tabStartCol = this.sel.active.col;
+    } else if (single && dir === "down" && this.tabStartCol !== null) {
+      // Tab ile satırda ilerleyip Enter'a basınca başlangıç sütununun altına dön
+      const col = this.tabStartCol;
+      const next = stepCell(this.sheet, { row: this.sel.active.row, col }, 1, 0);
+      this.selectCell(next.row, col);
+      return;
+    } else this.tabStartCol = null;
     const s = nextInSelection(this.sheet, this.sel, dir);
     this.corner = { ...s.active };
     this.sheet.selection = s;
@@ -276,6 +311,11 @@ export class Controller {
 
   /** Seçimde kilitli hücre varsa uyarır (korumalı sayfa). */
   guardSelection(): boolean {
+    // PivotTable hücreleri yalnız PivotTable işlemleriyle değişir
+    if (this.sheet.pivots.length && this.sel.ranges.some((r) => this.sheet.pivots.some((p) => p.output && p.values.length + p.rows.length + p.cols.length > 0 && intersectsRect(p.output, r)))) {
+      this.alert(PIVOT_EDIT_MESSAGE);
+      return false;
+    }
     if (!this.sheet.protected) return true;
     for (const r of this.sel.ranges)
       for (let row = r.r1; row <= Math.min(r.r2, r.r1 + 200); row++)
@@ -291,6 +331,10 @@ export class Controller {
   startEdit(text?: string, inBar = false): void {
     if (this.edit) return;
     const { row, col } = this.sel.active;
+    if (isPivotCell(this.sheet, row, col)) {
+      this.alert(PIVOT_EDIT_MESSAGE);
+      return;
+    }
     if (this.isLocked(row, col)) {
       this.alert("Değiştirmeye çalıştığınız hücre veya grafik korumalı bir sayfada. Değişiklik yapmak için Gözden Geçir sekmesinde Sayfa Korumasını Kaldır'ı tıklatın.");
       return;
@@ -405,7 +449,14 @@ export class Controller {
         this.ops.setInputs(sheet, entries, "Yazma");
       }
     } else {
+      const mark = this.ops.history.mark();
       this.ops.enterText(sheet, cells, text);
+      // Biçimli sayı (tarih, para…) varsayılan genişliğe sığmıyorsa sütun genişler
+      const w = widenForNumber(this.wb, sheet, e.row, e.col);
+      if (w !== null) {
+        this.ops.sheetOp(sheet, "Sütun Genişliği", () => sheet.cols.set(e.col, w, false));
+        this.ops.history.squash(mark, "Yazma");
+      }
     }
     if (move) this.advance(move);
     else this.emit();
@@ -511,7 +562,7 @@ export class Controller {
     this.emit();
   }
 
-  private applyPainter(): void {
+  applyPainter(): void {
     const p = this.painter;
     if (!p) return;
     const src = this.wb.sheetById(p.sheetId);
@@ -547,6 +598,13 @@ export class Controller {
   activeAddress(): string {
     return `${colToName(this.sel.active.col)}${this.sel.active.row + 1}`;
   }
+}
+
+/** Aralık tek hücre (ya da tek birleştirilmiş alan) mı? */
+function rectIsCell(sheet: SheetModel, r: Rect): boolean {
+  if (r.r1 === r.r2 && r.c1 === r.c2) return true;
+  const m = sheet.mergeAt(r.r1, r.c1);
+  return !!m && m.r1 === r.r1 && m.c1 === r.c1 && m.r2 === r.r2 && m.c2 === r.c2;
 }
 
 /** Kapanmamış parantezleri tamamlar (Excel davranışı). */

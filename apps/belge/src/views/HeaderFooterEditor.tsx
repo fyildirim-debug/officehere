@@ -25,7 +25,8 @@ export function HeaderFooterEditor({ which, label, page: g, rect, content, onCha
     {
       extensions: headerFooterExtensions(),
       content: content ?? { type: "doc", content: [{ type: "paragraph" }] },
-      autofocus: "end",
+      // Odak aşağıdaki etkide hemen verilir (gecikmeli odakta ilk tuşlar kaybolmasın).
+      autofocus: false,
       editorProps: { attributes: { class: "bl-hf-editor", spellcheck: "true", lang: "tr", "aria-label": label } },
       onUpdate: ({ editor: ed }) => changeRef.current(ed.getJSON()),
     },
@@ -36,6 +37,20 @@ export function HeaderFooterEditor({ which, label, page: g, rect, content, onCha
     onEditor(editor);
     return () => onEditor(null);
   }, [editor, onEditor]);
+
+  // Açılışta: hazır yer tutucu ("[Buraya yazın]") varsa seçilir, yazınca yerine geçer (Word'deki gibi);
+  // yoksa imleç sona konur.
+  useEffect(() => {
+    let range: { from: number; to: number } | null = null;
+    editor.state.doc.descendants((n, pos) => {
+      if (range || !n.isText) return !range;
+      const m = /\[[^\]]+\]/.exec(n.text ?? "");
+      if (m) range = { from: pos + m.index, to: pos + m.index + m[0].length };
+      return false;
+    });
+    if (range) editor.commands.setTextSelection(range);
+    editor.commands.focus(range ? undefined : "end");
+  }, [editor]);
 
   const left = rect.x + g.ml;
   const width = g.w - g.ml - g.mr;

@@ -1,7 +1,7 @@
 // Şerit ve kısayolların kullandığı biçimlendirme komutları.
 import type { Editor } from "@tiptap/core";
 import type { Mark, Node as PMNode } from "@tiptap/pm/model";
-import { TextSelection } from "@tiptap/pm/state";
+import { Selection, TextSelection } from "@tiptap/pm/state";
 import { FONT_SIZES } from "@officehere/core";
 import { PARA_DEFAULTS, PARA_TYPES, type ParagraphAttrs } from "./paragraphFormat";
 import { effectiveProps, styleIdOf, type StyleDef } from "../model/styles";
@@ -188,7 +188,9 @@ export function setLineSpacing(editor: Editor, value: number) {
 /** Paragrafları alfabetik sıralar (Türkçe). */
 export function sortParagraphs(editor: Editor, desc: boolean, numeric = false) {
   const { state } = editor;
-  const { from, to } = state.selection;
+  // Tümünü Seç bölüm düzeyine çıkar; seçim metin bloklarına daraltılır.
+  const from = Math.max(state.selection.from, Selection.atStart(state.doc).from);
+  const to = Math.min(state.selection.to, Selection.atEnd(state.doc).to);
   const $a = state.doc.resolve(from);
   const $b = state.doc.resolve(to);
   const range = $a.blockRange($b);
@@ -245,7 +247,7 @@ export function stepFontSize(editor: Editor, styles: Record<string, StyleDef>, d
 export function clearFormatting(editor: Editor) {
   const { state } = editor;
   const { from, to } = state.selection;
-  const keep = new Set(["link", "comment", "insertion", "deletion", "highlight"]);
+  const keep = new Set(["link", "comment", "insertion", "deletion", "formatChange", "highlight"]);
   const tr = state.tr;
   for (const mt of Object.values(state.schema.marks)) if (!keep.has(mt.name)) tr.removeMark(from, to, mt);
   if (from === to) tr.setStoredMarks([]);
@@ -262,7 +264,7 @@ export function clearFormatting(editor: Editor) {
 export function clearCharFormatting(editor: Editor) {
   const { state } = editor;
   const { from, to } = state.selection;
-  const keep = new Set(["link", "comment", "insertion", "deletion"]);
+  const keep = new Set(["link", "comment", "insertion", "deletion", "formatChange"]);
   const tr = state.tr;
   for (const mt of Object.values(state.schema.marks)) if (!keep.has(mt.name)) tr.removeMark(from, to, mt);
   if (from === to) tr.setStoredMarks([]);
@@ -283,19 +285,19 @@ export function copyFormat(editor: Editor): CopiedFormat {
   const { $from, empty } = state.selection;
   const marks = empty ? (state.storedMarks ?? $from.marks()) : state.doc.resolve(Math.min(state.selection.from + 1, state.selection.to)).marks();
   const p = currentPara(editor);
-  const skip = new Set(["link", "comment", "insertion", "deletion"]);
+  const skip = new Set(["link", "comment", "insertion", "deletion", "formatChange"]);
   return { marks: marks.filter((m) => !skip.has(m.type.name)), para: p ? { type: p.node.type.name, attrs: { ...p.node.attrs } } : null };
 }
 
-export function pasteFormat(editor: Editor, f: CopiedFormat) {
+export function pasteFormat(editor: Editor, f: CopiedFormat, range?: { from: number; to: number }) {
   const { state } = editor;
-  let { from, to } = state.selection;
+  let { from, to } = range ?? state.selection;
   if (from === to) {
     const w = wordAt(state.doc, from);
     if (w) ({ from, to } = w);
   }
   const tr = state.tr;
-  const skip = new Set(["link", "comment", "insertion", "deletion"]);
+  const skip = new Set(["link", "comment", "insertion", "deletion", "formatChange"]);
   for (const mt of Object.values(state.schema.marks)) if (!skip.has(mt.name)) tr.removeMark(from, to, mt);
   for (const m of f.marks) tr.addMark(from, to, m);
   // Paragraf biçimi: seçim tüm paragrafı kapsıyorsa ya da birden çok paragraf varsa.

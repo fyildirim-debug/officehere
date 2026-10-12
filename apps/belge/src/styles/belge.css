@@ -115,13 +115,24 @@
   min-height: 0 !important;
 }
 
+/* Satır başı ara parçaları (column-span) esnek kutu içinde çalışmaz: genel bakış görünümünde
+   kök ve bölümler blok düzenine geçer (paragraf aralıkları HTML'deki gibi birleşir). */
+.bl-body.is-tiled .ProseMirror,
+.bl-body.is-tiled .bl-section {
+  display: block;
+}
+
 .bl-body.is-tiled.bl-measuring-body {
   column-count: auto !important;
   height: auto !important;
 }
 
-.bl-pg-tilerow {
+.bl-pg-tilerow,
+.bl-pg-fill {
   display: block;
+}
+
+.bl-pg-tilerow {
   column-span: all;
   height: 0;
 }
@@ -1568,8 +1579,15 @@
 
 .bl-dlg-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0 16px;
+}
+
+.bl-dlg-grid input,
+.bl-dlg-grid select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .bl-dlg-checks {
