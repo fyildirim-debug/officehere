@@ -14,3 +14,7 @@ export * from "./components/Updates";
 export * from "./hooks/useHotkeys";
 export * from "./hooks/useUiTheme";
 export * from "./hooks/useDocumentLifecycle";
+export * from "./components/SaveBadge";
+export * from "./hooks/saveStatus";
+export * from "./hooks/autoSaveCore";
+export * from "./hooks/useAutoSave";

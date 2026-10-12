@@ -235,6 +235,7 @@ export function App() {
   const { dialog: lifecycleDialog, confirmDiscard } = useDocumentLifecycle({
     title: files.fileName,
     dirty,
+    path: files.fileRef?.path,
     onOpenPath: (p) => void files.openPath(p),
     onSave: files.save,
   });

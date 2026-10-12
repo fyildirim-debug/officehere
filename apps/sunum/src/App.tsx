@@ -36,6 +36,7 @@ import { useAppCommands } from "./app/useAppCommands";
 import { buildRibbonTabs } from "./app/ribbonTabs";
 import { ErrorBoundary } from "./app/ErrorBoundary";
 import { useAutoRecover } from "./app/useAutoRecover";
+import { useFileAutoSave } from "./app/useFileAutoSave";
 import { CommandSearch } from "./app/CommandSearch";
 import { extraCommands } from "./app/extraCommands";
 import "./styles/slide.css";
@@ -64,10 +65,12 @@ export function App() {
   blockedRef.current = !!dialog || !!extra || !!backstage || (!!show && !show.preview);
   const recovery = useMemo(() => recoveryHandlers(), []);
   const autoRecover = useAutoRecover(a);
+  useFileAutoSave(a, state.fileRef?.path);
 
   const lifecycle = useDocumentLifecycle({
     title: state.fileName,
     dirty: state.dirty,
+    path: state.fileRef?.path,
     onOpenPath: (p) => void openFromPath(a, p),
     onSave: () => save(a),
   });

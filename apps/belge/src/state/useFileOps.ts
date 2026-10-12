@@ -1,9 +1,9 @@
-// Dosya işlemleri: yeni, aç, kaydet, farklı kaydet, dışa aktar ve otomatik kurtarma.
+// Dosya işlemleri: yeni, aç, kaydet, farklı kaydet, dışa aktar, otomatik kurtarma ve otomatik kaydetme.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { addRecentFile, baseName, downloadBlob, getNative, openFile, readPath, saveFile, saveFileAs, type FileRef } from "@officehere/core";
-import { getUserName } from "@officehere/ui";
+import { getUserName, isDirectSave, saveStatus, trackSave, useAutoSave } from "@officehere/ui";
 import { defaultSettings, normalizeDoc, type BelgeDocument, type DocSettings } from "../model/document";
 import { DOCX_FILTER, OPEN_FILTERS, docToText, htmlDocument, openDocument, writeDocx } from "../io";
 import { TEMPLATES } from "../templates/templates";
@@ -51,6 +51,7 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       setFileName(name);
       setFileRef(ref);
       setDirty(false);
+      saveStatus.reset();
       onLoaded();
     },
     [editor, setSettings, setDirty, onLoaded],
@@ -110,9 +111,8 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
 
   const save = useCallback(async (): Promise<boolean> => {
     try {
-      const bytes = await writeDocx(currentDoc());
-      const canOverwrite = fileRef && /\.docx$/i.test(fileRef.name);
-      const ref = await saveFile(canOverwrite ? fileRef : null, docxName(fileName), DOCX_FILTER, bytes);
+      const target = fileRef && /\.docx$/i.test(fileRef.name) ? fileRef : null;
+      const ref = await trackSave(isDirectSave(target), async () => saveFile(target, docxName(fileName), DOCX_FILTER, await writeDocx(currentDoc())));
       if (!ref) return false;
       setFileRef(ref);
       setFileName(baseName(ref.name));
@@ -129,8 +129,7 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
 
   const saveAs = useCallback(async (): Promise<boolean> => {
     try {
-      const bytes = await writeDocx(currentDoc());
-      const ref = await saveFileAs(docxName(fileName), DOCX_FILTER, bytes);
+      const ref = await trackSave(false, async () => saveFileAs(docxName(fileName), DOCX_FILTER, await writeDocx(currentDoc())));
       if (!ref) return false;
       setFileRef(ref);
       setFileName(baseName(ref.name));
@@ -171,6 +170,8 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
   // Otomatik kurtarma: kirli belgeyi birkaç saniyede bir bu pencerenin taslağına yaz.
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  const saveRef = useRef(save);
+  saveRef.current = save;
   const nameRef = useRef(fileName);
   nameRef.current = fileName;
   useEffect(() => {
@@ -194,6 +195,34 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [editor, autosave]);
+
+  // Otomatik kaydetme (masaüstü, .docx): yazma durunca aynı dosyaya kaydedilir; taslak da silinir.
+  const autoSave = useAutoSave({
+    path: fileRef?.path,
+    formats: ["docx"],
+    isDirty: () => dirtyRef.current,
+    subscribe: (onChange) => {
+      editor.on("update", onChange);
+      return () => {
+        editor.off("update", onChange);
+      };
+    },
+    prepare: async () => {
+      const doc = editor.state.doc;
+      const s = settingsRef.current;
+      return { data: await writeDocx(currentDoc()), isCurrent: () => !editor.isDestroyed && editor.state.doc === doc && settingsRef.current === s };
+    },
+    markClean: () => {
+      // Taslak yazıcı yeniden çizimi beklemeden temiz görsün.
+      dirtyRef.current = false;
+      setDirty(false);
+      clearOwnDraft();
+    },
+    save: () => void saveRef.current(),
+  });
+  // Belge ayarları (sayfa yapısı, üst/alt bilgi, açıklamalar…) düzenleyici olayı üretmez.
+  const touchAutoSave = autoSave.touch;
+  useEffect(() => touchAutoSave(), [settings, touchAutoSave]);
 
   return { isPristine, fileName, setFileName, fileRef, newDocument, openDialog, openPath, openData, save, saveAs, exportAs, closeDocument, load, currentDoc };
 }
