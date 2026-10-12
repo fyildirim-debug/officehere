@@ -1,9 +1,11 @@
 import type { Page } from "@playwright/test";
 
+const base = Number(process.env.OH_E2E_PORT ?? 4173);
+
 export const URL = {
-  belge: "http://localhost:4173/",
-  tablo: "http://localhost:4174/",
-  sunum: "http://localhost:4175/",
+  belge: `http://localhost:${base}/`,
+  tablo: `http://localhost:${base + 1}/`,
+  sunum: `http://localhost:${base + 2}/`,
 } as const;
 
 /** Sayfa hatalarını ve konsol hatalarını toplar. */
