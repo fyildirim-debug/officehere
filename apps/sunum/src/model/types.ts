@@ -55,6 +55,8 @@ export interface Line {
   dash: DashType;
   head?: ArrowType;
   tail?: ArrowType;
+  /** Çizgi ucu (ECMA-376 ST_LineCap): yuvarlak, kare, düz. */
+  cap?: "rnd" | "sq" | "flat";
 }
 
 export interface Shadow {
@@ -211,6 +213,8 @@ export interface SpShape extends ShapeBase {
   geom: string;
   adj?: Record<string, number>;
   paths?: CustomPath[];
+  /** Çizim sekmesiyle oluşturulmuş serbest mürekkep çizimi. */
+  ink?: boolean;
   fill: Fill;
   line: Line;
   effects?: Effects;

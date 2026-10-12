@@ -9,7 +9,6 @@ import { animDef, TRIGGER_LABELS } from "../show/catalog";
 import { AnimStar } from "../ribbon/AnimationsTab";
 import type { Actions } from "../state/actions";
 import type { AppState } from "../state/store";
-import { uid } from "../model/factory";
 import { PaneShell } from "./paneControls";
 
 export function AnimationPane({ state, actions: a, onClose, onPlay }: { state: AppState; actions: Actions; onClose: () => void; onPlay: (fromId?: string) => void }) {
@@ -149,7 +148,7 @@ export function CommentsPane({ state, actions: a, onClose }: { state: AppState; 
           type="button"
           className="oh-btn"
           disabled={!slide}
-          onClick={() => a.store.commit((p) => updateSlide(p, state.slideIdx, (sl) => ({ ...sl, comments: [...(sl.comments ?? []), { id: uid("c"), author: getUserName(), text: "", x: 20, y: 20, date: Date.now() }] })))}
+          onClick={() => a.addComment(getUserName())}
         >
           Yeni
         </button>

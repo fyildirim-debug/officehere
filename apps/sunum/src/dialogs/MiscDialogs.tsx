@@ -138,7 +138,7 @@ export function FindDialog({ open, onClose, actions: a, replaceMode }: { open: b
       title={replaceMode ? "Değiştir" : "Bul"}
       onClose={onClose}
       onSubmit={findNext}
-      width={420}
+      width={520}
       footer={
         <>
           <DialogButton primary disabled={!q} onClick={findNext}>

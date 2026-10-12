@@ -1,6 +1,9 @@
 /** Tasarım sekmesi: Temalar, Çeşitlemeler, Özelleştir. */
 import { memo, useMemo } from "react";
-import { PaintBucket20Regular, SlideSize24Regular } from "@fluentui/react-icons";
+import { PaintBucket20Regular, SlideSize24Regular,
+  Color24Regular,
+  PaintBrush24Regular,
+} from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, useMenuClose } from "@officehere/ui";
 import { makeSp, textBody } from "../model/factory";
 import { applyTheme, applyVariant, newPresentation, resizePresentation, SLIDE_16_9, SLIDE_4_3 } from "../model/presentation";
@@ -108,7 +111,7 @@ export function DesignTab({ ctx }: { ctx: RibbonCtx }) {
   const setTheme = (t: Partial<Theme>) => a.store.commit((p) => ({ ...p, theme: { ...p.theme, ...t } }));
   return (
     <>
-      <RibbonGroup label="Temalar">
+      <RibbonGroup label="Temalar" icon={<PaintBrush24Regular />}>
         <RibbonGallery
           columns={6}
           itemWidth={78}
@@ -125,7 +128,7 @@ export function DesignTab({ ctx }: { ctx: RibbonCtx }) {
           }
         />
       </RibbonGroup>
-      <RibbonGroup label="Çeşitlemeler">
+      <RibbonGroup label="Çeşitlemeler" icon={<Color24Regular />}>
         <RibbonGallery
           columns={4}
           itemWidth={78}
@@ -188,7 +191,7 @@ export function DesignTab({ ctx }: { ctx: RibbonCtx }) {
           }
         />
       </RibbonGroup>
-      <RibbonGroup label="Özelleştir">
+      <RibbonGroup label="Özelleştir" icon={<SlideSize24Regular />}>
         <RibbonMenuButton
           size="large"
           icon={<SlideSize24Regular />}

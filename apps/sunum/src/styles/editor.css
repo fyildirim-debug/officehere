@@ -109,6 +109,60 @@
   background: #e8e8e8;
 }
 
+/* Kırpma tutamaçları: kenarlarda kalın siyah çubuklar, köşelerde L biçimleri */
+.sel-frame.is-crop {
+  outline: 1px solid #000;
+}
+
+.sel-frame.is-crop .sel-handle {
+  box-sizing: border-box;
+  background: #000;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 0 1px #fff);
+}
+
+.sel-frame.is-crop .sel-handle.is-edge {
+  width: 18px;
+  height: 6px;
+  margin: -3px 0 0 -9px;
+}
+
+.sel-frame.is-crop .sel-handle[data-handle="e"],
+.sel-frame.is-crop .sel-handle[data-handle="w"] {
+  width: 6px;
+  height: 18px;
+  margin: -9px 0 0 -3px;
+}
+
+.sel-frame.is-crop .sel-handle.is-corner {
+  width: 16px;
+  height: 16px;
+  background: transparent;
+  border: 0 solid #000;
+}
+
+.sel-frame.is-crop .sel-handle[data-handle="nw"] {
+  margin: -3px 0 0 -3px;
+  border-width: 6px 0 0 6px;
+}
+
+.sel-frame.is-crop .sel-handle[data-handle="ne"] {
+  margin: -3px 0 0 -13px;
+  border-width: 6px 6px 0 0;
+}
+
+.sel-frame.is-crop .sel-handle[data-handle="se"] {
+  margin: -13px 0 0 -13px;
+  border-width: 0 6px 6px 0;
+}
+
+.sel-frame.is-crop .sel-handle[data-handle="sw"] {
+  margin: -13px 0 0 -3px;
+  border-width: 0 0 6px 6px;
+}
+
 .sel-rot {
   position: absolute;
   top: -27px;
@@ -367,7 +421,8 @@
 .crop-ghost {
   position: absolute;
   opacity: 0.35;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: move;
   outline: 1px dashed #555;
 }
 
@@ -386,4 +441,75 @@
   pointer-events: auto;
   cursor: pointer;
   transform: translateY(-100%);
+}
+
+/* Çizim sekmesi: canlı mürekkep önizlemesi */
+.ink-preview {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.ink-menu {
+  padding-bottom: 6px;
+}
+
+.ink-swatches {
+  display: grid;
+  grid-template-columns: repeat(7, 22px);
+  gap: 4px;
+  padding: 4px 10px 6px;
+}
+
+.ink-swatch {
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ink-swatch.is-selected,
+.ink-swatch:hover {
+  outline: 2px solid var(--oh-accent);
+  outline-offset: 1px;
+}
+
+.ink-widths {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 6px;
+}
+
+.ink-width {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--oh-text, #222);
+  cursor: pointer;
+  border-radius: 3px;
+  font: inherit;
+}
+
+.ink-width > span {
+  display: block;
+  width: 70px;
+  border-radius: 8px;
+}
+
+.ink-width > em {
+  font-style: normal;
+  font-size: 12px;
+}
+
+.ink-width:hover,
+.ink-width.is-selected {
+  background: var(--oh-hover, rgba(0, 0, 0, 0.06));
 }

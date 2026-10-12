@@ -1,6 +1,9 @@
 /** Animasyonlar sekmesi: Önizleme, Animasyon, Gelişmiş Animasyon, Zamanlama. */
 import { useState } from "react";
-import { ArrowDown20Regular, ArrowUp20Regular, Play24Regular, StarAdd24Regular, StarEdit24Regular, PaintBrush20Regular, AppsListDetail24Regular } from "@fluentui/react-icons";
+import { ArrowDown20Regular, ArrowUp20Regular, Play24Regular, StarAdd24Regular, StarEdit24Regular, PaintBrush20Regular, AppsListDetail24Regular,
+  Star24Regular,
+  Timer24Regular,
+} from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, RibbonButton, RibbonCombo, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonStack, useMenuClose } from "@officehere/ui";
 import type { AnimClass, Animation } from "../model/types";
 import { ANIMATIONS, animDef, CLASS_COLORS, CLASS_LABELS, TRIGGER_LABELS, type AnimDef } from "../show/catalog";
@@ -80,10 +83,10 @@ export function AnimationsTab({ ctx }: { ctx: RibbonCtx }) {
   const galleryItems = [{ id: "none", label: "Yok", preview: <Tile d={{ id: "none", label: "Yok" }} /> }, ...ANIMATIONS.map((d) => ({ id: d.id, label: `${d.label} (${CLASS_LABELS[d.cls]})`, preview: <Tile d={d} /> }))];
   return (
     <>
-      <RibbonGroup label="Önizleme">
+      <RibbonGroup label="Önizleme" icon={<Play24Regular />}>
         <RibbonButton size="large" icon={<Play24Regular />} label="Önizleme" disabled={!slide?.animations.length} description="Bu slayttaki animasyonları oynatın." onClick={cmd.previewAnimations} />
       </RibbonGroup>
-      <RibbonGroup label="Animasyon" onLauncher={() => cmd.togglePane("animation")} launcherTip="Efekt Seçenekleri">
+      <RibbonGroup label="Animasyon" icon={<Star24Regular />} onLauncher={() => cmd.togglePane("animation")} launcherTip="Efekt Seçenekleri">
         <RibbonGallery
           columns={7}
           itemWidth={62}
@@ -116,7 +119,7 @@ export function AnimationsTab({ ctx }: { ctx: RibbonCtx }) {
           }
         />
       </RibbonGroup>
-      <RibbonGroup label="Gelişmiş Animasyon">
+      <RibbonGroup label="Gelişmiş Animasyon" icon={<StarAdd24Regular />}>
         <RibbonMenuButton
           size="large"
           icon={<StarAdd24Regular />}
@@ -142,7 +145,7 @@ export function AnimationsTab({ ctx }: { ctx: RibbonCtx }) {
           />
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Zamanlama">
+      <RibbonGroup label="Zamanlama" icon={<Timer24Regular />}>
         <RibbonStack>
           <div className="oh-spinner-wrap">
             <span className="oh-spinner-label">Başlangıç:</span>

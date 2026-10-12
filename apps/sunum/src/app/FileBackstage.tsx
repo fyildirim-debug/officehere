@@ -21,7 +21,7 @@ function templatePres(id: string): Presentation {
 }
 
 const EXPORTS: BackstageExport[] = [
-  { id: "pdf", title: "PDF/XPS Belgesi Oluştur", description: "Her slayt yatay bir sayfa olarak yazdırılır; yazıcı olarak “PDF olarak kaydet” seçin.", icon: <DocumentPdf24Regular /> },
+  { id: "pdf", title: "PDF Belgesi Oluştur", description: "Her slayt yatay bir sayfa olarak yazdırılır; yazıcı olarak “PDF olarak kaydet” seçin.", icon: <DocumentPdf24Regular /> },
   { id: "png", title: "Geçerli Slaytı Resim Olarak Kaydet", description: "Geçerli slaydı PNG resmi olarak indirir.", icon: <Image24Regular /> },
   { id: "pngAll", title: "Tüm Slaytları Resim Olarak Kaydet", description: "Her slaydı PNG olarak bir ZIP arşivinde indirir.", icon: <ImageMultiple24Regular /> },
   { id: "outline", title: "Ana Hat Olarak Kaydet", description: "Slayt başlıkları ve metinleri düz metin dosyası olarak.", icon: <TextBulletListLtr24Regular /> },

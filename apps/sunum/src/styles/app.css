@@ -653,6 +653,11 @@
   flex-wrap: wrap;
 }
 
+.pane-toolbar .oh-btn {
+  min-width: 0;
+  padding: 0 10px;
+}
+
 .anim-timeline {
   height: 6px;
   background: #f2c94c;
@@ -764,4 +769,122 @@
     overflow: visible !important;
     background: #fff !important;
   }
+}
+
+/* Ana Hat Görünümü */
+.outline-pane {
+  flex: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 8px 24px 0;
+  background: var(--oh-panel-bg, #fff);
+  border-right: 1px solid var(--oh-border);
+}
+
+.outline-slide {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 4px 0 6px;
+  border-left: 3px solid transparent;
+}
+
+.outline-slide.is-current {
+  border-left-color: var(--oh-accent);
+  background: var(--oh-hover, rgba(0, 0, 0, 0.04));
+}
+
+.outline-slide.is-hidden .outline-title,
+.outline-slide.is-hidden .outline-body {
+  opacity: 0.55;
+}
+
+.outline-num {
+  flex: none;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding-top: 5px;
+  font-size: 12px;
+  color: var(--oh-text-muted, #666);
+}
+
+.outline-icon {
+  display: inline-block;
+  width: 16px;
+  height: 11px;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+}
+
+.outline-texts {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.outline-title,
+.outline-body {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--oh-text, #222);
+  font-family: inherit;
+  outline: none;
+  padding: 2px 4px;
+  box-sizing: border-box;
+}
+
+.outline-title {
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.outline-body {
+  font-size: 13px;
+  line-height: 1.45;
+  resize: none;
+  overflow: hidden;
+  tab-size: 3;
+  -moz-tab-size: 3;
+  white-space: pre-wrap;
+  padding-left: 14px;
+}
+
+.outline-title:focus,
+.outline-body:focus {
+  border-color: var(--oh-accent);
+  background: var(--oh-surface, #fff);
+}
+
+.outline-title::placeholder,
+.outline-body::placeholder {
+  color: var(--oh-text-muted, #999);
+  font-weight: normal;
+}
+
+/* Ekleme/kırpma/çizim kipi ipucu (slayt alanının üstünde yüzer) */
+.canvas-hint {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 5px 12px;
+  border-radius: 4px;
+  background: rgba(32, 32, 32, 0.86);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 30;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }

@@ -77,14 +77,15 @@ export const SlideView = memo(function SlideView({ pres, slide, slideNumber, mod
 });
 
 const DecoLayer = memo(function DecoLayer({ shapes, ctx }: { shapes: Shape[]; ctx: RenderCtx }) {
+  // Asıl slayt/düzen süslemeleri slayt sınırında kırpılır (düzenleme görünümünde taşmasın).
   return (
-    <>
+    <div className="sv-deco">
       {shapes
         .filter((s) => !(s.kind === "sp" && s.ph))
         .map((s) => (
           <ShapeView key={s.id} shape={s} ctx={ctx} deco />
         ))}
-    </>
+    </div>
   );
 });
 
@@ -243,6 +244,8 @@ export function shapeGeometry(shape: SpShape, w: number, h: number): GeomResult 
     return {
       paths: shape.paths.map((p) => ({ d: customPathD(p, w, h), fill: p.fill === false ? "none" : "norm", stroke: p.stroke !== false })),
       text: { x: 0, y: 0, w, h },
+      // Dolgusuz ve kapanmayan yollar (serbest çizim, mürekkep) açık çizgi gibi davranır.
+      open: shape.paths.length === 1 && shape.paths[0].fill === false && !shape.paths[0].cmds.some((c) => c.c === "Z") ? true : undefined,
     };
   }
   return presetGeometry(shape.geom, w, h, shape.adj);
@@ -280,7 +283,7 @@ function SpBody({ shape, w, h, ctx, flipH, flipV, deco }: { shape: SpShape; w: n
             strokeWidth={p.stroke ? ln.width : 0}
             strokeDasharray={p.stroke ? ln.dash : undefined}
             strokeLinejoin="round"
-            strokeLinecap={geo.open ? "round" : undefined}
+            strokeLinecap={shape.line.cap === "rnd" ? "round" : shape.line.cap === "sq" ? "square" : geo.open ? "round" : undefined}
             markerStart={geo.open && shape.line.head && shape.line.head !== "none" ? `url(#${id}-h)` : undefined}
             markerEnd={geo.open && shape.line.tail && shape.line.tail !== "none" ? `url(#${id}-t)` : undefined}
           />
@@ -302,7 +305,7 @@ function PlaceholderIcons({ type, w, h }: { type: string; w: number; h: number }
   return (
     <div className="ph-icons" style={{ gap: size / 3 }}>
       {items.map((it) => (
-        <button key={it} type="button" className="ph-icon" data-ph-action={it} title={it === "table" ? "Tablo Ekle" : "Resimler"} style={{ width: size, height: size }}>
+        <span key={it} role="button" className="ph-icon" data-ph-action={it} title={it === "table" ? "Tablo Ekle" : "Resimler"} aria-label={it === "table" ? "Tablo Ekle" : "Resimler"} style={{ width: size, height: size }}>
           {it === "table" ? (
             <svg viewBox="0 0 24 24" width="70%" height="70%">
               <rect x="3" y="4" width="18" height="16" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
@@ -315,7 +318,7 @@ function PlaceholderIcons({ type, w, h }: { type: string; w: number; h: number }
               <path d="M4 17l5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" strokeWidth="1.3" />
             </svg>
           )}
-        </button>
+        </span>
       ))}
     </div>
   );

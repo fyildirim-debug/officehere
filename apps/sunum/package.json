@@ -16,7 +16,6 @@
     "@officehere/core": "workspace:*",
     "@officehere/ui": "workspace:*",
     "jszip": "^3.10.2",
-    "pptxgenjs": "^4.0.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   }

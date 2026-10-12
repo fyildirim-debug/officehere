@@ -19,6 +19,13 @@
   inset: 0;
 }
 
+.sv-deco {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .sh {
   position: absolute;
   pointer-events: none;

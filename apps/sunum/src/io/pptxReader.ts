@@ -6,7 +6,7 @@
 import JSZip from "jszip";
 import { uid } from "../model/factory";
 import { DEFAULT_HF } from "../model/presentation";
-import { findPlaceholder } from "../model/textStyle";
+import { findPlaceholder, placeholderKind } from "../model/textStyle";
 import type { Fill, Layout, LayoutType, LevelStyle, Master, Placeholder, Presentation, SchemeColorName, Shape, Slide, SpShape, TextStyles, Theme } from "../model/types";
 import { buildTextStyles, LAYOUT_NAMES } from "../themes/build";
 import { getThemeDef } from "../themes/themes";
@@ -120,6 +120,20 @@ function cleanPlaceholderText(shapes: Shape[], tree: Element | undefined, isLayo
   });
 }
 
+/** Düzey stillerini birleştirir (b, a'nın üzerine yazar). */
+function mergeLevels(a: Partial<LevelStyle>[] | undefined, b: Partial<LevelStyle>[] | undefined): Partial<LevelStyle>[] | undefined {
+  if (!a?.length) return b;
+  if (!b?.length) return a;
+  const n = Math.max(a.length, b.length);
+  const out: Partial<LevelStyle>[] = [];
+  for (let i = 0; i < n; i++) {
+    const x = a[i] ?? {};
+    const y = b[i] ?? {};
+    out.push({ para: { ...(x.para ?? {}), ...(y.para ?? {}) }, run: { ...(x.run ?? {}), ...(y.run ?? {}) } } as Partial<LevelStyle>);
+  }
+  return out;
+}
+
 const LAYOUT_TYPES = new Set(["title", "obj", "secHead", "twoObj", "twoTxTwoObj", "titleOnly", "blank", "objTx", "picTx", "vertTx"]);
 
 /** PPTX baytlarını sunu modeline okur. */
@@ -168,48 +182,97 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
 
   const mkCtx = (rels: Map<string, Rel>, map = clrMap, inherit?: ReadCtx["inherit"]): ReadCtx => ({ rels, media, clrMap: map, idMap: new Map(), inherit, lnWidths });
 
-  const mctx = mkCtx(masterRels);
-  const mCSld = kid(masterDoc, "cSld");
-  const mTree = kid(mCSld, "spTree");
-  const masterShapes = cleanPlaceholderText(readShapeList(mTree, mctx), mTree, false, mctx.idMap);
-  const tx = kid(masterDoc, "txStyles");
-  const base = buildTextStyles({ bg: { type: "none" } });
-  const defaultTs = readLevels(kid(presDoc, "defaultTextStyle"), mctx);
-  const otherLv = readLevels(kid(tx, "otherStyle"), mctx);
-  const textStyles: TextStyles = {
-    title: levelsToStyles(readLevels(kid(tx, "titleStyle"), mctx), base.title),
-    body: levelsToStyles(readLevels(kid(tx, "bodyStyle"), mctx), base.body),
-    other: levelsToStyles(otherLv ?? defaultTs, base.other),
+  // Açıklama yazarları (yalnız gerektiğinde okunur).
+  let authorsCache: Map<string, string> | undefined;
+  const commentAuthors = async (): Promise<Map<string, string>> => {
+    if (authorsCache) return authorsCache;
+    authorsCache = new Map();
+    const rel = [...presRels.values()].find((r) => r.type === REL.commentAuthors);
+    const xml = rel ? await text(rel.target) : undefined;
+    if (xml) for (const a of kids(parseXml(xml).documentElement, "cmAuthor")) authorsCache.set(attr(a, "id") ?? "", attr(a, "name") ?? "Yazar");
+    return authorsCache;
   };
-  const master: Master = { background: readBg(mCSld, mctx) ?? { type: "solid", color: { scheme: "lt1" } }, shapes: masterShapes, textStyles };
 
-  // Düzenler
+  // Asıl slaytlar: model tek asıl slayt taşır. İlki asıl slayt olur; diğerlerinin
+  // arka planı ve süs şekilleri kendi düzenlerine aktarılır (tüm düzenler okunur).
+  const masterIdEls = kids(kid(presDoc, "sldMasterIdLst"), "sldMasterId");
+  const masterPaths = masterIdEls.map((e) => relId(e)).map((rid) => (rid ? presRels.get(rid)?.target : undefined)).filter(Boolean) as string[];
+  if (!masterPaths.includes(masterPath)) masterPaths.unshift(masterPath);
+
   const layouts: Layout[] = [];
   const layoutByPath = new Map<string, Layout>();
-  const layoutRids = kids(kid(masterDoc, "sldLayoutIdLst"), "sldLayoutId").map((e) => relId(e)).filter(Boolean) as string[];
-  const layoutPaths = layoutRids.map((rid) => masterRels.get(rid)?.target).filter(Boolean) as string[];
-  for (const r of masterRels.values()) if (r.type === REL.slideLayout && !layoutPaths.includes(r.target)) layoutPaths.push(r.target);
-  for (const lp of layoutPaths) {
-    const xml = await text(lp);
-    if (!xml) continue;
-    const doc = parseXml(xml).documentElement;
-    const rels = parseRels(await text(relsPathFor(lp)), lp);
-    const lctx = mkCtx(rels, readClrMap(kidPath(doc, "clrMapOvr", "overrideClrMapping"), clrMap), (ph: Placeholder) => findPlaceholder(masterShapes, { type: ph.type }));
-    const cSld = kid(doc, "cSld");
-    const tree = kid(cSld, "spTree");
-    const shapes = cleanPlaceholderText(readShapeList(tree, lctx), tree, true, lctx.idMap);
-    const t = attr(doc, "type") ?? "cust";
-    const layout: Layout = {
-      id: uid("L"),
-      type: (LAYOUT_TYPES.has(t) ? t : "cust") as LayoutType,
-      name: attr(cSld, "name") || LAYOUT_NAMES[t] || "Özel Düzen",
-      shapes,
-      background: readBg(cSld, lctx),
-      showMasterShapes: attr(doc, "showMasterSp") !== "0" && attr(doc, "showMasterSp") !== "false",
+  const layoutMasterShapes = new Map<Layout, Shape[]>();
+  let master: Master | undefined;
+  for (const [mi, mp] of masterPaths.entries()) {
+    const mDoc = mi === 0 ? masterDoc : parseXml((await text(mp)) ?? "<x/>").documentElement;
+    const mRels = mi === 0 ? masterRels : parseRels(await text(relsPathFor(mp)), mp);
+    const mClr = mi === 0 ? clrMap : readClrMap(kid(mDoc, "clrMap"));
+    const mctx = mkCtx(mRels, mClr);
+    const mCSld = kid(mDoc, "cSld");
+    const mTree = kid(mCSld, "spTree");
+    const mShapes = cleanPlaceholderText(readShapeList(mTree, mctx), mTree, false, mctx.idMap);
+    const mBg = readBg(mCSld, mctx) ?? { type: "solid", color: { scheme: "lt1" } };
+    const tx = kid(mDoc, "txStyles");
+    const base = buildTextStyles({ bg: { type: "none" } });
+    const defaultTs = readLevels(kid(presDoc, "defaultTextStyle"), mctx);
+    const otherLv = readLevels(kid(tx, "otherStyle"), mctx);
+    const textStyles: TextStyles = {
+      title: levelsToStyles(readLevels(kid(tx, "titleStyle"), mctx), base.title),
+      body: levelsToStyles(readLevels(kid(tx, "bodyStyle"), mctx), base.body),
+      other: levelsToStyles(otherLv ?? defaultTs, base.other),
     };
-    layouts.push(layout);
-    layoutByPath.set(lp, layout);
+    if (mi === 0) master = { background: mBg, shapes: mShapes, textStyles };
+    // İkincil asıl slaytın metin stilleri farklıysa düzen yer tutucularına taşınır.
+    const ownStyles = mi > 0 && master && JSON.stringify(textStyles) !== JSON.stringify(master.textStyles) ? textStyles : undefined;
+    const mDeco = mShapes.filter((x) => !(x.kind === "sp" && x.ph));
+
+    // Düzenler
+    const layoutRids = kids(kid(mDoc, "sldLayoutIdLst"), "sldLayoutId").map((e) => relId(e)).filter(Boolean) as string[];
+    const layoutPaths = layoutRids.map((rid) => mRels.get(rid)?.target).filter(Boolean) as string[];
+    for (const r of mRels.values()) if (r.type === REL.slideLayout && !layoutPaths.includes(r.target)) layoutPaths.push(r.target);
+    for (const lp of layoutPaths) {
+      if (layoutByPath.has(lp)) continue;
+      const xml = await text(lp);
+      if (!xml) continue;
+      const doc = parseXml(xml).documentElement;
+      const rels = parseRels(await text(relsPathFor(lp)), lp);
+      const lctx = mkCtx(rels, readClrMap(kidPath(doc, "clrMapOvr", "overrideClrMapping"), mClr), (ph: Placeholder) => findPlaceholder(mShapes, { type: ph.type }));
+      const cSld = kid(doc, "cSld");
+      const tree = kid(cSld, "spTree");
+      let shapes = cleanPlaceholderText(readShapeList(tree, lctx), tree, true, lctx.idMap);
+      const t = attr(doc, "type") ?? "cust";
+      let showMasterShapes = attr(doc, "showMasterSp") !== "0" && attr(doc, "showMasterSp") !== "false";
+      let background = readBg(cSld, lctx);
+      if (mi > 0) {
+        // İkincil asıl slaytın görünümü düzene taşınır.
+        background ??= mBg;
+        if (showMasterShapes) shapes = [...mDeco.map((d) => ({ ...d, id: uid("s") })), ...shapes];
+        showMasterShapes = false;
+        const st = ownStyles;
+        if (st) {
+          shapes = shapes.map((sh) => {
+            if (sh.kind !== "sp" || !sh.ph) return sh;
+            const mph = findPlaceholder(mShapes, { type: sh.ph.type });
+            const levels = mergeLevels(mergeLevels(st[placeholderKind(sh.ph)], mph?.text?.levels), sh.text?.levels);
+            return { ...sh, text: { ...(sh.text ?? { paragraphs: [{ runs: [], level: 0, props: {} }] }), levels } };
+          });
+        }
+      }
+      const layout: Layout = {
+        id: uid("L"),
+        type: (LAYOUT_TYPES.has(t) ? t : "cust") as LayoutType,
+        name: attr(cSld, "name") || LAYOUT_NAMES[t] || "Özel Düzen",
+        shapes,
+        background,
+        showMasterShapes,
+      };
+      layouts.push(layout);
+      layoutByPath.set(lp, layout);
+      layoutMasterShapes.set(layout, mShapes);
+    }
   }
+  if (!master) throw new PptxError("Asıl slayt okunamadı.");
+  const masterShapes = master.shapes;
   if (!layouts.length) {
     const l: Layout = { id: uid("L"), type: "blank", name: "Boş", shapes: [], showMasterShapes: true };
     layouts.push(l);
@@ -228,7 +291,7 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
     const rels = parseRels(await text(relsPathFor(sp)), sp);
     const lrel = [...rels.values()].find((r) => r.type === REL.slideLayout);
     const layout = (lrel && layoutByPath.get(lrel.target)) || layouts[0];
-    const sctx = mkCtx(rels, readClrMap(kidPath(doc, "clrMapOvr", "overrideClrMapping"), clrMap), (ph: Placeholder) => findPlaceholder(layout.shapes, ph) ?? findPlaceholder(masterShapes, { type: ph.type }));
+    const sctx = mkCtx(rels, readClrMap(kidPath(doc, "clrMapOvr", "overrideClrMapping"), clrMap), (ph: Placeholder) => findPlaceholder(layout.shapes, ph) ?? findPlaceholder(layoutMasterShapes.get(layout) ?? masterShapes, { type: ph.type }));
     const cSld = kid(doc, "cSld");
     const shapes = readShapeList(kid(cSld, "spTree"), sctx);
     const slide: Slide = {
@@ -242,6 +305,24 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
       transition: readTransition(doc),
       animations: readAnimations(doc, sctx.idMap),
     };
+    const crel = [...rels.values()].find((r) => r.type === REL.comments);
+    const cxml = crel ? await text(crel.target) : undefined;
+    if (cxml) {
+      const names = await commentAuthors();
+      const list = kids(parseXml(cxml).documentElement, "cm").map((cm) => {
+        const pos = kid(cm, "pos");
+        const dt = Date.parse(attr(cm, "dt") ?? "");
+        return {
+          id: uid("c"),
+          author: names.get(attr(cm, "authorId") ?? "") ?? "Yazar",
+          text: kid(cm, "text")?.textContent ?? "",
+          x: (numAttr(pos, "x") ?? 0) / 6,
+          y: (numAttr(pos, "y") ?? 0) / 6,
+          date: Number.isFinite(dt) ? dt : Date.now(),
+        };
+      });
+      if (list.length) slide.comments = list;
+    }
     const nrel = [...rels.values()].find((r) => r.type === REL.notesSlide);
     if (nrel) {
       const nxml = await text(nrel.target);

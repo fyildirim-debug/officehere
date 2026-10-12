@@ -21,12 +21,14 @@ export interface OverlayProps {
   rotInfo?: { x: number; y: number; text: string } | null;
   cropGhost?: { src: string; x: number; y: number; w: number; h: number } | null;
   comments?: { id: string; x: number; y: number; author: string; text: string }[];
+  /** Kırpma modundaki resim (kırpma tutamaçlarıyla çizilir). */
+  cropId?: string | null;
 }
 
-export function SelectionOverlay({ shapes, overrides, zoom: z, editingId, parentGroup, guides, lasso, preview, animBadges, cellSel, rotInfo, cropGhost, comments }: OverlayProps) {
+export function SelectionOverlay({ shapes, overrides, zoom: z, editingId, parentGroup, guides, lasso, preview, animBadges, cellSel, rotInfo, cropGhost, comments, cropId }: OverlayProps) {
   return (
     <div className="sel-layer">
-      {cropGhost && <img className="crop-ghost" src={cropGhost.src} alt="" style={{ left: cropGhost.x * z, top: cropGhost.y * z, width: cropGhost.w * z, height: cropGhost.h * z }} />}
+      {cropGhost && <img className="crop-ghost" draggable={false} src={cropGhost.src} alt="" style={{ left: cropGhost.x * z, top: cropGhost.y * z, width: cropGhost.w * z, height: cropGhost.h * z }} />}
       {comments?.map((c, i) => (
         <div key={c.id} className="comment-marker" data-comment={c.id} title={`${c.author}: ${c.text}`} style={{ left: c.x * z, top: c.y * z }}>
           {i + 1}
@@ -64,14 +66,15 @@ export function SelectionOverlay({ shapes, overrides, zoom: z, editingId, parent
           );
         }
         const editing = editingId === s.id;
-        const adjDefs = s.kind === "sp" ? ADJUST_HANDLES[s.geom] : undefined;
+        const crop = cropId === s.id;
+        const adjDefs = s.kind === "sp" && !crop ? ADJUST_HANDLES[s.geom] : undefined;
         const adj = s.kind === "sp" ? effectiveAdj(s.geom, s.adj) : {};
         const W = g.w * z;
         const H = g.h * z;
         return (
           <div
             key={s.id}
-            className={`sel-frame${editing ? " is-editing" : ""}`}
+            className={`sel-frame${editing ? " is-editing" : ""}${crop ? " is-crop" : ""}`}
             style={{ left: g.x * z, top: g.y * z, width: W, height: H, transform: g.rot ? `rotate(${g.rot}deg)` : undefined }}
           >
             <div className="sel-move is-t" data-handle="move" data-shape={s.id} />
@@ -89,7 +92,7 @@ export function SelectionOverlay({ shapes, overrides, zoom: z, editingId, parent
                   />
                 ))
               : null}
-            {s.kind !== "table" && (
+            {s.kind !== "table" && !crop && (
               <div className="sel-rot" data-handle="rot" data-shape={s.id} style={{ left: W / 2 }}>
                 <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
                   <path d="M12.5 5.5A5 5 0 1 0 13 9" fill="none" stroke="currentColor" strokeWidth="1.4" />

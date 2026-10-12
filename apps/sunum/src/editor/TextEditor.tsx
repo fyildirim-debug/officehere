@@ -318,13 +318,25 @@ export function TextEditor(props: TextEditorProps) {
 
   // Düzenleyici tanıtıcısı (şerit komutları için).
   useEffect(() => {
+    /** Tarayıcının selectionchange olayı gecikebilir: komuttan önce seçimi DOM'dan eşitle. */
+    const sync = () => {
+      const el = ref.current;
+      if (!el || composing.current || document.activeElement !== el) return;
+      const s = domSelToSel(el);
+      if (s && (cmpPos(s.anchor, selRef.current.anchor) !== 0 || cmpPos(s.focus, selRef.current.focus) !== 0)) {
+        selRef.current = s;
+        pendingRef.current = null;
+      }
+    };
     const changeLevel = (delta: number) => {
+      sync();
       const [a, z] = orderSel(selRef.current);
       const nb = applyParaProps(bodyRef.current, a.p, z.p, (p) => ({ ...p, level: Math.max(0, Math.min(8, p.level + delta)) }));
       commit(nb, selRef.current);
     };
     const handle: TextEditorHandle = {
       applyRun(patch) {
+        sync();
         const b = bodyRef.current;
         let [a, z] = orderSel(selRef.current);
         if (cmpPos(a, z) === 0) {
@@ -345,11 +357,13 @@ export function TextEditor(props: TextEditorProps) {
         propsRef.current.onSelectionChange();
       },
       applyPara(patch, levelDelta) {
+        sync();
         if (levelDelta) return changeLevel(levelDelta);
         const [a, z] = orderSel(selRef.current);
         commit(applyParaProps(bodyRef.current, a.p, z.p, patch), selRef.current);
       },
       runProps() {
+        sync();
         const b = bodyRef.current;
         const [a, z] = orderSel(selRef.current);
         const lvl = propsRef.current.ctx.lvl;
@@ -358,10 +372,12 @@ export function TextEditor(props: TextEditorProps) {
         return list.map((rp) => effectiveRun(rp, b.paragraphs[Math.min(a.p, b.paragraphs.length - 1)], lvl));
       },
       paragraphs() {
+        sync();
         const [a, z] = orderSel(selRef.current);
         return bodyRef.current.paragraphs.slice(a.p, z.p + 1);
       },
       transform(fn) {
+        sync();
         let [a, z] = orderSel(selRef.current);
         if (cmpPos(a, z) === 0) {
           const w = wordRangeAt(bodyRef.current, a);
@@ -371,10 +387,12 @@ export function TextEditor(props: TextEditorProps) {
         commit(transformText(bodyRef.current, a, z, fn), selRef.current);
       },
       insert(text) {
+        sync();
         const r = insertText(bodyRef.current, selRef.current, text, insProps());
         commit(r.body, caret(r.caret.p, r.caret.o), "text");
       },
       insertRun(text, props) {
+        sync();
         const r = insertText(bodyRef.current, selRef.current, text, { ...insProps(), ...props });
         commit(r.body, caret(r.caret.p, r.caret.o));
       },
@@ -383,7 +401,7 @@ export function TextEditor(props: TextEditorProps) {
         restoreSel();
         propsRef.current.onSelectionChange();
       },
-      selection: () => selRef.current,
+      selection: () => (sync(), selRef.current),
       setSelection(sel) {
         selRef.current = clampSel(sel);
         ref.current?.focus({ preventScroll: true });
@@ -391,6 +409,7 @@ export function TextEditor(props: TextEditorProps) {
         propsRef.current.onSelectionChange();
       },
       selectedText() {
+        sync();
         const [a, z] = orderSel(selRef.current);
         return textInRange(bodyRef.current, a, z);
       },

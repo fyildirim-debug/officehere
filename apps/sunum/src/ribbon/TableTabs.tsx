@@ -19,6 +19,14 @@ import {
   TextboxAlignTop20Regular,
   TextboxAlignMiddle20Regular,
   TextboxAlignBottom20Regular,
+  BorderAll24Regular,
+  Table24Regular,
+  TableInsertRow24Regular,
+  TableResizeColumn24Regular,
+  TableResizeRow24Regular,
+  TableSettings24Regular,
+  TableSimple24Regular,
+  TextAlignCenter24Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonRow, RibbonSpinner, RibbonStack } from "@officehere/ui";
 import { cssColor } from "../model/color";
@@ -138,7 +146,7 @@ export function TableDesignTab({ ctx }: { ctx: RibbonCtx }) {
   const range = t ? (ctx.state.cellSel || ctx.state.editing?.cell ? currentRange(ctx, t) : { r1: 0, c1: 0, r2: t.rows.length - 1, c2: t.cols.length - 1 }) : null;
   return (
     <>
-      <RibbonGroup label="Tablo Stili Seçenekleri">
+      <RibbonGroup label="Tablo Stili Seçenekleri" icon={<TableSettings24Regular />}>
         <RibbonStack>
           {opt("firstRow", "Üst Bilgi Satırı")}
           {opt("lastRow", "Toplam Satırı")}
@@ -150,7 +158,7 @@ export function TableDesignTab({ ctx }: { ctx: RibbonCtx }) {
           {opt("bandCol", "Şeritli Sütunlar")}
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Tablo Stilleri">
+      <RibbonGroup label="Tablo Stilleri" icon={<TableSimple24Regular />}>
         <RibbonGallery
           columns={7}
           itemWidth={54}
@@ -198,7 +206,7 @@ export function TableDesignTab({ ctx }: { ctx: RibbonCtx }) {
           />
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Kenarlık Çiz">
+      <RibbonGroup label="Kenarlık Çiz" icon={<BorderAll24Regular />}>
         <RibbonStack>
           <RibbonSpinner label="Kalem Kalınlığı:" value={penW} min={0.25} max={6} step={0.25} decimals={2} unit="nk" width={70} onChange={setPenW} />
           <ThemeColorSplit icon={<BorderAll20Regular />} label="Kalem Rengi" tip="Kalem Rengi" size="medium" theme={theme} color={pen} onColorChange={setPen} onApply={(c) => setPen(c)} />
@@ -217,7 +225,7 @@ export function TableLayoutTab({ ctx }: { ctx: RibbonCtx }) {
   const colW = t && r ? t.cols[r.c1] ?? 0 : 0;
   return (
     <>
-      <RibbonGroup label="Tablo">
+      <RibbonGroup label="Tablo" icon={<Table24Regular />}>
         <RibbonMenuButton
           size="large"
           icon={<TableSelectRange24Regular />}
@@ -232,7 +240,7 @@ export function TableLayoutTab({ ctx }: { ctx: RibbonCtx }) {
           }
         />
       </RibbonGroup>
-      <RibbonGroup label="Satırlar ve Sütunlar">
+      <RibbonGroup label="Satırlar ve Sütunlar" icon={<TableInsertRow24Regular />}>
         <RibbonMenuButton
           size="large"
           icon={<TableDeleteRow24Regular />}
@@ -253,11 +261,11 @@ export function TableLayoutTab({ ctx }: { ctx: RibbonCtx }) {
           <RibbonButton icon={<TableMoveRight24Regular />} label="Sağa Ekle" disabled={dis} onClick={() => r && updateTable(ctx, (x) => insertCol(x, r.c2, true))} />
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Birleştir">
+      <RibbonGroup label="Birleştir" icon={<TableCellsMerge24Regular />}>
         <RibbonButton size="large" icon={<TableCellsMerge24Regular />} label="Hücreleri Birleştir" disabled={dis || !ctx.state.cellSel} onClick={() => r && (updateTable(ctx, (x) => mergeCells(x, r)), a.store.set({ cellSel: null }))} />
         <RibbonButton size="large" icon={<TableCellsSplit24Regular />} label="Hücreleri Böl" disabled={dis || !(t && r && (t.rows[r.r1].cells[r.c1].gridSpan || t.rows[r.r1].cells[r.c1].rowSpan))} onClick={() => r && updateTable(ctx, (x) => splitCell(x, r.r1, r.c1))} />
       </RibbonGroup>
-      <RibbonGroup label="Hücre Boyutu">
+      <RibbonGroup label="Hücre Boyutu" icon={<TableResizeColumn24Regular />}>
         <RibbonStack>
           <RibbonSpinner label="Yükseklik:" value={cm(rowH)} min={0.1} max={50} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => r && updateTable(ctx, (x) => { const rows = x.rows.map((row, i) => (i >= r.r1 && i <= r.r2 ? { ...row, h: fromCm(v) } : row)); return { ...x, rows, h: rows.reduce((s, q) => s + q.h, 0) }; })} />
           <RibbonSpinner label="Genişlik:" value={cm(colW)} min={0.1} max={50} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => r && updateTable(ctx, (x) => { const cols = x.cols.map((c, j) => (j >= r.c1 && j <= r.c2 ? fromCm(v) : c)); return { ...x, cols, w: cols.reduce((s, q) => s + q, 0) }; })} />
@@ -267,7 +275,7 @@ export function TableLayoutTab({ ctx }: { ctx: RibbonCtx }) {
           <RibbonButton icon={<AutoFitWidth20Regular />} label="Sütunları Dağıt" disabled={dis} onClick={() => updateTable(ctx, distributeCols)} />
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Hizalama">
+      <RibbonGroup label="Hizalama" icon={<TextAlignCenter24Regular />}>
         <RibbonStack>
           <RibbonRow>
             <RibbonButton size="small" icon={<TextAlignLeft20Regular />} tip="Sola Hizala" disabled={dis} onClick={() => setParaProps(a, { align: "l" })} />
@@ -281,7 +289,7 @@ export function TableLayoutTab({ ctx }: { ctx: RibbonCtx }) {
           </RibbonRow>
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Tablo Boyutu">
+      <RibbonGroup label="Tablo Boyutu" icon={<TableResizeRow24Regular />}>
         <RibbonStack>
           <RibbonSpinner label="Yükseklik:" value={t ? cm(t.h) : 0} min={0.5} max={142} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => updateTable(ctx, (x) => { const k = fromCm(v) / (x.h || 1); const rows = x.rows.map((row) => ({ ...row, h: row.h * k })); return { ...x, rows, h: fromCm(v) }; })} />
           <RibbonSpinner label="Genişlik:" value={t ? cm(t.w) : 0} min={0.5} max={142} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => updateTable(ctx, (x) => { const k = fromCm(v) / (x.w || 1); return { ...x, cols: x.cols.map((c) => c * k), w: fromCm(v) }; })} />

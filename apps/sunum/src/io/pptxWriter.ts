@@ -21,6 +21,8 @@ const CT = {
   presProps: "application/vnd.openxmlformats-officedocument.presentationml.presProps+xml",
   viewProps: "application/vnd.openxmlformats-officedocument.presentationml.viewProps+xml",
   tableStyles: "application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml",
+  comments: "application/vnd.openxmlformats-officedocument.presentationml.comments+xml",
+  commentAuthors: "application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml",
   core: "application/vnd.openxmlformats-package.core-properties+xml",
   app: "application/vnd.openxmlformats-officedocument.extended-properties+xml",
 };
@@ -143,6 +145,12 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
     zip.file("ppt/notesMasters/_rels/notesMaster1.xml.rels", r.xml());
   }
 
+  // Açıklama yazarları (ECMA-376 §19.4: cmAuthorLst / cmLst; konum birimi 1/576 inç).
+  const authors: string[] = [];
+  const authorIdx = new Map<string, number>();
+  for (const sl of pres.slides) for (const c of sl.comments ?? []) if (!authorIdx.has(c.author)) authorIdx.set(c.author, authors.push(c.author) - 1);
+  const authorLast = authors.map(() => 0);
+
   // Slaytlar
   const tableStyles = new Set<string>();
   pres.slides.forEach((slide, i) => {
@@ -164,6 +172,19 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
       zip.file(`ppt/notesSlides/_rels/notesSlide${i + 1}.xml.rels`, nr.xml());
       ctx.rels.add(REL.notesSlide, `../notesSlides/notesSlide${i + 1}.xml`);
     }
+    if (slide.comments?.length) {
+      const cp = `ppt/comments/comment${i + 1}.xml`;
+      const items = slide.comments
+        .map((c) => {
+          const a = authorIdx.get(c.author) ?? 0;
+          const idx = ++authorLast[a];
+          const dt = new Date(c.date || Date.now()).toISOString();
+          return `<p:cm authorId="${a}" dt="${dt}" idx="${idx}"><p:pos x="${Math.round(c.x * 6)}" y="${Math.round(c.y * 6)}"/><p:text>${esc(c.text)}</p:text></p:cm>`;
+        })
+        .join("");
+      add(cp, `<p:cmLst ${NS_DECL}>${items}</p:cmLst>`, CT.comments);
+      ctx.rels.add(REL.comments, `../comments/comment${i + 1}.xml`);
+    }
     add(
       path,
       `<p:sld ${NS_DECL}${attrs({ show: slide.hidden ? "0" : undefined, showMasterSp: slide.hideMasterShapes ? "0" : undefined })}><p:cSld>${bgXml(slide.background, ctx)}${tree}</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${trans}${timing}${ext}</p:sld>`,
@@ -181,6 +202,16 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
   pctx.rels.add(REL.viewProps, "viewProps.xml");
   pctx.rels.add(REL.theme, "theme/theme1.xml");
   pctx.rels.add(REL.tableStyles, "tableStyles.xml");
+  if (authors.length) {
+    pctx.rels.add(REL.commentAuthors, "commentAuthors.xml");
+    const list = authors
+      .map((name, id) => {
+        const initials = name.split(/\s+/).filter(Boolean).map((w) => w[0]!.toLocaleUpperCase("tr-TR")).join("").slice(0, 3) || "?";
+        return `<p:cmAuthor id="${id}" name="${esc(name)}" initials="${esc(initials)}" lastIdx="${authorLast[id]}" clrIdx="${id % 8}"/>`;
+      })
+      .join("");
+    add("ppt/commentAuthors.xml", `<p:cmAuthorLst ${NS_DECL}>${list}</p:cmAuthorLst>`, CT.commentAuthors);
+  }
   add("ppt/presentation.xml", presentationXml(pres, masterRid, notesRid, slideRids, pctx), CT.presentation);
   zip.file("ppt/_rels/presentation.xml.rels", pctx.rels.xml());
   add("ppt/presProps.xml", PRES_PROPS, CT.presProps);

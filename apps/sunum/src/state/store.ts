@@ -19,7 +19,7 @@ export interface EditTarget {
   range?: [{ p: number; o: number }, { p: number; o: number }];
 }
 
-export type ViewMode = "normal" | "sorter" | "notes" | "reading";
+export type ViewMode = "normal" | "outline" | "sorter" | "notes" | "reading";
 export type PaneKind = "background" | "shape" | "animation" | "selection" | "comments" | null;
 
 export interface InsertMode {
@@ -28,6 +28,15 @@ export interface InsertMode {
   head?: "triangle";
   tail?: "triangle";
   vertical?: boolean;
+}
+
+/** Çizim sekmesi: etkin kalem ya da silgi. */
+export interface InkTool {
+  tool: "pen" | "pencil" | "highlighter" | "eraser";
+  /** "#RRGGBB" */
+  color: string;
+  /** pt */
+  width: number;
 }
 
 export interface AppState {
@@ -60,6 +69,8 @@ export interface AppState {
   spellcheck: boolean;
   /** Kırpma modundaki resim. */
   cropId: string | null;
+  /** Çizim modu (null: seçim). */
+  ink: InkTool | null;
   /** Seçim değişimini şeride bildirmek için sayaç. */
   textTick: number;
   ribbonTab: string;

@@ -31,6 +31,16 @@ function add(p: Presentation, layout: LayoutType, title: string, ...bodies: stri
   return s;
 }
 
+/** İçerik yer tutucusundaki paragrafları numaralı listeye çevirir. */
+function numbered(s: Slide): Slide {
+  s.shapes = s.shapes.map((x) =>
+    x.kind === "sp" && x.ph?.type === "obj" && x.text
+      ? { ...x, text: { ...x.text, paragraphs: x.text.paragraphs.map((pp) => ({ ...pp, props: { ...pp.props, bullet: { type: "auto", scheme: "arabicPeriod" }, marL: 54, indent: -54 } })) } }
+      : x,
+  );
+  return s;
+}
+
 function titleSlide(p: Presentation, title: string, sub: string) {
   const s = p.slides[0];
   setPh(s, isTitle, title);
@@ -91,11 +101,10 @@ function trainingDeck(): Presentation {
   p.props.title = "Eğitim";
   titleSlide(p, "Etkili Sunum Teknikleri", "Kurum İçi Eğitim Programı · Modül 1");
   add(p, "obj", "Eğitimin Amaçları", "Hedef kitleyi tanımak\nMesajı yapılandırmak\nGörsel tasarım ilkelerini uygulamak\nBeden dili ve ses kullanımı\nSorularla etkileşim kurmak");
-  const s = add(p, "obj", "Modüller", "Hazırlık ve planlama\nİçerik ve hikâye kurgusu\nSlayt tasarımı\nSunum anı\nDeğerlendirme");
-  s.shapes = s.shapes.map((x) => (x.kind === "sp" && x.ph?.type === "obj" && x.text ? { ...x, text: { ...x.text, paragraphs: x.text.paragraphs.map((pp) => ({ ...pp, props: { bullet: { type: "auto", scheme: "arabicPeriod" }, marL: 54, indent: -54 } })) } } : x));
+  numbered(add(p, "obj", "Modüller", "Hazırlık ve planlama\nİçerik ve hikâye kurgusu\nSlayt tasarımı\nSunum anı\nDeğerlendirme"));
   add(p, "twoTxTwoObj", "Yapılması ve Kaçınılması Gerekenler", "Yapın", "Her slaytta tek bir ana fikir\nOkunaklı yazı tipi boyutu (en az 24 nk)\nGörsellerle destekleyin", "Kaçının", "Uzun paragraflar\nÇok sayıda yazı tipi\nOkunamayan renk kontrastları");
   add(p, "secHead", "Uygulama", "Her katılımcı 3 dakikalık bir sunum hazırlayacak");
-  const q = add(p, "objTx", "Kısa Sınav", "1. Bir slaytta kaç ana fikir olmalı?\n2. Önerilen en küçük yazı boyutu nedir?\n3. Sunumun ilk 30 saniyesinde ne yapılmalı?", "Cevaplarınızı not alın; oturum sonunda birlikte değerlendireceğiz.");
+  const q = numbered(add(p, "objTx", "Kısa Sınav", "Bir slaytta kaç ana fikir olmalı?\nÖnerilen en küçük yazı boyutu nedir?\nSunumun ilk 30 saniyesinde ne yapılmalı?", "Cevaplarınızı not alın; oturum sonunda birlikte değerlendireceğiz."));
   q.notes = "Cevaplar: 1) Bir 2) 24 nk 3) Dikkat çekici bir açılış";
   add(p, "obj", "Özet", "Hazırlık, sunumun yarısıdır\nAz metin, güçlü görsel\nProva yapın ve süreyi ölçün");
   return p;

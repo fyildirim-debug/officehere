@@ -21,6 +21,8 @@ import { StatusArea } from "./app/StatusArea";
 import { FileBackstage } from "./app/FileBackstage";
 import { HomeTab } from "./ribbon/HomeTab";
 import { InsertTab } from "./ribbon/InsertTab";
+import { DrawTab } from "./ribbon/DrawTab";
+import { OutlinePane } from "./panes/OutlinePane";
 import { DesignTab } from "./ribbon/DesignTab";
 import { TransitionsTab } from "./ribbon/TransitionsTab";
 import { AnimationsTab } from "./ribbon/AnimationsTab";
@@ -68,6 +70,7 @@ function initialState(): AppState {
     painter: null,
     spellcheck: true,
     cropId: null,
+    ink: null,
     textTick: 0,
     ribbonTab: "home",
     message: null,
@@ -186,7 +189,7 @@ export function App() {
         const w = WORDART_PRESETS[i];
         const p = a.pres;
         const tb = makeTextBox(p.width * 0.2, p.height * 0.38, p.width * 0.6, 120, "Metninizi buraya yazın");
-        tb.name = `WordArt ${a.nextShapeNumber()}`;
+        tb.name = `Sanatsal Metin ${a.nextShapeNumber()}`;
         tb.text = { ...tb.text!, wrap: true, levels: [{ para: { align: "ctr" }, run: { size: 54, color: w.color, outline: w.outline, shadow: w.shadow || undefined, glow: w.glow ? w.color : undefined, bold: w.bold } }] };
         const i0 = a.s.slideIdx;
         a.store.commit((pp) => {
@@ -241,9 +244,11 @@ export function App() {
   const hasSpLike = shapes.some((s) => s.kind === "sp" || s.kind === "group");
   const hasPic = !!one && one.kind === "pic";
   const hasTable = !!one && one.kind === "table";
+  const editView = state.view === "normal" || state.view === "outline";
   const tabs: RibbonTabDef[] = [
     { id: "home", label: "Giriş", content: <HomeTab ctx={ctx} /> },
     { id: "insert", label: "Ekle", content: <InsertTab ctx={ctx} /> },
+    { id: "draw", label: "Çizim", content: <DrawTab ctx={ctx} /> },
     { id: "design", label: "Tasarım", content: <DesignTab ctx={ctx} /> },
     { id: "transitions", label: "Geçişler", content: <TransitionsTab ctx={ctx} /> },
     { id: "animations", label: "Animasyonlar", content: <AnimationsTab ctx={ctx} /> },
@@ -251,10 +256,10 @@ export function App() {
     { id: "review", label: "Gözden Geçir", content: <ReviewTab ctx={ctx} /> },
     { id: "view", label: "Görünüm", content: <ViewTab ctx={ctx} /> },
     { id: "help", label: "Yardım", content: <HelpTab ctx={ctx} /> },
-    { id: "shapeFormat", label: "Şekil Biçimi", contextual: true, hidden: !hasSpLike || state.view !== "normal", content: <ShapeFormatTab ctx={ctx} /> },
-    { id: "pictureFormat", label: "Resim Biçimi", contextual: true, hidden: !hasPic || state.view !== "normal", content: <PictureFormatTab ctx={ctx} /> },
-    { id: "tableDesign", label: "Tablo Tasarımı", contextual: true, hidden: !hasTable || state.view !== "normal", content: <TableDesignTab ctx={ctx} /> },
-    { id: "tableLayout", label: "Düzen", contextual: true, hidden: !hasTable || state.view !== "normal", content: <TableLayoutTab ctx={ctx} /> },
+    { id: "shapeFormat", label: "Şekil Biçimi", contextual: true, hidden: !hasSpLike || !editView, content: <ShapeFormatTab ctx={ctx} /> },
+    { id: "pictureFormat", label: "Resim Biçimi", contextual: true, hidden: !hasPic || !editView, content: <PictureFormatTab ctx={ctx} /> },
+    { id: "tableDesign", label: "Tablo Tasarımı", contextual: true, hidden: !hasTable || !editView, content: <TableDesignTab ctx={ctx} /> },
+    { id: "tableLayout", label: "Düzen", contextual: true, hidden: !hasTable || !editView, content: <TableLayoutTab ctx={ctx} /> },
   ];
   const activeTab = tabs.find((t) => t.id === state.ribbonTab && !t.hidden) ? state.ribbonTab : "home";
 
@@ -292,6 +297,19 @@ export function App() {
     }
   })();
 
+  // Kip ipuçları slayt alanının üstünde yüzer (yerleşimi kaydırmaz).
+  const canvasHint = state.insert
+    ? state.insert.kind === "textbox"
+      ? "Metin kutusu eklemek için slayta tıklayın ya da sürükleyin."
+      : "Şekli çizmek için slaytta sürükleyin (Shift: oranı koru). Vazgeçmek için Esc."
+    : state.cropId
+      ? "Kırpmak için kenar tutamaçlarını, resmi kaydırmak için içini sürükleyin. Bitirmek için Esc."
+      : state.ink
+        ? state.ink.tool === "eraser"
+          ? "Silmek için mürekkep çizimlerinin üzerinden geçin. Bitirmek için Esc."
+          : "Çizmek için slaytta sürükleyin. Bitirmek için Esc."
+        : null;
+
   let main: React.ReactNode;
   if (state.view === "sorter") {
     main = (
@@ -326,8 +344,12 @@ export function App() {
   } else {
     main = (
       <>
-        <ThumbnailPane state={state} actions={a} width={state.thumbWidth} onContextMenu={(e, onSlide) => ctxMenu.open(e, thumbMenu(a, cmd, onSlide))} />
-        <Splitter dir="v" onDrag={(d) => a.store.set((s) => ({ thumbWidth: Math.max(110, Math.min(420, s.thumbWidth + d)) }))} />
+        {state.view === "outline" ? (
+          <OutlinePane state={state} actions={a} width={Math.max(300, state.thumbWidth * 1.5)} />
+        ) : (
+          <ThumbnailPane state={state} actions={a} width={state.thumbWidth} onContextMenu={(e, onSlide) => ctxMenu.open(e, thumbMenu(a, cmd, onSlide))} />
+        )}
+        <Splitter dir="v" onDrag={(d) => a.store.set((s) => ({ thumbWidth: Math.max(110, Math.min(420, s.thumbWidth + (s.view === "outline" ? d / 1.5 : d))) }))} />
         <div className="app-center" style={{ position: "relative" }} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
           <Canvas
             state={state}
@@ -353,6 +375,11 @@ export function App() {
               <Splitter dir="h" onDrag={(d) => a.store.set((s) => ({ notesHeight: Math.max(30, Math.min(500, s.notesHeight - d)) }))} />
               <NotesPane state={state} actions={a} height={state.notesHeight} spellcheck={state.spellcheck} />
             </>
+          )}
+          {canvasHint && (
+            <div className="canvas-hint" role="status">
+              {canvasHint}
+            </div>
           )}
           {show?.preview && <SlideShow pres={state.pres} startIndex={show.start} mode="window" preview={show.preview} frame={show.frame} onExit={() => setShow(null)} />}
         </div>
@@ -400,14 +427,6 @@ export function App() {
           state.message ? (
             <MessageBar kind={state.message.kind} onClose={() => a.store.set({ message: null })}>
               {state.message.text}
-            </MessageBar>
-          ) : state.insert ? (
-            <MessageBar kind="info" onClose={() => a.store.set({ insert: null })}>
-              {state.insert.kind === "textbox" ? "Metin kutusu eklemek için slayta tıklayın ya da sürükleyin." : "Şekli çizmek için slaytta sürükleyin (Shift: oranı koru). Vazgeçmek için Esc."}
-            </MessageBar>
-          ) : state.cropId ? (
-            <MessageBar kind="info" onClose={() => a.store.set({ cropId: null })}>
-              Kırpmak için resmin kenar tutamaçlarını sürükleyin. Bitirmek için Esc ya da Kırp düğmesine yeniden tıklayın.
             </MessageBar>
           ) : undefined
         }
@@ -460,7 +479,7 @@ export function App() {
       >
         <div className="app-main" onDragOver={(e) => e.preventDefault()}>
           {main}
-          {state.view === "normal" && sidePane}
+          {editView && sidePane}
         </div>
       </AppShell>
       {show && !show.preview && (

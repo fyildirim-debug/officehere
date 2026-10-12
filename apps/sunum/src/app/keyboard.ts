@@ -103,6 +103,7 @@ export function useKeyboard(actions: Actions, h: KeyHandlers) {
       if (key === "Escape") {
         if (s.insert) return run(() => actions.store.set({ insert: null }));
         if (s.cropId) return run(() => actions.store.set({ cropId: null }));
+        if (s.ink) return run(() => actions.store.set({ ink: null }));
         if (s.painter) return run(() => actions.store.set({ painter: null }));
         if (hasSel) return run(() => actions.select([]));
         return;

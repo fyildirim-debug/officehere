@@ -11,6 +11,11 @@ import {
   Table32Regular,
   Textbox32Regular,
   TextEffects24Regular,
+  Image24Regular,
+  Shapes24Regular,
+  SlideAdd24Regular,
+  Table24Regular,
+  Textbox24Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack, TableGridPicker, useMenuClose } from "@officehere/ui";
 import { cssColor } from "../model/color";
@@ -59,10 +64,10 @@ export function InsertTab({ ctx }: { ctx: RibbonCtx }) {
   const { state, actions: a, cmd } = ctx;
   return (
     <>
-      <RibbonGroup label="Slaytlar">
+      <RibbonGroup label="Slaytlar" icon={<SlideAdd24Regular />}>
         <RibbonSplitButton size="large" icon={<SlideAdd32Regular />} label="Yeni Slayt" shortcut="Ctrl+M" onClick={() => a.newSlide()} menu={<LayoutGallery pres={state.pres} header="Tema" onPick={(id) => a.newSlide(id)} />} />
       </RibbonGroup>
-      <RibbonGroup label="Tablolar">
+      <RibbonGroup label="Tablolar" icon={<Table24Regular />}>
         <RibbonMenuButton
           size="large"
           icon={<Table32Regular />}
@@ -77,7 +82,7 @@ export function InsertTab({ ctx }: { ctx: RibbonCtx }) {
           )}
         />
       </RibbonGroup>
-      <RibbonGroup label="Görüntüler">
+      <RibbonGroup label="Görüntüler" icon={<Image24Regular />}>
         <RibbonMenuButton
           size="large"
           icon={<Image32Regular />}
@@ -90,11 +95,11 @@ export function InsertTab({ ctx }: { ctx: RibbonCtx }) {
           }
         />
       </RibbonGroup>
-      <RibbonGroup label="Çizimler">
+      <RibbonGroup label="Çizimler" icon={<Shapes24Regular />}>
         <RibbonMenuButton size="large" icon={<Shapes32Regular />} label="Şekiller" description="Hazır şekiller ekleyin: dikdörtgen, daire, ok, çizgi, belirtme çizgisi…" menu={<ShapeGalleryMenu onPick={cmd.pickShape} />} />
         <RibbonButton size="large" icon={<Icons24Regular />} label="Simgeler" description="Simge kitaplığından vektörel simge ekleyin." onClick={() => ctx.openDialog("icons")} />
       </RibbonGroup>
-      <RibbonGroup label="Metin">
+      <RibbonGroup label="Metin" icon={<Textbox24Regular />}>
         <RibbonMenuButton
           size="large"
           icon={<Textbox32Regular />}
@@ -108,13 +113,13 @@ export function InsertTab({ ctx }: { ctx: RibbonCtx }) {
           }
         />
         <RibbonButton size="large" icon={<DocumentHeaderFooter20Regular />} label="Üst Bilgi ve Alt Bilgi" description="Tarih/saat, slayt numarası ve alt bilgi metnini düzenleyin." onClick={() => ctx.openDialog("headerFooter")} />
-        <RibbonMenuButton size="large" icon={<TextEffects24Regular />} label="WordArt" description="Belgenize dekoratif metin ekleyin." menu={<WordArtGrid ctx={ctx} />} />
+        <RibbonMenuButton size="large" icon={<TextEffects24Regular />} label="Sanatsal Metin" description="Slaydınıza dekoratif metin ekleyin." menu={<WordArtGrid ctx={ctx} />} />
         <RibbonStack>
           <RibbonButton icon={<CalendarDate20Regular />} label="Tarih ve Saat" onClick={() => ctx.openDialog("dateTime")} />
           <RibbonButton icon={<NumberSymbol20Regular />} label="Slayt Numarası" onClick={cmd.insertSlideNumber} />
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Simgeler">
+      <RibbonGroup label="Simgeler" icon={<Symbols24Regular />}>
         <RibbonButton size="large" icon={<Symbols24Regular />} label="Simge" description="Klavyede bulunmayan karakterler ekleyin." onClick={() => ctx.openDialog("symbol")} />
       </RibbonGroup>
     </>

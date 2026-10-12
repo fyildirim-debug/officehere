@@ -25,10 +25,10 @@ import {
 } from "../model/ops";
 import { footerShapes, layoutByType, relayoutSlide, newSlide as makeSlide } from "../model/presentation";
 import { layoutOf } from "../model/textStyle";
-import type { Animation, Fill, Layout, Presentation, Shape, Slide, SpShape, TableShape, Transition } from "../model/types";
+import type { Animation, Fill, Layout, PathCmd, Presentation, Shape, Slide, SpShape, TableShape, Transition } from "../model/types";
 import { isLineGeom } from "../render/geometry";
 import type { TextEditorHandle } from "../editor/TextEditor";
-import type { AppState, EditTarget, Store } from "./store";
+import type { AppState, EditTarget, InkTool, Store } from "./store";
 
 export class Actions {
   textHandle: TextEditorHandle | null = null;
@@ -192,6 +192,21 @@ export class Actions {
     this.store.commit((p) => updateSlide(p, i, (sl) => ({ ...sl, notes: text })), { merge: `notes:${this.slide()?.id}` });
   }
 
+  /** Geçerli slayda boş bir açıklama ekler (seçimin sağ üstüne; üst üste binmez). */
+  addComment(author: string) {
+    const i = this.s.slideIdx;
+    const sl = this.slide();
+    if (!sl) return;
+    const box = this.selectionBox();
+    const x = box ? Math.min(this.pres.width - 24, box.x + box.w) : 20;
+    let y = box ? Math.max(0, box.y) : 20;
+    const list = sl.comments ?? [];
+    while (list.some((c) => Math.abs(c.x - x) < 6 && Math.abs(c.y - y) < 6)) y += 24;
+    const c = { id: uid("c"), author, text: "", x, y, date: Date.now() };
+    this.store.commit((p) => updateSlide(p, i, (s2) => ({ ...s2, comments: [...(s2.comments ?? []), c] })));
+    this.store.set({ pane: "comments" });
+  }
+
   /* ------------------------------ Seçim ------------------------------ */
 
   select(ids: string[]) {
@@ -326,6 +341,65 @@ export class Actions {
   updateSelectedDeep(fn: (s: Shape) => Shape, merge?: string) {
     const deep = (s: Shape): Shape => (s.kind === "group" ? { ...s, children: s.children.map(deep) } : fn(s));
     this.updateShapes(deep, this.s.sel, merge);
+  }
+
+  /* ------------------------------ Mürekkep (Çizim sekmesi) ------------------------------ */
+
+  /** Slayt koordinatlarındaki noktalardan mürekkep şekli oluşturur (seçimi değiştirmez). */
+  addInk(points: [number, number][], tool: InkTool) {
+    const i = this.s.slideIdx;
+    if (!this.slide() || !points.length) return;
+    const pad = 0.5;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const [x, y] of points) {
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x);
+      y1 = Math.max(y1, y);
+    }
+    x0 -= pad;
+    y0 -= pad;
+    const w = Math.max(1, x1 + pad - x0);
+    const h = Math.max(1, y1 + pad - y0);
+    const loc = points.map(([x, y]) => [x - x0, y - y0] as [number, number]);
+    // Noktalar arası orta noktalardan geçen ikinci derece eğrilerle yumuşatılır.
+    const cmds: PathCmd[] = [{ c: "M", pts: [loc[0][0], loc[0][1]] }];
+    if (loc.length === 1) cmds.push({ c: "L", pts: [loc[0][0] + 0.01, loc[0][1] + 0.01] });
+    else if (loc.length === 2) cmds.push({ c: "L", pts: [loc[1][0], loc[1][1]] });
+    else {
+      for (let k = 1; k < loc.length - 1; k++) {
+        const [cx, cy] = loc[k];
+        const [nx, ny] = loc[k + 1];
+        cmds.push({ c: "Q", pts: [cx, cy, (cx + nx) / 2, (cy + ny) / 2] });
+      }
+      const last = loc[loc.length - 1];
+      cmds.push({ c: "L", pts: [last[0], last[1]] });
+    }
+    const count = (this.slide()?.shapes.filter((x) => x.kind === "sp" && x.ink).length ?? 0) + 1;
+    const sh = makeSp("custom", x0, y0, w, h, {
+      name: `Mürekkep ${count}`,
+      fill: NO_FILL,
+      line: { fill: { type: "solid", color: { rgb: tool.color, alpha: tool.tool === "highlighter" ? 0.5 : tool.tool === "pencil" ? 0.85 : undefined } }, width: tool.width, dash: "solid", cap: "rnd" },
+      paths: [{ w, h, cmds, fill: false }],
+    }) as SpShape;
+    sh.ink = true;
+    this.store.commit((p) => updateSlideShapes(p, i, (list) => [...list, sh]));
+  }
+
+  /** Mürekkep şekillerini siler; aynı sürüklemedeki silmeler tek geri alma adımıdır. */
+  eraseInk(ids: string[], mergeKey?: string) {
+    const i = this.s.slideIdx;
+    const set = new Set(ids);
+    if (!set.size) return;
+    this.store.commit((p) => updateSlide(p, i, (sl) => pruneAnimations({ ...sl, shapes: sl.shapes.filter((x) => !set.has(x.id)) })), { merge: mergeKey, sel: this.s.sel.filter((x) => !set.has(x)) });
+  }
+
+  clearInk() {
+    const ids = (this.slide()?.shapes ?? []).filter((x) => x.kind === "sp" && x.ink).map((x) => x.id);
+    if (ids.length) this.eraseInk(ids);
   }
 
   deleteSelection() {

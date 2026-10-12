@@ -186,6 +186,51 @@ describe("PPTX gidiş-dönüş", () => {
     fs.writeFileSync(out, await writePptx(build()));
   });
 
+  it("mürekkep çizimi (serbest yol, yuvarlak uç, saydamlık) korunur", async () => {
+    const pres = build();
+    const ink = makeSp("custom", 100, 120, 200, 80, {
+      name: "Mürekkep 1",
+      fill: { type: "none" },
+      line: { fill: { type: "solid", color: { rgb: "#FFFF00", alpha: 0.5 } }, width: 12, dash: "solid", cap: "rnd" },
+      paths: [{ w: 200, h: 80, fill: false, cmds: [{ c: "M", pts: [0, 40] }, { c: "Q", pts: [50, 0, 100, 40] }, { c: "Q", pts: [150, 80, 200, 40] }] }],
+    }) as SpShape;
+    ink.ink = true;
+    pres.slides[0].shapes.push(ink);
+    const back = await readPptx(await writePptx(pres));
+    const r = back.slides[0].shapes.find((x) => x.name === "Mürekkep 1") as SpShape;
+    expect(r.ink).toBe(true);
+    expect(r.geom).toBe("custom");
+    expect(r.line.cap).toBe("rnd");
+    expect(r.line.width).toBeCloseTo(12, 1);
+    expect(r.line.fill.type === "solid" && r.line.fill.color.alpha).toBeCloseTo(0.5, 2);
+    expect(r.paths![0].cmds.map((c) => c.c)).toEqual(["M", "Q", "Q"]);
+    expect(r.paths![0].fill).toBe(false);
+  });
+
+  it("açıklamalar (yazar, metin, konum) korunur", async () => {
+    const pres = build();
+    pres.slides[1].comments = [
+      { id: "c1", author: "Ayşe Yılmaz", text: "Bu başlığı kısaltalım & <netleştirelim>", x: 640, y: 120, date: Date.parse("2026-10-01T09:30:00Z") },
+      { id: "c2", author: "Mehmet Öz", text: "Katılıyorum.", x: 20, y: 20, date: Date.parse("2026-10-01T10:00:00Z") },
+    ];
+    pres.slides[2].comments = [{ id: "c3", author: "Ayşe Yılmaz", text: "Tablo güncel mi?", x: 300, y: 400, date: Date.parse("2026-10-02T08:00:00Z") }];
+    const bytes = await writePptx(pres);
+    const zip = await JSZip.loadAsync(bytes);
+    expect(Object.keys(zip.files)).toContain("ppt/commentAuthors.xml");
+    expect(Object.keys(zip.files)).toContain("ppt/comments/comment2.xml");
+    const authors = await zip.file("ppt/commentAuthors.xml")!.async("string");
+    expect(authors).toContain('name="Ayşe Yılmaz"');
+    expect(authors).toContain('lastIdx="2"');
+    const back = await readPptx(bytes);
+    expect(back.slides[0].comments).toBeUndefined();
+    const c = back.slides[1].comments!;
+    expect(c).toHaveLength(2);
+    expect(c[0]).toMatchObject({ author: "Ayşe Yılmaz", text: "Bu başlığı kısaltalım & <netleştirelim>", x: 640, y: 120 });
+    expect(c[0].date).toBe(Date.parse("2026-10-01T09:30:00Z"));
+    expect(c[1].author).toBe("Mehmet Öz");
+    expect(back.slides[2].comments![0].text).toBe("Tablo güncel mi?");
+  });
+
   it("4:3 slayt boyutu korunur", async () => {
     const pres = newPresentation("varsayilan", 0, { width: 960, height: 720 });
     const back = await readPptx(await writePptx(pres));

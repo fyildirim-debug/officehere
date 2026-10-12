@@ -1,5 +1,7 @@
 /** Geçişler sekmesi: Önizleme, Bu Slayda Geçiş, Zamanlama. */
-import { Play24Regular, SlideTransition24Regular, ArrowRepeatAll20Regular } from "@fluentui/react-icons";
+import { Play24Regular, SlideTransition24Regular, ArrowRepeatAll20Regular,
+  Timer24Regular,
+} from "@fluentui/react-icons";
 import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonRow, RibbonSpinner, RibbonStack } from "@officehere/ui";
 import type { TransitionType } from "../model/types";
 import { TRANSITIONS, transitionDef } from "../show/catalog";
@@ -122,10 +124,10 @@ export function TransitionsTab({ ctx }: { ctx: RibbonCtx }) {
   const disabled = !slide;
   return (
     <>
-      <RibbonGroup label="Önizleme">
+      <RibbonGroup label="Önizleme" icon={<Play24Regular />}>
         <RibbonButton size="large" icon={<Play24Regular />} label="Önizleme" disabled={disabled || type === "none"} description="Bu slaydın geçişini oynatın." onClick={cmd.previewTransition} />
       </RibbonGroup>
-      <RibbonGroup label="Bu Slayda Geçiş">
+      <RibbonGroup label="Bu Slayda Geçiş" icon={<SlideTransition24Regular />}>
         <RibbonGallery
           columns={8}
           itemWidth={64}
@@ -161,7 +163,7 @@ export function TransitionsTab({ ctx }: { ctx: RibbonCtx }) {
           }
         />
       </RibbonGroup>
-      <RibbonGroup label="Zamanlama">
+      <RibbonGroup label="Zamanlama" icon={<Timer24Regular />}>
         <RibbonStack>
           <RibbonSpinner label="Süre:" value={t?.duration ?? 1} min={0.01} max={59} step={0.25} decimals={2} width={70} tip="Süre (saniye)" onChange={(v) => a.setTransition({ duration: v })} />
           <RibbonButton icon={<ArrowRepeatAll20Regular />} label="Tümüne Uygula" disabled={disabled} onClick={() => a.applyTransitionToAll()} />

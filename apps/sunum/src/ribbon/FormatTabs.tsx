@@ -19,6 +19,12 @@ import {
   Textbox24Regular,
   ImageBorder20Regular,
   DarkTheme24Regular,
+  Image24Regular,
+  ImageEdit24Regular,
+  PaintBucket24Regular,
+  ResizeLarge24Regular,
+  Shapes24Regular,
+  TextEffects24Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonSplitButton, RibbonStack, useMenuClose } from "@officehere/ui";
 import { cssColor } from "../model/color";
@@ -34,7 +40,7 @@ function ArrangeGroup({ ctx }: { ctx: RibbonCtx }) {
   const { actions: a, cmd } = ctx;
   const shapes = a.selectedShapes();
   return (
-    <RibbonGroup label="Yerleştir">
+    <RibbonGroup label="Yerleştir" icon={<Shapes24Regular />}>
       <RibbonSplitButton
         size="large"
         icon={<PositionForward24Regular />}
@@ -100,7 +106,7 @@ function SizeGroup({ ctx, lock }: { ctx: RibbonCtx; lock?: boolean }) {
   const { actions: a } = ctx;
   const s: Shape | undefined = a.selectedShapes()[0];
   return (
-    <RibbonGroup label="Boyut" onLauncher={() => ctx.openDialog("sizePos")} launcherTip="Boyut ve Konum">
+    <RibbonGroup label="Boyut" icon={<ResizeLarge24Regular />} onLauncher={() => ctx.openDialog("sizePos")} launcherTip="Boyut ve Konum">
       <RibbonStack>
         <RibbonSpinner label="Yükseklik:" value={s ? cm(s.h) : 0} min={0} max={142} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => a.setSize(undefined, fromCm(v), lock)} />
         <RibbonSpinner label="Genişlik:" value={s ? cm(s.w) : 0} min={0} max={142} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => a.setSize(fromCm(v), undefined, lock)} />
@@ -142,7 +148,7 @@ export function ShapeFormatTab({ ctx }: { ctx: RibbonCtx }) {
   const sp = a.selectedShapes().find((s) => s.kind === "sp");
   return (
     <>
-      <RibbonGroup label="Şekil Ekle">
+      <RibbonGroup label="Şekil Ekle" icon={<Shapes24Regular />}>
         <InlineShapeGallery onPick={cmd.pickShape} />
         <RibbonStack>
           <RibbonMenuButton
@@ -168,7 +174,7 @@ export function ShapeFormatTab({ ctx }: { ctx: RibbonCtx }) {
           <RibbonButton icon={<Textbox24Regular />} label="Metin Kutusu" onClick={() => a.store.set({ insert: { kind: "textbox" } })} />
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Şekil Stilleri" onLauncher={() => cmd.togglePane("shape")} launcherTip="Şekli Biçimlendir">
+      <RibbonGroup label="Şekil Stilleri" icon={<PaintBucket24Regular />} onLauncher={() => cmd.togglePane("shape")} launcherTip="Şekli Biçimlendir">
         <RibbonGallery
           columns={6}
           itemWidth={56}
@@ -186,7 +192,7 @@ export function ShapeFormatTab({ ctx }: { ctx: RibbonCtx }) {
           <ShapeEffectsMenu a={a} theme={theme} label="Şekil Efektleri" size="medium" />
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="WordArt Stilleri" onLauncher={() => cmd.togglePane("shape")} launcherTip="Metin Efektlerini Biçimlendir">
+      <RibbonGroup label="Sanatsal Metin Stilleri" icon={<TextEffects24Regular />} onLauncher={() => cmd.togglePane("shape")} launcherTip="Metin Efektlerini Biçimlendir">
         <WordArtGallery ctx={ctx} />
         <RibbonStack>
           <ThemeColorSplit icon={<TextColor20Regular />} tip="Metin Dolgusu" label="Metin Dolgusu" size="medium" theme={theme} color={textFill} onColorChange={setTextFill} onApply={(c) => applyRun(a, (p) => ({ ...p, color: c ?? undefined }))} />
@@ -280,7 +286,7 @@ export function PictureFormatTab({ ctx }: { ctx: RibbonCtx }) {
   const cropping = state.cropId === pic?.id && !!pic;
   return (
     <>
-      <RibbonGroup label="Ayarla">
+      <RibbonGroup label="Ayarla" icon={<ImageEdit24Regular />}>
         <RibbonMenuButton size="large" icon={<BrightnessHigh24Regular />} label="Düzeltmeler" disabled={!pic} menu={<AdjustGrid ctx={ctx} />} />
         <RibbonMenuButton
           size="large"
@@ -332,7 +338,7 @@ export function PictureFormatTab({ ctx }: { ctx: RibbonCtx }) {
           <RibbonButton icon={<ImageArrowCounterclockwise20Regular />} label="Resmi Sıfırla" disabled={!pic} onClick={() => a.updateShapes((s) => (s.kind === "pic" ? { ...s, adjust: undefined, crop: undefined, effects: undefined, geom: undefined, line: { fill: { type: "none" }, width: 1, dash: "solid" } } : s))} />
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Resim Stilleri" onLauncher={() => cmd.togglePane("shape")} launcherTip="Resmi Biçimlendir">
+      <RibbonGroup label="Resim Stilleri" icon={<Image24Regular />} onLauncher={() => cmd.togglePane("shape")} launcherTip="Resmi Biçimlendir">
         <RibbonGallery
           columns={5}
           itemWidth={50}
@@ -347,7 +353,7 @@ export function PictureFormatTab({ ctx }: { ctx: RibbonCtx }) {
         </RibbonStack>
       </RibbonGroup>
       <ArrangeGroup ctx={ctx} />
-      <RibbonGroup label="Boyut" onLauncher={() => ctx.openDialog("sizePos")} launcherTip="Boyut ve Konum">
+      <RibbonGroup label="Boyut" icon={<ResizeLarge24Regular />} onLauncher={() => ctx.openDialog("sizePos")} launcherTip="Boyut ve Konum">
         <RibbonButton size="large" icon={<Crop24Regular />} label="Kırp" checked={cropping} disabled={!pic} description="Resmin istenmeyen kısımlarını kırpın: kenar tutamaçlarını içeri sürükleyin." onClick={() => a.store.set({ cropId: cropping ? null : (pic?.id ?? null) })} />
         <RibbonStack>
           <RibbonSpinner label="Yükseklik:" value={pic ? cm(pic.h) : 0} min={0} max={142} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => a.setSize(undefined, fromCm(v), true)} />

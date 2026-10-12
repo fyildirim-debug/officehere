@@ -193,5 +193,21 @@ export function resizePresentation(pres: Presentation, width: number, height: nu
     master = { ...pres.master, shapes: pres.master.shapes.map(tf) };
     layouts = pres.layouts.map((l) => ({ ...l, shapes: l.shapes.map(tf) }));
   }
-  return { ...pres, width, height, master, layouts, slides: pres.slides.map((sl) => ({ ...sl, shapes: sl.shapes.map(tf) })) };
+  // Düzenden konum alan (özelleştirilmemiş) yer tutucular yeni düzenin konumuna geçer; diğerleri ölçeklenir.
+  const slides = pres.slides.map((sl) => {
+    const oldL = def ? pres.layouts.find((l) => l.id === sl.layoutId) : undefined;
+    const newL = oldL ? layouts.find((l) => l.id === sl.layoutId) : undefined;
+    return {
+      ...sl,
+      shapes: sl.shapes.map((sh) => {
+        if (oldL && newL && sh.kind === "sp" && sh.ph) {
+          const o = findPlaceholder(oldL.shapes, sh.ph);
+          const n = findPlaceholder(newL.shapes, sh.ph);
+          if (o && n && (FOOTER_TYPES.has(sh.ph.type) || sameGeom(o, sh))) return { ...sh, x: n.x, y: n.y, w: n.w, h: n.h };
+        }
+        return tf(sh);
+      }),
+    };
+  });
+  return { ...pres, width, height, master, layouts, slides };
 }

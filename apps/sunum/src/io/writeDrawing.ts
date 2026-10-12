@@ -93,7 +93,7 @@ export function lineXml(l: Line | undefined, ctx: WriteCtx): string {
   const dash = l.dash && l.dash !== "solid" ? `<a:prstDash val="${l.dash}"/>` : "";
   const head = l.head && l.head !== "none" ? `<a:headEnd type="${l.head}"/>` : "";
   const tail = l.tail && l.tail !== "none" ? `<a:tailEnd type="${l.tail}"/>` : "";
-  return `<a:ln w="${Math.round(l.width * 12700)}"><a:solidFill>${colorXml(l.fill.color, ctx)}</a:solidFill>${dash}<a:round/>${head}${tail}</a:ln>`;
+  return `<a:ln w="${Math.round(l.width * 12700)}"${l.cap ? ` cap="${l.cap}"` : ""}><a:solidFill>${colorXml(l.fill.color, ctx)}</a:solidFill>${dash}<a:round/>${head}${tail}</a:ln>`;
 }
 
 export function effectsXml(fx: Effects | undefined, ctx: WriteCtx): string {

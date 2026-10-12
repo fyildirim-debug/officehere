@@ -30,6 +30,22 @@ describe("LibreOffice PPTX içe aktarma", () => {
     expect(p.theme.colors.accent1).toMatch(/^#[0-9A-F]{6}$/);
     // Her slaydın geçerli bir düzeni vardır.
     for (const s of p.slides) expect(p.layouts.some((l) => l.id === s.layoutId)).toBe(true);
+    // Birden çok asıl slayt: içerik slaytları kendi asıl slaytlarının görünümünü (beyaz zemin + dalgalar) alır.
+    const lay = (i: number) => p.layouts.find((l) => l.id === p.slides[i].layoutId)!;
+    expect(lay(1).id).not.toBe(lay(0).id);
+    expect(lay(1).name).toBe("Başlık ve İçerik");
+    expect(lay(1).background).toMatchObject({ type: "solid", color: { scheme: "lt1" } });
+    expect(lay(1).shapes.filter((x) => !(x.kind === "sp" && x.ph)).length).toBeGreaterThan(0);
+  });
+
+  it("açıklamalar: yazar ve metinler okunur", async () => {
+    const p = await load("lo-yorum.pptx");
+    expect(p.slides.length).toBe(1);
+    const c = p.slides[0].comments ?? [];
+    expect(c.map((x) => x.text)).toEqual(["İlk açıklama: başlık rengi koyulaşsın.", "İkinci açıklama"]);
+    expect(c[0].author).toBe("Kullanıcı");
+    expect(Number.isFinite(c[0].date)).toBe(true);
+    expect(allText(p)).toContain("Açıklamalı Sunu");
   });
 
   it("ürün sunusu: şekiller ve yeniden yazma", async () => {

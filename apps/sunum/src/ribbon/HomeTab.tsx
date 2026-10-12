@@ -39,6 +39,12 @@ import {
   TextT20Regular,
   ClipboardPaste20Regular,
   Copy24Regular,
+  ClipboardPaste24Regular,
+  Search24Regular,
+  Shapes24Regular,
+  SlideAdd24Regular,
+  TextFont24Regular,
+  TextParagraph24Regular,
 } from "@fluentui/react-icons";
 import { FONT_LIST, FONT_SIZES, fontStack } from "@officehere/core";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonCombo, RibbonGroup, RibbonMenuButton, RibbonRow, RibbonSplitButton, RibbonStack, useMenuClose } from "@officehere/ui";
@@ -108,7 +114,7 @@ export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
 
   return (
     <>
-      <RibbonGroup label="Pano" onLauncher={() => cmd.paste()} launcherTip="Pano">
+      <RibbonGroup label="Pano" icon={<ClipboardPaste24Regular />} onLauncher={() => cmd.paste()} launcherTip="Pano">
         <RibbonSplitButton
           size="large"
           icon={<ClipboardPaste32Regular />}
@@ -152,7 +158,7 @@ export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
         </RibbonStack>
       </RibbonGroup>
 
-      <RibbonGroup label="Slaytlar">
+      <RibbonGroup label="Slaytlar" icon={<SlideAdd24Regular />}>
         <RibbonSplitButton
           size="large"
           icon={<SlideAdd32Regular />}
@@ -175,7 +181,7 @@ export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
         </RibbonStack>
       </RibbonGroup>
 
-      <RibbonGroup label="Yazı Tipi" onLauncher={() => ctx.openDialog("font")} launcherTip="Yazı Tipi">
+      <RibbonGroup label="Yazı Tipi" icon={<TextFont24Regular />} onLauncher={() => ctx.openDialog("font")} launcherTip="Yazı Tipi">
         <RibbonStack>
           <RibbonRow>
             <RibbonCombo
@@ -253,7 +259,7 @@ export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
         </RibbonStack>
       </RibbonGroup>
 
-      <RibbonGroup label="Paragraf" onLauncher={() => ctx.openDialog("paragraph")} launcherTip="Paragraf">
+      <RibbonGroup label="Paragraf" icon={<TextParagraph24Regular />} onLauncher={() => ctx.openDialog("paragraph")} launcherTip="Paragraf">
         <RibbonStack>
           <RibbonRow>
             <RibbonSplitButton
@@ -327,7 +333,7 @@ export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
         </RibbonStack>
       </RibbonGroup>
 
-      <RibbonGroup label="Çizim" onLauncher={() => cmd.togglePane("shape")} launcherTip="Şekli Biçimlendir">
+      <RibbonGroup label="Çizim" icon={<Shapes24Regular />} onLauncher={() => cmd.togglePane("shape")} launcherTip="Şekli Biçimlendir">
         <InlineShapeGallery onPick={cmd.pickShape} />
         <RibbonMenuButton size="large" icon={<Shapes32Regular />} label="Yerleştir" tip="Yerleştir" description="Nesneleri sıralayın, gruplayın, hizalayın ve döndürün." menu={(close) => <ArrangeMenu a={a} onSelectionPane={() => (close(), cmd.togglePane("selection"))} onMoreRotate={() => (close(), ctx.openDialog("sizePos"))} />} />
         <QuickStylesMenu a={a} theme={theme} />
@@ -338,7 +344,7 @@ export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
         </RibbonStack>
       </RibbonGroup>
 
-      <RibbonGroup label="Düzenleme">
+      <RibbonGroup label="Düzenleme" icon={<Search24Regular />}>
         <RibbonStack>
           <RibbonButton icon={<Search20Regular />} label="Bul" shortcut="Ctrl+F" onClick={() => ctx.openDialog("find")} />
           <RibbonSplitButton

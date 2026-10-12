@@ -3,22 +3,24 @@
  * sürükle-taşı/boyutlandır/döndür, kement seçimi, akıllı kılavuzlar,
  * şekil çizme ve metin düzenleyicinin yerleştirilmesi.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { aabb, findShape, unionBox, type Box } from "../model/ops";
-import { effectiveBodyProps, layoutOf, type TextContext } from "../model/textStyle";
-import type { GroupShape, Shape, Slide, SpShape, TableShape, TextBody } from "../model/types";
+import { layoutOf, type TextContext } from "../model/textStyle";
+import type { Shape, SpShape } from "../model/types";
 import { isLineGeom } from "../render/geometry";
 import { SlideView, type GeomOverride } from "../render/SlideView";
-import type { TextRenderCtx } from "../render/textHtml";
 import type { Actions } from "../state/actions";
 import type { AppState } from "../state/store";
 import { applyFormatPainter } from "../state/painter";
 import { ADJUST_HANDLES, effectiveAdj } from "./adjust";
-import { angleFromCenter, constrainLine, geomFromEnds, geomOf, HANDLES, lineEnds, normAngle, resizeGeom, rotateVec, type Geom } from "./interact";
+import { angleFromCenter, constrainLine, geomFromEnds, geomOf, HANDLES, lineEnds, normAngle, resizeGeom, rotateVec } from "./interact";
 import { Rulers } from "./Rulers";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { snapMove, snapValue, type GuideLine } from "./snap";
-import { TextEditor } from "./TextEditor";
+import { animationLabels, cellSelRects, childOfGroupContaining, cropGhostOf, GridOverlay, InkPreview, inkIdsAt, MARGIN, topLevelOf, type Drag, type Pt } from "./canvasUtils";
+import { useAutofit } from "./useAutofit";
+import { useViewportZoom } from "./useViewportZoom";
+import { useEditorRenderer } from "./useEditorRenderer";
 
 export interface CanvasProps {
   state: AppState;
@@ -30,46 +32,6 @@ export interface CanvasProps {
   guides: { h: number[]; v: number[] };
   onGuidesChange: (g: { h: number[]; v: number[] }) => void;
   onZoomChange: (zoom: number, fit: boolean) => void;
-}
-
-type Pt = [number, number];
-
-type Drag =
-  | { kind: "pending" | "move"; id: string; start: Pt; startClient: Pt; wasSelected: boolean; textHit: boolean; cell?: [number, number]; ids: string[]; geoms: Map<string, Geom>; ctrl: boolean; point: { x: number; y: number } }
-  | { kind: "resize"; hx: number; hy: number; start: Pt; geoms: Map<string, Geom>; kinds: Map<string, string>; crop?: { id: string; c: { l: number; t: number; r: number; b: number } } }
-  | { kind: "rotate"; start: Pt; startAngle: number; geoms: Map<string, Geom> }
-  | { kind: "end"; id: string; which: "start" | "end"; geom: Geom }
-  | { kind: "adj"; id: string; index: number; geom: Geom; adj: Record<string, number>; geomName: string }
-  | { kind: "lasso"; start: Pt; additive: boolean }
-  | { kind: "insert"; start: Pt }
-  | { kind: "cells"; id: string; start: [number, number] }
-  | { kind: "guide"; dir: "h" | "v"; index: number };
-
-const MARGIN = 40;
-const FONT_STEPS = [1, 0.925, 0.85, 0.775, 0.7, 0.625, 0.55, 0.475, 0.4, 0.325, 0.25];
-
-function topLevelOf(shapes: Shape[], id: string): Shape | undefined {
-  for (const s of shapes) {
-    if (s.id === id) return s;
-    if (s.kind === "group" && findShape(s.children, id)) return s;
-  }
-  return undefined;
-}
-
-function childOfGroupContaining(g: GroupShape, id: string): Shape | undefined {
-  return g.children.find((c) => c.id === id || (c.kind === "group" && findShape(c.children, id)));
-}
-
-export function animationLabels(slide: Slide): Map<string, string[]> {
-  const out = new Map<string, string[]>();
-  let click = 0;
-  for (const a of slide.animations) {
-    if (a.trigger === "click") click += 1;
-    const list = out.get(a.shapeId) ?? [];
-    list.push(String(click));
-    out.set(a.shapeId, list);
-  }
-  return out;
 }
 
 export function Canvas(props: CanvasProps) {
@@ -85,8 +47,8 @@ export function Canvas(props: CanvasProps) {
   const [guideLines, setGuideLines] = useState<GuideLine[]>([]);
   const [lasso, setLasso] = useState<Box | null>(null);
   const [preview, setPreview] = useState<(Box & { line?: boolean; flipH?: boolean; flipV?: boolean }) | null>(null);
+  const [inkPts, setInkPts] = useState<Pt[] | null>(null);
   const [rotInfo, setRotInfo] = useState<{ x: number; y: number; text: string } | null>(null);
-  const [viewport, setViewport] = useState({ w: 800, h: 500 });
   const [scrollPos, setScrollPos] = useState({ x: 0, y: 0 });
   const propsRef = useRef(props);
   propsRef.current = props;
@@ -94,44 +56,12 @@ export function Canvas(props: CanvasProps) {
   const z = state.zoom / 100;
   const rulerSize = state.showRuler ? 18 : 0;
 
-  // Pencere boyutu ve "Pencereye Sığdır".
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setViewport({ w: el.clientWidth, h: el.clientHeight }));
-    ro.observe(el);
-    setViewport({ w: el.clientWidth, h: el.clientHeight });
-    return () => ro.disconnect();
-  }, []);
-
-  const fitZoom = useMemo(() => {
-    const zz = Math.min((viewport.w - MARGIN * 2) / pres.width, (viewport.h - MARGIN * 2) / pres.height);
-    return Math.max(10, Math.min(400, Math.floor(zz * 100)));
-  }, [viewport, pres.width, pres.height]);
-
-  useEffect(() => {
-    if (state.fit && Math.abs(fitZoom - state.zoom) > 0.5) propsRef.current.onZoomChange(fitZoom, true);
-  }, [state.fit, fitZoom, state.zoom]);
+  const viewport = useViewportZoom(scrollRef, pres.width, pres.height, () => propsRef.current);
 
   const contentW = Math.max(viewport.w, pres.width * z + MARGIN * 2);
   const contentH = Math.max(viewport.h, pres.height * z + MARGIN * 2);
   const stageLeft = (contentW - pres.width * z) / 2;
   const stageTop = (contentH - pres.height * z) / 2;
-
-  // Ctrl + tekerlek yakınlaştırma.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      e.preventDefault();
-      const cur = propsRef.current.state.zoom;
-      const next = Math.max(10, Math.min(400, Math.round(cur * (e.deltaY < 0 ? 1.1 : 1 / 1.1))));
-      propsRef.current.onZoomChange(next, false);
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
 
   const toSlide = useCallback((cx: number, cy: number): Pt => {
     const r = stageRef.current!.getBoundingClientRect();
@@ -141,154 +71,11 @@ export function Canvas(props: CanvasProps) {
 
   const tctx: TextContext = useMemo(() => ({ master: pres.master, layout: layoutOf(pres, slide) }), [pres, slide]);
 
-  /* ------------------------- Ölçüm: otomatik sığdırma ------------------------- */
-  useLayoutEffect(() => {
-    if (overrides || !slide) return;
-    const root = slideRef.current;
-    if (!root) return;
-    const updates = new Map<string, (s: Shape) => Shape>();
-    for (const s of slide.shapes) {
-      if (s.kind === "sp" && s.text) {
-        const bp = effectiveBodyProps(s, tctx);
-        if (bp.autofit === "none") continue;
-        const tb = root.querySelector(`[data-shape-id="${s.id}"] > .tb`) as HTMLElement | null;
-        const inner = tb?.firstElementChild as HTMLElement | null;
-        if (!tb || !inner) continue;
-        const contentH = inner.scrollHeight;
-        if (bp.autofit === "shape" && !isLineGeom(s.geom)) {
-          let needW = s.w;
-          if (!bp.wrap && !s.rot) {
-            const prevW = inner.style.width;
-            inner.style.width = "max-content";
-            needW = Math.ceil(inner.offsetWidth) + bp.insets.l + bp.insets.r + 2;
-            inner.style.width = prevW;
-          }
-          const needH = Math.ceil(contentH + bp.insets.t + bp.insets.b);
-          if (Math.abs(needH - s.h) > 1 || Math.abs(needW - s.w) > 1) {
-            updates.set(s.id, (sh) => ({ ...sh, h: needH, w: needW }));
-          }
-        } else if (bp.autofit === "shrink") {
-          const boxH = tb.clientHeight;
-          const scale = s.text.fontScale ?? 1;
-          let next = scale;
-          if (contentH > boxH + 1) {
-            const target = (scale * boxH) / contentH;
-            next = FONT_STEPS.find((f) => f <= target + 1e-6 && f < scale) ?? FONT_STEPS[FONT_STEPS.length - 1];
-            if (next >= scale) next = FONT_STEPS.find((f) => f < scale) ?? scale;
-          } else if (scale < 1) {
-            const bigger = [...FONT_STEPS].reverse().find((f) => f > scale + 1e-6);
-            if (bigger && (contentH * bigger) / scale <= boxH - 2) next = bigger;
-          }
-          if (next !== scale) {
-            const red = next < 1 ? (next <= 0.7 ? 0.2 : 0.1) : 0;
-            updates.set(s.id, (sh) => (sh.kind === "sp" && sh.text ? { ...sh, text: { ...sh.text, fontScale: next < 1 ? next : undefined, lnSpcReduction: red || undefined } } : sh));
-          }
-        }
-      } else if (s.kind === "table") {
-        const tbl = root.querySelector(`[data-shape-id="${s.id}"] table`) as HTMLTableElement | null;
-        if (!tbl) continue;
-        const rows = Array.from(tbl.rows);
-        const hs = rows.map((r) => r.offsetHeight);
-        const changed = hs.length === s.rows.length && hs.some((h, i) => Math.abs(h - s.rows[i].h) > 1);
-        if (changed) {
-          updates.set(s.id, (sh) => {
-            if (sh.kind !== "table") return sh;
-            const nrows = sh.rows.map((r, i) => ({ ...r, h: Math.max(r.h, hs[i]) }));
-            return { ...sh, rows: nrows, h: nrows.reduce((t, r) => t + r.h, 0) };
-          });
-        } else {
-          const total = tbl.offsetHeight;
-          if (Math.abs(total - s.h) > 1) updates.set(s.id, (sh) => ({ ...sh, h: total }));
-        }
-      }
-    }
-    if (updates.size) {
-      const i = state.slideIdx;
-      actions.store.commit(
-        (p) => {
-          const sl = p.slides[i];
-          if (!sl) return p;
-          const slides = p.slides.slice();
-          slides[i] = { ...sl, shapes: sl.shapes.map((sh) => (updates.has(sh.id) ? updates.get(sh.id)!(sh) : sh)) };
-          return { ...p, slides };
-        },
-        { silent: true },
-      );
-    }
-  });
+  useAutofit({ slide, slideIdx: state.slideIdx, measuring: !overrides, tctx, slideRef, actions });
 
   /* ------------------------- Metin düzenleyici ------------------------- */
   const editing = state.editing;
-  const renderEditor = useCallback(
-    (shape: SpShape | TableShape, trc: TextRenderCtx, cell?: [number, number]) => {
-      const st = propsRef.current.state;
-      const ed = st.editing;
-      const body: TextBody | undefined = shape.kind === "sp" ? shape.text : cell ? shape.rows[cell[0]]?.cells[cell[1]]?.text : undefined;
-      if (!body || !ed) return null;
-      const key = `${shape.id}:${cell?.join(",") ?? ""}`;
-      return (
-        <TextEditor
-          key={key}
-          body={body}
-          ctx={trc}
-          initial={{ selectAll: ed.selectAll, replaceWith: ed.replaceWith, point: ed.point, range: ed.range }}
-          spellcheck={st.spellcheck}
-          onChange={(nb, merge) => {
-            const i = actions.s.slideIdx;
-            actions.store.commit(
-              (p) => {
-                const sl = p.slides[i];
-                const update = (s: Shape): Shape => {
-                  if (s.id === shape.id) {
-                    if (s.kind === "sp") return { ...s, text: nb };
-                    if (s.kind === "table" && cell)
-                      return { ...s, rows: s.rows.map((r, ri) => (ri !== cell[0] ? r : { ...r, cells: r.cells.map((c, ci) => (ci === cell[1] ? { ...c, text: nb } : c)) })) };
-                  }
-                  if (s.kind === "group") return { ...s, children: s.children.map(update) };
-                  return s;
-                };
-                const slides = p.slides.slice();
-                slides[i] = { ...sl, shapes: sl.shapes.map(update) };
-                return { ...p, slides };
-              },
-              { merge: merge ? `${merge}:${key}` : undefined },
-            );
-            if (ed.replaceWith !== undefined || ed.selectAll || ed.point || ed.range) actions.store.set({ editing: { shapeId: ed.shapeId, cell: ed.cell } });
-          }}
-          onExit={() => actions.stopEditing()}
-          register={(h) => {
-            actions.textHandle = h;
-          }}
-          onSelectionChange={() => actions.store.set((s) => ({ textTick: s.textTick + 1 }))}
-          onTab={
-            cell && shape.kind === "table"
-              ? (shift) => {
-                  const nCols = shape.cols.length;
-                  const nRows = shape.rows.length;
-                  let idx = cell[0] * nCols + cell[1] + (shift ? -1 : 1);
-                  if (idx < 0) idx = 0;
-                  if (idx >= nRows * nCols) {
-                    // Son hücrede Tab: yeni satır ekle.
-                    actions.updateShapes((s) =>
-                      s.kind === "table" ? { ...s, rows: [...s.rows, { h: s.rows[s.rows.length - 1].h, cells: s.cols.map(() => ({ text: { paragraphs: [{ runs: [], level: 0, props: {} }] } })) }], h: s.h + s.rows[s.rows.length - 1].h } : s,
-                    [shape.id]);
-                  }
-                  actions.store.set({ editing: { shapeId: shape.id, cell: [Math.floor(idx / nCols), idx % nCols], selectAll: true } });
-                  return true;
-                }
-              : undefined
-          }
-          onUndo={() => actions.store.undo()}
-          onRedo={() => actions.store.redo()}
-          onCopyRich={(paras) => {
-            actions.store.clipboard = { kind: "text", paragraphs: paras };
-          }}
-          getRichClipboard={() => actions.store.clipboard?.paragraphs ?? null}
-        />
-      );
-    },
-    [actions],
-  );
+  const renderEditor = useEditorRenderer(actions, () => propsRef.current.state);
 
   /* ------------------------- İşaretçi olayları ------------------------- */
 
@@ -297,6 +84,11 @@ export function Canvas(props: CanvasProps) {
     const sl = st.pres.slides[st.slideIdx];
     if (!sl) return [];
     return st.sel.map((id) => findShape(sl.shapes, id)).filter((x): x is Shape => !!x);
+  };
+
+  const eraseAt = (cx: number, cy: number, key: string) => {
+    const ids = slide ? inkIdsAt(slide, cx, cy) : [];
+    if (ids.length) actions.eraseInk(ids, key);
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -320,6 +112,18 @@ export function Canvas(props: CanvasProps) {
     if (document.activeElement instanceof HTMLElement && document.activeElement !== scrollRef.current) document.activeElement.blur();
     scrollRef.current?.focus({ preventScroll: true });
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+    if (st.ink) {
+      if (st.ink.tool === "eraser") {
+        const key = `erase:${Date.now()}`;
+        drag.current = { kind: "erase", key };
+        eraseAt(e.clientX, e.clientY, key);
+      } else {
+        drag.current = { kind: "ink", pts: [pt] };
+        setInkPts([pt]);
+      }
+      return;
+    }
 
     if (st.insert) {
       drag.current = { kind: "insert", start: pt };
@@ -379,6 +183,16 @@ export function Canvas(props: CanvasProps) {
         if (st.editing) actions.stopEditing();
       }
       return;
+    }
+
+    // Kırpma modunda resmin içinde sürükleme: resmi kırpma çerçevesi içinde kaydırır.
+    if (st.cropId && (target.closest(".crop-ghost") || (target.closest("[data-shape-id]") as HTMLElement | null)?.dataset.shapeId === st.cropId)) {
+      const pic = findShape(slide.shapes, st.cropId);
+      if (pic && pic.kind === "pic") {
+        e.preventDefault();
+        drag.current = { kind: "cropPan", id: pic.id, start: pt, geom: geomOf(pic), c: pic.crop ?? { l: 0, t: 0, r: 0, b: 0 } };
+        return;
+      }
     }
 
     const phAct = target.closest("[data-ph-action]") as HTMLElement | null;
@@ -448,6 +262,31 @@ export function Canvas(props: CanvasProps) {
     const st = propsRef.current.state;
     const thr = 6 / (st.zoom / 100);
     switch (d.kind) {
+      case "ink": {
+        const last = d.pts[d.pts.length - 1];
+        if (Math.hypot(pt[0] - last[0], pt[1] - last[1]) * (st.zoom / 100) >= 1.5) {
+          d.pts.push(pt);
+          setInkPts(d.pts.slice());
+        }
+        break;
+      }
+      case "erase":
+        eraseAt(e.clientX, e.clientY, d.key);
+        break;
+      case "cropPan": {
+        const g = d.geom;
+        const c = d.c;
+        const fw = g.w / Math.max(0.01, 1 - c.l - c.r);
+        const fh = g.h / Math.max(0.01, 1 - c.t - c.b);
+        // Resmin sol/üst kenarı: çerçeveyi her zaman örtecek biçimde sınırlanır.
+        const left = Math.min(g.x, Math.max(g.x + g.w - fw, g.x - c.l * fw + (pt[0] - d.start[0])));
+        const top = Math.min(g.y, Math.max(g.y + g.h - fh, g.y - c.t * fh + (pt[1] - d.start[1])));
+        const l = (g.x - left) / fw;
+        const t = (g.y - top) / fh;
+        const nc = { l, t, r: Math.max(0, 1 - l - g.w / fw), b: Math.max(0, 1 - t - g.h / fh) };
+        setOverrides(new Map([[d.id, { x: g.x, y: g.y, w: g.w, h: g.h, rot: g.rot, flipH: g.flipH, flipV: g.flipV, crop: nc }]]));
+        break;
+      }
       case "pending":
       case "move": {
         if (d.kind === "pending") {
@@ -645,6 +484,18 @@ export function Canvas(props: CanvasProps) {
     const ov = overrides;
     setOverrides(undefined);
     switch (d.kind) {
+      case "ink":
+        setInkPts(null);
+        if (st.ink && st.ink.tool !== "eraser") actions.addInk(d.pts, st.ink);
+        return;
+      case "erase":
+        actions.store.breakMerge();
+        return;
+      case "cropPan": {
+        const nc = ov?.get(d.id)?.crop;
+        if (nc) actions.updateShapes((sh) => (sh.kind === "pic" ? { ...sh, crop: nc.l || nc.t || nc.r || nc.b ? nc : undefined } : sh), [d.id]);
+        return;
+      }
       case "pending": {
         if (st.painter) {
           applyFormatPainter(actions, d.id);
@@ -782,37 +633,14 @@ export function Canvas(props: CanvasProps) {
     return out;
   }, [props.showAnimBadges, slide]);
 
-  const cellRects = useMemo(() => {
-    const cs = state.cellSel;
-    if (!cs || !slide || selShapes.length !== 1 || selShapes[0].kind !== "table") return null;
-    const t = selShapes[0] as TableShape;
-    const r1 = Math.min(cs.r1, cs.r2);
-    const r2 = Math.max(cs.r1, cs.r2);
-    const c1 = Math.min(cs.c1, cs.c2);
-    const c2 = Math.max(cs.c1, cs.c2);
-    let y = t.y;
-    for (let r = 0; r < r1; r++) y += t.rows[r].h;
-    let x = t.x;
-    for (let c = 0; c < c1; c++) x += t.cols[c];
-    let h = 0;
-    for (let r = r1; r <= r2; r++) h += t.rows[r]?.h ?? 0;
-    let w = 0;
-    for (let c = c1; c <= c2; c++) w += t.cols[c] ?? 0;
-    return { shape: t, rects: [{ x, y, w, h }] };
+  const cellRects = useMemo(
+    () => (state.cellSel && selShapes.length === 1 && selShapes[0].kind === "table" ? cellSelRects(selShapes[0], state.cellSel) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.cellSel, slide, state.sel]);
+    [state.cellSel, slide, state.sel],
+  );
 
-  const cursor = state.insert ? "crosshair" : state.painter ? "copy" : undefined;
-  const cropGhost = (() => {
-    if (!state.cropId || !slide) return null;
-    const pic = findShape(slide.shapes, state.cropId);
-    if (!pic || pic.kind !== "pic") return null;
-    const g = overrides?.get(pic.id) ?? pic;
-    const c = (overrides?.get(pic.id)?.crop ?? pic.crop) ?? { l: 0, t: 0, r: 0, b: 0 };
-    const fw = g.w / Math.max(0.01, 1 - c.l - c.r);
-    const fh = g.h / Math.max(0.01, 1 - c.t - c.b);
-    return { src: pic.src, x: g.x - c.l * fw, y: g.y - c.t * fh, w: fw, h: fh };
-  })();
+  const cursor = state.insert ? "crosshair" : state.ink ? (state.ink.tool === "eraser" ? "cell" : "crosshair") : state.painter ? "copy" : undefined;
+  const cropGhost = slide && state.cropId ? cropGhostOf(slide, state.cropId, overrides) : null;
 
   return (
     <div className="canvas-wrap" ref={wrapRef}>
@@ -852,6 +680,7 @@ export function Canvas(props: CanvasProps) {
                 ))}
               </>
             )}
+            {inkPts && state.ink && <InkPreview pts={inkPts} ink={state.ink} z={z} w={pres.width} h={pres.height} />}
             <SelectionOverlay
               shapes={selShapes}
               overrides={overrides}
@@ -865,6 +694,7 @@ export function Canvas(props: CanvasProps) {
               cellSel={cellRects}
               rotInfo={rotInfo}
               cropGhost={cropGhost}
+              cropId={state.cropId}
               comments={slide?.comments}
             />
           </div>
@@ -874,16 +704,3 @@ export function Canvas(props: CanvasProps) {
   );
 }
 
-function GridOverlay({ w, h, z }: { w: number; h: number; z: number }) {
-  const step = (96 / 2.54) * z;
-  return (
-    <svg className="grid-overlay" width={w * z} height={h * z}>
-      <defs>
-        <pattern id="oh-grid" width={step} height={step} patternUnits="userSpaceOnUse" x={((w * z) / 2) % step} y={((h * z) / 2) % step}>
-          <circle cx={0.5} cy={0.5} r={0.7} fill="rgba(0,0,0,0.35)" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#oh-grid)" />
-    </svg>
-  );
-}

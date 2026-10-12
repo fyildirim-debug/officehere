@@ -30,6 +30,7 @@ export function loadPresentation(a: Actions, pres: Presentation, fileName: strin
     pane: null,
     insert: null,
     cropId: null,
+    ink: null,
     fit: true,
   });
   a.store.resetHistory();

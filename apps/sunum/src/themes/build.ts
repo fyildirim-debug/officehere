@@ -110,7 +110,7 @@ export function buildMasterAndLayouts(w: number, h: number, st: ThemeStyle): { m
     ...(st.deco ? st.deco(w, h) : []),
     ph("title", undefined, "Başlık Yer Tutucusu", L, titleY, W, titleH, { anchor: "ctr", autofit: "shrink", prompt: "Asıl başlık stilini düzenlemek için tıklayın" }),
     ph("body", 1, "Metin Yer Tutucusu", L, bodyY, W, bodyH, { anchor: "t", autofit: "shrink", prompt: "Asıl metin stillerini düzenlemek için tıklayın" }),
-    ...footers(sx, sy, area),
+    ...footers(sx, sy, area, st.bodyColor ? { ...st.bodyColor, alpha: 0.65 } : undefined),
   ];
   const master: Master = { background: st.bg, shapes: masterShapes, textStyles: buildTextStyles(st) };
 
@@ -120,7 +120,7 @@ export function buildMasterAndLayouts(w: number, h: number, st: ThemeStyle): { m
     id: uid("L"),
     type,
     name: LAYOUT_NAMES[type],
-    shapes: [...shapes, ...footers(sx, sy, area, type === "title" || (type === "secHead" && !st.secHeadUsesMaster) ? subCol : undefined)],
+    shapes: [...shapes, ...footers(sx, sy, area, (type === "title" || (type === "secHead" && !st.secHeadUsesMaster) ? subCol : undefined) ?? (st.bodyColor ? { ...st.bodyColor, alpha: 0.65 } : undefined))],
     showMasterShapes: true,
     ...extra,
   });
