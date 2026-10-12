@@ -6,7 +6,6 @@ import * as D from "../actions/data";
 import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import { validationList } from "../controller";
 import { pivotAt, refreshAll, refreshPivot } from "../pivot/pivotOps";
-import { toggleSpellcheck } from "../actions/view";
 import { quickChart } from "../actions/objects";
 import { handleObjectKey } from "../actions/objectClip";
 
@@ -143,7 +142,7 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
       }
       return false;
     case "F7":
-      toggleSpellcheck(ctl);
+      ctl.openDialog("spelling");
       return true;
     case "F10":
       if (shift) return false;

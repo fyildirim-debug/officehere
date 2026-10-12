@@ -60,7 +60,18 @@ export function rowContentHeight(wb: WorkbookModel, sheet: SheetModel, row: numb
       const text = displayText(wb, sheet, row, c);
       lines = Math.max(1, wrapLines(text, fontCss(st, 1, fontStack), Math.max(4, sheet.cols.size(c) - 6)).length);
     }
-    const h = Math.ceil(lines * lineH + 2.4);
+    let h = Math.ceil(lines * lineH + 2.4);
+    // Döndürülmüş metin: yükseklik metin genişliğinin dikey bileşeni kadar büyür (45° → w·sin45 + h·cos45)
+    const rot = st.rotation ?? 0;
+    if (hasValue && rot && !st.wrap) {
+      const text = displayText(wb, sheet, row, c);
+      const w = measureText(text, fontCss(st, 1, fontStack));
+      if (rot === 255) h = Math.ceil(text.length * lineH + 4);
+      else {
+        const a = ((rot > 90 ? rot - 90 : rot) * Math.PI) / 180;
+        h = Math.ceil(w * Math.sin(a) + lineH * Math.cos(a) + 6);
+      }
+    }
     if (h > max) max = h;
   }
   return Math.min(545, max);

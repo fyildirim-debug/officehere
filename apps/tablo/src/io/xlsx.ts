@@ -256,7 +256,11 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
     if (r) sheet.page.printArea = r;
   }
   if (ps.showGridLines) sheet.page.printGridlines = true;
-  if (ps.fitToPage) sheet.page.fitToWidth = true;
+  if (ps.fitToPage) {
+    const fw = ps.fitToWidth ?? 1;
+    const fh = ps.fitToHeight ?? 1;
+    sheet.page.fitMode = fw && fh ? "sheet" : fh && !fw ? "rows" : "cols";
+  }
   const hf = ws.headerFooter ?? {};
   if (hf.oddHeader) sheet.page.header = stripHF(hf.oddHeader);
   if (hf.oddFooter) sheet.page.footer = stripHF(hf.oddFooter);
@@ -563,7 +567,7 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
     margins: p.margins,
     showGridLines: p.printGridlines,
     ...(p.printArea ? { printArea: formatRange(p.printArea) } : {}),
-    ...(p.fitToWidth ? { fitToPage: true, fitToWidth: 1, fitToHeight: 0 } : {}),
+    ...(p.fitMode === "sheet" ? { fitToPage: true, fitToWidth: 1, fitToHeight: 1 } : p.fitMode === "rows" ? { fitToPage: true, fitToWidth: 0, fitToHeight: 1 } : p.fitMode === "cols" || p.fitToWidth ? { fitToPage: true, fitToWidth: 1, fitToHeight: 0 } : {}),
   };
   if (p.header || p.footer) ws.headerFooter = { oddHeader: p.header ? hfToFile(p.header) : undefined, oddFooter: p.footer ? hfToFile(p.footer) : undefined };
   if (sheet.protected) ws.sheetProtection = { sheet: true, objects: true, scenarios: true };

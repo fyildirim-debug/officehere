@@ -436,3 +436,143 @@
 .oh-split-large.tb-split-nowrap .oh-split-arrow .oh-rbtn-label {
   white-space: nowrap;
 }
+
+/* Sayfalara bölünmüş yazdırma */
+@media print {
+  .tb-print-page {
+    break-after: page;
+  }
+  .tb-print-page:last-child {
+    break-after: auto;
+  }
+}
+
+/* Dosya › Yazdır sayfası */
+.tb-printpage {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+  min-height: 0;
+}
+.tb-printpage-side {
+  width: 300px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tb-printpage-side select,
+.tb-printpage-side input {
+  height: 30px;
+  border: 1px solid var(--oh-border);
+  border-radius: 3px;
+  background: var(--oh-surface);
+  color: var(--oh-text);
+  padding: 0 6px;
+}
+.tb-printpage-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.tb-printpage-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 84px;
+  height: 84px;
+  justify-content: center;
+  border: 1px solid var(--oh-border);
+  border-radius: 4px;
+  background: var(--oh-surface);
+  color: var(--oh-text);
+  cursor: pointer;
+}
+.tb-printpage-btn:hover {
+  background: var(--oh-hover);
+}
+.tb-printpage-copies {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tb-printpage-copies input {
+  width: 64px;
+}
+.tb-printpage-label {
+  margin-top: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.tb-printpage-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tb-printpage-range input {
+  width: 64px;
+}
+.tb-printpage-link {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: var(--oh-accent, #0f6cbd);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.tb-printpage-preview {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--oh-surface-2, #e8e8e8);
+  border-radius: 4px;
+}
+.tb-printpage-paper {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  color: #000;
+}
+.tb-printpage-content {
+  position: absolute;
+  transform-origin: 0 0;
+  overflow: hidden;
+}
+.tb-printpage-content .tb-print-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: Calibri, Carlito, sans-serif;
+}
+.tb-printpage-content .tb-print-table td {
+  padding: 0 3px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 11pt;
+}
+.tb-printpage-content .tb-print-table.has-grid td,
+.tb-printpage-content .tb-print-table.has-grid th {
+  border: 1px solid #c8c8c8;
+}
+.tb-printpage-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tb-printpage-nav button {
+  border: 1px solid var(--oh-border);
+  background: var(--oh-surface);
+  border-radius: 3px;
+  width: 26px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--oh-text);
+}

@@ -569,10 +569,17 @@
 .tb-gallery-cellstyle {
   width: 100%;
   height: 100%;
-  display: grid;
-  place-items: center;
+  display: block;
+  line-height: 24px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  text-align: center;
   font-size: 11px;
   border: 1px solid transparent;
+  /* Uzun stil adları kutudan taşmaz: tek satır, sonu üç nokta */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .tb-filter-menu {
   width: 260px;

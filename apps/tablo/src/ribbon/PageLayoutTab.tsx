@@ -92,7 +92,7 @@ export function PageLayoutTab({ ctl }: { ctl: Controller }) {
       <RibbonGroup label="Sığdırmak İçin Ölçeklendir" icon={<ArrowStepIn24Regular />} onLauncher={() => ctl.openDialog("pageSetup", { tab: "page" })}>
         <RibbonStack>
           <RibbonLabel>Genişlik:</RibbonLabel>
-          <RibbonCheckbox label="Tek sayfaya sığdır" checked={!!p.fitToWidth} onChange={(v) => setPage(ctl, { fitToWidth: v || undefined }, "Ölçek")} />
+          <RibbonCheckbox label="Tek sayfaya sığdır" checked={p.fitMode === "cols" || p.fitMode === "sheet" || (!p.fitMode && !!p.fitToWidth)} onChange={(v) => setPage(ctl, { fitToWidth: undefined, fitMode: v ? "cols" : undefined }, "Ölçek")} />
         </RibbonStack>
       </RibbonGroup>
       <RibbonGroup label="Sayfa Seçenekleri" icon={<Grid24Regular />} onLauncher={() => ctl.openDialog("pageSetup", { tab: "sheet" })}>

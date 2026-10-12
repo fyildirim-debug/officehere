@@ -1,6 +1,7 @@
 /** 3. tur iletişim kutuları: veri doğrulama hata kutusu, Özel Git. */
 import { useState } from "react";
 import { Dialog, DialogButton } from "@officehere/ui";
+import { colToName } from "@officehere/formula";
 import type { Controller } from "../controller";
 import { goSpecial, type GoSpecialKind } from "../model/goSpecial";
 import { Check, Radio, SimpleDialog } from "./common";
@@ -161,5 +162,88 @@ export function GoToSpecialDialog({ ctl, onClose }: P) {
         </div>
       </div>
     </SimpleDialog>
+  );
+}
+
+/**
+ * Yazım Denetimi (F7): sayfadaki metin hücrelerini sırayla gösterir. Sözcükler
+ * sistemin Türkçe yazım denetleyicisiyle işaretlenir (altı kırmızı çizili);
+ * düzeltilen metin "Değiştir" ile hücreye yazılır.
+ */
+export function SpellingDialog({ ctl, onClose }: P) {
+  const sheet = ctl.sheet;
+  const cells = (() => {
+    const out: { row: number; col: number }[] = [];
+    ctl.wb.engine.forEachCell(sheet.id, (row, col, rec) => {
+      if (!rec.formula && typeof rec.value === "string" && /\p{L}{2,}/u.test(rec.value)) out.push({ row, col });
+    });
+    const a = ctl.sel.active;
+    // Etkin hücreden başlayarak satır satır
+    out.sort((x, y) => x.row - y.row || x.col - y.col);
+    const start = out.findIndex((c) => c.row > a.row || (c.row === a.row && c.col >= a.col));
+    return start > 0 ? [...out.slice(start), ...out.slice(0, start)] : out;
+  })();
+  const [idx, setIdx] = useState(0);
+  const cur = cells[idx];
+  const original = cur ? String(ctl.wb.getValue(sheet, cur.row, cur.col) ?? "") : "";
+  const [text, setText] = useState(original);
+  const go = (i: number) => {
+    if (i >= cells.length) {
+      onClose();
+      ctl.alert("Yazım denetimi tamamlandı.");
+      return;
+    }
+    setIdx(i);
+    const c = cells[i];
+    setText(String(ctl.wb.getValue(sheet, c.row, c.col) ?? ""));
+    ctl.selectCell(c.row, c.col);
+  };
+  if (!cur) {
+    return (
+      <SimpleDialog title="Yazım Denetimi: Türkçe" onClose={onClose} onOk={onClose}>
+        <p className="oh-dialog-message">Bu sayfada denetlenecek metin yok.</p>
+      </SimpleDialog>
+    );
+  }
+  const addr = `${colToName(cur.col)}${cur.row + 1}`;
+  return (
+    <Dialog
+      open
+      title="Yazım Denetimi: Türkçe"
+      onClose={onClose}
+      width={520}
+      footer={
+        <>
+          <DialogButton onClick={() => go(idx + 1)}>Yoksay</DialogButton>
+          <DialogButton
+            primary
+            disabled={text === original}
+            onClick={() => {
+              ctl.ops.enterText(sheet, [cur], text.startsWith("=") ? "'" + text : text, "Yazım Denetimi");
+              go(idx + 1);
+            }}
+          >
+            Değiştir
+          </DialogButton>
+          <DialogButton onClick={onClose}>Kapat</DialogButton>
+        </>
+      }
+    >
+      <div style={{ marginBottom: 4 }}>
+        {idx + 1}/{cells.length} — {addr} hücresi (hatalı sözcüklerin altı çizilir; düzeltip Değiştir'e basın):
+      </div>
+      <textarea className="tb-spell-text" lang="tr" spellCheck value={text} onChange={(e) => setText(e.target.value)} rows={4} data-autofocus="true" style={{ width: "100%" }} />
+      <div style={{ marginTop: 8 }}>
+        <Check
+          checked={ctl.spellcheck}
+          onChange={(v) => {
+            ctl.spellcheck = v;
+            ctl.emit();
+          }}
+        >
+          Yazarken yazım hatalarını işaretle
+        </Check>
+      </div>
+    </Dialog>
   );
 }

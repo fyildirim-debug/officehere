@@ -41,7 +41,7 @@ export function PageSetupDialog({ ctl, onClose, arg }: P) {
   const [tab, setTab] = useState((arg as { tab?: string } | undefined)?.tab ?? "page");
   const [orientation, setOrientation] = useState(p.orientation);
   const [paper, setPaper] = useState(p.paper);
-  const [fit, setFit] = useState(!!p.fitToWidth);
+  const [fit, setFit] = useState<"no" | "sheet" | "cols" | "rows">(p.fitMode ?? (p.fitToWidth ? "cols" : "no"));
   const [m, setM] = useState(() => Object.fromEntries(Object.entries(p.margins).map(([k, v]) => [k, cm(v)])) as Record<keyof PageSetup["margins"], string>);
   const [header, setHeader] = useState(p.header ?? "");
   const [footer, setFooter] = useState(p.footer ?? "");
@@ -61,7 +61,8 @@ export function PageSetupDialog({ ctl, onClose, arg }: P) {
     return {
       orientation,
       paper,
-      fitToWidth: fit || undefined,
+      fitToWidth: undefined,
+      fitMode: fit === "no" ? undefined : fit,
       margins: {
         top: keep(m.top, p.margins.top),
         bottom: keep(m.bottom, p.margins.bottom),
@@ -133,11 +134,17 @@ export function PageSetupDialog({ ctl, onClose, arg }: P) {
               </div>
             </FieldSet>
             <FieldSet legend="Ölçek">
-              <Radio name="fit" value="no" current={fit ? "yes" : "no"} onChange={() => setFit(false)}>
+              <Radio name="fit" value="no" current={fit} onChange={setFit}>
                 Normal boyutun %100'ü
               </Radio>
-              <Radio name="fit" value="yes" current={fit ? "yes" : "no"} onChange={() => setFit(true)}>
+              <Radio name="fit" value="sheet" current={fit} onChange={setFit}>
+                Sayfayı tek sayfaya sığdır
+              </Radio>
+              <Radio name="fit" value="cols" current={fit} onChange={setFit}>
                 Tüm sütunları bir sayfaya sığdır
+              </Radio>
+              <Radio name="fit" value="rows" current={fit} onChange={setFit}>
+                Tüm satırları bir sayfaya sığdır
               </Radio>
             </FieldSet>
             <Field label="Kağıt boyutu:">

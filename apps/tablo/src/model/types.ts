@@ -206,6 +206,8 @@ export interface PageSetup {
   header?: string;
   footer?: string;
   fitToWidth?: boolean;
+  /** Ölçek: sayfayı tek sayfaya / tüm sütunları / tüm satırları tek sayfaya sığdır (fitToWidth'in yerine geçer). */
+  fitMode?: "sheet" | "cols" | "rows";
 }
 
 export type PivotFn = "sum" | "count" | "average" | "max" | "min" | "product" | "countNums";

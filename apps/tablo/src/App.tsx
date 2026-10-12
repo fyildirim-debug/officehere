@@ -329,7 +329,8 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
         onClose={(key) => {
           setDialogs((st) => {
             const next = st.filter((d) => d.key !== key);
-            if (!next.length) requestAnimationFrame(() => ctl.focusGrid());
+            // Sayfa adı düzenlenirken açılan uyarı kapanınca odak ad kutusunda kalır
+            if (!next.length) requestAnimationFrame(() => !document.activeElement?.classList.contains("tb-tab-input") && ctl.focusGrid());
             return next;
           });
         }}

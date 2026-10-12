@@ -30,10 +30,15 @@ export function SheetTabs({ ctl, onContextMenu }: { ctl: Controller; onContextMe
     }, 50);
     return () => window.clearInterval(h);
   });
-  const commitRename = () => {
+  const commitRename = (fromBlur = false) => {
     if (renaming === null || alerting.current) return;
     const err = wb.isValidSheetName(name, wb.sheets[renaming]);
     if (err) {
+      // Odak kaybında geçersiz ad sessizce bırakılır (uyarı yalnız Enter'da; iki kez açılmaz)
+      if (fromBlur) {
+        setRenaming(null);
+        return;
+      }
       alerting.current = true;
       ctl.alert(err);
       return;
@@ -119,12 +124,16 @@ export function SheetTabs({ ctl, onContextMenu }: { ctl: Controller; onContextMe
                   maxLength={31}
                   onChange={(e) => setName(e.target.value)}
                   onFocus={(e) => {
-                    alerting.current = false;
+                    if (!document.querySelector(".oh-dialog")) alerting.current = false;
                     e.currentTarget.select();
                   }}
-                  onBlur={commitRename}
+                  onBlur={() => commitRename(true)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") commitRename();
+                    if (e.key === "Enter") {
+                      // Enter'ın tuş olayı açılan uyarının Tamam düğmesini tetiklemesin
+                      e.preventDefault();
+                      commitRename();
+                    }
                     if (e.key === "Escape") {
                       alerting.current = false;
                       setRenaming(null);

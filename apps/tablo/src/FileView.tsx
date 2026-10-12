@@ -6,9 +6,11 @@ import { addRecentFile, baseName, downloadBlob, extensionOf, getNative, openFile
 import type { Controller } from "./controller";
 import { readXlsx, writeXlsx } from "./io/xlsx";
 import { readCsv, writeCsv } from "./io/csv";
-import { exportPdf, printRange, printSheet, rangeToHtml } from "./io/print";
+import { exportPdf, printRange, rangeToHtml } from "./io/print";
 import { buildTemplate, TEMPLATES } from "./templates";
 import type { WorkbookModel } from "./model/workbook";
+import { PrintPage } from "./PrintPage";
+import { printWithOptions } from "./io/printPages";
 
 const XLSX_FILTER: FileFilter = { name: "Çalışma Kitabı (.xlsx)", extensions: ["xlsx"] };
 const CSV_FILTER: FileFilter = { name: "CSV (Noktalı virgülle ayrılmış)", extensions: ["csv"] };
@@ -120,7 +122,7 @@ export function useFileActions(ctl: Controller): FileActions {
         }
       },
       print() {
-        printSheet(ctl.wb, ctl.sheet);
+        printWithOptions(ctl.wb, ctl.sheet, {});
       },
     };
     return actions;
@@ -233,6 +235,7 @@ export function FileView({ ctl, files, page, onClose }: { ctl: Controller; files
         ["Son değiştirme", wb.props.modified ? wb.props.modified.toLocaleString("tr-TR") : "—"],
       ]}
       printPreview={preview}
+      printPage={<PrintPage ctl={ctl} onDone={onClose} />}
     />
   );
 }

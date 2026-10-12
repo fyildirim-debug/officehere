@@ -26,9 +26,14 @@ export function pageInner(sheet: SheetModel): { w: number; h: number } {
   return { w, h };
 }
 
+/** Geçerli ölçek kipi (eski fitToWidth = tüm sütunlar). */
+export function fitModeOf(sheet: SheetModel): "sheet" | "cols" | "rows" | undefined {
+  return sheet.page.fitMode ?? (sheet.page.fitToWidth ? "cols" : undefined);
+}
+
 /** Sayfa sonu satır/sütun dizinleri (Sayfa Sonu Önizleme). */
-export function computePageBreaks(wb: WorkbookModel, sheet: SheetModel): { rows: number[]; cols: number[] } {
-  const r = printRange(wb, sheet);
+export function computePageBreaks(wb: WorkbookModel, sheet: SheetModel, range?: Rect | null): { rows: number[]; cols: number[] } {
+  const r = range ?? printRange(wb, sheet);
   if (!r) return { rows: [], cols: [] };
   const inner = pageInner(sheet);
   const scale = fitScale(sheet, r);
@@ -59,12 +64,20 @@ export function computePageBreaks(wb: WorkbookModel, sheet: SheetModel): { rows:
   return { rows, cols };
 }
 
-/** "Tek sayfaya sığdır" ölçeği (1 = ölçeksiz). */
+/** Sığdırma ölçeği (1 = ölçeksiz): sayfayı / tüm sütunları / tüm satırları tek sayfaya. */
 export function fitScale(sheet: SheetModel, r: Rect): number {
-  if (!sheet.page.fitToWidth) return 1;
-  let total = sheet.page.printHeadings ? 32 : 0;
-  for (let c = r.c1; c <= r.c2; c++) total += sheet.cols.size(c);
-  return total > 0 ? Math.min(1, pageInner(sheet).w / total) : 1;
+  const mode = fitModeOf(sheet);
+  if (!mode) return 1;
+  let totalW = sheet.page.printHeadings ? 32 : 0;
+  for (let c = r.c1; c <= r.c2; c++) totalW += sheet.cols.size(c);
+  let totalH = sheet.page.printHeadings ? 20 : 0;
+  if (mode !== "cols") totalH += sheet.rows.offset(r.r2 + 1) - sheet.rows.offset(r.r1);
+  const inner = pageInner(sheet);
+  const sw = totalW > 0 ? inner.w / totalW : 1;
+  const sh = totalH > 0 ? inner.h / totalH : 1;
+  if (mode === "cols") return Math.min(1, sw);
+  if (mode === "rows") return Math.min(1, sh);
+  return Math.min(1, sw, sh);
 }
 
 function esc(s: string): string {
@@ -122,7 +135,7 @@ function sparkCss(wb: WorkbookModel, sheet: SheetModel, row: number, col: number
 }
 
 /** Yazdırma kökünü (#tb-print) ve @page kuralını hazırlar; temizleme işlevini döndürür. */
-export function preparePrint(wb: WorkbookModel, sheet: SheetModel): () => void {
+export function preparePrint(wb: WorkbookModel, sheet: SheetModel, html?: string): () => void {
   const r = printRange(wb, sheet);
   let host = document.getElementById("tb-print");
   if (!host) {
@@ -131,8 +144,14 @@ export function preparePrint(wb: WorkbookModel, sheet: SheetModel): () => void {
     document.body.appendChild(host);
   }
   const page = sheet.page;
-  host.innerHTML = r ? rangeToHtml(wb, sheet, r, { gridlines: page.printGridlines, headings: page.printHeadings, objects: true }) : "<p></p>";
-  host.style.zoom = r ? String(fitScale(sheet, r)) : "";
+  if (html !== undefined) {
+    // Sayfalara bölünmüş içerik (her sayfa kendi ölçeğini taşır)
+    host.innerHTML = html || "<p></p>";
+    host.style.zoom = "";
+  } else {
+    host.innerHTML = r ? rangeToHtml(wb, sheet, r, { gridlines: page.printGridlines, headings: page.printHeadings, objects: true }) : "<p></p>";
+    host.style.zoom = r ? String(fitScale(sheet, r)) : "";
+  }
   let st = document.getElementById("tb-print-page") as HTMLStyleElement | null;
   if (!st) {
     st = document.createElement("style");

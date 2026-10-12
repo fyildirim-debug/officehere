@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import type { Controller } from "../controller";
 import type { FileActions } from "../FileView";
-import { GoToSpecialDialog, ValidationErrorDialog } from "./Round3Dialogs";
+import { GoToSpecialDialog, SpellingDialog, ValidationErrorDialog } from "./Round3Dialogs";
 import * as D from "../actions/data";
 import * as M from "./MiscDialogs";
 import { FormatCellsDialog } from "./FormatCellsDialog";
@@ -106,6 +106,8 @@ function OneDialog({ ctl, state, onClose, files, onBackstage }: { ctl: Controlle
       return <ValidationErrorDialog {...p} />;
     case "goSpecial":
       return <GoToSpecialDialog {...p} />;
+    case "spelling":
+      return <SpellingDialog {...p} />;
     case "confirm":
       return <M.ConfirmDialog {...p} />;
     case "formatCells":
