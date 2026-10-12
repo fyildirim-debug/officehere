@@ -3,6 +3,7 @@
 // DOCX'te gömülü grafik parçası (c:chartSpace, değer önbellekli) olarak yazılır ve okunur.
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
+import { closeHistory } from "@tiptap/pm/history";
 
 export type ChartType = "column" | "bar" | "line" | "pie";
 
@@ -188,6 +189,12 @@ function wrapSvg(W: number, H: number, parts: string[]): string {
 
 export const CHART_EVENT = "officehere:edit-chart";
 
+const RESIZE_HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
+/** Grafik boyut sınırları (px); en küçük değerler chartSvg'nin çizebildiği alt sınırdır. */
+const MIN_W = 120;
+const MIN_H = 90;
+const MAX_H = 1400;
+
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     chart: {
@@ -203,6 +210,7 @@ export const Chart = Node.create({
   inline: true,
   atom: true,
   selectable: true,
+  draggable: true,
   addAttributes() {
     return {
       data: {
@@ -237,15 +245,75 @@ export const Chart = Node.create({
       const dom = document.createElement("span");
       dom.className = "bl-chart";
       dom.contentEditable = "false";
+      const canvas = document.createElement("span");
+      canvas.className = "bl-chart-svg";
+      dom.appendChild(canvas);
+      // Seçiliyken görünen 8 boyutlandırma tutamacı (köşeler ve kenar ortaları).
+      for (const h of RESIZE_HANDLES) {
+        const el = document.createElement("span");
+        el.className = `bl-chart-h is-${h}`;
+        el.dataset.handle = h;
+        dom.appendChild(el);
+      }
       let cur = node;
-      const draw = () => {
-        dom.innerHTML = cur.attrs.data ? chartSvg(cur.attrs.data as ChartData) : "";
+      const draw = (data = cur.attrs.data as ChartData | null) => {
+        canvas.innerHTML = data ? chartSvg(data) : "";
       };
       draw();
       dom.addEventListener("dblclick", (e) => {
+        if ((e.target as HTMLElement).closest?.(".bl-chart-h")) return;
         e.preventDefault();
         const pos = typeof getPos === "function" ? getPos() : undefined;
         window.dispatchEvent(new CustomEvent(CHART_EVENT, { detail: { pos, editor } }));
+      });
+      dom.addEventListener("pointerdown", (e) => {
+        const handle = (e.target as HTMLElement).closest?.(".bl-chart-h") as HTMLElement | null;
+        const data = cur.attrs.data as ChartData | null;
+        if (!handle || !data || e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const dir = handle.dataset.handle ?? "se";
+        // Yakınlaştırmada ekrandaki piksel ile grafik pikseli farklıdır.
+        const scale = canvas.getBoundingClientRect().width / data.width || 1;
+        const area = dom.closest(".ProseMirror") as HTMLElement | null;
+        const maxW = Math.max(MIN_W, area?.clientWidth ?? 1600);
+        const { clientX: sx, clientY: sy } = e;
+        const w0 = data.width;
+        const h0 = data.height;
+        let w = w0;
+        let h = h0;
+        handle.setPointerCapture(e.pointerId);
+        dom.classList.add("is-resizing");
+        const move = (ev: PointerEvent) => {
+          const dx = (ev.clientX - sx) / scale;
+          const dy = (ev.clientY - sy) / scale;
+          w = w0 + (dir.includes("e") ? dx : dir.includes("w") ? -dx : 0);
+          h = h0 + (dir.includes("s") ? dy : dir.includes("n") ? -dy : 0);
+          // Köşe tutamacında Shift en-boy oranını korur.
+          if (ev.shiftKey && dir.length === 2) {
+            const r = Math.max(w / w0, h / h0);
+            w = w0 * r;
+            h = h0 * r;
+          }
+          w = Math.round(Math.min(maxW, Math.max(MIN_W, w)));
+          h = Math.round(Math.min(MAX_H, Math.max(MIN_H, h)));
+          draw({ ...data, width: w, height: h });
+        };
+        const up = () => {
+          handle.removeEventListener("pointermove", move);
+          handle.removeEventListener("pointerup", up);
+          handle.removeEventListener("pointercancel", up);
+          dom.classList.remove("is-resizing");
+          const pos = typeof getPos === "function" ? getPos() : undefined;
+          if (pos == null || (w === w0 && h === h0)) return draw();
+          const tr = editor.state.tr.setNodeMarkup(pos, undefined, { ...cur.attrs, data: { ...data, width: w, height: h } });
+          tr.setSelection(NodeSelection.create(tr.doc, pos));
+          // Her boyutlandırma ayrı bir geri alma adımı olsun (önceki yazma/ekleme ile birleşmesin).
+          editor.view.dispatch(closeHistory(tr));
+        };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", up);
+        handle.addEventListener("pointercancel", up);
       });
       return {
         dom,
@@ -257,6 +325,9 @@ export const Chart = Node.create({
         },
         selectNode: () => dom.classList.add("is-selected"),
         deselectNode: () => dom.classList.remove("is-selected"),
+        // Tutamaç olaylarını düzenleyici işlemesin (seçim/sürükleme başlatmasın).
+        stopEvent: (e: Event) => !!(e.target as HTMLElement | null)?.closest?.(".bl-chart-h"),
+        ignoreMutation: () => true,
       };
     };
   },

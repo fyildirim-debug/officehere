@@ -468,6 +468,36 @@ test.describe("OfficeHere Belge senaryoları", () => {
     await expect(body(page).locator('span[style*="Georgia"]')).toHaveText("Selam");
   });
 
+  test("grafik tutamaçlarla büyütülüp küçültülür, her boyutlandırma ayrı geri alınır", async ({ page }) => {
+    await tab(page, "Ekle");
+    await button(page, "Grafik").click();
+    await dialog(page).getByRole("button", { name: "Tamam" }).click();
+    const svg = body(page).locator(".bl-chart svg");
+    await expect(svg).toHaveAttribute("width", "576");
+    // Grafik yazıları metin seçimine katılmaz.
+    expect(await body(page).locator(".bl-chart").evaluate((el) => getComputedStyle(el).userSelect)).toBe("none");
+    const box = (await svg.boundingBox())!;
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator(".bl-chart-h")).toHaveCount(8);
+    const drag = async (cls: string, dx: number, dy: number) => {
+      const h = (await page.locator(`.bl-chart-h.${cls}`).boundingBox())!;
+      await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(h.x + h.width / 2 + dx, h.y + h.height / 2 + dy, { steps: 8 });
+      await page.mouse.up();
+    };
+    await drag("is-se", 100, 60);
+    await expect(svg).toHaveAttribute("width", "676");
+    await expect(svg).toHaveAttribute("height", "396");
+    await drag("is-w", 200, 0);
+    await expect(svg).toHaveAttribute("width", "476");
+    await page.keyboard.press("Control+z");
+    await expect(svg).toHaveAttribute("width", "676");
+    await page.keyboard.press("Control+z");
+    await expect(svg).toHaveAttribute("width", "576");
+    await expect(svg).toHaveCount(1);
+  });
+
   test("sekme durakları: Paragraf › Sekmeler, ondalık ve noktalı öncü", async ({ page }) => {
     await page.keyboard.type("Ürün\t12,50");
     await page.locator('.oh-ribbon-launcher[data-tip="Paragraf Ayarları"]').first().click();

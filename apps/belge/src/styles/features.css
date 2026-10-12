@@ -126,15 +126,50 @@
 
 /* Grafikler */
 .bl-chart {
+  position: relative;
   display: inline-block;
   line-height: 0;
   vertical-align: bottom;
+  /* Grafik yazıları belge metni gibi seçilip vurgulanmasın. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.bl-chart-svg {
+  display: inline-block;
 }
 
 .bl-chart.is-selected svg {
   outline: 2px solid #2b579a;
   outline-offset: 1px;
 }
+
+/* Boyutlandırma tutamaçları: yalnız grafik seçiliyken görünür. */
+.bl-chart-h {
+  position: absolute;
+  z-index: 3;
+  display: none;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  background: #fff;
+  border: 1px solid #5a5a5a;
+  border-radius: 50%;
+}
+
+.bl-chart.is-selected .bl-chart-h,
+.bl-chart.is-resizing .bl-chart-h {
+  display: block;
+}
+
+.bl-chart-h.is-nw { left: 0; top: 0; cursor: nwse-resize; }
+.bl-chart-h.is-n { left: 50%; top: 0; cursor: ns-resize; }
+.bl-chart-h.is-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.bl-chart-h.is-e { left: 100%; top: 50%; cursor: ew-resize; }
+.bl-chart-h.is-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.bl-chart-h.is-s { left: 50%; top: 100%; cursor: ns-resize; }
+.bl-chart-h.is-sw { left: 0; top: 100%; cursor: nesw-resize; }
+.bl-chart-h.is-w { left: 0; top: 50%; cursor: ew-resize; }
 
 .bl-chart-types {
   display: flex;
