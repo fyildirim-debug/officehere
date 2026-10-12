@@ -127,9 +127,19 @@ export function sortRange(ctl: Controller, r: Rect, keys: SortKey[], hasHeader: 
   });
 }
 
+/** Sıralanacak/süzülecek veri yoksa uyarır (boş sayfa ya da boş hücre). */
+export function warnIfNoData(ctl: Controller, r: Rect): boolean {
+  let any = false;
+  for (let row = r.r1; row <= Math.min(r.r2, r.r1 + 50) && !any; row++) for (let c = r.c1; c <= Math.min(r.c2, r.c1 + 50) && !any; c++) if (!ctl.wb.isEmpty(ctl.sheet, row, c)) any = true;
+  if (any) return false;
+  ctl.alert("Bu komut seçili alana uygulanamaz. Veri içeren bir aralıkta tek bir hücre seçip yeniden deneyin.");
+  return true;
+}
+
 /** Hızlı sıralama (A→Z / Z→A) etkin hücrenin sütununa göre. */
 export function quickSort(ctl: Controller, desc: boolean): void {
   const r = sortRegion(ctl);
+  if (warnIfNoData(ctl, r)) return;
   const header = guessHeader(ctl.wb, ctl.sheet, r) || !!ctl.sheet.tableAt(r.r1, r.c1)?.headerRow || (!!ctl.sheet.autoFilter && ctl.sheet.autoFilter.range.r1 === r.r1);
   sortRange(ctl, r, [{ col: ctl.sel.active.col, desc }], header);
 }
@@ -266,6 +276,11 @@ export function toggleAutoFilter(ctl: Controller): void {
       recomputeFilters(ctl);
     });
     return;
+  }
+  if (!sheet.autoFilter) {
+    const r = ctl.range;
+    const region = r.r1 === r.r2 && r.c1 === r.c2 ? currentRegion(ctl.wb, sheet, ctl.sel.active) : r;
+    if (warnIfNoData(ctl, region)) return;
   }
   ctl.ops.sheetOp(sheet, "Filtre", () => {
     if (sheet.autoFilter) {

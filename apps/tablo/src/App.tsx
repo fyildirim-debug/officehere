@@ -9,6 +9,7 @@ import { FormulaBar } from "./grid/FormulaBar";
 import { HomeTab } from "./ribbon/HomeTab";
 import { StatusArea } from "./StatusArea";
 import * as E from "./actions/edit";
+import { sortRegion, warnIfNoData } from "./actions/data";
 import { CellMenu, HeaderMenu, TabMenu, ObjectMenu } from "./ContextMenus";
 import { DialogHost, type DialogState } from "./dialogs/DialogHost";
 import { InsertTab } from "./ribbon/InsertTab";
@@ -102,6 +103,7 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
 
   useEffect(() => {
     ctl.openDialog = (id, arg) => {
+      if (id === "sort" && warnIfNoData(ctl, sortRegion(ctl))) return;
       if (id === "chartFormat") {
         ctl.formatPane = "chart";
         ctl.emit();
