@@ -7,6 +7,7 @@ import { BOOL_NAMES, EN_SYNTAX, ERROR_FROM_TR, ERROR_TO_TR, TR_SYNTAX, tokenize,
 import { parse as parseRaw, stripFunctionPrefix } from "./parser";
 import { FUNCTIONS, resolveFunctionName, trNameOf } from "./functions/registry";
 import { renderRefToken } from "./transform";
+import { renderStructRef } from "./structref";
 import type { Node } from "./ast";
 
 export type FormulaLocale = "tr" | "en";
@@ -48,6 +49,9 @@ function convertTokens(tokens: Token[], from: SyntaxLocale, to: SyntaxLocale, to
       case "ref":
         if (t.ref!.refError) out += renderRefToken(t.ref!, toLocale);
         else out += t.text;
+        break;
+      case "structref":
+        out += renderStructRef(t.sref!, toLocale);
         break;
       case "sep":
         out += to.argSep;

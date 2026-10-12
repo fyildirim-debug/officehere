@@ -95,8 +95,14 @@ export function formatToLocal(code: string): string {
     .join(";");
 }
 
+/** İngilizce yerel ayar etiketli ([$-409], [$-en-US]) bölüm: kodlar İngilizce yazılmıştır. */
+function englishTagged(section: string): boolean {
+  return /\[\$[^\]]*-(409|809|c09|1009|en)[^\]]*\]/i.test(section);
+}
+
 /** Kodun Türkçe yazımla mı girildiğini tahmin eder. */
 export function looksLocalFormat(code: string): boolean {
+  if (splitSections(code).every(englishTagged)) return false;
   let letters = "";
   mapUnquoted(code, (seg) => {
     letters += seg.replace(/genel|general|am\/pm|a\/p|öö\/ös|ö\/s|e[+-]/gi, "");
@@ -111,6 +117,8 @@ export function looksLocalFormat(code: string): boolean {
   const code2 = code.replace(/"[^"]*"|\[[^\]]*\]|\\./g, "");
   const iDot = code2.indexOf(".");
   const iCom = code2.indexOf(",");
+  // "0,0.." : ondalık virgülden sonra gelen sondaki noktalar binlik ölçeklemedir (Türkçe yazım)
+  if (/[0#?],[0#?]+\.+(?![0#?])/.test(code2)) return true;
   if (iDot >= 0 && iCom >= 0) return iDot < iCom;
   if (iDot >= 0) return /\.(##0|###)/.test(code2);
   if (iCom >= 0) return !/,(##0|###)/.test(code2) && !/[0#],+(\s|$|;|%)/.test(code2);
@@ -123,6 +131,7 @@ export function formatFromLocal(code: string): string {
   if (/^genel$/i.test(t)) return "General";
   return splitSections(t)
     .map((section) => {
+      if (englishTagged(section)) return section;
       const lower = section.toLocaleLowerCase("tr-TR");
       const unq = lower.replace(/"[^"]*"|\[[^\]]*\]/g, "").replace(/öö\/ös|ö\/s|genel/g, "");
       const isDate = /[gaysdn]/.test(unq.replace(/e[+-]/g, ""));

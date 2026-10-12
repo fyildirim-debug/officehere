@@ -74,7 +74,7 @@ export function ChartView({ def, data, width, height }: { def: ChartDef; data: C
   return (
     <div className="tb-chart-svgwrap">
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={def.title || "Grafik"} style={{ fontFamily: FONT, display: "block" }}>
-        <rect x={0.5} y={0.5} width={width - 1} height={height - 1} fill={themeOf(def).bg} stroke={themeOf(def).border ?? "none"} />
+        <rect x={0.5} y={0.5} width={width - 1} height={height - 1} fill={def.fill ?? themeOf(def).bg} stroke={def.border === "none" ? "none" : (def.border ?? themeOf(def).border ?? "none")} />
         {def.showTitle && (
           <text x={width / 2} y={22} textAnchor="middle" fontSize={15} fill={themeOf(def).ink}>
             {truncate(def.title || "Grafik Başlığı", Math.floor(width / 8))}

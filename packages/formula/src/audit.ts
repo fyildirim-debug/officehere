@@ -13,6 +13,7 @@ import { localBoolName, localErrorName } from "./locale";
 import { numberToText } from "./numfmt";
 import { quoteSheetName } from "./references";
 import { renderRefToken } from "./transform";
+import { renderStructRef } from "./structref";
 import { isArray, isError, isRef, type Scalar, type Value } from "./values";
 
 export interface AuditRange {
@@ -230,6 +231,9 @@ export class FormulaStepper {
       case "ref":
         out += renderRefToken(n.ref, "tr");
         break;
+      case "structref":
+        out += renderStructRef(n.ref, "tr");
+        break;
       case "name":
         out += n.name;
         break;
@@ -312,6 +316,8 @@ function printPlain(n: Node): string {
   switch (n.type) {
     case "ref":
       return renderRefToken(n.ref, "tr");
+    case "structref":
+      return renderStructRef(n.ref, "tr");
     case "binary":
       return printPlain(n.left) + n.op + printPlain(n.right);
     case "union":

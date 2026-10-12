@@ -4,6 +4,7 @@
  * belirteç düzeyinde yapılabilir.
  */
 import { MAX_COLS, MAX_ROWS, nameToCol } from "./references";
+import { matchBracket, parseStructInner, type StructRef } from "./structref";
 
 export interface SyntaxLocale {
   /** Ondalık ayırıcı. */
@@ -25,6 +26,8 @@ export type TokenType =
   | "bool"
   | "error"
   | "ref"
+  /** Yapısal (tablo) başvurusu: Tablo1[Tutar], [@Adet]. */
+  | "structref"
   | "func"
   | "name"
   | "op"
@@ -64,6 +67,7 @@ export interface Token {
   pos: number;
   value?: number | string | boolean;
   ref?: RefToken;
+  sref?: StructRef;
 }
 
 const TR_ERROR_NAMES: Record<string, string> = {
@@ -284,11 +288,28 @@ export function tokenize(src: string, syntax: SyntaxLocale = EN_SYNTAX): Token[]
         continue;
       }
     }
+    // Tablosuz yapısal başvuru: [@Adet], [[#Bu Satır];[Adet]]
+    if (ch === "[") {
+      const close = matchBracket(src, i);
+      const inner = close > 0 ? parseStructInner(src.slice(i + 1, close)) : null;
+      if (inner) {
+        push("structref", i, close + 1, { sref: inner });
+        continue;
+      }
+    }
     // Tanımlayıcı: fonksiyon, ad, mantıksal
     {
       const m = stickyMatch(IDENT, src, i);
       if (m) {
         const end = i + m[0].length;
+        if (src[end] === "[") {
+          const close = matchBracket(src, end);
+          const inner = close > 0 ? parseStructInner(src.slice(end + 1, close)) : null;
+          if (inner) {
+            push("structref", i, close + 1, { sref: { table: m[0], ...inner } });
+            continue;
+          }
+        }
         if (src[end] === "(") {
           push("func", i, end, { value: m[0] });
           continue;

@@ -83,8 +83,68 @@ export interface SeriesRefs {
   series: { name: Rect | null; values: Rect; xs?: Rect | null }[];
 }
 
+/** Nitelenmiş aralık metnini sayfa ve dikdörtgene çözer. */
+function qualified(wb: WorkbookModel, text: string | undefined, owner: SheetModel): { sheet: SheetModel; rect: Rect } | null {
+  if (!text) return null;
+  const q = parseQualifiedRange(text.replace(/^=/, "").replace(/\$/g, ""));
+  if (!q) return null;
+  const sheet = q.sheet ? wb.sheetByName(q.sheet) : owner;
+  return sheet ? { sheet, rect: q.range } : null;
+}
+
+function cellsOf(r: Rect): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = r.r1; i <= r.r2; i++) for (let j = r.c1; j <= r.c2; j++) out.push([i, j]);
+  return out;
+}
+
+/** Açık seri tanımlarından başvurular. */
+function explicitRefs(wb: WorkbookModel, def: ChartDef): SeriesRefs | null {
+  const owner = wb.active;
+  const first = qualified(wb, def.series![0].values, owner);
+  if (!first) return null;
+  const cat = qualified(wb, def.series![0].categories, owner);
+  return {
+    sheetName: first.sheet.name,
+    cat: cat?.rect ?? null,
+    series: def.series!.map((s) => ({ name: qualified(wb, s.nameRef, owner)?.rect ?? null, values: qualified(wb, s.values, owner)?.rect ?? first.rect, xs: qualified(wb, s.xValues, owner)?.rect ?? null })),
+  };
+}
+
+/** Açık seri tanımlarından veri. */
+function explicitData(wb: WorkbookModel, def: ChartDef): ChartData {
+  const owner = wb.active;
+  const out: ChartData = { categories: [], series: [] };
+  const labelOf = (sheet: SheetModel, r: number, c: number) => {
+    const v = wb.getValue(sheet, r, c);
+    if (typeof v === "number") return formatValue(v, wb.styleAt(sheet, r, c).numFmt).text;
+    return formatScalar(v);
+  };
+  const numOf = (sheet: SheetModel, r: number, c: number) => {
+    const v = wb.getValue(sheet, r, c);
+    return typeof v === "number" ? v : null;
+  };
+  def.series!.forEach((s, i) => {
+    const vals = qualified(wb, s.values, owner);
+    const values = vals ? cellsOf(vals.rect).map(([r, c]) => numOf(vals.sheet, r, c)) : [];
+    if (i === 0 && vals) out.numFmt = wb.styleAt(vals.sheet, vals.rect.r1, vals.rect.c1).numFmt;
+    const nm = qualified(wb, s.nameRef, owner);
+    const name = nm ? labelOf(nm.sheet, nm.rect.r1, nm.rect.c1) : (s.name ?? `Seri${i + 1}`);
+    const xs = qualified(wb, s.xValues, owner);
+    const series: ChartSeries = { name, values };
+    if (xs) series.xs = cellsOf(xs.rect).map(([r, c]) => numOf(xs.sheet, r, c));
+    out.series.push(series);
+    if (i === 0) {
+      const cat = qualified(wb, s.categories ?? s.xValues, owner);
+      out.categories = cat ? cellsOf(cat.rect).map(([r, c]) => labelOf(cat.sheet, r, c)) : values.map((_, k) => String(k + 1));
+    }
+  });
+  return out;
+}
+
 /** Dosyaya yazmak için seri başvuruları. */
 export function seriesRefs(wb: WorkbookModel, def: ChartDef): SeriesRefs | null {
+  if (def.series?.length) return explicitRefs(wb, def);
   const L = chartLayout(wb, def);
   if (!L) return null;
   const { rect, headerRow, labelCol, dataR1, dataC1 } = L;
@@ -101,6 +161,7 @@ export function seriesRefs(wb: WorkbookModel, def: ChartDef): SeriesRefs | null 
 }
 
 export function extractChartData(wb: WorkbookModel, def: ChartDef): ChartData {
+  if (def.series?.length) return explicitData(wb, def);
   const L = chartLayout(wb, def);
   if (!L) return { categories: [], series: [] };
   const { sheet, rect, headerRow, labelCol, dataR1, dataC1 } = L;

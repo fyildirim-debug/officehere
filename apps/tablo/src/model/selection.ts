@@ -197,26 +197,27 @@ export function currentRegion(wb: WorkbookModel, sheet: SheetModel, pos: CellPos
   const filled = (row: number, col: number) => row >= 0 && col >= 0 && row < MAX_ROWS && col < MAX_COLS && !wb.isEmpty(sheet, row, col);
   let changed = true;
   let guard = 0;
-  while (changed && guard++ < 1000) {
+  // Her kenarın bir dışındaki satır/sütunu (çaprazlar dahil) kontrol et; büyük veride her yön kendi döngüsünde ilerler
+  const check = (row1: number, col1: number, row2: number, col2: number) => {
+    for (let i = row1; i <= row2; i++) for (let j = col1; j <= col2; j++) if (filled(i, j)) return true;
+    return false;
+  };
+  const ext = wb.dataExtent(sheet);
+  while (changed && guard++ < 10000) {
     changed = false;
-    // Her kenarın bir dışındaki satır/sütunu (çaprazlar dahil) kontrol et
-    const check = (row1: number, col1: number, row2: number, col2: number) => {
-      for (let i = row1; i <= row2; i++) for (let j = col1; j <= col2; j++) if (filled(i, j)) return true;
-      return false;
-    };
-    if (r.r1 > 0 && check(r.r1 - 1, Math.max(0, r.c1 - 1), r.r1 - 1, r.c2 + 1)) {
+    while (r.r1 > 0 && check(r.r1 - 1, Math.max(0, r.c1 - 1), r.r1 - 1, r.c2 + 1)) {
       r = { ...r, r1: r.r1 - 1 };
       changed = true;
     }
-    if (check(r.r2 + 1, Math.max(0, r.c1 - 1), r.r2 + 1, r.c2 + 1)) {
+    while (r.r2 + 1 < Math.max(ext.rows, r.r2 + 2) && check(r.r2 + 1, Math.max(0, r.c1 - 1), r.r2 + 1, r.c2 + 1)) {
       r = { ...r, r2: r.r2 + 1 };
       changed = true;
     }
-    if (r.c1 > 0 && check(Math.max(0, r.r1 - 1), r.c1 - 1, r.r2 + 1, r.c1 - 1)) {
+    while (r.c1 > 0 && check(Math.max(0, r.r1 - 1), r.c1 - 1, r.r2 + 1, r.c1 - 1)) {
       r = { ...r, c1: r.c1 - 1 };
       changed = true;
     }
-    if (check(Math.max(0, r.r1 - 1), r.c2 + 1, r.r2 + 1, r.c2 + 1)) {
+    while (r.c2 + 1 < Math.max(ext.cols, r.c2 + 2) && check(Math.max(0, r.r1 - 1), r.c2 + 1, r.r2 + 1, r.c2 + 1)) {
       r = { ...r, c2: r.c2 + 1 };
       changed = true;
     }

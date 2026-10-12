@@ -13,6 +13,8 @@ import { createContext, evaluateNode } from "./evaluator";
 import { shiftFormula } from "./transform";
 import { Errors, FormulaError, type RefValue, type Scalar, type Value } from "./values";
 import { DependencyIndex, analyzeDeps } from "./depindex";
+import type { TableInfo } from "./structref";
+import { renameTableColumnInFormula, renameTableInFormula } from "./transform";
 import { DeferSignal, normalizeResult, sameScalar } from "./engine-util";
 import { applySpillImpl, clearSpillImpl, exportInputsImpl, importInputsImpl, moveRangeImpl, removeSheetImpl, renameSheetImpl, shiftCellsImpl, structuralChange } from "./engine-structure";
 import {
@@ -125,22 +127,97 @@ export class FormulaEngine implements EvalHost {
     const set = filtered ? s.filteredRows : s.hiddenRows;
     if (hidden) set.add(row);
     else set.delete(row);
-    // ALTTOPLAM gizli satırlara bağlıdır
-    this.markSubtotalsDirty(sheet);
+    // ALTTOPLAM gizli satırlara bağlıdır (işaretleme sonraki hesaplamaya ertelenir)
+    this.subtotalsStale = true;
+  }
+
+  /** Toplu gizleme/gösterme (filtre, anahat): tek seferde. */
+  setRowsHidden(sheet: number, rows: Iterable<number>, hidden: boolean, filtered = false): void {
+    const s = this.sheets.get(sheet);
+    if (!s) return;
+    const set = filtered ? s.filteredRows : s.hiddenRows;
+    if (hidden) for (const r of rows) set.add(r);
+    else for (const r of rows) set.delete(r);
+    this.subtotalsStale = true;
   }
 
   clearFilteredRows(sheet: number): void {
     const s = this.sheets.get(sheet);
     if (!s) return;
     s.filteredRows.clear();
-    this.markSubtotalsDirty(sheet);
+    this.subtotalsStale = true;
   }
 
-  private markSubtotalsDirty(sheet: number): void {
-    void sheet;
+  /** Gizli satır kümesini tümüyle değiştirir (geri al / eşitleme). */
+  replaceHiddenRows(sheet: number, hidden: Iterable<number>, filtered: Iterable<number>): void {
+    const s = this.sheets.get(sheet);
+    if (!s) return;
+    s.hiddenRows = new Set(hidden);
+    s.filteredRows = new Set(filtered);
+    this.subtotalsStale = true;
+  }
+
+  private subtotalsStale = false;
+  /** ALTTOPLAM/TOPLAMA içeren formül hücreleri (gizli satır değişince yeniden hesaplanır). */
+  private subtotalCells = new Set<number>();
+
+  private markSubtotalsDirty(): void {
+    this.subtotalsStale = false;
+    for (const g of this.subtotalCells) this.dirty.add(g);
+  }
+
+  /* ------------------------------ Tablolar ------------------------------ */
+
+  private tables: TableInfo[] = [];
+  private tablesSig = "";
+
+  /** Yapısal başvurular için tablo listesini ayarlar; değiştiyse bağımlılıklar yenilenir. */
+  setTables(list: TableInfo[]): void {
+    const sig = JSON.stringify(list);
+    if (sig === this.tablesSig) return;
+    this.tablesSig = sig;
+    this.tables = list.map((t) => ({ ...t, columns: [...t.columns] }));
+    this.reregisterAll();
+    this.markAllDirty();
+  }
+
+  getTables(): TableInfo[] {
+    return this.tables;
+  }
+
+  getTable(name: string | undefined, sheet: number, row: number, col: number): TableInfo | undefined {
+    if (name !== undefined) {
+      const u = name.toLocaleUpperCase("tr-TR");
+      return this.tables.find((t) => t.name.toLocaleUpperCase("tr-TR") === u);
+    }
+    return this.tables.find((t) => t.sheet === sheet && row >= t.r1 && row <= t.r2 && col >= t.c1 && col <= t.c2);
+  }
+
+  /** Tablo yeniden adlandırılınca formüllerdeki yapısal başvuruları günceller. */
+  renameTable(oldName: string, newName: string): void {
     for (const id of this.order) {
       const sh = this.sheets.get(id)!;
-      for (const [k, rec] of sh.cells) if (rec.formula && /SUBTOTAL|AGGREGATE/i.test(rec.formula.text)) this.dirty.add(id * SHEET_STRIDE + k);
+      for (const [k, rec] of sh.cells) {
+        if (!rec.formula || !rec.formula.text.includes("[")) continue;
+        const t = renameTableInFormula(rec.formula.text, oldName, newName);
+        if (t !== rec.formula.text) this.setFormulaInternal(id, keyRow(k), keyCol(k), t);
+      }
+    }
+    for (const t of this.tables) if (t.name.toLocaleUpperCase("tr-TR") === oldName.toLocaleUpperCase("tr-TR")) t.name = newName;
+    this.tablesSig = JSON.stringify(this.tables);
+    this.reregisterAll();
+    this.markAllDirty();
+  }
+
+  /** Tablo sütunu yeniden adlandırılınca formülleri günceller. */
+  renameTableColumn(table: string, oldCol: string, newCol: string): void {
+    for (const id of this.order) {
+      const sh = this.sheets.get(id)!;
+      for (const [k, rec] of sh.cells) {
+        if (!rec.formula || !rec.formula.text.includes("[")) continue;
+        const t = renameTableColumnInFormula(rec.formula.text, table, oldCol, newCol);
+        if (t !== rec.formula.text) this.setFormulaInternal(id, keyRow(k), keyCol(k), t);
+      }
     }
   }
 
@@ -409,12 +486,14 @@ export class FormulaEngine implements EvalHost {
     const { cellDeps, rangeDeps, volatile, usesNames } = analyzeDeps(info.ast, g, sheet, {
       sheetId: (name) => this.getSheetId(name),
       definedName: (name, sh) => this.getDefinedName(name, sh),
+      table: (name, sh, row, col) => this.getTable(name, sh, row, col),
     });
     info.cellDeps = cellDeps;
     info.rangeDeps = rangeDeps;
     info.volatile = volatile;
     info.usesNames = usesNames;
     this.deps.add(g, cellDeps, rangeDeps);
+    if (/SUBTOTAL|AGGREGATE/i.test(info.text)) this.subtotalCells.add(g);
     if (volatile) this.volatiles.add(g);
     if (usesNames) this.nameUsers.add(g);
   }
@@ -430,6 +509,7 @@ export class FormulaEngine implements EvalHost {
     info.rangeDeps = [];
     this.volatiles.delete(g);
     this.nameUsers.delete(g);
+    this.subtotalCells.delete(g);
     if (info.spill || info.spillTarget) this.clearSpill(g, info);
     this.spillAnchors.delete(g);
     this.dirty.delete(g);
@@ -440,6 +520,7 @@ export class FormulaEngine implements EvalHost {
     this.deps.clear();
     this.volatiles.clear();
     this.nameUsers.clear();
+    this.subtotalCells.clear();
     for (const id of this.order) {
       const s = this.sheets.get(id)!;
       for (const [k, rec] of s.cells) if (rec.formula) this.register(id * SHEET_STRIDE + k, rec.formula, id);
@@ -471,7 +552,7 @@ export class FormulaEngine implements EvalHost {
 
   /** Yeniden hesaplanmayı bekleyen formül var mı? */
   get pending(): boolean {
-    return this.dirty.size > 0 || this.changed.size > 0;
+    return this.dirty.size > 0 || this.changed.size > 0 || this.subtotalsStale;
   }
 
   /* --------------------------- Yeniden hesaplama --------------------------- */
@@ -484,6 +565,7 @@ export class FormulaEngine implements EvalHost {
     this.inRecalc = true;
     try {
       if (full) this.markAllDirty();
+      if (this.subtotalsStale) this.markSubtotalsDirty();
       for (const v of this.volatiles) this.dirty.add(v);
       this.lookupCache.clear();
       for (let pass = 0; pass < 8; pass++) {
@@ -677,8 +759,8 @@ export class FormulaEngine implements EvalHost {
 
   /* ----------------------------- Anlık görüntü ----------------------------- */
 
-  exportInputs(): EngineSnapshot {
-    return exportInputsImpl(this);
+  exportInputs(withAst = false): EngineSnapshot {
+    return exportInputsImpl(this, withAst);
   }
 
   /** Sayfa listesini ve girdileri anlık görüntüden geri yükler. */

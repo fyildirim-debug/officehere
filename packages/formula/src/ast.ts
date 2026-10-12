@@ -1,5 +1,6 @@
 import type { ErrorCode } from "./values";
 import type { RefToken } from "./lexer";
+import type { StructRef } from "./structref";
 
 export type BinaryOp = "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | ">" | "<=" | ">=" | ":" | " ";
 
@@ -9,6 +10,7 @@ export type Node =
   | { type: "bool"; value: boolean }
   | { type: "err"; code: ErrorCode }
   | { type: "ref"; ref: RefToken }
+  | { type: "structref"; ref: StructRef }
   | { type: "name"; name: string }
   | { type: "func"; name: string; args: Node[] }
   | { type: "unary"; op: "-" | "+"; arg: Node }

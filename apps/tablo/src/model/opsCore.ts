@@ -20,6 +20,7 @@ export class OpsCore {
   constructor(public wb: WorkbookModel) {}
 
   protected recalc(): void {
+    this.wb.syncTables();
     if (this.wb.engine.autoCalc) this.wb.engine.recalc();
   }
 
@@ -130,17 +131,19 @@ export class OpsCore {
     const wb = this.wb;
     const before = wb.snapshot();
     mutate();
-    const after = wb.snapshot();
+    // "Sonra" görüntüsü ilk geri almada alınır (doğrusal geçmişte o anki durum budur)
+    let after: ReturnType<WorkbookModel["snapshot"]> | null = null;
     const cost = before.engine.sheets.reduce((n, s) => n + s.cells.length, 0) * 2 + 100;
     this.history.push({
       label,
       cost,
       undo: () => {
+        after ??= wb.snapshot();
         wb.restore(before);
         wb.sheets.forEach((s) => this.syncHiddenRows(s));
       },
       redo: () => {
-        wb.restore(after);
+        if (after) wb.restore(after);
         wb.sheets.forEach((s) => this.syncHiddenRows(s));
       },
     });
@@ -155,8 +158,9 @@ export class OpsCore {
 
   /** Motorun gizli satır bilgisini sayfa modeliyle eşitler (ALTTOPLAM için). */
   syncHiddenRows(sheet: SheetModel): void {
-    const e = this.wb.engine;
-    for (const r of sheet.rows.hiddenItems()) e.setRowHidden(sheet.id, r, true, sheet.filterHidden.has(r));
+    const manual: number[] = [];
+    for (const r of sheet.rows.hiddenItems()) if (!sheet.filterHidden.has(r)) manual.push(r);
+    this.wb.engine.replaceHiddenRows(sheet.id, manual, sheet.filterHidden);
   }
 
 }

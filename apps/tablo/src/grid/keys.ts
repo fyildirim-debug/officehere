@@ -2,10 +2,13 @@
 import type { Controller } from "../controller";
 import * as F from "../actions/format";
 import * as E from "../actions/edit";
+import * as D from "../actions/data";
 import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import { validationList } from "../controller";
 import { pivotAt, refreshAll, refreshPivot } from "../pivot/pivotOps";
 import { toggleSpellcheck } from "../actions/view";
+import { quickChart } from "../actions/objects";
+import { handleObjectKey } from "../actions/objectClip";
 
 export interface GridKeyContext {
   pageRows: () => number;
@@ -19,6 +22,8 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
   const key = ev.key;
   const code = (ev as KeyboardEvent).code ?? "";
   const sheet = ctl.sheet;
+  // Seçili grafik/resim/şekil: Sil, Esc, ok tuşları, yazma
+  if (ctl.selObj && handleObjectKey(ctl, ev)) return true;
 
   switch (key) {
     case "ArrowUp":
@@ -101,7 +106,8 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
       return false;
     case "F4":
       if (ctrl) return false;
-      ctl.ops.redo();
+      // F4: son işlemi yinele (biçim uygula, satır ekle…)
+      ctl.repeatLast();
       return true;
     case "F5": {
       // Alt+F5: PivotTable'ı yenile, Ctrl+Alt+F5: tümünü yenile
@@ -142,6 +148,13 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
     case "F10":
       if (shift) return false;
       return false;
+    case "F1":
+      // Alt+F1: seçili veriden hızlı grafik
+      if (alt && !ctrl) {
+        quickChart(ctl);
+        return true;
+      }
+      return false;
     case "ContextMenu":
       return false;
   }
@@ -160,7 +173,8 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
       case "I":
       case "3":
         if (shift && k === "3") {
-          F.setNumFmt(ctl, "dd.mm.yyyy");
+          // Ctrl+Shift+3: gün.ay adı.yıl tarih biçimi (gg.aaa.yy)
+          F.setNumFmt(ctl, "dd.mmm.yy");
           return true;
         }
         F.toggle(ctl, "italic");
@@ -212,7 +226,9 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
         E.redo(ctl);
         return true;
       case "F":
-        ctl.openDialog("find");
+        // Ctrl+Shift+F: Hücreleri Biçimlendir > Yazı Tipi
+        if (shift) ctl.openDialog("formatCells", { tab: "font" });
+        else ctl.openDialog("find");
         return true;
       case "H":
         ctl.openDialog("replace");
@@ -225,7 +241,7 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
         return true;
       case "L":
         if (shift) {
-          ctl.openDialog("toggleFilter");
+          D.toggleAutoFilter(ctl);
           return true;
         }
         ctl.openDialog("createTable");
@@ -236,14 +252,26 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
       case "Backquote":
       case "`":
       case '"':
+        // Ctrl+Shift+~: Genel sayı biçimi; Ctrl+`: formülleri göster
+        if (shift && code === "Backquote") {
+          F.setNumFmt(ctl, "General");
+          return true;
+        }
         sheet.showFormulas = !sheet.showFormulas;
         ctl.emit();
         return true;
+      case "Quote":
+      case "'":
+        // Ctrl+' üstteki formülü, Ctrl+Shift+" üstteki değeri kopyalar
+        E.copyFromAbove(ctl, shift);
+        return true;
       case "Semicolon":
       case ";":
+      case ":":
       case ",":
       case "Comma":
-        E.insertNow(ctl, shift ? "time" : "date");
+        // Fiziksel tuş (e.code) esas alınır: ABD düzeninde Ctrl+Shift+; ":" üretir
+        E.insertNow(ctl, key === ":" || (shift && (code === "Semicolon" || k === ";")) ? "time" : "date");
         return true;
       case "Minus":
       case "-":

@@ -21,6 +21,8 @@ import {
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack, ColorPalette, useMenuClose } from "@officehere/ui";
 import { paletteOf } from "../model/theme";
 import type { Controller } from "../controller";
+import { requestDeleteSheet } from "../dialogs/MiscDialogs";
+import { IconSetMenu } from "./IconSetMenu";
 import * as F from "../actions/format";
 import * as E from "../actions/edit";
 import * as D from "../actions/data";
@@ -30,6 +32,7 @@ import { COLOR_SCALES, DATA_BAR_COLORS } from "../model/condfmt";
 import { autoFitCols, autoFitRows } from "../grid/autofit";
 import { currentRegion } from "../model/selection";
 import { SigmaGlyph } from "./glyphs";
+import { selectFirstObject } from "../actions/objectClip";
 
 export function TablePreview({ p, size = 56 }: { p: TableStylePreset; size?: number }) {
   const c = previewColors(p);
@@ -225,6 +228,7 @@ export function StylesGroup({ ctl }: { ctl: Controller }) {
             />
             <MenuItem icon={<DataBarHorizontal24Regular />} label="Veri Çubukları" submenu={<ColorBars ctl={ctl} />} />
             <MenuItem label="Renk Ölçekleri" submenu={<ColorScales ctl={ctl} />} />
+            <MenuItem label="Simge Kümeleri" submenu={<IconSetMenu ctl={ctl} />} />
             <MenuSeparator />
             <MenuItem label="Yeni Kural..." onClick={() => cf("new")} />
             <MenuItem
@@ -295,7 +299,7 @@ export function CellsGroup({ ctl }: { ctl: Controller }) {
             <MenuItem icon={<TableDeleteRow20Regular />} label="Sayfa Satırlarını Sil" onClick={() => E.deleteRows(ctl)} />
             <MenuItem icon={<TableDeleteColumn20Regular />} label="Sayfa Sütunlarını Sil" onClick={() => E.deleteCols(ctl)} />
             <MenuSeparator />
-            <MenuItem label="Sayfayı Sil" onClick={() => ctl.openDialog("deleteSheet")} />
+            <MenuItem label="Sayfayı Sil" onClick={() => requestDeleteSheet(ctl)} />
           </Menu>
         }
       />
@@ -424,7 +428,7 @@ export function EditingGroup({ ctl }: { ctl: Controller }) {
           }
         />
       </RibbonStack>
-      <RibbonMenuButton size="large" icon={<SortFilterGlyph />} label="Sırala ve Filtre Uygula" menu={<SortFilterMenu ctl={ctl} />} />
+      <RibbonMenuButton size="large" icon={<SortFilterGlyph />} label={"Sırala ve Filtre\u00a0Uygula"} menu={<SortFilterMenu ctl={ctl} />} />
       <RibbonMenuButton
         size="large"
         icon={<FindGlyph />}
@@ -434,6 +438,7 @@ export function EditingGroup({ ctl }: { ctl: Controller }) {
             <MenuItem icon={<Search20Regular />} label="Bul..." shortcut="Ctrl+F" onClick={() => ctl.openDialog("find")} />
             <MenuItem label="Değiştir..." shortcut="Ctrl+H" onClick={() => ctl.openDialog("replace")} />
             <MenuItem label="Git..." shortcut="Ctrl+G" onClick={() => ctl.openDialog("goto")} />
+            <MenuItem label="Özel Git..." onClick={() => ctl.openDialog("goSpecial")} />
             <MenuSeparator />
             <MenuItem label="Formüller" onClick={() => selectCells((r, c) => !!ctl.wb.getFormula(ctl.sheet, r, c))} />
             <MenuItem label="Notlar" onClick={() => {
@@ -453,6 +458,9 @@ export function EditingGroup({ ctl }: { ctl: Controller }) {
               else ctl.setSelection({ ranges, active: { row: ranges[0].r1, col: ranges[0].c1 }, anchor: { row: ranges[0].r1, col: ranges[0].c1 } });
             }} />
             <MenuItem label="Geçerli Bölge" onClick={() => ctl.selectRange(currentRegion(ctl.wb, ctl.sheet, ctl.sel.active))} />
+            <MenuSeparator />
+            <MenuItem label="Nesneleri Seç" disabled={!ctl.sheet.charts.length && !ctl.sheet.images.length && !ctl.sheet.shapes.length} onClick={() => selectFirstObject(ctl)} />
+            <MenuItem label="Seçim Bölmesi..." onClick={() => ((ctl.formatPane = "selection"), ctl.emit())} />
           </Menu>
         }
       />

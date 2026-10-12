@@ -221,12 +221,9 @@ function testOp(op: string, arg: string, v: Scalar, text: string): boolean {
 /** Tüm filtreleri yeniden uygular ve satırları gizler/gösterir. */
 export function recomputeFilters(ctl: Controller, sheet = ctl.sheet): void {
   const { wb } = ctl;
-  for (const r of sheet.filterHidden) {
-    sheet.rows.setHidden(r, false);
-    wb.engine.setRowHidden(sheet.id, r, false, true);
-  }
+  // Toplu işlem: önce eski filtre gizlilikleri kalkar, sonra yeni küme tek seferde uygulanır
+  sheet.rows.setHiddenMany(sheet.filterHidden, false);
   sheet.filterHidden.clear();
-  wb.engine.clearFilteredRows(sheet.id);
   for (const f of filtersOf(sheet)) {
     f.range = extendFilterRange(wb, sheet, f);
     const cols = Object.entries(f.columns);
@@ -251,13 +248,11 @@ export function recomputeFilters(ctl: Controller, sheet = ctl.sheet): void {
           break;
         }
       }
-      if (!visible) {
-        sheet.filterHidden.add(row);
-        sheet.rows.setHidden(row, true);
-        wb.engine.setRowHidden(sheet.id, row, true, true);
-      }
+      if (!visible) sheet.filterHidden.add(row);
     }
   }
+  sheet.rows.setHiddenMany(sheet.filterHidden, true);
+  ctl.ops.syncHiddenRows(sheet);
 }
 
 export function toggleAutoFilter(ctl: Controller): void {
@@ -485,20 +480,36 @@ export function createTable(ctl: Controller, r: Rect, hasHeader: boolean, style 
 /** Tablo seçeneği değiştir (Tablo Tasarımı sekmesi). */
 export function updateTable(ctl: Controller, t: TableDef, patch: Partial<TableDef>): void {
   const { wb, sheet } = ctl;
-  ctl.ops.sheetOp(
-    sheet,
-    "Tablo Stili Seçenekleri",
-    () => {
+  if (patch.name !== undefined && patch.name !== t.name) {
+    // Yeniden adlandırma formüllerdeki yapısal başvuruları da günceller (tüm kitap)
+    const newName = patch.name;
+    ctl.ops.snapshotOp("Tablo Adı", () => {
+      const cur = sheet.tables.find((x) => x.id === t.id);
+      if (!cur) return;
+      wb.engine.renameTable(cur.name, newName);
+      cur.name = newName;
+    });
+    const rest = { ...patch };
+    delete rest.name;
+    if (Object.keys(rest).length) updateTable(ctl, { ...t, name: newName }, rest);
+    return;
+  }
+  const apply = () => {
       const cur = sheet.tables.find((x) => x.id === t.id);
       if (!cur) return;
       if (patch.totalRow !== undefined && patch.totalRow !== cur.totalRow) {
         if (patch.totalRow) {
           const row = cur.ref.r2 + 1;
+          // Altındaki veri ezilmez: tablo sütunlarındaki hücreler bir satır aşağı kaydırılır
+          let occupied = false;
+          for (let c = cur.ref.c1; c <= cur.ref.c2 && !occupied; c++) if (wb.engine.hasInput(sheet.id, row, c)) occupied = true;
+          if (occupied) ctl.ops.shiftCellsRaw(sheet, { r1: row, c1: cur.ref.c1, r2: row, c2: cur.ref.c2 }, "down");
           cur.ref = { ...cur.ref, r2: row };
           wb.setInputRaw(sheet, row, cur.ref.c1, "Toplam");
           const lastCol = cur.ref.c2;
-          const dataRange = `${colName(lastCol)}${cur.ref.r1 + 2}:${colName(lastCol)}${row}`;
-          wb.setInputRaw(sheet, row, lastCol, { formula: `=SUBTOTAL(109,${dataRange})` });
+          const colRef = cur.columns[lastCol - cur.ref.c1];
+          const ref = colRef ? `${cur.name}[${/^[\p{L}\p{N}_.][\p{L}\p{N}_. ]*$/u.test(colRef) ? colRef : `[${colRef.replace(/(['[\]#])/g, "'$1")}]`}]` : `${colName(lastCol)}${cur.ref.r1 + 2}:${colName(lastCol)}${row}`;
+          wb.setInputRaw(sheet, row, lastCol, { formula: `=SUBTOTAL(109,${ref})` });
         } else {
           const row = cur.ref.r2;
           for (let c = cur.ref.c1; c <= cur.ref.c2; c++) wb.setInputRaw(sheet, row, c, null);
@@ -510,9 +521,10 @@ export function updateTable(ctl: Controller, t: TableDef, patch: Partial<TableDe
       if (patch.filterButton === false) cur.filter = undefined;
       if (patch.filterButton === true && !cur.filter) cur.filter = { range: cur.ref, columns: {} };
       recomputeFilters(ctl);
-    },
-    [rect(t.ref.r1, t.ref.c1, t.ref.r2 + 1, t.ref.c2)],
-  );
+  };
+  // Toplam satırı hücreleri kaydırabilir: tüm kitap anlık görüntüsüyle geri alınır
+  if (patch.totalRow !== undefined && patch.totalRow !== t.totalRow) ctl.ops.snapshotOp("Toplam Satırı", apply);
+  else ctl.ops.sheetOp(sheet, "Tablo Stili Seçenekleri", apply, [rect(t.ref.r1, t.ref.c1, t.ref.r2 + 1, t.ref.c2)]);
 }
 
 function colName(c: number): string {

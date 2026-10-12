@@ -90,6 +90,11 @@ export function readCondRule(rule: any, cr: ColorResolver): Omit<CondRule, "id" 
       return { type: "dataBar", color: cr.resolve(rule.color) ?? "#638EC6" };
     case "colorScale":
       return { type: "colorScale", colors: (rule.color ?? []).map((c: any) => cr.resolve(c) ?? "#FFFFFF") };
+    case "iconSet": {
+      const set = String(rule.iconSet ?? "3TrafficLights1");
+      const th = (rule.cfvo ?? []).map((c: any) => ({ type: c.type === "num" || c.type === "percentile" ? c.type : "percent", value: Number(c.value ?? 0) }));
+      return { type: "iconSet", iconSet: set, iconThresholds: th.length ? th : undefined, reverseIcons: !!rule.reverse, iconOnly: rule.showValue === false || rule.showValue === 0 || rule.showValue === "0" };
+    }
   }
   return null;
 }
@@ -157,6 +162,11 @@ export function writeCondRule(r: CondRule, priority: number): any {
       const cols = r.colors ?? ["#F8696B", "#FFEB84", "#63BE7B"];
       const cfvo = cols.length === 2 ? [{ type: "min" }, { type: "max" }] : [{ type: "min" }, { type: "percentile", value: 50 }, { type: "max" }];
       return { type: "colorScale", priority, cfvo, color: cols.map((c) => ({ argb: "FF" + c.slice(1) })) };
+    }
+    case "iconSet": {
+      const n = Number((r.iconSet ?? "3")[0]) || 3;
+      const th = r.iconThresholds?.length === n ? r.iconThresholds : Array.from({ length: n }, (_, i) => ({ type: "percent", value: Math.round((100 * i) / n) }));
+      return { type: "iconSet", priority, iconSet: r.iconSet ?? "3TrafficLights1", reverse: !!r.reverseIcons, showValue: !r.iconOnly, cfvo: th.map((t) => ({ type: t.type, value: t.value })) };
     }
   }
   return null;

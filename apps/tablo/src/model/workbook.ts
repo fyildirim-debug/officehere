@@ -3,7 +3,7 @@
  * içeriklerini tutar; bu katman stilleri, boyutları, birleştirmeleri,
  * notları ve sayfa düzeyindeki nesneleri yönetir.
  */
-import { FormulaEngine, cellKey, keyCol, keyRow, toLocalFormula, numberToText, isDateFormat, isTimeOnlyFormat, formatValue, isError, localErrorName, parseCellInput, type Scalar } from "@officehere/formula";
+import { FormulaEngine, cellKey, keyCol, keyRow, toLocalFormula, numberToText, isDateFormat, isTimeOnlyFormat, formatValue, isError, localErrorName, parseCellInput, type Scalar, type TableInfo } from "@officehere/formula";
 import { AxisSizes } from "./axis";
 import { MAX_COLS, MAX_ROWS, contains, intersects, shiftIndex, shiftRect } from "./rect";
 import { StyleTable, type CellStyle } from "./styles";
@@ -279,6 +279,8 @@ export class WorkbookModel {
   props: DocProps = {};
   /** Çalışma kitabı teması (Sayfa Düzeni > Temalar). */
   theme: WorkbookTheme = defaultTheme();
+  /** İçe aktarmada okunamayıp atlanan öğeler (bilgi çubuğunda gösterilir). */
+  loadWarnings: string[] = [];
   private nextObjectId = 1;
 
   constructor(empty = false) {
@@ -292,6 +294,17 @@ export class WorkbookModel {
 
   newId(prefix: string): string {
     return `${prefix}${this.nextObjectId++}`;
+  }
+
+  /** Dışarıdan yüklenen nesnelerin kimlikleriyle çakışmamak için sayacı ilerletir. */
+  bumpIds(): void {
+    let max = 0;
+    for (const s of this.sheets)
+      for (const o of [...s.charts, ...s.images, ...s.shapes, ...s.tables, ...s.pivots, ...s.sparklines, ...s.validations, ...s.condFormats]) {
+        const n = Number(/(\d+)$/.exec(o.id)?.[1] ?? 0);
+        if (n > max) max = n;
+      }
+    this.nextObjectId = Math.max(this.nextObjectId, max + 1);
   }
 
   /* ------------------------------ Sayfalar ------------------------------ */
@@ -323,7 +336,10 @@ export class WorkbookModel {
     this.engine.renameSheet(s.id, name);
     // Grafik ve mini grafik veri aralıkları yeni adı göstersin
     for (const o of this.sheets) {
-      for (const c of o.charts) c.range = renameRangeText(c.range, s.name, name);
+      for (const c of o.charts) {
+        c.range = renameRangeText(c.range, s.name, name);
+        mapSeriesRanges(c, (t) => renameRangeText(t, s.name, name));
+      }
       for (const g of o.sparklines) for (const it of g.items) it.range = renameRangeText(it.range, s.name, name);
     }
     s.name = name;
@@ -487,15 +503,26 @@ export class WorkbookModel {
         const r = shiftRect(p.source, axis, at, count);
         if (r) p.source = r;
       }
-      for (const c of s.charts) c.range = shiftRangeText(c.range, s.name, sheet.name, axis, at, count);
+      for (const c of s.charts) {
+        c.range = shiftRangeText(c.range, s.name, sheet.name, axis, at, count);
+        mapSeriesRanges(c, (t) => shiftRangeText(t, s.name, sheet.name, axis, at, count));
+      }
       for (const g of s.sparklines) for (const it of g.items) it.range = shiftRangeText(it.range, s.name, sheet.name, axis, at, count);
     }
+  }
+
+  /** Tablo tanımlarını hesap motoruna bildirir (yapısal başvurular); değişmediyse işlem yapılmaz. */
+  syncTables(): void {
+    const list: TableInfo[] = [];
+    for (const s of this.sheets)
+      for (const t of s.tables) list.push({ name: t.name, sheet: s.id, r1: t.ref.r1, c1: t.ref.c1, r2: t.ref.r2, c2: t.ref.c2, headerRow: t.headerRow, totalRow: t.totalRow, columns: t.columns });
+    this.engine.setTables(list);
   }
 
   /** Tüm sayfaların anlık görüntüsü (yapısal işlemleri geri almak için). */
   snapshot(): WorkbookSnapshot {
     return {
-      engine: this.engine.exportInputs(),
+      engine: this.engine.exportInputs(true),
       sheets: this.sheets.map((s) => ({ id: s.id, name: s.name, data: s.cloneData() })),
       activeIndex: this.activeIndex,
       theme: structuredClone(this.theme),
@@ -513,8 +540,21 @@ export class WorkbookModel {
     });
     this.activeIndex = Math.min(snap.activeIndex, this.sheets.length - 1);
     this.theme = structuredClone(snap.theme);
+    this.syncTables();
     this.engine.recalc();
   }
+}
+
+/** Grafiğin açık seri aralıklarına dönüşüm uygular. */
+function mapSeriesRanges(c: ChartDef, fn: (t: string) => string): void {
+  if (!c.series) return;
+  c.series = c.series.map((s) => ({
+    ...s,
+    values: fn(s.values),
+    ...(s.categories ? { categories: fn(s.categories) } : {}),
+    ...(s.xValues ? { xValues: fn(s.xValues) } : {}),
+    ...(s.nameRef ? { nameRef: fn(s.nameRef) } : {}),
+  }));
 }
 
 export interface WorkbookSnapshot {

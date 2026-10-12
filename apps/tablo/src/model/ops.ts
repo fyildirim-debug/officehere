@@ -2,7 +2,7 @@
  * Geri alınabilir çalışma kitabı işlemleri. Her işlem değişen hücrelerin
  * önceki/sonraki durumunu (ya da yapısal işlemlerde anlık görüntüyü) kaydeder.
  */
-import { cellKey, keyCol, keyRow, parseCellInput, type Scalar } from "@officehere/formula";
+import { cellKey, keyCol, keyRow, parseCellInput, qualifyStructRefs, type Scalar } from "@officehere/formula";
 import { OpsSheets, uniqueTableName } from "./opsSheets";
 import { MAX_COLS, MAX_ROWS, contains, intersects, isFullCols, isFullRows, rect, rectCols, rectRows } from "./rect";
 import type { CellStyle } from "./styles";
@@ -10,6 +10,7 @@ import type { Rect } from "./types";
 import { generateFill, type FillSource } from "./fill";
 import type { CellInput, SheetModel } from "./workbook";
 import { copySparkline } from "../sparkline/sparkOps";
+import { inheritedFormat } from "./formatInherit";
 
 export type StylePatch = Partial<CellStyle> | ((s: CellStyle) => Partial<CellStyle>);
 
@@ -25,10 +26,19 @@ export class Ops extends OpsSheets {
         const st = wb.styleAt(sheet, row, col);
         const p = parseCellInput(text, { numFmt: st.numFmt });
         if (p.kind === "empty") wb.setInputRaw(sheet, row, col, null);
-        else if (p.kind === "formula") wb.setInputRaw(sheet, row, col, { formula: p.formula! });
+        else if (p.kind === "formula") {
+          // Tablosuz yapısal başvurular ([@Adet]) bulunduğu tablonun adıyla nitelenir
+          const t = p.formula!.includes("[") ? sheet.tableAt(row, col) : undefined;
+          wb.setInputRaw(sheet, row, col, { formula: t ? qualifyStructRefs(p.formula!, t.name) : p.formula! });
+        }
         else wb.setInputRaw(sheet, row, col, p.value ?? null);
         if (p.numFmt && (!st.numFmt || st.numFmt === "General")) {
           wb.setStyleRaw(sheet, row, col, wb.styles.patch(wb.styleIdAt(sheet, row, col), { numFmt: p.numFmt }));
+        }
+        // Formül sonucu, Genel biçimli hücrede başvurduğu hücrenin (ya da fonksiyonun) biçimini alır
+        if (p.kind === "formula" && (!st.numFmt || st.numFmt === "General")) {
+          const fmt = inheritedFormat(wb, sheet, p.formula!);
+          if (fmt) wb.setStyleRaw(sheet, row, col, wb.styles.patch(wb.styleIdAt(sheet, row, col), { numFmt: fmt }));
         }
         // Alt+Enter ile girilen satır sonu metni kaydırmayı açar
         if (typeof p.value === "string" && p.value.includes("\n") && !st.wrap) {
@@ -295,7 +305,12 @@ export class Ops extends OpsSheets {
   /** Hücre ekle/sil ve kaydır. */
   shiftCells(sheet: SheetModel, r: Rect, dir: "down" | "right" | "up" | "left"): void {
     const label = dir === "down" || dir === "right" ? "Hücre Ekle" : "Hücre Sil";
-    this.snapshotOp(label, () => {
+    this.snapshotOp(label, () => this.shiftCellsRaw(sheet, r, dir));
+  }
+
+  /** Hücre kaydırma (geri alma kaydı olmadan; çağıran snapshotOp içinde kullanır). */
+  shiftCellsRaw(sheet: SheetModel, r: Rect, dir: "down" | "right" | "up" | "left"): void {
+    {
       const wb = this.wb;
       wb.engine.shiftCells(sheet.id, r.r1, r.c1, r.r2, r.c2, dir);
       const h = rectRows(r);
@@ -323,7 +338,7 @@ export class Ops extends OpsSheets {
       sheet.styles = moveMap(sheet.styles);
       sheet.notes = moveMap(sheet.notes);
       sheet.links = moveMap(sheet.links);
-    });
+    }
   }
 
   /* ------------------------- Birleştirme ------------------------- */
@@ -393,14 +408,12 @@ export class Ops extends OpsSheets {
   setHidden(sheet: SheetModel, axis: "row" | "col", items: number[], hidden: boolean): void {
     this.sheetOp(sheet, hidden ? "Gizle" : "Göster", () => {
       const ax = axis === "row" ? sheet.rows : sheet.cols;
+      ax.setHiddenMany(items, hidden);
       for (const i of items) {
-        ax.setHidden(i, hidden);
         if (!hidden && ax.rawSize(i) === 0) ax.reset(i);
-        if (axis === "row") {
-          sheet.filterHidden.delete(i);
-          this.wb.engine.setRowHidden(sheet.id, i, hidden);
-        }
+        if (axis === "row") sheet.filterHidden.delete(i);
       }
+      if (axis === "row") this.syncHiddenRows(sheet);
     });
   }
 

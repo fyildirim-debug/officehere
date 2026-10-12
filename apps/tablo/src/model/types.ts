@@ -55,7 +55,8 @@ export type CondRuleType =
   | "containsBlanks"
   | "notContainsBlanks"
   | "containsErrors"
-  | "timePeriod";
+  | "timePeriod"
+  | "iconSet";
 
 export interface CondRule {
   id: string;
@@ -77,6 +78,13 @@ export interface CondRule {
   /** Renk ölçeği: 2 ya da 3 renk (min, [orta], maks). */
   colors?: string[];
   timePeriod?: string;
+  /** Simge kümesi adı (3Arrows, 3TrafficLights1, 5Rating…). */
+  iconSet?: string;
+  /** Simge eşikleri (ilki her zaman en küçük): yüzde, sayı ya da yüzdebirlik. */
+  iconThresholds?: { type: "percent" | "num" | "percentile"; value: number }[];
+  reverseIcons?: boolean;
+  /** Yalnız simgeyi göster (değer gizli). */
+  iconOnly?: boolean;
   stopIfTrue?: boolean;
   priority?: number;
 }
@@ -142,11 +150,33 @@ export interface ChartDef {
   height: number;
   xTitle?: string;
   yTitle?: string;
+  /**
+   * Açık seri tanımları (dosyadan okunan grafiklerde): varsa veri aralığından
+   * seri tahmini yapılmaz. Aralıklar nitelenmiş metindir ("Bütçe!$E$3:$E$9").
+   */
+  series?: ChartSeriesDef[];
+  /** Seçim Bölmesinde gizlenmiş. */
+  hidden?: boolean;
+  /** Grafik alanı dolgusu (Grafik Alanını Biçimlendir). */
+  fill?: string;
+  /** Grafik alanı kenarlığı rengi; "none" kenarlıksız. */
+  border?: string;
+}
+
+export interface ChartSeriesDef {
+  /** Seri adı hücresi (nitelenmiş başvuru) ya da sabit ad. */
+  nameRef?: string;
+  name?: string;
+  values: string;
+  categories?: string;
+  /** Dağılım grafiğinde x değerleri. */
+  xValues?: string;
 }
 
 export interface ImageDef {
   id: string;
   name: string;
+  hidden?: boolean;
   src: string;
   anchor: Anchor;
   width: number;
@@ -157,6 +187,7 @@ export interface ShapeDef {
   id: string;
   kind: "rect" | "roundRect" | "ellipse" | "triangle" | "arrow" | "line" | "textbox";
   text: string;
+  hidden?: boolean;
   fill: string;
   stroke: string;
   anchor: Anchor;

@@ -152,6 +152,7 @@ export function drawCellText(ctx: CanvasRenderingContext2D, v: CellView, x: numb
   ctx.font = font;
   ctx.fillStyle = v.color;
   const avail = cellW - pad * 2 - indent;
+  let hashed = false;
   // Sayılar sığmazsa ### (Genel biçimde önce basamak azaltılır)
   if (v.isNumber && !s.wrap) {
     let tw = ctx.measureText(text).width;
@@ -171,11 +172,18 @@ export function drawCellText(ctx: CanvasRenderingContext2D, v: CellView, x: numb
             done = true;
           }
         }
-        if (!done) text = "#".repeat(Math.max(1, Math.floor(avail / Math.max(1, ctx.measureText("#").width))));
-      } else text = "#".repeat(Math.max(1, Math.floor(avail / Math.max(1, ctx.measureText("#").width))));
+        if (!done) {
+          text = "#".repeat(Math.max(1, Math.floor(avail / Math.max(1, ctx.measureText("#").width))));
+          hashed = true;
+        }
+      } else {
+        text = "#".repeat(Math.max(1, Math.floor(avail / Math.max(1, ctx.measureText("#").width))));
+        hashed = true;
+      }
     }
   }
-  if (v.fillChar && !s.wrap) {
+  // Doldurma karakteri (muhasebe biçimindeki "* ") yalnız değer sığdığında uygulanır: sığmayan değer düz ######## olur
+  if (v.fillChar && !s.wrap && !hashed) {
     const fw = ctx.measureText(v.fillChar.char).width || 3;
     const tw = ctx.measureText(text).width;
     const n = Math.max(0, Math.floor((avail - tw) / fw));

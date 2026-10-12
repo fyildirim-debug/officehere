@@ -82,8 +82,23 @@ export class AxisSizes {
     this.invalidate();
   }
 
+  /** Toplu gizle/göster (tek geçersizleştirme). */
+  setHiddenMany(items: Iterable<number>, hidden: boolean): void {
+    if (hidden) for (const i of items) this.hiddenSet.add(i);
+    else for (const i of items) this.hiddenSet.delete(i);
+    this.invalidate();
+  }
+
+  hiddenCount(): number {
+    return this.hiddenSet.size;
+  }
+
   hiddenItems(): number[] {
     return [...this.hiddenSet].sort((a, b) => a - b);
+  }
+
+  manualItems(): number[] {
+    return [...this.manualSet];
   }
 
   customItems(): [number, number][] {

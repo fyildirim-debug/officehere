@@ -15,6 +15,7 @@ import { autoCloseParens, parseRangeLoose, validateInputRule, validationList } f
 import { adjustRowHeights, widenForNumber } from "./grid/autofit";
 import type { TraceArrow, Watch } from "./actions/audit";
 import { activateTheme } from "./model/themeRuntime";
+import { afterTableEntry } from "./actions/tableAuto";
 
 export type EditMode = "enter" | "edit";
 
@@ -81,6 +82,14 @@ export class Controller {
   requestTab: string | null = null;
   /** Veri doğrulama açılan listesi açık mı. */
   listDropdown = false;
+  /** Uygulamanın Kaydet eylemi (çökme uyarısından çağrılır). */
+  saveHook: (() => Promise<boolean>) | null = null;
+  /** Sağdaki biçimlendirme bölmesi (Grafik Alanını Biçimlendir). */
+  formatPane: "chart" | "selection" | null = null;
+  /** Son yinelenebilir işlem (F4 / Ctrl+Y: Yinele). */
+  lastAction: { label: string; run: () => void } | null = null;
+  /** Şeridin altındaki bilgi çubuğu (ör. içe aktarmada atlanan öğeler). */
+  infoBar: { kind: "info" | "warning" | "error"; text: string } | null = null;
   /** Seçili yüzen nesne (grafik, resim, şekil). */
   selObj: { kind: "chart" | "image" | "shape"; id: string } | null = null;
   /** Biçim Boyacısı: kopyalanan stiller. */
@@ -125,11 +134,15 @@ export class Controller {
     this.ops = this.makeOps(wb);
     this.cf = new CondFormatter(wb);
     activateTheme(wb.theme);
+    wb.syncTables();
     wb.engine.recalc();
     wb.sheets.forEach((s) => this.ops.syncHiddenRows(s));
     this.fileName = fileName;
     this.fileRef = ref;
     this.dirty = false;
+    this.infoBar = wb.loadWarnings.length
+      ? { kind: "warning", text: `Dosyadaki bazı öğeler okunamadı ve atlandı: ${wb.loadWarnings.join(", ")}. Çalışma kitabının geri kalanı açıldı.` }
+      : null;
     this.edit = null;
     this.clip = null;
     this.corner = { ...this.sel.active };
@@ -345,6 +358,19 @@ export class Controller {
     return true;
   }
 
+  /** İşlemi F4 ile yinelenebilir olarak kaydeder (çalıştırıldığında geçerli seçime uygulanır). */
+  recordRepeat(label: string, run: () => void): void {
+    this.lastAction = { label, run };
+  }
+
+  /** F4: son işlemi geçerli seçimde yineler. */
+  repeatLast(): boolean {
+    const a = this.lastAction;
+    if (!a || this.edit) return false;
+    a.run();
+    return true;
+  }
+
   /** Hücre düzenlemeyi başlatır. text verilirse "Gir" kipinde yazılanla başlar. */
   startEdit(text?: string, inBar = false): void {
     if (this.edit) return;
@@ -451,10 +477,28 @@ export class Controller {
       for (const r of this.sel.ranges) for (let i = r.r1; i <= Math.min(r.r2, r.r1 + 100000); i++) for (let j = r.c1; j <= Math.min(r.c2, r.c1 + 1000); j++) cells.push({ row: i, col: j });
     } else cells.push({ row: e.row, col: e.col });
     this.edit = null;
-    const validation = this.validateInput(sheet, e.row, e.col, text);
+    const validation = this.skipValidation ? null : this.validateInput(sheet, e.row, e.col, text);
+    this.skipValidation = false;
     if (validation) {
+      // Durdur: Yeniden Dene/İptal; Uyarı: Evet/Hayır/İptal; Bilgi: Tamam/İptal
       this.edit = e;
-      this.alert(validation.message, validation.title);
+      this.openDialog("validationError", {
+        ...validation,
+        onRetry: () => {
+          if (this.edit) this.edit = { ...this.edit, mode: "edit" };
+          this.emit();
+          this.focusGrid();
+        },
+        onCancel: () => {
+          this.cancelEdit();
+          this.focusGrid();
+        },
+        onAccept: () => {
+          this.skipValidation = true;
+          this.commitEdit(move, fillAll);
+          this.focusGrid();
+        },
+      });
       this.emit();
       return false;
     }
@@ -471,10 +515,10 @@ export class Controller {
       this.ops.enterText(sheet, cells, text);
       // Biçimli sayı (tarih, para…) varsayılan genişliğe sığmıyorsa sütun genişler
       const w = widenForNumber(this.wb, sheet, e.row, e.col);
-      if (w !== null) {
-        this.ops.sheetOp(sheet, "Sütun Genişliği", () => sheet.cols.set(e.col, w, false));
-        this.ops.history.squash(mark, "Yazma");
-      }
+      if (w !== null) this.ops.sheetOp(sheet, "Sütun Genişliği", () => sheet.cols.set(e.col, w, false));
+      // Tablo: alta/sağa yazınca genişleme, hesaplanmış sütun, başlık adı
+      if (text !== "") afterTableEntry(this, sheet, e.row, e.col);
+      this.ops.history.squash(mark, "Yazma");
     }
     if (move) this.advance(move);
     else this.emit();
@@ -508,8 +552,11 @@ export class Controller {
     return out;
   }
 
+  /** Bir sonraki onayda veri doğrulama atlanır (uyarı kutusunda "Evet"). */
+  private skipValidation = false;
+
   /** Veri doğrulama kuralı ihlali. */
-  validateInput(sheet: SheetModel, row: number, col: number, text: string): { title: string; message: string } | null {
+  validateInput(sheet: SheetModel, row: number, col: number, text: string): { title: string; message: string; style: "stop" | "warning" | "information" } | null {
     return validateInputRule(this.wb, sheet, row, col, text);
   }
 

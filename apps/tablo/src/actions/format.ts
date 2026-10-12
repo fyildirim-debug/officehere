@@ -21,6 +21,7 @@ export function applyStyle(ctl: Controller, patch: Partial<CellStyle> | ((s: Cel
     return;
   }
   ctl.ops.applyStyle(ctl.sheet, ranges(ctl), patch, label);
+  ctl.recordRepeat(label ?? "Biçimlendirme", () => applyStyle(ctl, patch, label));
 }
 
 export function toggle(ctl: Controller, key: "bold" | "italic" | "strike"): void {
@@ -156,6 +157,7 @@ export function comma(ctl: Controller): void {
 export function borders(ctl: Controller, kind: string, color = "#000000", style: "thin" | "medium" | "thick" | "dashed" | "dotted" | "double" = "thin"): void {
   if (ctl.edit) ctl.commitEdit(null);
   for (const r of ctl.sel.ranges) ctl.ops.applyBorders(ctl.sheet, r, kind, { style, color });
+  ctl.recordRepeat("Kenarlıklar", () => borders(ctl, kind, color, style));
 }
 
 export function mergeCells(ctl: Controller, mode: "center" | "across" | "merge" | "unmerge"): void {
@@ -174,6 +176,7 @@ export function mergeCells(ctl: Controller, mode: "center" | "across" | "merge" 
     ctl.ops.merge(sheet, ctl.sel.ranges, mode);
     const r = ctl.range;
     ctl.selectRange(r, { row: r.r1, col: r.c1 });
+    ctl.recordRepeat("Birleştir", () => mergeCells(ctl, mode));
   };
   if (ctl.ops.mergeLosesData(sheet, ctl.sel.ranges)) {
     ctl.openDialog("confirm", {
@@ -186,6 +189,7 @@ export function mergeCells(ctl: Controller, mode: "center" | "across" | "merge" 
 
 export function clearFormats(ctl: Controller): void {
   ctl.ops.clear(ctl.sheet, ctl.sel.ranges, "formats");
+  ctl.recordRepeat("Biçimleri Temizle", () => clearFormats(ctl));
 }
 
 export function applyCellStyle(ctl: Controller, style: CellStyle): void {

@@ -2,7 +2,7 @@
 import { useSyncExternalStore } from "react";
 import { DocumentOnePage20Regular, Grid20Regular, ReadingModeMobile20Regular } from "@fluentui/react-icons";
 import { StatusBar, StatusItem, ViewSwitcher, ZoomSlider } from "@officehere/ui";
-import { addr, formatValue, isError } from "@officehere/formula";
+import { addr, formatValue } from "@officehere/formula";
 import type { Controller } from "./controller";
 
 const MODE: Record<string, string> = { ready: "Hazır", enter: "Gir", edit: "Düzenle", point: "İşaret" };
@@ -43,7 +43,8 @@ function selectionStats(ctl: Controller): { count: number; nums: number; sum: nu
         if (seen.has(k)) continue;
         seen.add(k);
         const v = wb.getValue(sheet, i, j);
-        if (v === null || isError(v)) continue;
+        if (v === null) continue;
+        // Sayım hata değerlerini de sayar (boş olmayan her hücre); toplam/ortalama yalnız sayılar
         count++;
         if (typeof v === "number") {
           nums++;

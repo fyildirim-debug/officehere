@@ -5,12 +5,12 @@ import type { Rect } from "./types";
 import type { SheetModel, WorkbookModel } from "./workbook";
 
 /** Veri doğrulama kuralı ihlali (Hata Uyarısı "Dur" ise ileti). */
-export function validateInputRule(wb: WorkbookModel, sheet: SheetModel, row: number, col: number, text: string): { title: string; message: string } | null {
+export function validateInputRule(wb: WorkbookModel, sheet: SheetModel, row: number, col: number, text: string): { title: string; message: string; style: "stop" | "warning" | "information" } | null {
   const v = sheet.validations.find((x) => x.ranges.some((r) => row >= r.r1 && row <= r.r2 && col >= r.c1 && col <= r.c2));
   if (!v || text === "" || text.startsWith("=")) return null;
   const rule = v.rule;
-  if (rule.type === "any" || (rule.errorStyle && rule.errorStyle !== "stop")) return null;
-  const fail = { title: rule.errorTitle || "OfficeHere Tablo", message: rule.error || "Bu değer, bu hücre için tanımlanan veri doğrulama kısıtlamalarıyla eşleşmiyor." };
+  if (rule.type === "any") return null;
+  const fail = { title: rule.errorTitle || "OfficeHere Tablo", message: rule.error || "Bu değer, bu hücre için tanımlanan veri doğrulama kısıtlamalarıyla eşleşmiyor.", style: rule.errorStyle ?? "stop" };
   if (rule.type === "list") {
     const items = validationList(wb, sheet, v.rule.formula1 ?? "", row, col);
     return items.some((i) => i.toLocaleUpperCase("tr-TR") === text.trim().toLocaleUpperCase("tr-TR")) ? null : fail;

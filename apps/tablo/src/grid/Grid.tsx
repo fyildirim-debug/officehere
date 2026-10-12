@@ -559,7 +559,8 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
   const onWheel = (e: React.WheelEvent) => {
     if (!fromGrid(e)) return;
     if (e.ctrlKey) {
-      const next = Math.max(10, Math.min(400, sheet.zoom + (e.deltaY < 0 ? 10 : -10)));
+      // Ctrl+tekerlek: %15 adım (Excel gibi)
+      const next = Math.max(10, Math.min(400, sheet.zoom + (e.deltaY < 0 ? 15 : -15)));
       sheet.zoom = next;
       ctl.emit();
       return;

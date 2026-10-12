@@ -19,4 +19,5 @@ export * from "./transform";
 export * from "./engine";
 export * from "./input";
 export * from "./audit";
+export * from "./structref";
 export { FUNCTIONS, CATEGORY_LABELS, getFunction, resolveFunctionName, trNameOf, argNames, type FnDef, type Category } from "./functions/registry";

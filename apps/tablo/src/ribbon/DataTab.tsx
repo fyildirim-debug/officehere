@@ -31,7 +31,7 @@ export function DataTab({ ctl }: { ctl: Controller }) {
   return (
     <>
       <RibbonGroup label="Veri Al ve Dönüştür" icon={<DocumentText24Regular />}>
-        <RibbonButton size="large" icon={<DocumentText24Regular />} label="Metinden/ CSV'den" description="Metin, virgülle ya da noktalı virgülle ayrılmış değer dosyasından veri alır." onClick={() => void importText(ctl)} />
+        <RibbonButton size="large" icon={<DocumentText24Regular />} label="Metin/CSV'den" description="Metin, virgülle ya da noktalı virgülle ayrılmış değer dosyasından veri alır." onClick={() => void importText(ctl)} />
       </RibbonGroup>
       <RibbonGroup label="Sorgular ve Bağlantılar" icon={<ArrowSync24Regular />}>
         <RibbonButton size="large" icon={<ArrowSync24Regular />} label="Tümünü Yenile" shortcut="Ctrl+Alt+F5" description="Çalışma kitabındaki tüm özet tabloları kaynak verilerinden yeniden hesaplar." disabled={!ctl.wb.sheets.some((s) => s.pivots.length)} onClick={() => refreshAll(ctl)} />

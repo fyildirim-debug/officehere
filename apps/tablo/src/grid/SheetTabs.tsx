@@ -17,10 +17,24 @@ export function SheetTabs({ ctl, onContextMenu }: { ctl: Controller; onContextMe
     el?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [wb.activeIndex]);
 
+  // Geçersiz ad uyarısı açıkken odak kaybı yeniden doğrulamaz (uyarı iki kez açılmasın)
+  const alerting = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Uyarı kapanınca odak ad kutusuna döner (Excel gibi düzeltmeye devam edilir)
+  useEffect(() => {
+    if (!alerting.current || renaming === null) return;
+    const h = window.setInterval(() => {
+      if (document.querySelector(".oh-dialog")) return;
+      window.clearInterval(h);
+      inputRef.current?.focus();
+    }, 50);
+    return () => window.clearInterval(h);
+  });
   const commitRename = () => {
-    if (renaming === null) return;
+    if (renaming === null || alerting.current) return;
     const err = wb.isValidSheetName(name, wb.sheets[renaming]);
     if (err) {
+      alerting.current = true;
       ctl.alert(err);
       return;
     }
@@ -98,16 +112,21 @@ export function SheetTabs({ ctl, onContextMenu }: { ctl: Controller; onContextMe
             >
               {renaming === i ? (
                 <input
+                  ref={inputRef}
                   className="tb-tab-input"
                   autoFocus
                   value={name}
                   maxLength={31}
                   onChange={(e) => setName(e.target.value)}
-                  onFocus={(e) => e.currentTarget.select()}
+                  onFocus={(e) => {
+                    alerting.current = false;
+                    e.currentTarget.select();
+                  }}
                   onBlur={commitRename}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") commitRename();
                     if (e.key === "Escape") {
+                      alerting.current = false;
                       setRenaming(null);
                       ctl.focusGrid();
                     }

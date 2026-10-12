@@ -1,7 +1,7 @@
 /** OfficeHere Tablo uygulama kökü: kabuk, şerit, formül çubuğu, ızgara, durum çubuğu. */
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ArrowRedo20Regular, ArrowUndo20Regular, Save20Regular } from "@fluentui/react-icons";
-import { AppShell, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, useHotkeys, type RibbonTabDef } from "@officehere/ui";
+import { AppShell, MessageBar, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, useHotkeys, type RibbonTabDef } from "@officehere/ui";
 import { baseName } from "@officehere/core";
 import { Controller } from "./controller";
 import { Grid } from "./grid/Grid";
@@ -32,12 +32,20 @@ import { WatchWindow } from "./panes/WatchWindow";
 import { sparkAt } from "./sparkline/geometry";
 import { SparklineTab } from "./sparkline/SparkTab";
 import { ThemePaletteContext } from "./themeContext";
+import { ChartFormatPane } from "./charts/ChartFormatPane";
+import { SelectionPane } from "./charts/SelectionPane";
+import { ErrorBoundary } from "./app/ErrorBoundary";
+import { recoveryHandlers } from "./app/recovery";
+import { useAutoRecover } from "./app/useAutoRecover";
+import { copyObject, objectClipMarker, pasteObject } from "./actions/objectClip";
 import { paletteOf } from "./model/theme";
 
 let dialogSeq = 0;
 
-export function App() {
-  const ctl = useMemo(() => new Controller(), []);
+export function App({ ctl: given }: { ctl?: Controller } = {}) {
+  const ctl = useMemo(() => given ?? new Controller(), [given]);
+  const recovery = useMemo(() => recoveryHandlers(ctl), [ctl]);
+  const autoRecover = useAutoRecover(ctl);
   useEffect(() => installTestHook(ctl), [ctl]);
   // Şeritteki onay kutusu değişince odak çalışma sayfasına döner (Ctrl+Z vb. çalışsın)
   useEffect(() => {
@@ -90,16 +98,22 @@ export function App() {
     onSave: () => files.save(),
   });
   files.confirmDiscard = lifecycle.confirmDiscard;
+  ctl.saveHook = () => files.save();
 
   useEffect(() => {
     ctl.openDialog = (id, arg) => {
+      if (id === "chartFormat") {
+        ctl.formatPane = "chart";
+        ctl.emit();
+        return;
+      }
       if (id === "objectMenu") {
         const a = arg as { x: number; y: number; kind: "chart" | "image" | "shape"; id: string };
         ctx.open({ clientX: a.x, clientY: a.y, preventDefault: () => {} }, <ObjectMenu ctl={ctl} kind={a.kind} id={a.id} />);
         return;
       }
       // İletişim kutuları hücre içeriğiyle çalışır: süren düzenleme önce onaylanır
-      if (ctl.edit && id !== "insertFunction" && id !== "alert" && id !== "confirm") ctl.commitEdit(null);
+      if (ctl.edit && id !== "insertFunction" && id !== "alert" && id !== "confirm" && id !== "validationError") ctl.commitEdit(null);
       pushDialog({ id, arg });
     };
     ctl.alert = (message, title) => pushDialog({ id: "alert", arg: { message, title } });
@@ -109,10 +123,20 @@ export function App() {
   useEffect(() => {
     const inGrid = () => {
       const a = document.activeElement;
+      if (ctl.selObj && a?.closest(".tb-float") && !backstage) return true;
       return !!a && a.classList.contains("tb-editor-input") && !ctl.edit && !backstage;
     };
     const onCopy = (e: ClipboardEvent) => {
       if (!inGrid()) return;
+      // Seçili grafik/resim/şekil kopyalanır (uygulama içi nesne panosu)
+      if (ctl.selObj) {
+        if (copyObject(ctl, e.type === "cut")) {
+          e.preventDefault();
+          e.clipboardData?.setData("text/plain", "");
+          e.clipboardData?.setData("text/html", objectClipMarker() ?? "");
+        }
+        return;
+      }
       const d = E.copySelection(ctl, e.type === "cut");
       if (!d) return;
       e.preventDefault();
@@ -122,6 +146,11 @@ export function App() {
     const onPaste = (e: ClipboardEvent) => {
       if (!inGrid()) return;
       e.preventDefault();
+      const marker = objectClipMarker();
+      if (marker && (e.clipboardData?.getData("text/html") ?? "").includes(marker)) {
+        pasteObject(ctl);
+        return;
+      }
       E.pasteData(ctl, e.clipboardData?.getData("text/plain") ?? "", e.clipboardData?.getData("text/html") || undefined);
     };
     document.addEventListener("copy", onCopy);
@@ -214,21 +243,75 @@ export function App() {
           }
         />
       }
-      ribbon={<Ribbon tabs={tabs} activeTab={tab} onTabChange={setTab} onFileClick={() => setBackstage("home")} collapsed={collapsed} onCollapsedChange={setCollapsed} />}
-      belowRibbon={ctl.showFormulaBar ? <FormulaBar ctl={ctl} /> : undefined}
-      statusBar={<StatusArea ctl={ctl} />}
-      backstage={backstage ? <FileView ctl={ctl} files={files} page={backstage} onClose={() => (setBackstage(null), requestAnimationFrame(() => ctl.focusGrid()))} /> : undefined}
+      ribbon={
+        <ErrorBoundary region="Şerit" compact recovery={recovery}>
+          <Ribbon tabs={tabs} activeTab={tab} onTabChange={setTab} onFileClick={() => setBackstage("home")} collapsed={collapsed} onCollapsedChange={setCollapsed} />
+        </ErrorBoundary>
+      }
+      belowRibbon={
+        <>
+          {ctl.infoBar && (
+            <MessageBar
+              kind={ctl.infoBar.kind}
+              onClose={() => {
+                ctl.infoBar = null;
+                ctl.emit();
+              }}
+            >
+              {ctl.infoBar.text}
+            </MessageBar>
+          )}
+          {autoRecover.bar}
+          {ctl.showFormulaBar && (
+            <ErrorBoundary region="Formül çubuğu" compact recovery={recovery}>
+              <FormulaBar ctl={ctl} />
+            </ErrorBoundary>
+          )}
+        </>
+      }
+      statusBar={
+        <ErrorBoundary region="Durum çubuğu" compact recovery={recovery}>
+          <StatusArea ctl={ctl} />
+        </ErrorBoundary>
+      }
+      backstage={
+        backstage ? (
+          <ErrorBoundary region="Dosya görünümü" recovery={recovery}>
+            <FileView ctl={ctl} files={files} page={backstage} onClose={() => (setBackstage(null), requestAnimationFrame(() => ctl.focusGrid()))} />
+          </ErrorBoundary>
+        ) : undefined
+      }
     >
       <div className="tb-root">
         <div className="tb-workarea">
-          {sheet.viewMode === "pageLayout" ? (
-            <PageLayoutView ctl={ctl} />
-          ) : (
-            <Grid ctl={ctl} onContextMenu={openContext} onFilterButton={(row, col, x, y) => setFilterMenu({ row, col, x, y })} />
+          <ErrorBoundary region="Çalışma sayfası" recovery={recovery}>
+            {sheet.viewMode === "pageLayout" ? (
+              <PageLayoutView ctl={ctl} />
+            ) : (
+              <Grid ctl={ctl} onContextMenu={openContext} onFilterButton={(row, col, x, y) => setFilterMenu({ row, col, x, y })} />
+            )}
+          </ErrorBoundary>
+          {activePivot && ctl.showFieldList && (
+            <ErrorBoundary region="Özet Tablo Alanları" compact recovery={recovery}>
+              <PivotFieldsPane ctl={ctl} sheet={sheet} def={activePivot} />
+            </ErrorBoundary>
           )}
-          {activePivot && ctl.showFieldList && <PivotFieldsPane ctl={ctl} sheet={sheet} def={activePivot} />}
+          {ctl.formatPane === "selection" && (
+            <ErrorBoundary region="Seçim bölmesi" compact recovery={recovery}>
+              <SelectionPane ctl={ctl} />
+            </ErrorBoundary>
+          )}
+          {ctl.formatPane === "chart" && activeChart && (
+            <ErrorBoundary region="Biçimlendirme bölmesi" compact recovery={recovery}>
+              <ChartFormatPane ctl={ctl} chart={activeChart} />
+            </ErrorBoundary>
+          )}
         </div>
-        {ctl.showWatch && <WatchWindow ctl={ctl} />}
+        {ctl.showWatch && (
+          <ErrorBoundary region="İzleme Penceresi" compact recovery={recovery}>
+            <WatchWindow ctl={ctl} />
+          </ErrorBoundary>
+        )}
       </div>
       {filterMenu &&
         (() => {

@@ -16,6 +16,7 @@ export interface CellView {
   isNumber: boolean;
   fillChar?: { index: number; char: string };
   bar?: CondResult["bar"];
+  icon?: CondResult["icon"];
 }
 
 const EMPTY_STYLE: CellStyle = {};
@@ -62,6 +63,8 @@ export function computeView(wb: WorkbookModel, sheet: SheetModel, row: number, c
       } else text = value;
     } else text = formatScalar(value);
   }
+  // Simge kümesi "Yalnızca Simgeyi Göster"
+  if (condRes?.icon?.only) text = "";
   let align: CellView["align"] = "left";
   const h = style.hAlign;
   if (h === "center" || h === "centerContinuous" || h === "distributed") align = "center";
@@ -80,6 +83,7 @@ export function computeView(wb: WorkbookModel, sheet: SheetModel, row: number, c
     isNumber,
     fillChar,
     bar: condRes?.bar,
+    icon: condRes?.icon,
   };
 }
 

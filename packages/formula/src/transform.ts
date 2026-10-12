@@ -5,6 +5,47 @@
  */
 import { EN_SYNTAX, tokenize, type RefPart, type RefToken } from "./lexer";
 import { MAX_COLS, MAX_ROWS, colToName, quoteSheetName } from "./references";
+import { renameTableInRef, renderStructRef, type StructRef } from "./structref";
+
+/** Yapısal başvuru belirteçlerine işlev uygulayıp formülü yeniden yazar. */
+function mapStructRefs(formula: string, fn: (r: StructRef) => StructRef): string {
+  if (!formula.includes("[")) return formula;
+  const hasEq = formula.startsWith("=");
+  const body = hasEq ? formula.slice(1) : formula;
+  let changed = false;
+  const out = tokenize(body, EN_SYNTAX)
+    .map((t) => {
+      if (t.type !== "structref" || !t.sref) return t.text;
+      const r = fn(t.sref);
+      if (r === t.sref) return t.text;
+      changed = true;
+      return renderStructRef(r, "en");
+    })
+    .join("");
+  return changed ? (hasEq ? "=" : "") + out : formula;
+}
+
+/** Tablo adını formüldeki yapısal başvurularda değiştirir. */
+export function renameTableInFormula(formula: string, oldName: string, newName: string): string {
+  return mapStructRefs(formula, (r) => renameTableInRef(r, oldName, newName));
+}
+
+/** Tablo sütunu yeniden adlandırılınca yapısal başvuruları günceller. */
+export function renameTableColumnInFormula(formula: string, table: string, oldCol: string, newCol: string): string {
+  const T = table.toLocaleUpperCase("tr-TR");
+  const O = oldCol.toLocaleUpperCase("tr-TR");
+  return mapStructRefs(formula, (r) => {
+    if (!r.table || r.table.toLocaleUpperCase("tr-TR") !== T) return r;
+    const c1 = r.col1 !== undefined && r.col1.toLocaleUpperCase("tr-TR") === O ? newCol : r.col1;
+    const c2 = r.col2 !== undefined && r.col2.toLocaleUpperCase("tr-TR") === O ? newCol : r.col2;
+    return c1 === r.col1 && c2 === r.col2 ? r : { ...r, col1: c1, col2: c2 };
+  });
+}
+
+/** Tablosuz yapısal başvurulara ([@Adet]) tablo adını ekler (dosyada tablo adı zorunludur). */
+export function qualifyStructRefs(formula: string, tableName: string): string {
+  return mapStructRefs(formula, (r) => (r.table ? r : { ...r, table: tableName }));
+}
 
 export function renderPart(p: RefPart, kind: RefToken["kind"]): string {
   if (kind === "cols") return `${p.colAbs ? "$" : ""}${colToName(p.col)}`;
@@ -84,10 +125,23 @@ function mapIndex(i: number, at: number, count: number): number | null {
 }
 
 /** Satır/sütun ekleme-silmede başvuruları günceller. formulaSheet: formülün bulunduğu sayfa. */
+const upperCache = new Map<string, string>();
+/** Sayfa adının büyük harf karşılığı (önbellekli; yerel ayarlı dönüşüm pahalıdır). */
+function upperName(s: string): string {
+  let u = upperCache.get(s);
+  if (u === undefined) {
+    if (upperCache.size > 1000) upperCache.clear();
+    u = s.toLocaleUpperCase("tr-TR");
+    upperCache.set(s, u);
+  }
+  return u;
+}
+
 export function adjustFormula(formula: string, formulaSheet: string, ch: StructuralChange): string {
-  const target = ch.sheet.toLocaleUpperCase("tr-TR");
+  const target = upperName(ch.sheet);
+  const own = upperName(formulaSheet);
   return mapRefs(formula, (ref) => {
-    const refSheet = (ref.sheet ?? formulaSheet).toLocaleUpperCase("tr-TR");
+    const refSheet = ref.sheet === undefined ? own : upperName(ref.sheet);
     if (refSheet !== target) return ref;
     if (ch.axis === "row" && ref.kind === "cols") return ref;
     if (ch.axis === "col" && ref.kind === "rows") return ref;

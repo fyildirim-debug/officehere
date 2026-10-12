@@ -6,10 +6,11 @@
 import JSZip from "jszip";
 import { formatQualifiedRange, parseQualifiedRange } from "@officehere/formula";
 import { PALETTES, extractChartData, seriesRefs } from "../charts/chartData";
-import type { ChartDef, ChartType, Rect } from "../model/types";
+import type { ChartDef, ChartSeriesDef, ChartType, Rect } from "../model/types";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
 import { writePivotsInto } from "./xlsxPivot";
 import { writeSparklinesInto } from "./xlsxSpark";
+import { writeDefinedNamesInto } from "./xlsxNames";
 import { patchThemeXml } from "../model/theme";
 import { NS_R, esc, nextRid, relsPathOf, resolveTarget, sheetPaths, unescapeXml } from "./ooxmlZip";
 
@@ -168,6 +169,7 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise
   if (wb.sheets.some((s) => s.charts.length)) await writeChartsInto(zip, wb, paths);
   if (wb.sheets.some((s) => s.pivots.length)) await writePivotsInto(zip, wb, paths);
   await writeSparklinesInto(zip, wb);
+  await writeDefinedNamesInto(zip, wb);
   // Çalışma kitabı teması (renk ve yazı tipi şemaları)
   const themeFile = zip.file("xl/theme/theme1.xml");
   if (themeFile) zip.file("xl/theme/theme1.xml", patchThemeXml(await themeFile.async("string"), wb.theme));
@@ -231,6 +233,30 @@ async function writeChartsInto(zip: JSZip, wb: WorkbookModel, paths: Map<string,
 }
 
 /* ------------------------------ Okuma ------------------------------ */
+
+/** <c:ser> öğelerinden seri başvuruları; okunamayan varsa null (aralık tahminine dönülür). */
+export function readSeries(cXml: string): ChartSeriesDef[] | null {
+  const out: ChartSeriesDef[] = [];
+  const block = (s: string, tag: string) => new RegExp(`<c:${tag}>([\\s\\S]*?)</c:${tag}>`).exec(s)?.[1];
+  const fOf = (s: string | undefined) => {
+    const m = s ? /<c:f>([^<]+)<\/c:f>/.exec(s) : null;
+    return m ? unescapeXml(m[1]) : undefined;
+  };
+  const ok = (t: string | undefined) => t === undefined || !!parseQualifiedRange(t.replace(/\$/g, ""));
+  for (const sm of cXml.matchAll(/<c:ser>([\s\S]*?)<\/c:ser>/g)) {
+    const s = sm[1];
+    const tx = block(s, "tx");
+    const values = fOf(block(s, "val") ?? block(s, "yVal"));
+    if (!values || !ok(values)) return null;
+    const categories = fOf(block(s, "cat"));
+    const xValues = fOf(block(s, "xVal"));
+    const nameRef = tx ? fOf(tx) : undefined;
+    const name = tx && !nameRef ? unescapeXml(/<c:v>([^<]*)<\/c:v>/.exec(tx)?.[1] ?? "") : undefined;
+    if (!ok(categories) || !ok(xValues) || !ok(nameRef)) return null;
+    out.push({ values, ...(categories ? { categories } : {}), ...(xValues ? { xValues } : {}), ...(nameRef ? { nameRef } : {}), ...(name ? { name } : {}) });
+  }
+  return out.length ? out : null;
+}
 
 function detectType(xml: string): ChartType {
   const bar = /<c:barChart>/.test(xml) || /<c:bar3DChart>/.test(xml);
@@ -343,6 +369,9 @@ export async function readCharts(data: ArrayBuffer, wb: WorkbookModel): Promise<
         height,
       };
       if (!def.title && def.showTitle) def.title = "";
+      // Seriler dosyadaki başvurularla birebir (aralık tahmini yapılmaz)
+      const series = readSeries(cXml);
+      if (series) def.series = series;
       const xt = titleText(catAx);
       const yt = titleText(valAx);
       if (xt) def.xTitle = xt;

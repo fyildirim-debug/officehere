@@ -12,6 +12,7 @@ import type { SheetModel, WorkbookModel } from "../model/workbook";
 import type { GridLayout, Quadrant } from "./layout";
 import { cellFont, drawBorder, drawCellText, drawFilterButton, drawPattern, measureText, snap } from "./renderCell";
 import { drawArrows, drawErrorTriangles } from "./renderAudit";
+import { drawIcon } from "./icons";
 import { drawSparkGroupOutline, drawSparklines } from "./renderSpark";
 import type { TraceArrow } from "../actions/audit";
 
@@ -287,12 +288,33 @@ function drawQuadrant(ctx: CanvasRenderingContext2D, st: RenderState, q: Quadran
     if (sr) drawBorder(ctx, sr, rc.x + rc.w, rc.y, rc.x + rc.w, rc.y + rc.h, dpr, "v");
   }
 
-  // Metinler
+  // Metinler (simge kümesi varsa simge solda, metin kalan alanda)
   for (const sp of spans) {
     if (st.editing && st.editing.row === sp.r && st.editing.col === sp.c) continue;
     const y = L.rowY(sp.r);
     const h = L.rowH(sp.r);
-    drawCellText(ctx, sp.view, sp.x, y, sp.w, h, L.colX(sp.c), L.colW(sp.c), z, dpr);
+    const iw = sp.view.icon ? iconBox(h, z) + 3 * z : 0;
+    drawCellText(ctx, sp.view, sp.x + (sp.x === L.colX(sp.c) ? iw : 0), y, sp.w - (sp.x === L.colX(sp.c) ? iw : 0), h, L.colX(sp.c) + iw, L.colW(sp.c) - iw, z, dpr);
+  }
+  // Simge kümesi simgeleri
+  for (let i = 0; i < rows.length; i++) {
+    const r = q.r1 + i;
+    const rv = rows[i];
+    if (!rv.views.length) continue;
+    for (let c = q.c1; c <= q.c2; c++) {
+      const v = rv.views[c - c0];
+      if (!v?.icon || L.colW(c) === 0) continue;
+      const y = L.rowY(r);
+      const h = L.rowH(r);
+      const s = Math.min(iconBox(h, z), L.colW(c) - 2 * z);
+      if (s < 4) continue;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(L.colX(c), y, L.colW(c), h);
+      ctx.clip();
+      drawIcon(ctx, v.icon.set, v.icon.index, L.colX(c) + 2 * z, y + (h - s) / 2, s);
+      ctx.restore();
+    }
   }
   for (const m of merges) {
     if (st.editing && st.editing.row === m.r1 && st.editing.col === m.c1) continue;
@@ -328,6 +350,11 @@ function drawQuadrant(ctx: CanvasRenderingContext2D, st: RenderState, q: Quadran
     drawFilterButton(ctx, rc.x + rc.w - Math.min(rc.h, 18 * z) - 1, rc.y + 1, Math.min(rc.h - 2, 17 * z), fb.active, dpr);
   }
   ctx.restore();
+}
+
+/** Simge kutusu boyutu (satır yüksekliğine göre). */
+function iconBox(h: number, z: number): number {
+  return Math.max(6, Math.min(h - 4 * z, 15 * z));
 }
 
 function clipQuad(ctx: CanvasRenderingContext2D, q: Quadrant): void {

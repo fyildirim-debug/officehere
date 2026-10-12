@@ -6,6 +6,7 @@ import type { Anchor, ChartDef, ImageDef, ShapeDef } from "../model/types";
 import type { SheetModel } from "../model/workbook";
 import { ChartView } from "./ChartView";
 import { extractChartData } from "./chartData";
+import { handleObjectKey } from "../actions/objectClip";
 
 type Obj = { kind: "chart"; o: ChartDef } | { kind: "image"; o: ImageDef } | { kind: "shape"; o: ShapeDef };
 
@@ -26,7 +27,8 @@ export function FloatingLayer({ ctl, layout }: { ctl: Controller; layout: GridLa
   const [drag, setDrag] = useState<{ id: string; dx: number; dy: number; dw: number; dh: number } | null>(null);
   const start = useRef<{ x: number; y: number; handle: string | null; id: string; kind: Obj["kind"] } | null>(null);
   const version = ctl.wb.engine.version;
-  const objs: Obj[] = [...sheet.images.map((o) => ({ kind: "image" as const, o })), ...sheet.shapes.map((o) => ({ kind: "shape" as const, o })), ...sheet.charts.map((o) => ({ kind: "chart" as const, o }))];
+  // Seçim Bölmesinde gizlenen nesneler çizilmez
+  const objs: Obj[] = [...sheet.images.map((o) => ({ kind: "image" as const, o })), ...sheet.shapes.map((o) => ({ kind: "shape" as const, o })), ...sheet.charts.map((o) => ({ kind: "chart" as const, o }))].filter((x) => !x.o.hidden);
   const chartData = useMemo(() => new Map(sheet.charts.map((c) => [c.id, extractChartData(ctl.wb, c)])), [sheet.charts, version, ctl.version]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!layout || !objs.length) return null;
   const z = layout.z;
@@ -124,17 +126,19 @@ export function FloatingLayer({ ctl, layout }: { ctl: Controller; layout: GridLa
             onPointerDown={(e) => onDown(e, obj, null)}
             onPointerMove={onMove}
             onPointerUp={onUp}
-            onDoubleClick={() => obj.kind === "chart" && ctl.openDialog("chartType")}
+            onDoubleClick={() => {
+              // Çift tık: grafikte biçimlendirme bölmesi, şekilde metin düzenleme
+              if (obj.kind === "chart") ctl.openDialog("chartFormat");
+              else if (obj.kind === "shape") ctl.openDialog("shapeText", { id: o.id });
+            }}
             onKeyDown={(e) => {
-              if (e.key === "Delete" || e.key === "Backspace") {
-                e.preventDefault();
-                deleteObject(ctl, obj.kind, o.id);
-              }
               if (e.key === "Escape") {
                 ctl.selObj = null;
                 ctl.emit();
                 ctl.focusGrid();
+                return;
               }
+              if (handleObjectKey(ctl, e)) e.preventDefault();
             }}
             onContextMenu={(e) => {
               e.preventDefault();

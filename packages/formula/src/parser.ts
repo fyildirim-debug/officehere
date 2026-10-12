@@ -138,6 +138,8 @@ class Parser {
         return { type: "err", code: t.value as ErrorCode };
       case "ref":
         return { type: "ref", ref: t.ref! };
+      case "structref":
+        return { type: "structref", ref: t.sref! };
       case "name":
         return { type: "name", name: t.value as string };
       case "func":
@@ -227,8 +229,8 @@ class Parser {
   }
 }
 
-const OPERAND_END = new Set(["ref", "name", "rparen"]);
-const REF_START = new Set(["ref", "name", "func", "lparen"]);
+const OPERAND_END = new Set(["ref", "structref", "name", "rparen"]);
+const REF_START = new Set(["ref", "structref", "name", "func", "lparen"]);
 
 /** Belirteç listesini AST'ye çevirir; boşluklar atlanır (iki başvuru arasındaki boşluk kesişim işlecidir). */
 export function parseTokens(tokens: Token[], resolve: FunctionNameResolver = (n) => n.toUpperCase()): Node {

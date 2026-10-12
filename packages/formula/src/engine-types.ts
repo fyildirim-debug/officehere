@@ -96,6 +96,8 @@ export interface CellSnapshot {
   col: number;
   value?: Scalar;
   formula?: string;
+  /** @internal Ayrıştırılmış formül (geri yüklemede yeniden ayrıştırmayı önler). */
+  ast?: Node | null;
 }
 
 export interface EngineSnapshot {

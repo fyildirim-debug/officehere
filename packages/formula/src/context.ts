@@ -1,6 +1,7 @@
 import type { Node } from "./ast";
 import type { LocaleInfo } from "./coerce";
 import type { RefValue, Scalar, Value } from "./values";
+import type { TableInfo } from "./structref";
 
 /** Değerlendiricinin çalışma kitabından istediği hizmetler. */
 export interface EvalHost {
@@ -18,6 +19,8 @@ export interface EvalHost {
   getFormulaText(sheet: number, row: number, col: number): string | undefined;
   /** Hücre ALTTOPLAM/TOPLAMA formülü mü (iç içe alt toplamları atlamak için)? */
   isSubtotalCell(sheet: number, row: number, col: number): boolean;
+  /** Tablo (ad verilmezse konumu içeren tablo) — yapısal başvurular için. */
+  getTable?(name: string | undefined, sheet: number, row: number, col: number): TableInfo | undefined;
   /** Geçerli zamanın seri numarası. */
   now(): number;
   random(): number;

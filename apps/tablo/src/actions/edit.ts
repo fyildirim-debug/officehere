@@ -1,5 +1,6 @@
 /** Düzenleme eylemleri: pano, temizleme, doldurma, ekleme/silme, Otomatik Toplam. */
-import { addr, formatRange, jsDateToSerial, type Scalar } from "@officehere/formula";
+import { addr, formatRange, formatValue, jsDateToSerial, type Scalar } from "@officehere/formula";
+import { displayText } from "../model/display";
 import type { Controller } from "../controller";
 import { buildClipboard, clipIdFromHtml, getInternalClipboard, pastePayload, pasteText, type PasteOptions } from "../model/clipboard";
 import { MAX_COLS, MAX_ROWS, isFullCols, isFullRows, rect, rectCols, rectRows } from "../model/rect";
@@ -90,6 +91,7 @@ export async function pasteFromButton(ctl: Controller, opts?: PasteOptions): Pro
 export function clearContents(ctl: Controller): void {
   if (!ctl.guardSelection()) return;
   ctl.ops.clear(ctl.sheet, ctl.sel.ranges, "contents");
+  ctl.recordRepeat("İçeriği Temizle", () => clearContents(ctl));
 }
 
 /* ------------------------------ Doldurma ------------------------------ */
@@ -173,40 +175,46 @@ export function autoSum(ctl: Controller, fn = "SUM"): void {
 
 /* ------------------------------ Tarih / saat ------------------------------ */
 
+/** Ctrl+; tarih, Ctrl+Shift+; saat: Excel gibi hücreye yazar ve "Gir" kipinde bırakır (Enter ile onaylanır). */
 export function insertNow(ctl: Controller, kind: "date" | "time"): void {
   const now = jsDateToSerial(new Date());
   const v: Scalar = kind === "date" ? Math.floor(now) : now - Math.floor(now);
-  const { row, col } = ctl.sel.active;
-  const sheet = ctl.sheet;
-  ctl.ops.cellsOp(sheet, [rect(row, col)], "Tarih Ekle", () => {
-    ctl.wb.setInputRaw(sheet, row, col, v);
-    const id = ctl.wb.styleIdAt(sheet, row, col);
-    ctl.wb.setStyleRaw(sheet, row, col, ctl.wb.styles.patch(id, { numFmt: kind === "date" ? "dd.mm.yyyy" : "hh:mm" }));
-  });
+  const text = formatValue(v, kind === "date" ? "dd.mm.yyyy" : "hh:mm").text;
+  const e = ctl.edit;
+  if (e) {
+    const next = e.text.slice(0, e.caret) + text + e.text.slice(e.caret);
+    ctl.updateEdit(next, e.caret + text.length);
+    return;
+  }
+  ctl.startEdit(text);
 }
 
 /* ------------------------------ Ekle / Sil ------------------------------ */
 
 export function insertRows(ctl: Controller): void {
   const r = ctl.range;
-  ctl.ops.insertRows(ctl.sheet, r.r1, isFullRows(r) ? rectRows(r) : rectRows(r));
+  ctl.ops.insertRows(ctl.sheet, r.r1, rectRows(r));
+  ctl.recordRepeat("Satır Ekle", () => insertRows(ctl));
 }
 
 export function insertCols(ctl: Controller): void {
   const r = ctl.range;
   ctl.ops.insertCols(ctl.sheet, r.c1, rectCols(r));
+  ctl.recordRepeat("Sütun Ekle", () => insertCols(ctl));
 }
 
 export function deleteRows(ctl: Controller): void {
   const r = ctl.range;
   ctl.ops.deleteRows(ctl.sheet, r.r1, rectRows(r));
   ctl.selectCell(Math.min(r.r1, MAX_ROWS - 1), ctl.sel.active.col);
+  ctl.recordRepeat("Satır Sil", () => deleteRows(ctl));
 }
 
 export function deleteCols(ctl: Controller): void {
   const r = ctl.range;
   ctl.ops.deleteCols(ctl.sheet, r.c1, rectCols(r));
   ctl.selectCell(ctl.sel.active.row, Math.min(r.c1, MAX_COLS - 1));
+  ctl.recordRepeat("Sütun Sil", () => deleteCols(ctl));
 }
 
 /** Ctrl++ / Hücre Ekle: tüm satır/sütun seçiliyse doğrudan, değilse iletişim kutusu. */
@@ -245,7 +253,18 @@ export function undo(ctl: Controller): void {
   ctl.ops.undo();
 }
 
+/** Ctrl+Y / Yinele: geri alınan işlem varsa yineler, yoksa son işlemi tekrarlar. */
 export function redo(ctl: Controller): void {
   if (ctl.edit) return;
-  ctl.ops.redo();
+  if (ctl.ops.history.canRedo) ctl.ops.redo();
+  else ctl.repeatLast();
+}
+
+/** Ctrl+' : üstteki hücrenin formülünü (kaydırmadan) düzenlemeye kopyalar; Ctrl+Shift+" değerini. */
+export function copyFromAbove(ctl: Controller, valueOnly: boolean): void {
+  const { row, col } = ctl.sel.active;
+  if (row === 0) return;
+  const text = valueOnly ? displayText(ctl.wb, ctl.sheet, row - 1, col) : ctl.wb.editText(ctl.sheet, row - 1, col);
+  ctl.startEdit(text);
+  if (ctl.edit) ctl.setEditMode("edit");
 }

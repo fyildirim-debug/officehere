@@ -1,5 +1,5 @@
 /** Çeşitli iletişim kutuları: uyarı, boyutlar, hücre ekle/sil, sayfa işlemleri, köprü, not, simge, yakınlaştırma, koruma, Özel Yapıştır. */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogButton, Field } from "@officehere/ui";
 import { addr, quoteSheetName } from "@officehere/formula";
 import type { Controller } from "../controller";
@@ -133,15 +133,22 @@ export function MoveSheetDialog({ ctl, onClose, arg }: P) {
   );
 }
 
+/** Sayfayı sil: boş sayfa sorulmadan silinir, dolu sayfa için onay istenir (çizim dışında karar verilir). */
+export function requestDeleteSheet(ctl: Controller, index = ctl.wb.activeIndex): void {
+  const sheet = ctl.wb.sheets[index];
+  if (!sheet || ctl.wb.sheets.filter((s) => !s.hidden).length <= 1) return;
+  const hasData = ctl.wb.engine.cellCount(sheet.id) > 0 || sheet.styles.size > 0 || sheet.charts.length + sheet.images.length + sheet.shapes.length > 0;
+  if (!hasData) ctl.ops.deleteSheet(index);
+  else ctl.openDialog("deleteSheet", { index });
+}
+
 export function DeleteSheetDialog({ ctl, onClose, arg }: P) {
   const index = (arg as { index?: number } | undefined)?.index ?? ctl.wb.activeIndex;
   const sheet = ctl.wb.sheets[index];
-  const hasData = ctl.wb.engine.cellCount(sheet.id) > 0 || sheet.styles.size > 0;
-  if (!hasData) {
-    ctl.ops.deleteSheet(index);
-    queueMicrotask(onClose);
-    return null;
-  }
+  useEffect(() => {
+    if (!sheet) onClose();
+  }, [sheet, onClose]);
+  if (!sheet) return null;
   return (
     <SimpleDialog title="OfficeHere Tablo" onClose={onClose} onOk={() => (ctl.ops.deleteSheet(index), onClose())} okLabel="Sil" width={420}>
       <p className="oh-dialog-message">Bu sayfa kalıcı olarak silinecek. Devam etmek istiyor musunuz?</p>
@@ -547,7 +554,8 @@ export function PickListDialog({ ctl, onClose, arg }: P) {
 export function ShapeTextDialog({ ctl, onClose, arg }: P) {
   const id = (arg as { id: string }).id;
   const shape = ctl.sheet.shapes.find((s) => s.id === id);
-  const [text, setText] = useState(shape?.text ?? "");
+  // Şekil seçiliyken yazılan karakter metnin sonuna eklenir
+  const [text, setText] = useState((shape?.text ?? "") + ((arg as { text?: string }).text ?? ""));
   const [fill, setFill] = useState(shape?.fill ?? "#156082");
   return (
     <SimpleDialog
@@ -568,7 +576,7 @@ export function ShapeTextDialog({ ctl, onClose, arg }: P) {
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} data-autofocus="true" />
       </Field>
       <Field label="Dolgu rengi:" inline>
-        <input type="color" value={fill} onChange={(e) => setFill(e.target.value)} />
+        <input type="color" value={/^#[0-9a-f]{6}$/i.test(fill) ? fill : "#ffffff"} onChange={(e) => setFill(e.target.value)} />
       </Field>
     </SimpleDialog>
   );
@@ -586,6 +594,9 @@ export function GoToDialog({ ctl, onClose }: P) {
   };
   return (
     <SimpleDialog title="Git" onClose={onClose} onOk={ok} width={320}>
+      <button type="button" className="oh-btn tb-goto-special" onClick={() => (onClose(), ctl.openDialog("goSpecial"))}>
+        Özel...
+      </button>
       <div style={{ marginBottom: 4 }}>Git:</div>
       <div className="tb-list" style={{ height: 130 }}>
         {names.map((n) => (

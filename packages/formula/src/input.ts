@@ -68,6 +68,19 @@ export function parseCellInput(raw: string, opts: InputOptions = {}): ParsedInpu
       return { kind: "value", value: v, numFmt: hasDec ? '#,##0.00 "₺"' : '#,##0 "₺"' };
     }
   }
+  // Diğer para birimleri: €50, $50, £50, 50 €
+  m = /^([-+]?)\s*([€$£])\s*([\d.,]+)$/.exec(t);
+  const suffix = m ? null : /^([-+]?)([\d.,]+)\s*([€$£])$/.exec(t);
+  if (m || suffix) {
+    const sym = m ? m[2] : suffix![3];
+    const numText = m ? m[3] : suffix![2];
+    const n = parseLocalNumber(numText.trim(), dec);
+    if (n !== null) {
+      const v = (m ? m[1] : suffix![1]) === "-" ? -n : n;
+      const body = numText.includes(dec) ? "#,##0.00" : "#,##0";
+      return { kind: "value", value: v, numFmt: m ? `"${sym}"${body}` : `${body} "${sym}"` };
+    }
+  }
   // Parantezli negatif
   m = /^\((.+)\)$/.exec(t);
   if (m) {

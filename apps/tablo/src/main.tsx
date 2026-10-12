@@ -6,9 +6,17 @@ import "./styles/dialogs.css";
 import "./styles/views.css";
 import "./styles/panes.css";
 import { App } from "./App";
+import { Controller } from "./controller";
+import { ErrorBoundary } from "./app/ErrorBoundary";
+import { recoveryHandlers } from "./app/recovery";
+
+// Denetleyici kökün dışında tutulur: uygulama çökse de çalışma kitabı bellekte kalır
+const ctl = new Controller();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary region="OfficeHere Tablo" root recovery={recoveryHandlers(ctl)}>
+      <App ctl={ctl} />
+    </ErrorBoundary>
   </StrictMode>,
 );

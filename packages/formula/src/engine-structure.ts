@@ -47,12 +47,17 @@ export function structuralChange(e: FormulaEngine, sheet: number, axis: "row" | 
     s.hiddenRows = shiftSet(s.hiddenRows);
     s.filteredRows = shiftSet(s.filteredRows);
   }
-  // Tüm formülleri güncelle
+  // Tüm formülleri güncelle (değişikliğin ötesine başvurmayanlar ayrıştırılmadan atlanır)
   const ch = { sheet: name, axis, at, count };
   for (const id of e.order) {
     const sh = e.sheets.get(id)!;
     for (const [, rec] of sh.cells) {
       if (!rec.formula) continue;
+      if (!mayBeAffected(rec.formula, sheet, axis, at)) {
+        rec.formula.spill = null;
+        rec.formula.spillTarget = null;
+        continue;
+      }
       const t = adjustFormula(rec.formula.text, sh.name, ch);
       if (t !== rec.formula.text) {
         rec.formula.text = t;
@@ -77,6 +82,18 @@ export function structuralChange(e: FormulaEngine, sheet: number, axis: "row" | 
 
 
 
+
+/** Formül, yapısal değişiklikten etkilenen bir konuma başvuruyor olabilir mi (bağımlılık listesine göre)? */
+function mayBeAffected(info: FormulaInfo, sheet: number, axis: "row" | "col", at: number): boolean {
+  if (!info.ast) return true;
+  for (const d of info.cellDeps) {
+    if (gkSheet(d) !== sheet) continue;
+    const local = gkLocal(d);
+    if ((axis === "row" ? keyRow(local) : keyCol(local)) >= at) return true;
+  }
+  for (const rd of info.rangeDeps) if (rd.sheet === sheet && (axis === "row" ? rd.r2 : rd.c2) >= at) return true;
+  return false;
+}
 
 /**
  * Hücre aralığını yatay/dikey kaydırır (Hücre Ekle/Sil: "hücreleri sağa/aşağı kaydır").
@@ -159,13 +176,13 @@ function rewriteAll(e: FormulaEngine, fn: (text: string, sheetName: string) => s
 }
 
 
-export function exportInputsImpl(e: FormulaEngine): EngineSnapshot {
+export function exportInputsImpl(e: FormulaEngine, withAst = false): EngineSnapshot {
   return {
     sheets: e.order.map((id) => {
       const s = e.sheets.get(id)!;
       const cells: CellSnapshot[] = [];
       for (const [k, rec] of s.cells) {
-        if (rec.formula) cells.push({ row: keyRow(k), col: keyCol(k), formula: rec.formula.text });
+        if (rec.formula) cells.push(withAst ? { row: keyRow(k), col: keyCol(k), formula: rec.formula.text, ast: rec.formula.ast } : { row: keyRow(k), col: keyCol(k), formula: rec.formula.text });
         else cells.push({ row: keyRow(k), col: keyCol(k), value: rec.value });
       }
       return { id, name: s.name, cells };
@@ -191,7 +208,7 @@ export function importInputsImpl(e: FormulaEngine, snap: EngineSnapshot): void {
     for (const c of ss.cells) {
       const k = cellKey(c.row, c.col);
       if (c.formula !== undefined) {
-        const ast = safeParse(c.formula);
+        const ast = c.ast !== undefined ? c.ast : safeParse(c.formula);
         s.cells.set(k, { value: 0, formula: { text: c.formula, ast, volatile: false, usesNames: false, cellDeps: [], rangeDeps: [], spill: null, spillTarget: null } });
       } else s.cells.set(k, { value: c.value ?? null });
     }

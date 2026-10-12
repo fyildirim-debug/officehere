@@ -61,7 +61,9 @@ export function updateChart(ctl: Controller, id: string, patch: Partial<ChartDef
   const sheet = ctl.sheet;
   if (!sheet.charts.some((c) => c.id === id)) return;
   ctl.ops.sheetOp(sheet, label, () => {
-    sheet.charts = sheet.charts.map((c) => (c.id === id ? { ...c, ...patch } : c));
+    // Veri aralığı ya da seri yönü değişince açık seri tanımları bırakılır (aralıktan yeniden kurulur)
+    const reset = patch.range !== undefined || patch.seriesInRows !== undefined;
+    sheet.charts = sheet.charts.map((c) => (c.id === id ? { ...c, ...patch, ...(reset && !("series" in patch) ? { series: undefined } : {}) } : c));
   });
 }
 
@@ -160,4 +162,9 @@ export function reorderObject(ctl: Controller, kind: "chart" | "image" | "shape"
     else if (kind === "image") sheet.images = move(sheet.images);
     else sheet.shapes = move(sheet.shapes);
   });
+}
+
+/** Alt+F1: seçili veriden varsayılan türde (kümelenmiş sütun) hızlı grafik. */
+export function quickChart(ctl: Controller): void {
+  insertChart(ctl, "column");
 }

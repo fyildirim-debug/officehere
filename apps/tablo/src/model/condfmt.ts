@@ -12,6 +12,7 @@ export interface CondResult {
   style?: Partial<CellStyle>;
   bar?: { from: number; to: number; color: string };
   scale?: string;
+  icon?: { set: string; index: number; only?: boolean };
 }
 
 interface RuleStats {
@@ -128,6 +129,7 @@ export class CondFormatter {
       out ??= {};
       if (hit.bar && !out.bar) out.bar = hit.bar;
       if (hit.scale && !out.scale) out.scale = hit.scale;
+      if (hit.icon && !out.icon) out.icon = hit.icon;
       if (hit.style) out.style = { ...hit.style, ...(out.style ?? {}) };
       if (rule.stopIfTrue) break;
     }
@@ -262,6 +264,24 @@ export class CondFormatter {
         const pos = (v - lo) / span;
         return { bar: { from: Math.min(zero, pos), to: Math.max(zero, pos), color: rule.color ?? DATA_BAR_COLORS[0] } };
       }
+      case "iconSet": {
+        if (typeof v !== "number") return null;
+        const st = this.statsFor(sheet, rule);
+        const set = rule.iconSet ?? "3Arrows";
+        const n = iconCount(set);
+        const th = rule.iconThresholds?.length === n ? rule.iconThresholds : defaultThresholds(n);
+        let idx = 0;
+        for (let i = 1; i < n; i++) {
+          const t = th[i];
+          let tv: number;
+          if (t.type === "num") tv = t.value;
+          else if (t.type === "percentile") tv = percentile(st.nums, t.value / 100);
+          else tv = st.min + ((st.max - st.min) * t.value) / 100;
+          if (v >= tv) idx = i;
+        }
+        if (rule.reverseIcons) idx = n - 1 - idx;
+        return { icon: { set, index: idx, only: rule.iconOnly } };
+      }
       case "colorScale": {
         if (typeof v !== "number") return null;
         const st = this.statsFor(sheet, rule);
@@ -275,6 +295,64 @@ export class CondFormatter {
     }
     return null;
   }
+}
+
+/** Simge kümeleri (galeri sırasıyla). */
+export const ICON_SETS: { group: string; sets: { id: string; label: string }[] }[] = [
+  {
+    group: "Yönlü",
+    sets: [
+      { id: "3Arrows", label: "3 Ok (Renkli)" },
+      { id: "3ArrowsGray", label: "3 Ok (Gri)" },
+      { id: "4Arrows", label: "4 Ok (Renkli)" },
+      { id: "5Arrows", label: "5 Ok (Renkli)" },
+      { id: "3Triangles", label: "3 Üçgen" },
+    ],
+  },
+  {
+    group: "Şekiller",
+    sets: [
+      { id: "3TrafficLights1", label: "3 Trafik Işığı" },
+      { id: "3Signs", label: "3 İşaret" },
+      { id: "4TrafficLights", label: "4 Trafik Işığı" },
+      { id: "4RedToBlack", label: "Kırmızıdan Siyaha" },
+    ],
+  },
+  {
+    group: "Göstergeler",
+    sets: [
+      { id: "3Symbols", label: "3 Simge (Daire İçinde)" },
+      { id: "3Symbols2", label: "3 Simge" },
+      { id: "3Flags", label: "3 Bayrak" },
+    ],
+  },
+  {
+    group: "Derecelendirmeler",
+    sets: [
+      { id: "3Stars", label: "3 Yıldız" },
+      { id: "4Rating", label: "4 Derecelendirme" },
+      { id: "5Rating", label: "5 Derecelendirme" },
+      { id: "5Quarters", label: "5 Çeyrek" },
+      { id: "5Boxes", label: "5 Kutu" },
+    ],
+  },
+];
+
+export function iconCount(set: string): number {
+  const n = Number(set[0]);
+  return n >= 3 && n <= 5 ? n : 3;
+}
+
+export function defaultThresholds(n: number): { type: "percent"; value: number }[] {
+  return Array.from({ length: n }, (_, i) => ({ type: "percent" as const, value: Math.round((100 * i) / n) }));
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (!sorted.length) return 0;
+  const k = (sorted.length - 1) * p;
+  const lo = Math.floor(k);
+  const hi = Math.ceil(k);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (k - lo);
 }
 
 export function ruleKey(row: number, col: number): number {

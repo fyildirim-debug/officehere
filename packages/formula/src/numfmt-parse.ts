@@ -52,6 +52,16 @@ export interface Section {
   cond?: { op: string; v: number };
   kind: "number" | "date" | "text" | "general";
   hasAmPm: boolean;
+  /** Yerel ayar etiketi ([$-tr-TR], [$-409]…): ay/gün adlarının dili. */
+  lang?: "tr" | "en";
+}
+
+/** [$sembol-yerel] etiketindeki yerel ayarın dili. */
+export function localeTagLang(lcid: string): "tr" | "en" | undefined {
+  const l = lcid.trim().toLowerCase();
+  if (/^(41f|tr)/.test(l)) return "tr";
+  if (/^(409|809|c09|1009|1409|1809|2009|4009|en)/.test(l) || /^(f800|f400)$/.test(l)) return "en";
+  return undefined;
 }
 
 export interface Parsed {
@@ -130,8 +140,11 @@ export function parseSection(src: string): Section {
       } else if (/^(h+|m+|s+)$/i.test(inner)) {
         toks.push({ t: "elapsed", v: inner[0].toLowerCase() as "h" | "m" | "s", n: inner.length });
       } else if (inner.startsWith("$")) {
-        const sym = inner.slice(1).split("-")[0];
+        const body = inner.slice(1);
+        const dash = body.indexOf("-");
+        const sym = dash < 0 ? body : body.slice(0, dash);
         if (sym) toks.push({ t: "lit", v: sym });
+        if (dash >= 0) sec.lang = localeTagLang(body.slice(dash + 1)) ?? sec.lang;
       }
       continue;
     }

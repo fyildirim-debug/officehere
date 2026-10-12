@@ -669,3 +669,12 @@
 .oh-rbtn-large.tb-wide {
   max-width: 100px;
 }
+
+/* Şerit taşma ölçümü: sağdaki "Şeridi Daralt" düğmesinin alanı içeriğin parçası sayılır,
+   böylece gruplar o alana taşmadan zamanında küçülür */
+.oh-ribbon-body {
+  padding-right: 4px;
+}
+.oh-ribbon-body > .oh-ribbon-content {
+  padding-right: 24px;
+}

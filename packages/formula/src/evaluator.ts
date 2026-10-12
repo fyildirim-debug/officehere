@@ -7,6 +7,7 @@ import { compareScalars, toNumber, toText } from "./coerce";
 import type { EvalHost, FnContext } from "./context";
 import type { LocaleInfo } from "./coerce";
 import { getFunction, type FnDef } from "./functions/registry";
+import { resolveStructRect } from "./structref";
 import { matrix, scalar } from "./functions/helpers";
 import { MAX_COLS, MAX_ROWS } from "./references";
 import { Errors, FormulaError, isArray, isError, isLambda, isMultiRef, isRef, makeArray, type RefValue, type Scalar, type Value } from "./values";
@@ -85,6 +86,13 @@ function evalInner(node: Node, ctx: FnContext): Value {
       return null;
     case "ref":
       return resolveRef(node, ctx);
+    case "structref": {
+      const t = ctx.host.getTable?.(node.ref.table, ctx.sheet, ctx.row, ctx.col);
+      if (!t) return Errors.REF;
+      const r = resolveStructRect(node.ref, t, ctx.row);
+      if ("error" in r) return r.error === "#REF!" ? Errors.REF : Errors.VALUE;
+      return { kind: "ref", ...r };
+    }
     case "name": {
       const key = node.name.toLocaleUpperCase("tr-TR");
       if (ctx.scope) {
@@ -92,7 +100,15 @@ function evalInner(node: Node, ctx: FnContext): Value {
         if (v !== undefined) return v;
       }
       const def = ctx.host.getDefinedName(node.name, ctx.sheet);
-      if (!def) return Errors.NAME;
+      if (!def) {
+        // Tablo adı tek başına: tablonun veri alanı (=SATIRSAY(Tablo1))
+        const t = ctx.host.getTable?.(node.name, ctx.sheet, ctx.row, ctx.col);
+        if (t) {
+          const r = resolveStructRect({ items: ["#Data"] }, t, ctx.row);
+          if (!("error" in r)) return { kind: "ref", ...r };
+        }
+        return Errors.NAME;
+      }
       return evalInner(def, ctx);
     }
     case "array":

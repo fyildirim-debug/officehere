@@ -4,10 +4,11 @@ import { Dialog, DialogButton, Field } from "@officehere/ui";
 import { formatRange, fromLocalFormula, parseRangeAddress, toLocalFormula } from "@officehere/formula";
 import type { Controller } from "../controller";
 import * as D from "../actions/data";
-import { COLOR_SCALES, DATA_BAR_COLORS, HIGHLIGHT_PRESETS } from "../model/condfmt";
+import { COLOR_SCALES, DATA_BAR_COLORS, HIGHLIGHT_PRESETS, ICON_SETS, defaultThresholds, iconCount } from "../model/condfmt";
+import { IconSetPreview } from "../ribbon/IconSetMenu";
 import type { CellStyle } from "../model/styles";
 import type { CondRule } from "../model/types";
-import { ColorDrop, OkCancel, SimpleDialog, parseTrNumber } from "./common";
+import { Check, ColorDrop, OkCancel, SimpleDialog, parseTrNumber } from "./common";
 
 type P = { ctl: Controller; onClose: () => void; arg?: unknown };
 
@@ -218,7 +219,7 @@ const RULE_KINDS = [
 ];
 
 function kindOfRule(r: CondRule): string {
-  if (r.type === "colorScale" || r.type === "dataBar") return "scale";
+  if (r.type === "colorScale" || r.type === "dataBar" || r.type === "iconSet") return "scale";
   if (r.type === "top10") return "top";
   if (r.type === "aboveAverage") return "avg";
   if (r.type === "duplicateValues" || r.type === "uniqueValues") return "dup";
@@ -230,7 +231,11 @@ function NewRuleDialog({ ctl, onClose, arg }: P) {
   const a = arg as { rule: string; edit?: CondRule; onDone?: (r: CondRule) => void };
   const e = a.edit;
   const [kind, setKind] = useState(e ? kindOfRule(e) : "cell");
-  const [scaleType, setScaleType] = useState<"colorScale2" | "colorScale3" | "dataBar">(e?.type === "dataBar" ? "dataBar" : e?.colors?.length === 2 ? "colorScale2" : "colorScale3");
+  const [scaleType, setScaleType] = useState<"colorScale2" | "colorScale3" | "dataBar" | "iconSet">(e?.type === "iconSet" ? "iconSet" : e?.type === "dataBar" ? "dataBar" : e?.colors?.length === 2 ? "colorScale2" : "colorScale3");
+  const [iconSet, setIconSet] = useState(e?.iconSet ?? "3TrafficLights1");
+  const [thresholds, setThresholds] = useState(e?.iconThresholds ?? defaultThresholds(iconCount(e?.iconSet ?? "3TrafficLights1")));
+  const [reverseIcons, setReverseIcons] = useState(!!e?.reverseIcons);
+  const [iconOnly, setIconOnly] = useState(!!e?.iconOnly);
   const [colors, setColors] = useState<string[]>(e?.colors ?? COLOR_SCALES[0].colors);
   const [barColor, setBarColor] = useState(e?.color ?? DATA_BAR_COLORS[0]);
   const [cellType, setCellType] = useState<string>(e && e.type !== "cellIs" && kindOfRule(e) === "cell" ? e.type : "cellIs");
@@ -248,6 +253,7 @@ function NewRuleDialog({ ctl, onClose, arg }: P) {
   const build = (): Omit<CondRule, "id" | "ranges"> | null => {
     switch (kind) {
       case "scale":
+        if (scaleType === "iconSet") return { type: "iconSet", iconSet, iconThresholds: thresholds, reverseIcons, iconOnly };
         return scaleType === "dataBar" ? { type: "dataBar", color: barColor } : { type: "colorScale", colors: scaleType === "colorScale2" ? [colors[0], colors[colors.length - 1]] : colors.length === 3 ? colors : [colors[0], "#FFEB84", colors[colors.length - 1]] };
       case "cell":
         if (cellType === "cellIs") return { type: "cellIs", operator: op, values: op === "between" || op === "notBetween" ? [condValueFromLocal(v1), condValueFromLocal(v2)] : [condValueFromLocal(v1)], style };
@@ -295,9 +301,52 @@ function NewRuleDialog({ ctl, onClose, arg }: P) {
                 <option value="colorScale2">2 Renk Ölçeği</option>
                 <option value="colorScale3">3 Renk Ölçeği</option>
                 <option value="dataBar">Veri Çubuğu</option>
+                <option value="iconSet">Simge Kümeleri</option>
               </select>
             </Field>
-            {scaleType === "dataBar" ? (
+            {scaleType === "iconSet" ? (
+              <div className="tb-iconset-edit">
+                <Field label="Simge Stili:" inline>
+                  <select
+                    value={iconSet}
+                    onChange={(ev) => {
+                      setIconSet(ev.target.value);
+                      setThresholds(defaultThresholds(iconCount(ev.target.value)));
+                    }}
+                  >
+                    {ICON_SETS.flatMap((g) => g.sets).map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                  <IconSetPreview set={iconSet} />
+                </Field>
+                <div className="tb-row-gap">
+                  <Check checked={reverseIcons} onChange={setReverseIcons}>
+                    Simge Sırasını Ters Çevir
+                  </Check>
+                  <Check checked={iconOnly} onChange={setIconOnly}>
+                    Yalnızca Simgeyi Göster
+                  </Check>
+                </div>
+                {thresholds
+                  .map((t, i) => ({ t, i }))
+                  .slice(1)
+                  .reverse()
+                  .map(({ t, i }) => (
+                    <div key={i} className="tb-row-gap">
+                      <span style={{ minWidth: 160 }}>{`${iconCount(iconSet) - i}. simge: değer >=`}</span>
+                      <input type="text" style={{ width: 70 }} value={String(t.value).replace(".", ",")} onChange={(ev) => setThresholds(thresholds.map((x, k) => (k === i ? { ...x, value: Number(ev.target.value.replace(",", ".")) || 0 } : x)))} aria-label={`Eşik ${i}`} />
+                      <select value={t.type} onChange={(ev) => setThresholds(thresholds.map((x, k) => (k === i ? { ...x, type: ev.target.value as typeof t.type } : x)))} aria-label={`Eşik türü ${i}`}>
+                        <option value="percent">Yüzde</option>
+                        <option value="num">Sayı</option>
+                        <option value="percentile">Yüzdebirlik</option>
+                      </select>
+                    </div>
+                  ))}
+              </div>
+            ) : scaleType === "dataBar" ? (
               <Field label="Çubuk Rengi:" inline>
                 <ColorDrop value={barColor} onChange={(c) => setBarColor(c ?? DATA_BAR_COLORS[0])} />
               </Field>
@@ -427,6 +476,8 @@ function describe(r: CondRule): string {
       return "Veri Çubuğu";
     case "colorScale":
       return `${r.colors?.length ?? 3} Renk Ölçeği`;
+    case "iconSet":
+      return "Simge Kümesi";
     case "expression":
       return `Formül: ${v(0)}`;
     case "containsBlanks":
@@ -540,6 +591,9 @@ export function CondManagerDialog({ ctl, onClose }: P) {
           <div key={r.id} className={`tb-cfm-row${r.id === sel ? " is-active" : ""}`} onClick={() => setSel(r.id)} onDoubleClick={() => setEditing(r)}>
             <span>{describe(r)}</span>
             <span>
+              {r.type === "iconSet" ? (
+                <IconSetPreview set={r.iconSet ?? "3TrafficLights1"} size={14} />
+              ) : (
               <span
                 className="tb-cf-preview"
                 style={{
@@ -550,6 +604,7 @@ export function CondManagerDialog({ ctl, onClose }: P) {
               >
                 AaBbÇç
               </span>
+              )}
             </span>
             <span>
               <input

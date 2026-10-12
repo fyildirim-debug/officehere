@@ -17,6 +17,7 @@ import { addXlfnPrefixes, normalizeFileFormula, utcSerial } from "./xlsxFormula"
 
 export { compressCells, addXlfnPrefixes, normalizeFileFormula };
 import { readPivotsFromData } from "./xlsxPivot";
+import { normalizePackage, OPTIONAL_PARTS, readCommentsFromData, readDefinedNamesFromData, stripOptionalParts } from "./xlsxPackage";
 import { readSparklinesFromData } from "./xlsxSpark";
 import { parseThemeXml } from "../model/theme";
 import { activateTheme } from "../model/themeRuntime";
@@ -41,11 +42,44 @@ function rectsFromSqref(s: string): Rect[] {
 
 /* ============================== OKUMA ============================== */
 
-export async function readXlsx(data: ArrayBuffer): Promise<WorkbookModel> {
+/** exceljs ile yükler; başarısız olursa isteğe bağlı parçaları sırayla çıkararak yeniden dener. */
+async function loadTolerant(ExcelJS: any, data: ArrayBuffer, warnings: string[]): Promise<any> {
+  let firstError: unknown;
+  try {
+    const x = new ExcelJS.Workbook();
+    await x.xlsx.load(data);
+    return x;
+  } catch (e) {
+    firstError = e;
+  }
+  const removed: string[] = [];
+  for (const part of OPTIONAL_PARTS) {
+    removed.push(part.kind);
+    try {
+      const stripped = await stripOptionalParts(data, removed);
+      const x = new ExcelJS.Workbook();
+      await x.xlsx.load(stripped);
+      for (const k of removed) warnings.push(OPTIONAL_PARTS.find((p) => p.kind === k)!.label);
+      return x;
+    } catch {
+      /* bir sonraki parça türünü de çıkarıp dene */
+    }
+  }
+  throw firstError;
+}
+
+export async function readXlsx(input: ArrayBuffer): Promise<WorkbookModel> {
   const ExcelJS = await loadExcelJS();
-  const x = new ExcelJS.Workbook();
-  await x.xlsx.load(data);
+  const warnings: string[] = [];
+  let data = input;
+  try {
+    data = await normalizePackage(input);
+  } catch {
+    /* ZIP değilse aşağıdaki yükleme anlamlı hatayı verir */
+  }
+  const x = await loadTolerant(ExcelJS, data, warnings);
   const wb = new WorkbookModel(true);
+  wb.loadWarnings = warnings;
   const cr = new ColorResolver();
   cr.loadTheme(x._themes?.theme1);
   // Tema: hücre stilleri okunmadan önce gövde yazı tipi bilinmeli
@@ -67,44 +101,70 @@ export async function readXlsx(data: ArrayBuffer): Promise<WorkbookModel> {
   const worksheets: any[] = [...x.worksheets].sort((a: any, b: any) => (a.orderNo ?? 0) - (b.orderNo ?? 0));
   for (const ws of worksheets) {
     const sheet = wb.addSheet(ws.name);
-    readSheet(wb, sheet, ws, cr, x);
-  }
-  // Adlandırılmış aralıklar
-  for (const dn of x.definedNames?.model ?? []) {
-    if (!dn.name || dn.name.startsWith("_xlnm")) continue;
-    if (!dn.ranges?.length) continue;
     try {
-      wb.engine.defineName(dn.name, "=" + dn.ranges[0]);
+      readSheet(wb, sheet, ws, cr, x, warnings);
     } catch {
-      /* yok say */
+      warnings.push(`"${ws.name}" sayfasının bir bölümü`);
+    }
+  }
+  // Adlandırılmış aralıklar (sabit/formül adları da): paket doğrudan okunur, olmazsa exceljs modeli
+  let names: { name: string; formula: string; localSheetId?: number }[] = [];
+  try {
+    names = await readDefinedNamesFromData(data);
+  } catch {
+    names = (x.definedNames?.model ?? []).filter((dn: any) => dn.name && !dn.name.startsWith("_xlnm") && dn.ranges?.length).map((dn: any) => ({ name: dn.name, formula: dn.ranges[0] }));
+  }
+  for (const dn of names) {
+    try {
+      const scope = dn.localSheetId !== undefined ? wb.sheets[dn.localSheetId]?.id : undefined;
+      wb.engine.defineName(dn.name, "=" + normalizeFileFormula(dn.formula), scope);
+    } catch {
+      /* geçersiz ad */
     }
   }
   if (!wb.sheets.length) wb.addSheet("Sayfa1");
   const firstVisible = wb.sheets.findIndex((s) => !s.hidden);
   wb.activeIndex = Math.max(0, x.views?.[0]?.activeTab ?? firstVisible);
   if (wb.sheets[wb.activeIndex]?.hidden) wb.activeIndex = Math.max(0, firstVisible);
+  // Notlar: exceljs bazı üreticilerin düz <t> metinlerini okumaz; paket doğrudan okunur
+  try {
+    const notes = await readCommentsFromData(data);
+    for (const sheet of wb.sheets) {
+      for (const n of notes.get(sheet.name) ?? []) {
+        const a = parseRangeAddress(n.ref);
+        if (!a || !n.text) continue;
+        const k = cellKey(a.r1, a.c1);
+        if (sheet.notes.get(k)?.text) continue;
+        sheet.notes.set(k, { text: n.text.replace(/^[^:\n]{1,40}:\n/, ""), author: n.author });
+      }
+    }
+  } catch {
+    /* exceljs'in okuduğu notlar kalır */
+  }
   // Grafikler (exceljs okumaz; DrawingML doğrudan ayrıştırılır)
   try {
     await readCharts(data, wb);
   } catch {
-    /* grafikler okunamazsa yok say */
+    warnings.push("grafikler");
   }
+  wb.syncTables();
   wb.engine.recalc(true);
   // PivotTable tanımları (kaynak değerleri hesaplandıktan sonra)
   try {
     await readPivotsFromData(data, wb);
   } catch {
-    /* PivotTable okunamazsa hücre değerleri kalır */
+    if (!warnings.includes("özet tablolar")) warnings.push("özet tablolar");
   }
   try {
     await readSparklinesFromData(data, wb);
   } catch {
-    /* mini grafikler okunamazsa yok say */
+    warnings.push("mini grafikler");
   }
+  wb.loadWarnings = [...new Set(warnings)];
   return wb;
 }
 
-function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResolver, x: any): void {
+function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResolver, x: any, warnings: string[]): void {
   if (ws.state && ws.state !== "visible") sheet.hidden = true;
   const tab = cr.resolve(ws.properties?.tabColor);
   if (tab) sheet.tabColor = tab;
@@ -232,7 +292,7 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
       });
     }
   } catch {
-    /* tablo okunamadı */
+    warnings.push("tablolar");
   }
   // Resimler
   try {
@@ -264,7 +324,7 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
       sheet.images.push({ id: wb.newId("img"), name: `Resim ${sheet.images.length + 1}`, src, anchor: { row, col, dx, dy }, width, height });
     }
   } catch {
-    /* resim okunamadı */
+    warnings.push("resimler");
   }
 }
 
@@ -356,17 +416,7 @@ export async function writeXlsx(wb: WorkbookModel): Promise<Uint8Array<ArrayBuff
   x.views = [{ x: 0, y: 0, width: 28800, height: 15000, firstSheet: 0, activeTab: wb.activeIndex, visibility: "visible" }];
   wb.engine.recalc();
   for (const sheet of wb.sheets) writeSheet(wb, sheet, x);
-  // Adlandırılmış aralıklar
-  for (const n of wb.engine.getNames()) {
-    const body = n.formula.slice(1);
-    if (/^('[^']+'|[\p{L}_][\p{L}\p{N}_.]*)!\$?[A-Z]+\$?\d+(:\$?[A-Z]+\$?\d+)?$/u.test(body)) {
-      try {
-        x.definedNames.add(body, n.name);
-      } catch {
-        /* yok say */
-      }
-    }
-  }
+  // Tanımlı adlar postProcess içinde workbook.xml'e doğrudan yazılır (sabit/formül adları dahil)
   const buf = await x.xlsx.writeBuffer();
   let bytes: Uint8Array = new Uint8Array(buf as ArrayBuffer);
   bytes = await postProcess(bytes, wb);

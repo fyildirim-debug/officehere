@@ -361,10 +361,12 @@ function formatDateSection(serial: number, sec: Section, o: Required<FormatOptio
   const dp = serialToDate(s);
   const tp = serialToTime(s);
   const totalSeconds = s * 86400;
-  const months = o.lang === "tr" ? MONTHS_TR : MONTHS_EN;
-  const monthsShort = o.lang === "tr" ? MONTHS_TR_SHORT : MONTHS_EN.map((m) => m.slice(0, 3));
-  const days = o.lang === "tr" ? DAYS_TR : DAYS_EN;
-  const daysShort = o.lang === "tr" ? DAYS_TR_SHORT : DAYS_EN.map((d) => d.slice(0, 3));
+  // Biçimdeki yerel ayar etiketi ([$-en-US], [$-41F]) adların dilini belirler
+  const lang = sec.lang ?? o.lang;
+  const months = lang === "tr" ? MONTHS_TR : MONTHS_EN;
+  const monthsShort = lang === "tr" ? MONTHS_TR_SHORT : MONTHS_EN.map((m) => m.slice(0, 3));
+  const days = lang === "tr" ? DAYS_TR : DAYS_EN;
+  const daysShort = lang === "tr" ? DAYS_TR_SHORT : DAYS_EN.map((d) => d.slice(0, 3));
   let out = "";
   for (const t of sec.toks) {
     switch (t.t) {
@@ -408,7 +410,7 @@ function formatDateSection(serial: number, sec: Section, o: Required<FormatOptio
         break;
       case "ampm": {
         const pm = tp.h >= 12;
-        if (o.lang === "tr") out += t.v === "A/P" ? (pm ? "S" : "Ö") : pm ? "ÖS" : "ÖÖ";
+        if (lang === "tr") out += t.v === "A/P" ? (pm ? "S" : "Ö") : pm ? "ÖS" : "ÖÖ";
         else out += t.v === "A/P" ? (pm ? "P" : "A") : pm ? "PM" : "AM";
         break;
       }

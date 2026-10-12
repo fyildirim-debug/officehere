@@ -177,7 +177,8 @@ export function cellError(wb: WorkbookModel, sheet: SheetModel, row: number, col
     const t = v.trim();
     if (t && /^[-+]?[\d.,]+$/.test(t) && /\d/.test(t)) {
       const p = parseCellInput(t);
-      if (p.kind === "value" && typeof p.value === "number" && !/^0\d/.test(t)) return { kind: "numberAsText", title: "Metin Olarak Depolanmış Sayı", help: "Bu hücredeki sayı metin olarak biçimlendirilmiş ya da başına kesme işareti konmuş." };
+      // Baştaki sıfırlar ('001) da metin olarak depolanmış sayıdır (Excel gibi)
+      if (p.kind === "value" && typeof p.value === "number") return { kind: "numberAsText", title: "Metin Olarak Depolanmış Sayı", help: "Bu hücredeki sayı metin olarak biçimlendirilmiş ya da başına kesme işareti konmuş." };
     }
   }
   if (f && inconsistentWithNeighbors(wb, sheet, row, col, f)) return { kind: "inconsistent", title: "Tutarsız Formül", help: "Bu hücredeki formül, alanınızdaki diğer formüllerin düzeniyle eşleşmiyor." };

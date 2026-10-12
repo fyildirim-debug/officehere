@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import type { Controller } from "../controller";
 import type { FileActions } from "../FileView";
+import { GoToSpecialDialog, ValidationErrorDialog } from "./Round3Dialogs";
 import * as D from "../actions/data";
 import * as M from "./MiscDialogs";
 import { FormatCellsDialog } from "./FormatCellsDialog";
@@ -32,8 +33,26 @@ const ACTIONS: Record<string, (ctl: Controller) => void> = {
   traceError: (ctl) => traceError(ctl),
 };
 
+const handled = new WeakSet<DialogState>();
+
 /** İletişim kutusu yığını: en üstteki etkindir; uyarılar alttakini kapatmadan üstte açılır. */
 export function DialogHost({ ctl, stack, onClose, files, onBackstage }: { ctl: Controller; stack: DialogState[]; onClose: (key: number | undefined) => void; files: FileActions; onBackstage?: (page: string) => void }) {
+  // Odak iletişim kutusunun dışına kaçtıysa (ör. ızgaraya döndüyse) Esc yine en üstteki kutuyu kapatır
+  useEffect(() => {
+    if (!stack.length) return;
+    const top = stack[stack.length - 1];
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.(".oh-dialog, .oh-popover, .oh-menu")) return;
+      if (!document.querySelector(".oh-dialog")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose(top.key);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [stack, onClose]);
   return (
     <>
       {stack.map((st) => (
@@ -55,7 +74,10 @@ export function DialogHost({ ctl, stack, onClose, files, onBackstage }: { ctl: C
 function OneDialog({ ctl, state, onClose, files, onBackstage }: { ctl: Controller; state: DialogState; onClose: () => void; files: FileActions; onBackstage?: (page: string) => void }) {
   const id = state.id;
   useEffect(() => {
+    // Eylem bir kez çalışır (React'in geliştirme kipindeki çift efekt çağrısında da)
     if (ACTIONS[id]) {
+      if (handled.has(state)) return;
+      handled.add(state);
       ACTIONS[id](ctl);
       onClose();
     } else if (id === "printPreview" || id === "about") {
@@ -80,6 +102,10 @@ function OneDialog({ ctl, state, onClose, files, onBackstage }: { ctl: Controlle
   switch (state.id) {
     case "alert":
       return <M.AlertDialog {...p} />;
+    case "validationError":
+      return <ValidationErrorDialog {...p} />;
+    case "goSpecial":
+      return <GoToSpecialDialog {...p} />;
     case "confirm":
       return <M.ConfirmDialog {...p} />;
     case "formatCells":
