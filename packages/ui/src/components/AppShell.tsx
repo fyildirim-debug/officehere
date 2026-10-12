@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getNative, type AppKind } from "@officehere/core";
 import { TooltipLayer, tipProps } from "./Tooltip";
+import { useUiTheme } from "../hooks/useUiTheme";
 
 export const APP_NAMES: Record<AppKind | "baslangic", string> = {
   belge: "OfficeHere Belge",
@@ -161,6 +162,8 @@ export interface AppShellProps {
 
 /** Başlık çubuğu + şerit + çalışma alanı + durum çubuğu iskeleti. */
 export function AppShell({ app, titleBar, ribbon, belowRibbon, statusBar, backstage, children }: AppShellProps) {
+  // Kayıtlı Office temasını (Renkli/Beyaz/Koyu Gri/Siyah/Sistem) açılışta uygula ve pencereler arası eşitle.
+  useUiTheme();
   useEffect(() => {
     document.documentElement.setAttribute("data-app", app);
   }, [app]);

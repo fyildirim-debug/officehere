@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export type UiTheme = "colorful" | "white" | "dark" | "black" | "system";
 
@@ -11,6 +11,7 @@ export const UI_THEMES: { id: UiTheme; label: string }[] = [
 ];
 
 const KEY = "officehere.uiTheme";
+const EVENT = "officehere:ui-theme";
 
 function read(): UiTheme {
   try {
@@ -30,15 +31,25 @@ export function useUiTheme(): [UiTheme, (t: UiTheme) => void] {
   useEffect(() => {
     applyUiTheme(theme);
     try {
-      localStorage.setItem(KEY, theme);
+      if (localStorage.getItem(KEY) !== theme) localStorage.setItem(KEY, theme);
     } catch {
       // yok say
     }
   }, [theme]);
   useEffect(() => {
+    // Başka pencerelerde (storage) ve aynı penceredeki diğer kanca örneklerinde (özel olay) eşitle.
     const onStorage = (e: StorageEvent) => e.key === KEY && e.newValue && setTheme(e.newValue as UiTheme);
+    const onLocal = (e: Event) => setTheme((e as CustomEvent<UiTheme>).detail);
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener(EVENT, onLocal);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(EVENT, onLocal);
+    };
   }, []);
-  return [theme, setTheme];
+  const set = useCallback((t: UiTheme) => {
+    setTheme(t);
+    window.dispatchEvent(new CustomEvent<UiTheme>(EVENT, { detail: t }));
+  }, []);
+  return [theme, set];
 }
