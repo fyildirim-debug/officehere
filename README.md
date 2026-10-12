@@ -45,9 +45,12 @@ Arayüz tamamen Türkçedir; Renkli, Beyaz, Koyu Gri ve Siyah temaları vardır.
 - Sayfalama (dul/yetim satır denetimi, birlikte tut), cetvel, üst/alt bilgi ve sayfa numarası
 - Stil galerisi ve stil kümeleri, temalar, filigran, sayfa rengi ve kenarlığı
 - Listeler ve çok düzeyli listeler, tablolar (birleştir/böl, tablo stilleri), resimler, şekiller, kapak sayfası, simgeler
-- İçindekiler, dipnot ve son not, açıklamalar, değişiklikleri izleme (kabul/ret)
-- Bul ve Değiştir (Türkçe harf duyarlı), sözcük sayısı, Okuma/Web/Odak görünümleri
-- Word'deki klavye kısayolları, sağ tık menüleri, otomatik kurtarma
+- İçindekiler, dipnot ve son not, açıklamalar, değişiklikleri izleme (kabul/ret, değişiklik çubukları)
+- Resim yazısı, çapraz başvuru, kaynakça (APA/IEEE), dizin, denklem, grafik, satır numaraları
+- Metni kaydır, resim kırpma, Stiller bölmesi, sekme durakları, Otomatik Düzelt, mini araç çubuğu
+- Adres mektup birleştirme (CSV/XLSX), belge karşılaştırma, düzenleme koruması
+- Bul ve Değiştir (Türkçe İ/i, I/ı duyarlı), Anahat/Taslak/Okuma/Web görünümleri, ayrıntılı yazdırma ayarları
+- Bilinen klavye kısayolları, sağ tık menüleri, otomatik kurtarma ve çökme koruması
 
 ### Tablo
 
@@ -55,9 +58,12 @@ Arayüz tamamen Türkçedir; Renkli, Beyaz, Koyu Gri ve Siyah temaları vardır.
 - 370'ten fazla işlev; **Türkçe işlev adları** (`=TOPLA(A1:A10)`, `=EĞER(…;…;…)`, `=DÜŞEYARA`) ve İngilizce adlar birlikte
 - Formül çubuğu, renkli başvuru vurguları, F4, otomatik tamamlama, doldurma tutamacıyla seriler
 - Hücreleri Biçimlendir, sayı biçimleri (₺, %, tarih), koşullu biçimlendirme, tablo ve hücre stilleri
-- Sıralama, filtre, veri doğrulama, yinelenenleri kaldırma, metni sütunlara dönüştürme, ad yöneticisi
-- Grafikler (sütun, çubuk, çizgi, pasta, halka, alan, dağılım), resimler, notlar, sayfa koruma
-- Sayfa Düzeni görünümü, yazdırma ve PDF
+- Tablo olarak biçimlendirme ve yapısal başvurular (`=TOPLA(Tablo1[Tutar])`), Özet Tablo, Dilimleyici
+- Sıralama, filtre, gelişmiş filtre, veri doğrulama, Anahat/Alt Toplam, Hedef Ara, Senaryo Yöneticisi, Veri Tablosu
+- Formül Denetimi (etkileyen/etkilenen okları, Formülü Değerlendir), Akıllı Doldurma, simge kümeleri
+- Grafikler ve mini grafikler, resimler, şekiller, notlar, sayfa ve kitap koruma
+- Sayfa Düzeni ve Sayfa Sonu Önizleme, yazdırma ayarları ve PDF; 100 bin satırda akıcı filtre/sıralama
+- Python/openpyxl, LibreOffice ve diğer araçların ürettiği XLSX dosyalarıyla uyum
 
 ### Sunum
 
@@ -66,7 +72,9 @@ Arayüz tamamen Türkçedir; Renkli, Beyaz, Koyu Gri ve Siyah temaları vardır.
 - Akıllı kılavuzlar, döndürme, hizalama ve dağıtma, gruplama, bölümler, köprüler
 - 10 tema × 4 çeşitleme, arka plan biçimlendirme, slayt boyutu
 - Gerçekten oynayan geçişler ve animasyonlar, Animasyon Bölmesi
-- Tam ekran slayt gösterisi, sunucu görünümü, kalem/vurgulayıcı/lazer işaretçi
+- Tam ekran slayt gösterisi, iki pencereli sunucu görünümü, kalem/vurgulayıcı/lazer işaretçi
+- Dönüştür geçişi, hareket yolları, eylem düğmeleri, özet ve slayt yakınlaştırma, zamanlama provası
+- Şekilleri birleştirme, noktaları düzenleme, resimleri sıkıştırma, erişilebilirlik denetleyicisi
 
 ## Kurulum
 
