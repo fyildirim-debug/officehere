@@ -64,9 +64,14 @@ export class PartReader {
             items.push({ node: this.table(c) });
             break;
           case "sdt": {
-            const gallery = attr(descendants(kid(c, "sdtPr") ?? c, "docPartGallery")[0], "val");
+            const pr = kid(c, "sdtPr") ?? c;
+            const gallery = attr(descendants(pr, "docPartGallery")[0], "val");
+            const tag = attr(kid(pr, "tag"), "val");
             const content = kid(c, "sdtContent");
-            if (gallery === "Table of Contents" && content) items.push({ node: this.toc(content) });
+            const instr = content ? descendants(content, "instrText").map((t) => t.textContent ?? "").join("") : "";
+            if (content && (tag === "OfficeHereTableOfFigures" || /\\c\s+"/.test(instr))) items.push({ node: tofNode(this.toc(content), instr) });
+            else if (gallery === "Table of Contents" && content) items.push({ node: this.toc(content) });
+            else if (content && (gallery === "Bibliographies" || tag === "OfficeHereBibliography")) items.push({ node: bibliographyNode(content) });
             else if (content) visit(content);
             break;
           }
@@ -230,7 +235,9 @@ export class PartReader {
         case "fldSimple": {
           const instr = (attr(c, "instr") ?? "").trim();
           const kw = instr.split(/\s+/)[0]?.toUpperCase();
-          if (kw === "PAGE" || kw === "NUMPAGES") push({ type: "pageField", attrs: { field: kw } });
+          const fnode = fieldNode(instr, kids(c).map((r) => descendants(r, "t").map((t) => t.textContent ?? "").join("")).join(""));
+          if (fnode) push(fnode);
+          else if (kw === "PAGE" || kw === "NUMPAGES") push({ type: "pageField", attrs: { field: kw } });
           else if (kw === "HYPERLINK") {
             const href = parseHyperlinkInstr(instr);
             this.inline(c, base, href ? [...marks, { type: "link", attrs: { href } }] : marks, segs, extra);
@@ -301,6 +308,14 @@ export class PartReader {
               f.kind = kw === "PAGE" ? "page" : "numpages";
               push({ type: "pageField", attrs: { field: kw } });
               f.emitted = true;
+            } else {
+              // SEQ / REF / PAGEREF / CITATION / MERGEFIELD: düğüm olarak alınır, sonuç metni atlanır.
+              const fnode = fieldNode(f.instr, "");
+              if (fnode) {
+                f.kind = "page";
+                push(fnode);
+                f.emitted = true;
+              }
             }
           } else if (t === "end" && f) {
             const kw = f.instr.trim().split(/\s+/)[0]?.toUpperCase();
@@ -451,9 +466,28 @@ export class PartReader {
           };
         }),
     }));
+    const firstTr = kids(tbl, "tr")[0];
+    const hdr = path(firstTr, "trPr", "tblHeader");
+    const repeatHeader = !!hdr && !["0", "false", "off"].includes(attr(hdr, "val") ?? "");
+    const mar = kid(tblPr, "tblCellMar");
+    const pt = (name: string, alt: string, def: number) => {
+      const el = kid(mar, name) ?? kid(mar, alt);
+      const w = attrNum(el, "w");
+      return el && w !== null && attr(el, "type") !== "pct" ? w / 20 : def;
+    };
+    const cellMargins = mar ? { top: pt("top", "top", 0), bottom: pt("bottom", "bottom", 0), left: pt("left", "start", 5.4), right: pt("right", "end", 5.4) } : null;
     return {
       type: "table",
-      attrs: { tableStyle, headerRow: flag("firstRow", 0x20), bandedRows: !flag("noHBand", 0x200), firstColumn: flag("firstColumn", 0x80), totalRow: flag("lastRow", 0x40), align: jc === "center" || jc === "right" ? jc : jc === "end" ? "right" : null },
+      attrs: {
+        tableStyle,
+        headerRow: flag("firstRow", 0x20),
+        bandedRows: !flag("noHBand", 0x200),
+        firstColumn: flag("firstColumn", 0x80),
+        totalRow: flag("lastRow", 0x40),
+        align: jc === "center" || jc === "right" ? jc : jc === "end" ? "right" : null,
+        repeatHeader,
+        cellMargins,
+      },
       content: content.filter((r) => (r.content?.length ?? 0) > 0),
     };
   }
@@ -524,6 +558,7 @@ export function runMarks(p: RunProps): Mark[] {
   if (p.smallCaps) ts.smallCaps = true;
   if (p.vanish) ts.hidden = true;
   if (p.dstrike) ts.doubleStrike = true;
+  for (const k of ["shadow", "outline", "emboss", "imprint"] as const) if (p[k]) ts[k] = true;
   if (p.spacing) ts.letterSpacing = p.spacing;
   if (Object.keys(ts).length) m.push({ type: "textStyle", attrs: ts });
   return m;
@@ -548,4 +583,59 @@ export function listStyleLevel(level: number | null, name: string | undefined): 
   if (level && level > 0) return level;
   const m = /^(?:list|liste)\b.*?\s(\d)$/i.exec((name ?? "").trim());
   return m ? Math.max(0, Math.min(8, Number(m[1]) - 1)) : (level ?? 0);
+}
+
+/** Alan yönergesinden düğüm (SEQ, REF, PAGEREF, CITATION, MERGEFIELD); tanınmayan alan için null. */
+export function fieldNode(instr: string, result: string): JSONContent | null {
+  const t = instr.trim();
+  const parts = t.match(/"[^"]*"|\S+/g) ?? [];
+  const kw = parts[0]?.toUpperCase();
+  const arg = (parts[1] ?? "").replace(/^"|"$/g, "");
+  const sw = (s: string) => new RegExp(`\\\\${s}(\\s|$)`, "i").test(t);
+  switch (kw) {
+    case "SEQ":
+      return { type: "seqField", attrs: { label: arg || "Şekil", num: parseInt(result, 10) || 1 } };
+    case "REF":
+      return arg ? { type: "crossRef", attrs: { ref: arg, kind: sw("p") ? "position" : "full", link: sw("h"), text: result } } : null;
+    case "PAGEREF":
+      return arg ? { type: "crossRef", attrs: { ref: arg, kind: "page", link: sw("h"), text: result } } : null;
+    case "CITATION": {
+      const pm = /\\p\s+("[^"]*"|\S+)/i.exec(t);
+      return arg ? { type: "citation", attrs: { tag: arg, pages: pm ? pm[1].replace(/"/g, "") : "", text: result } } : null;
+    }
+    case "MERGEFIELD":
+      return arg ? { type: "mergeField", attrs: { name: arg } } : null;
+    default:
+      return null;
+  }
+}
+
+/** Şekiller Tablosu: İçindekiler ayrıştırıcısının girdileri + \\c etiketi. */
+function tofNode(toc: JSONContent, instr: string): JSONContent {
+  const label = /\\c\s+"([^"]+)"/.exec(instr)?.[1] ?? "Şekil";
+  const entries = ((toc.attrs?.entries as TocEntry[]) ?? []).map((e) => ({ ...e, level: 1 }));
+  return { type: "toc", attrs: { kind: "tof", label, title: "", entries } };
+}
+
+/** Kaynakça bloğu (girdiler kaynaklardan yeniden üretilir; başlık korunur). */
+/** Kaynakça bloğu: başlık ve girdiler (italik bölüm ayrı; kaynaklar belgede varsa alan güncellemesi yeniler). */
+function bibliographyNode(content: Element): JSONContent {
+  const [first, ...rest] = descendants(content, "p");
+  const title = first ? descendants(first, "t").map((t) => t.textContent ?? "").join("").trim() : "";
+  const entries = rest
+    .map((p) => {
+      const e = { before: "", italic: "", after: "" };
+      for (const r of descendants(p, "r")) {
+        const text = kids(r, "t").map((t) => t.textContent ?? "").join("");
+        if (!text) continue;
+        const i = path(r, "rPr", "i");
+        const italic = !!i && !["0", "false"].includes(attr(i, "val") ?? "");
+        if (italic && !e.after) e.italic += text;
+        else if (e.italic) e.after += text;
+        else e.before += text;
+      }
+      return e;
+    })
+    .filter((e) => e.before || e.italic || e.after);
+  return { type: "bibliography", attrs: { title: title || "Kaynakça", entries } };
 }

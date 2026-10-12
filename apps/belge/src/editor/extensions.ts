@@ -24,6 +24,8 @@ import { BelgeDocument, ColumnBreak, Section, SectionKeys, createSectionLayout }
 import { AutoCorrect } from "./autocorrect";
 import { TableHandles } from "./tableHandles";
 import { TabStopsAttr } from "./tabStops";
+import { Bibliography, Citation, CrossRef, FieldUpdater, MergeField, SeqField } from "./fields";
+import { Outline } from "./outline";
 
 /** Yazı tipi adı yedek zinciriyle (yüklü olmayan yazı tiplerinde ölçü uyumlu açık yazı tipine düşer). */
 const BelgeFontFamily = FontFamily.extend({
@@ -99,6 +101,11 @@ function contentExtensions(): AnyExtension[] {
     BelgeImage,
     Note,
     TextBox,
+    SeqField,
+    CrossRef,
+    Citation,
+    MergeField,
+    Bibliography,
   ];
 }
 
@@ -132,6 +139,8 @@ export function editorExtensions(controller: PaginationController, hooks: Editor
     PasteRules,
     AutoCorrect,
     TableHandles,
+    FieldUpdater,
+    Outline,
     createSectionLayout({ enabled: () => controller.geometry.enabled, defaultPage: () => controller.geometry.defaultPage, tiled: () => controller.geometry.tiles > 0 }),
   ];
 }

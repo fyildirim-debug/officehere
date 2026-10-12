@@ -3,12 +3,16 @@ import type { DialogState } from "../state/context";
 import { AutoCorrectDialog } from "./AutoCorrectDialog";
 import { StyleDialog } from "./StyleDialog";
 import { TabsDialog } from "./TabsDialog";
+import { CaptionDialog, CrossRefDialog, TableOfFiguresDialog } from "./ReferenceDialogs";
+import { ManageSourcesDialog, SourceDialog } from "./SourceDialogs";
+import { MergeDialog, RecipientsDialog } from "./MergeDialogs";
+import { CellMarginsDialog, SortHost, TableSortDialog, TableToTextDialog, TextToTableDialog } from "./TableDialogs";
 import { FontDialog } from "./FontDialog";
 import { ParagraphDialog } from "./ParagraphDialog";
 import { FindReplaceDialog } from "./FindReplaceDialog";
 import { ColumnsDialog, PageSetupDialog } from "./PageSetupDialog";
 import { BookmarkDialog, DateTimeDialog, InsertTableDialog, LinkDialog, SymbolDialog } from "./InsertDialogs";
-import { AltTextDialog, ImageSizeDialog, PageBordersDialog, ShortcutsDialog, SortDialog, SplitCellsDialog, TablePropsDialog, WatermarkDialog, WordCountDialog, ZoomDialog, type ZoomTarget } from "./MiscDialogs";
+import { AltTextDialog, ImageSizeDialog, PageBordersDialog, ShortcutsDialog, SplitCellsDialog, TablePropsDialog, WatermarkDialog, WordCountDialog, ZoomDialog, type ZoomTarget } from "./MiscDialogs";
 
 interface Props {
   dialog: DialogState | null;
@@ -57,7 +61,15 @@ export function DialogHost({ dialog, onClose, zoom, onZoom, pages }: Props) {
     case "tableProps":
       return <TablePropsDialog onClose={onClose} />;
     case "sort":
-      return <SortDialog onClose={onClose} />;
+      return <SortHost onClose={onClose} />;
+    case "tableSort":
+      return <TableSortDialog onClose={onClose} />;
+    case "textToTable":
+      return <TextToTableDialog onClose={onClose} />;
+    case "tableToText":
+      return <TableToTextDialog onClose={onClose} />;
+    case "cellMargins":
+      return <CellMarginsDialog onClose={onClose} />;
     case "altText":
       return <AltTextDialog onClose={onClose} />;
     case "imageSize":
@@ -66,6 +78,20 @@ export function DialogHost({ dialog, onClose, zoom, onZoom, pages }: Props) {
       return <AutoCorrectDialog onClose={onClose} />;
     case "tabs":
       return <TabsDialog onClose={onClose} />;
+    case "caption":
+      return <CaptionDialog onClose={onClose} />;
+    case "tableOfFigures":
+      return <TableOfFiguresDialog onClose={onClose} />;
+    case "crossRef":
+      return <CrossRefDialog onClose={onClose} />;
+    case "source":
+      return <SourceDialog tag={dialog.arg && dialog.arg !== "insert" ? dialog.arg : undefined} insert={dialog.arg === "insert"} onClose={onClose} />;
+    case "sources":
+      return <ManageSourcesDialog onClose={onClose} />;
+    case "recipients":
+      return <RecipientsDialog onClose={onClose} />;
+    case "merge":
+      return <MergeDialog mode={dialog.arg === "print" ? "print" : "edit"} onClose={onClose} />;
     case "style":
       return <StyleDialog styleId={dialog.arg} onClose={onClose} />;
     default:

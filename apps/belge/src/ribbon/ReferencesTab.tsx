@@ -5,6 +5,7 @@ import { collectNotes, type NoteKind } from "../editor/notes";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonStack } from "@officehere/ui";
 import { useBelge } from "../state/context";
 import { applyStyle } from "../editor/commands";
+import { CaptionsGroup, CitationsGroup } from "./ReferencesGroups";
 
 export function ReferencesTab() {
   const ctx = useBelge();
@@ -99,6 +100,8 @@ export function ReferencesTab() {
           />
         </RibbonStack>
       </RibbonGroup>
+      <CitationsGroup />
+      <CaptionsGroup />
     </>
   );
 }

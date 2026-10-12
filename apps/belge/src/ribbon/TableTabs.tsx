@@ -17,6 +17,10 @@ import {
   Cursor20Regular,
   Delete20Regular,
   TableArrowUp20Regular,
+  ArrowSort20Regular,
+  TableArrowRepeatAll20Regular,
+  TableSwitch20Regular,
+  PaddingLeft20Regular,
 } from "@fluentui/react-icons";
 import { ColorSplitButton, Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonRow, RibbonSplitButton, RibbonStack } from "@officehere/ui";
 import { useState } from "react";
@@ -185,6 +189,21 @@ export function TableLayoutTab() {
             {alignBtn("bottom", "center", "Alta Ortala")}
             {alignBtn("bottom", "right", "Alta Sağa Hizala")}
           </RibbonRow>
+        </RibbonStack>
+        <RibbonStack>
+          <RibbonButton icon={<PaddingLeft20Regular />} label="Hücre Kenar Boşlukları" onClick={() => ctx.openDialog("cellMargins")} />
+        </RibbonStack>
+      </RibbonGroup>
+      <RibbonGroup label="Veri" icon={<ArrowSort20Regular />}>
+        <RibbonButton size="large" icon={<ArrowSort20Regular />} label="Sırala" onClick={() => ctx.openDialog("tableSort")} />
+        <RibbonStack>
+          <RibbonButton
+            icon={<TableArrowRepeatAll20Regular />}
+            label="Başlık Satırlarını Yinele"
+            checked={!!tableInfo(editor)?.node.attrs.repeatHeader}
+            onClick={() => chain().updateAttributes("table", { repeatHeader: !tableInfo(editor)?.node.attrs.repeatHeader }).run()}
+          />
+          <RibbonButton icon={<TableSwitch20Regular />} label="Metne Dönüştür" onClick={() => ctx.openDialog("tableToText")} />
         </RibbonStack>
       </RibbonGroup>
     </>

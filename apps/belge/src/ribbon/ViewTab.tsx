@@ -19,8 +19,7 @@ import {
   ArrowUp20Regular,
   ArrowDown20Regular,
   Dismiss32Regular,
-  ReadingModeMobile24Regular,
-} from "@fluentui/react-icons";
+  ReadingModeMobile24Regular, TextBulletListTree24Regular, Drafts24Regular } from "@fluentui/react-icons";
 import { getNative } from "@officehere/core";
 import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonStack } from "@officehere/ui";
 import { useBelge } from "../state/context";
@@ -38,6 +37,10 @@ export function ViewTab({ zoomTo }: { zoomTo: (kind: "100" | "onePage" | "multi"
         <RibbonButton size="large" icon={<ReadingModeMobile24Regular />} label="Okuma Modu" checked={v.mode === "read"} onClick={() => ctx.setView({ mode: "read" })} />
         <RibbonButton size="large" icon={<DocumentOnePage32Regular />} label="Yazdırma Düzeni" checked={v.mode === "print"} onClick={() => ctx.setView({ mode: "print" })} />
         <RibbonButton size="large" icon={<Globe32Regular />} label="Web Düzeni" checked={v.mode === "web"} onClick={() => ctx.setView({ mode: "web" })} />
+        <RibbonStack>
+          <RibbonButton icon={<TextBulletListTree24Regular />} label="Anahat" checked={v.mode === "outline"} onClick={() => ctx.setView({ mode: "outline" })} />
+          <RibbonButton icon={<Drafts24Regular />} label="Taslak" checked={v.mode === "draft"} onClick={() => ctx.setView({ mode: "draft" })} />
+        </RibbonStack>
       </RibbonGroup>
       <RibbonGroup label="Tam Ekran" icon={<ScanText32Regular />}>
         <RibbonButton size="large" icon={<ScanText32Regular />} label="Odak" description="Dikkat dağıtıcı öğeleri kaldırıp belgenize odaklanın. Çıkmak için Esc." checked={v.focusMode} onClick={() => ctx.setView({ focusMode: !v.focusMode })} />

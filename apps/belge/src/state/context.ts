@@ -31,7 +31,18 @@ export type DialogKind =
   | "about"
   | "autocorrect"
   | "style"
-  | "tabs";
+  | "tabs"
+  | "caption"
+  | "tableOfFigures"
+  | "crossRef"
+  | "source"
+  | "sources"
+  | "recipients"
+  | "merge"
+  | "tableSort"
+  | "textToTable"
+  | "tableToText"
+  | "cellMargins";
 
 export interface DialogState {
   kind: DialogKind;
@@ -39,7 +50,7 @@ export interface DialogState {
   arg?: string;
 }
 
-export type ViewMode = "print" | "web" | "read";
+export type ViewMode = "print" | "web" | "read" | "draft" | "outline";
 
 export interface ViewOptions {
   mode: ViewMode;

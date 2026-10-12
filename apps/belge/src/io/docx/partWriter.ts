@@ -179,6 +179,8 @@ export class PartWriter {
         return '<w:p><w:r><w:br w:type="column"/></w:r></w:p>';
       case "toc":
         return this.toc(n);
+      case "bibliography":
+        return bibliographyXml(n);
       default:
         return n.content ? this.blocks(n.content, list) : "";
     }
@@ -267,7 +269,13 @@ export class PartWriter {
       if (link !== null) out += "</w:hyperlink>";
       link = null;
     };
-    for (const node of nodes) {
+    // Resim yazısı yer işareti ("_Ref…") etiketi ve numarayı kapsar (REF alanı "Şekil 1" verir).
+    let refEnd: { id: number; at: number } | null = null;
+    for (const [ni, node] of nodes.entries()) {
+      if (refEnd && ni > refEnd.at) {
+        out += `<w:bookmarkEnd w:id="${refEnd.id}"/>`;
+        refEnd = null;
+      }
       const marks = (node.marks ?? []) as Mark[];
       // Açıklama aralıkları
       const cids = new Set(marks.filter((m) => m.type === "comment").map((m) => String(m.attrs?.id ?? "")));
@@ -289,7 +297,11 @@ export class PartWriter {
       }
       if (node.type === "bookmark") {
         const id = this.ctx.bookmarkId++;
-        out += `<w:bookmarkStart w:id="${id}" w:name="${esc(String(node.attrs?.name ?? ""))}"/><w:bookmarkEnd w:id="${id}"/>`;
+        const name = String(node.attrs?.name ?? "");
+        const seq: number = name.startsWith("_Ref") && !refEnd ? nodes.findIndex((x: JSONContent, k: number) => k > ni && x.type === "seqField") : -1;
+        out += `<w:bookmarkStart w:id="${id}" w:name="${esc(name)}"/>`;
+        if (seq > 0) refEnd = { id, at: seq };
+        else out += `<w:bookmarkEnd w:id="${id}"/>`;
         continue;
       }
       const lm = marks.find((m) => m.type === "link");
@@ -313,6 +325,7 @@ export class PartWriter {
       }
       out += this.run(node, marks, link !== null, rev === "del");
     }
+    if (refEnd) out += `<w:bookmarkEnd w:id="${refEnd.id}"/>`;
     closeLink();
     return out;
   }
@@ -331,6 +344,10 @@ export class PartWriter {
     if (ts.smallCaps) x += "<w:smallCaps/>";
     if (has("strike")) x += "<w:strike/>";
     if (ts.doubleStrike) x += "<w:dstrike/>";
+    if (ts.outline) x += "<w:outline/>";
+    if (ts.shadow) x += "<w:shadow/>";
+    if (ts.emboss) x += "<w:emboss/>";
+    if (ts.imprint) x += "<w:imprint/>";
     if (ts.hidden) x += "<w:vanish/>";
     const color = hex6(ts.color as string | undefined);
     if (color) x += `<w:color w:val="${color}"/>`;
@@ -393,6 +410,11 @@ export class PartWriter {
       }
       case "image":
         return this.image(node, rpr);
+      case "seqField":
+      case "crossRef":
+      case "citation":
+      case "mergeField":
+        return fieldXml(node, rpr);
       case "note": {
         const end = node.attrs?.kind === "endnote";
         const list = end ? this.ctx.endnotes : this.ctx.footnotes;
@@ -423,13 +445,14 @@ export class PartWriter {
     const descr = a.alt ? ` descr="${esc(String(a.alt))}"` : "";
     const rot = Number(a.rotate) || 0;
     const xfrmAttr = `${rot ? ` rot="${rot * 60000}"` : ""}${a.flipH ? ' flipH="1"' : ""}${a.flipV ? ' flipV="1"' : ""}`;
-    return (
-      `<w:r>${rpr}<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+    const graphic =
       `<wp:docPr id="${id}" name="Resim ${id}"${descr}/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>` +
       `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="${name}"${descr}/><pic:cNvPicPr/></pic:nvPicPr>` +
       `<pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
-      `<pic:spPr><a:xfrm${xfrmAttr}><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`
-    );
+      `<pic:spPr><a:xfrm${xfrmAttr}><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic>`;
+    const wrap = (a.wrap as string | undefined) ?? "inline";
+    if (wrap !== "inline") return `<w:r>${rpr}<w:drawing>${anchorXml(a, wrap, cx, cy, id)}${graphic}</wp:anchor></w:drawing></w:r>`;
+    return `<w:r>${rpr}<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>${graphic}</wp:inline></w:drawing></w:r>`;
   }
 
   table(n: JSONContent): string {
@@ -456,12 +479,15 @@ export class PartWriter {
     const allFixed = known.length === ncols;
     const tblW = allFixed ? `<w:tblW w:w="${gridTw.reduce((s, x) => s + x, 0)}" w:type="dxa"/>` : '<w:tblW w:w="5000" w:type="pct"/>';
     const jc = a.align ? `<w:jc w:val="${a.align}"/>` : "";
-    let x = `<w:tbl><w:tblPr><w:tblStyle w:val="${style}"/>${tblW}${jc}<w:tblLayout w:type="fixed"/>${look}</w:tblPr>`;
+    const m = a.cellMargins as { top: number; bottom: number; left: number; right: number } | null;
+    const tw = (pt: number) => Math.round(pt * 20);
+    const cellMar = m ? `<w:tblCellMar><w:top w:w="${tw(m.top)}" w:type="dxa"/><w:left w:w="${tw(m.left)}" w:type="dxa"/><w:bottom w:w="${tw(m.bottom)}" w:type="dxa"/><w:right w:w="${tw(m.right)}" w:type="dxa"/></w:tblCellMar>` : "";
+    let x = `<w:tbl><w:tblPr><w:tblStyle w:val="${style}"/>${tblW}${jc}<w:tblLayout w:type="fixed"/>${cellMar}${look}</w:tblPr>`;
     x += `<w:tblGrid>${gridTw.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>`;
     // rowspan → vMerge: her satırda dolu ızgara sütunlarını izle.
     const pending: { col: number; span: number; left: number; width: number }[] = [];
-    rows.forEach((row) => {
-      x += "<w:tr>";
+    rows.forEach((row, ri) => {
+      x += ri === 0 && a.repeatHeader ? "<w:tr><w:trPr><w:tblHeader/></w:trPr>" : "<w:tr>";
       let col = 0;
       const cells = row.content ?? [];
       let ci = 0;
@@ -505,19 +531,81 @@ export class PartWriter {
   toc(n: JSONContent): string {
     const entries = (n.attrs?.entries as TocEntry[]) ?? [];
     const title = String(n.attrs?.title ?? "İçindekiler");
+    // Şekiller Tablosu: resim yazısı etiketine göre TOC \c alanı (başlık paragrafı yok).
+    const tof = n.attrs?.kind === "tof";
     const tab = `<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="${this.contentWidthTw}"/></w:tabs>`;
-    let x = `<w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery w:val="Table of Contents"/><w:docPartUnique/></w:docPartObj></w:sdtPr><w:sdtContent>`;
-    x += `<w:p><w:pPr><w:pStyle w:val="TOCHeading"/></w:pPr><w:r><w:t xml:space="preserve">${esc(title)}</w:t></w:r></w:p>`;
-    const begin = '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> TOC \\o "1-3" \\h \\z \\u </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>';
+    let x = tof
+      ? `<w:sdt><w:sdtPr><w:tag w:val="OfficeHereTableOfFigures"/></w:sdtPr><w:sdtContent>`
+      : `<w:sdt><w:sdtPr><w:docPartObj><w:docPartGallery w:val="Table of Contents"/><w:docPartUnique/></w:docPartObj></w:sdtPr><w:sdtContent>`;
+    if (title && !tof) x += `<w:p><w:pPr><w:pStyle w:val="TOCHeading"/></w:pPr><w:r><w:t xml:space="preserve">${esc(title)}</w:t></w:r></w:p>`;
+    const instr = tof ? ` TOC \\h \\z \\c "${esc(String(n.attrs?.label ?? "Şekil"))}" ` : ' TOC \\o "1-3" \\h \\z \\u ';
+    const begin = `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve">${instr}</w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>`;
     const end = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
     if (!entries.length) {
       x += `<w:p>${begin}<w:r><w:t>İçindekiler girdisi bulunamadı.</w:t></w:r>${end}</w:p>`;
     } else {
       entries.forEach((e, i) => {
         const lvl = Math.min(3, Math.max(1, e.level));
-        x += `<w:p><w:pPr><w:pStyle w:val="TOC${lvl}"/>${tab}</w:pPr>${i === 0 ? begin : ""}<w:r><w:t xml:space="preserve">${esc(cleanText(e.text))}</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t>${e.page}</w:t></w:r>${i === entries.length - 1 ? end : ""}</w:p>`;
+        x += `<w:p><w:pPr><w:pStyle w:val="${tof ? "TableofFigures" : `TOC${lvl}`}"/>${tab}</w:pPr>${i === 0 ? begin : ""}<w:r><w:t xml:space="preserve">${esc(cleanText(e.text))}</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t>${e.page}</w:t></w:r>${i === entries.length - 1 ? end : ""}</w:p>`;
       });
     }
     return `${x}</w:sdtContent></w:sdt>`;
   }
+}
+
+/** Satır içi olmayan resmin wp:anchor başlangıcı (konum, metni kaydır, yığın sırası). */
+function anchorXml(a: Record<string, unknown>, wrap: string, cx: number, cy: number, id: number): string {
+  const free = wrap === "behind" || wrap === "front";
+  const side = (a.floatSide as string | undefined) ?? "left";
+  const z = 251658240 + Math.round(Number(a.z) || 0) * 1024 + id;
+  const dist = 'distT="0" distB="0" distL="114300" distR="114300"';
+  const posH = free ? `<wp:positionH relativeFrom="column"><wp:posOffset>${Math.round((Number(a.posX) || 0) * EMU_PER_PX)}</wp:posOffset></wp:positionH>` : `<wp:positionH relativeFrom="column"><wp:align>${side === "right" ? "right" : side === "center" ? "center" : "left"}</wp:align></wp:positionH>`;
+  const posV = `<wp:positionV relativeFrom="paragraph"><wp:posOffset>${Math.round((free ? Number(a.posY) || 0 : 0) * EMU_PER_PX)}</wp:posOffset></wp:positionV>`;
+  let wrapXml = "<wp:wrapSquare wrapText=\"bothSides\"/>";
+  if (free) wrapXml = "<wp:wrapNone/>";
+  else if (wrap === "topBottom") wrapXml = "<wp:wrapTopAndBottom/>";
+  else if (wrap === "tight") wrapXml = '<wp:wrapTight wrapText="bothSides"><wp:wrapPolygon edited="0"><wp:start x="0" y="0"/><wp:lineTo x="0" y="21600"/><wp:lineTo x="21600" y="21600"/><wp:lineTo x="21600" y="0"/><wp:lineTo x="0" y="0"/></wp:wrapPolygon></wp:wrapTight>';
+  return `<wp:anchor ${dist} simplePos="0" relativeHeight="${z}" behindDoc="${wrap === "behind" ? 1 : 0}" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>${posH}${posV}<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>${wrapXml}`;
+}
+
+/** Alan düğümleri: SEQ, REF/PAGEREF, CITATION, MERGEFIELD (sonuç metniyle birlikte). */
+function fieldXml(node: JSONContent, rpr: string): string {
+  const a = (node.attrs ?? {}) as Record<string, unknown>;
+  let instr = "";
+  let result = "";
+  switch (node.type) {
+    case "seqField":
+      instr = ` SEQ ${String(a.label ?? "Şekil")} \\* ARABIC `;
+      result = String(a.num ?? 1);
+      break;
+    case "crossRef":
+      instr = ` ${a.kind === "page" ? "PAGEREF" : "REF"} ${String(a.ref ?? "")}${a.link !== false ? " \\h" : ""}${a.kind === "position" ? " \\p" : ""} `;
+      result = String(a.text ?? "");
+      break;
+    case "citation":
+      instr = ` CITATION ${String(a.tag ?? "")}${a.pages ? ` \\p ${String(a.pages)}` : ""} \\l 1055 `;
+      result = String(a.text ?? "");
+      break;
+    case "mergeField":
+      instr = ` MERGEFIELD ${String(a.name ?? "")} `;
+      result = `«${String(a.name ?? "")}»`;
+      break;
+  }
+  return `<w:fldSimple w:instr="${esc(instr)}"><w:r>${rpr}<w:t xml:space="preserve">${esc(cleanText(result))}</w:t></w:r></w:fldSimple>`;
+}
+
+/** Kaynakça: Word'deki gibi "Bibliographies" belge bölümü içinde BIBLIOGRAPHY alanı. */
+function bibliographyXml(n: JSONContent): string {
+  const entries = (n.attrs?.entries as { before: string; italic: string; after: string }[]) ?? [];
+  const title = String(n.attrs?.title ?? "Kaynakça");
+  let x = `<w:sdt><w:sdtPr><w:tag w:val="OfficeHereBibliography"/><w:docPartObj><w:docPartGallery w:val="Bibliographies"/><w:docPartUnique/></w:docPartObj></w:sdtPr><w:sdtContent>`;
+  x += `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t xml:space="preserve">${esc(title)}</w:t></w:r></w:p>`;
+  const begin = '<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> BIBLIOGRAPHY </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>';
+  const end = '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+  const run = (t: string, italic = false) => (t ? `<w:r>${italic ? "<w:rPr><w:i/></w:rPr>" : ""}<w:t xml:space="preserve">${esc(cleanText(t))}</w:t></w:r>` : "");
+  if (!entries.length) x += `<w:p><w:pPr><w:pStyle w:val="Bibliography"/></w:pPr>${begin}${run("Belgede kaynak yok.")}${end}</w:p>`;
+  entries.forEach((e, i) => {
+    x += `<w:p><w:pPr><w:pStyle w:val="Bibliography"/><w:ind w:left="720" w:hanging="720"/></w:pPr>${i === 0 ? begin : ""}${run(e.before)}${run(e.italic, true)}${run(e.after)}${i === entries.length - 1 ? end : ""}</w:p>`;
+  });
+  return `${x}</w:sdtContent></w:sdt>`;
 }

@@ -184,8 +184,10 @@ export function createWordKeymap(hooks: EditorHooks) {
           const { $from, empty } = e.state.selection;
           const node = $from.parent;
           const sid = node.attrs.styleId as string | null;
-          if (!empty || node.type.name !== "paragraph" || !sid || !NEXT_NORMAL.has(sid) || $from.parentOffset !== node.content.size) return false;
-          return e.chain().splitBlock().updateAttributes("paragraph", { styleId: null }).run();
+          // Stilin "sonraki paragraf stili" (Konu Başlığı, Alıntı, Resim Yazısı → Normal).
+          const next = sid ? (hooks.styles()[sid]?.next ?? (NEXT_NORMAL.has(sid) ? "Normal" : undefined)) : undefined;
+          if (!empty || node.type.name !== "paragraph" || !sid || !next || next === sid || $from.parentOffset !== node.content.size) return false;
+          return e.chain().splitBlock().updateAttributes("paragraph", { styleId: next === "Normal" ? null : next }).run();
         },
         // Belge başı/sonu: tarayıcının yerel davranışı resim, tablo ve hücre seçiminde güvenilmez.
         "Mod-Home": () => docEdge(ed(), -1, false),
@@ -206,7 +208,33 @@ export function createWordKeymap(hooks: EditorHooks) {
           return tabIndent(e, -1);
         },
         Backspace: () => tabIndent(ed(), -1),
+        // F4: son eylemi yinele; Ctrl+Yukarı/Aşağı: paragraf başına / sonraki paragrafa.
+        F4: () => ed().commands.redo(),
+        "Mod-ArrowUp": () => paraJump(ed(), -1, false),
+        "Mod-ArrowDown": () => paraJump(ed(), 1, false),
+        "Mod-Shift-ArrowUp": () => paraJump(ed(), -1, true),
+        "Mod-Shift-ArrowDown": () => paraJump(ed(), 1, true),
       };
     },
   });
+}
+
+/** Ctrl+Yukarı: paragraf başı (zaten baştaysa önceki paragraf); Ctrl+Aşağı: sonraki paragrafın başı. */
+function paraJump(editor: Editor, dir: -1 | 1, extend: boolean): boolean {
+  syncDomSelection(editor.view);
+  const { state } = editor;
+  const starts: number[] = [];
+  let lastEnd = 0;
+  state.doc.descendants((n, pos) => {
+    if (!n.isTextblock) return true;
+    starts.push(pos + 1);
+    lastEnd = pos + 1 + n.content.size;
+    return false;
+  });
+  if (!starts.length) return false;
+  const cur = state.selection.head;
+  const target = dir < 0 ? ([...starts].reverse().find((x) => x < cur) ?? starts[0]) : (starts.find((x) => x > cur) ?? lastEnd);
+  const sel = TextSelection.create(state.doc, extend ? state.selection.anchor : target, target);
+  editor.view.dispatch(state.tr.setSelection(sel).scrollIntoView());
+  return true;
 }

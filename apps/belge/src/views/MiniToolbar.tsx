@@ -1,6 +1,7 @@
 // Mini araç çubuğu: fareyle metin seçilince seçimin üstünde, sağ tıkta bağlam menüsünün üstünde açılan
 // küçük biçimlendirme çubuğu (yazı tipi, boyut, büyült/küçült, stiller, kalın/italik/altı çizili, vurgu,
 // yazı rengi, madde işaretleri, numaralandırma, açıklama).
+import { syncDomSelection } from "../editor/pagination";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -55,6 +56,8 @@ export function useMiniToolbar() {
       down = false;
       window.setTimeout(() => {
         if (ed.isDestroyed) return;
+        // Çift/üçlü tıklamada seçim DOM'da değişmiş ama düzenleyiciye henüz okunmamış olabilir.
+        if (ed.view.hasFocus()) syncDomSelection(ed.view);
         const sel = ed.state.selection;
         if (sel.empty || !ed.view.hasFocus() || !ed.state.doc.textBetween(sel.from, sel.to).trim()) return;
         const r = window.getSelection()?.getRangeAt(0)?.getBoundingClientRect();

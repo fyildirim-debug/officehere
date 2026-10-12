@@ -1,0 +1,622 @@
+/* Ek belge stilleri: Okuma Modu sütunları, Bilgi özellikleri, Stiller bölmesi, sekme durakları, alanlar, kaynakça, Postalar. */
+
+/* Okuma Modu: ortalanmış sütunlar */
+.bl-read-cols {
+  padding-top: 48px !important;
+  padding-bottom: 40px !important;
+  line-height: 1.5;
+}
+
+.bl-read-cols > :first-child,
+.bl-read-cols > section > :first-child {
+  margin-top: 0;
+}
+
+/* Dosya › Bilgi: düzenlenebilir özellikler */
+.bl-prop-input {
+  width: 100%;
+  min-width: 180px;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.bl-prop-input:hover {
+  border-color: var(--oh-border, #c8c8c8);
+}
+
+.bl-prop-input:focus {
+  border-color: var(--oh-accent, #185abd);
+  background: var(--oh-surface, #fff);
+  outline: none;
+}
+
+/* Stiller bölmesi */
+.bl-styles-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 6px;
+}
+
+.bl-styles-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 26px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+button.bl-styles-item {
+  justify-content: space-between;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.bl-styles-item:hover,
+.bl-styles-item.is-active {
+  border-color: var(--oh-border, #c8c8c8);
+  background: var(--oh-hover, #f0f0f0);
+}
+
+.bl-styles-item.is-active {
+  border-color: var(--oh-accent, #185abd);
+}
+
+.bl-styles-apply {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 2px 6px 2px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bl-styles-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bl-styles-kind {
+  color: var(--oh-text-secondary, #616161);
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.bl-styles-more {
+  visibility: hidden;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.bl-styles-item:hover .bl-styles-more,
+.bl-styles-more[aria-expanded="true"] {
+  visibility: visible;
+}
+
+.bl-styles-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--oh-border, #e0e0e0);
+}
+
+.bl-styles-foot .oh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+}
+
+/* Stil iletişim kutusu */
+.bl-style-fmt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.bl-style-fmt label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bl-style-fmt input[type="number"] {
+  width: 56px;
+}
+
+.bl-tog {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  border: 1px solid var(--oh-border, #c8c8c8);
+  border-radius: 3px;
+  background: var(--oh-surface, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+
+.bl-tog.is-on {
+  background: var(--oh-selected, #d6e4f5);
+  border-color: var(--oh-accent, #185abd);
+}
+
+.bl-style-preview {
+  border: 1px solid var(--oh-border, #c8c8c8);
+  background: #fff;
+  color: #000;
+  padding: 8px 10px;
+  max-height: 140px;
+  overflow: hidden;
+  font-size: 11pt;
+}
+
+.bl-style-prev-dim {
+  display: block;
+  color: #a0a0a0;
+  font-size: 9pt;
+  margin: 2px 0;
+}
+
+/* Özel sekme durakları: sekme karakteri ölçülen genişliğe uzatılır; öncü karakterler. */
+.bl-doc .bl-tab {
+  display: inline-block;
+  tab-size: 0;
+  white-space: pre;
+  overflow: hidden;
+  text-indent: 0;
+  vertical-align: baseline;
+}
+
+.bl-doc .bl-tab.is-dot {
+  background: radial-gradient(circle, currentColor 0.7px, transparent 0.9px) 0 calc(100% - 0.3em) / 4px 4px repeat-x;
+}
+
+.bl-doc .bl-tab.is-hyphen {
+  background: linear-gradient(to right, currentColor 3px, transparent 3px) 0 calc(100% - 0.5em) / 6px 1px repeat-x;
+}
+
+.bl-doc .bl-tab.is-underscore {
+  background: linear-gradient(currentColor, currentColor) 0 calc(100% - 0.15em) / 100% 1px no-repeat;
+}
+
+/* Cetvelde sekme durakları */
+.bl-ruler-tab {
+  position: absolute;
+  bottom: 1px;
+  width: 8px;
+  height: 7px;
+  margin-left: -1px;
+  cursor: default;
+  z-index: 3;
+}
+
+.bl-ruler-tab::before,
+.bl-ruler-tab::after {
+  content: "";
+  position: absolute;
+  background: #333;
+}
+
+.bl-ruler-tab.is-left::before {
+  left: 0;
+  top: 0;
+  width: 1.5px;
+  height: 7px;
+}
+
+.bl-ruler-tab.is-left::after {
+  left: 0;
+  bottom: 0;
+  width: 6px;
+  height: 1.5px;
+}
+
+.bl-ruler-tab.is-right {
+  margin-left: -6px;
+}
+
+.bl-ruler-tab.is-right::before {
+  right: 2px;
+  top: 0;
+  width: 1.5px;
+  height: 7px;
+}
+
+.bl-ruler-tab.is-right::after {
+  right: 2px;
+  bottom: 0;
+  width: 6px;
+  height: 1.5px;
+}
+
+.bl-ruler-tab.is-center,
+.bl-ruler-tab.is-decimal,
+.bl-ruler-tab.is-bar {
+  margin-left: -4px;
+}
+
+.bl-ruler-tab.is-center::before,
+.bl-ruler-tab.is-decimal::before,
+.bl-ruler-tab.is-bar::before {
+  left: 3px;
+  top: 0;
+  width: 1.5px;
+  height: 7px;
+}
+
+.bl-ruler-tab.is-center::after,
+.bl-ruler-tab.is-decimal::after {
+  left: 0;
+  bottom: 0;
+  width: 8px;
+  height: 1.5px;
+}
+
+.bl-ruler-tab.is-decimal {
+  background: radial-gradient(circle, #333 1px, transparent 1.2px) 6px 1px / 3px 3px no-repeat;
+}
+
+/* Sekmeler iletişim kutusu */
+.bl-tabs-dlg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.bl-tabs-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bl-tabs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.bl-tabs-list {
+  height: 110px;
+  overflow-y: auto;
+  border: 1px solid var(--oh-border, #c8c8c8);
+  background: var(--oh-surface, #fff);
+  font-size: 12px;
+}
+
+.bl-tabs-list > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 6px;
+  cursor: default;
+}
+
+.bl-tabs-list > div.is-selected {
+  background: var(--oh-accent, #185abd);
+  color: #fff;
+}
+
+.bl-tabs-cleared {
+  font-size: 11px;
+  color: var(--oh-text-secondary, #616161);
+}
+
+.bl-tabs-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.bl-para-preview {
+  border: 1px solid var(--oh-border, #c8c8c8);
+  background: #fff;
+  color: #000;
+  padding: 6px 8px;
+  height: 92px;
+  overflow: hidden;
+  font-size: 6.5pt;
+}
+
+.bl-para-preview .bl-style-prev-dim {
+  font-size: 6.5pt;
+}
+
+/* Metni kaydır: metnin arkasındaki/önündeki resimler bağlı paragrafa göre konumlanır. */
+.bl-doc :is(p, h1, h2, h3, h4, h5, h6):has([data-wrap="behind"], [data-wrap="front"], img[data-wrap="behind"], img[data-wrap="front"]) {
+  position: relative;
+}
+
+.bl-doc [data-resize-container][data-wrap="behind"],
+.bl-doc [data-resize-container][data-wrap="front"] {
+  cursor: move;
+}
+
+/* Alanlar: resim yazısı numarası, çapraz başvuru, alıntı, birleştirme alanı */
+.bl-doc .bl-fieldval {
+  border-radius: 1px;
+}
+
+.bl-editor .bl-fieldval:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.bl-editor .bl-merge {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.bl-editor .bl-merge.is-preview {
+  background: rgba(24, 90, 189, 0.12);
+}
+
+/* Kaynakça bloğu */
+.bl-doc .bl-bib {
+  margin: 0 0 8pt;
+}
+
+.bl-doc .bl-bib-title {
+  margin: 0 0 8pt;
+}
+
+.bl-doc .bl-bib-entry {
+  padding-left: 36pt;
+  text-indent: -36pt;
+  margin: 0 0 6pt;
+}
+
+.bl-editor .bl-bib {
+  border: 1px solid transparent;
+}
+
+.bl-editor .bl-bib:hover,
+.bl-editor .bl-bib.ProseMirror-selectednode {
+  border-color: #b4c7e7;
+}
+
+/* Başvuru iletişim kutuları */
+.bl-cap-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bl-cap-row input {
+  flex: 1;
+}
+
+.bl-cap-prefix {
+  white-space: nowrap;
+  padding: 3px 6px;
+  background: var(--oh-canvas-bg, #f3f3f3);
+  border: 1px solid var(--oh-border, #c8c8c8);
+}
+
+.bl-tof-preview {
+  background: #fff;
+  color: #000;
+  border: 1px solid var(--oh-border, #c8c8c8);
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+.bl-tof-preview > div {
+  display: flex;
+  gap: 4px;
+}
+
+.bl-tof-dots {
+  flex: 1;
+  border-bottom: 1px dotted #000;
+  margin-bottom: 4px;
+}
+
+.bl-xref-head {
+  margin: 8px 0 4px;
+  font-size: 12px;
+}
+
+.bl-xref-list {
+  height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--oh-border, #c8c8c8);
+  background: var(--oh-surface, #fff);
+  font-size: 12px;
+}
+
+.bl-xref-list > div {
+  padding: 2px 6px;
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.bl-xref-list > div.is-selected {
+  background: var(--oh-accent, #185abd);
+  color: #fff;
+}
+
+.bl-xref-empty {
+  color: var(--oh-text-secondary, #616161);
+}
+
+.bl-src-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.bl-src-grid label {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.bl-src-preview {
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 1px solid var(--oh-border, #c8c8c8);
+  background: #fff;
+  color: #000;
+  font-size: 12px;
+  padding-left: 30px;
+  text-indent: -24px;
+}
+
+/* Postalar: birleştirme alanları ve iletişim kutuları */
+.is-merge-hl .bl-editor .bl-merge {
+  background: #bfbfbf;
+}
+
+.bl-merge-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.bl-merge-index {
+  width: 44px;
+  text-align: center;
+}
+
+.bl-merge-note {
+  font-size: 12px;
+  margin: 4px 0 8px;
+}
+
+.bl-merge-table {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--oh-border, #c8c8c8);
+  background: var(--oh-surface, #fff);
+}
+
+.bl-merge-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.bl-merge-table th,
+.bl-merge-table td {
+  border-bottom: 1px solid var(--oh-border, #e0e0e0);
+  padding: 3px 6px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.bl-merge-table th {
+  position: sticky;
+  top: 0;
+  background: var(--oh-canvas-bg, #f3f3f3);
+}
+
+.bl-merge-which {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bl-merge-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bl-merge-range input {
+  width: 56px;
+}
+
+.bl-tab-mailings {
+  display: contents;
+}
+
+.bl-tab-mailings .oh-rbtn-large {
+  max-width: 112px;
+}
+
+/* Metin efektleri */
+.bl-doc [data-shadow] {
+  text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.45);
+}
+
+.bl-doc [data-outline-text] {
+  -webkit-text-stroke: 0.6px currentColor;
+  -webkit-text-fill-color: #fff;
+}
+
+.bl-doc [data-emboss] {
+  text-shadow:
+    -1px -1px 0 #fff,
+    1px 1px 0 rgba(0, 0, 0, 0.35);
+  color: #d9d9d9;
+}
+
+.bl-doc [data-imprint] {
+  text-shadow:
+    1px 1px 0 #fff,
+    -1px -1px 0 rgba(0, 0, 0, 0.35);
+  color: #d9d9d9;
+}
+
+/* Sayfa Yapısı önizlemesi */
+.bl-ps-preview {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.bl-ps-sheet {
+  position: relative;
+  background: #fff;
+  border: 1px solid #8a8a8a;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
+}
+
+.bl-ps-text {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+}
+
+.bl-ps-text i {
+  display: block;
+  height: 2px;
+  background: #9a9a9a;
+  flex: none;
+}
+
+/* Yakınlaştır iletişim kutusu: seçenek etiketleri tek satırda */
+.oh-dialog .bl-dlg-grid .bl-radio {
+  white-space: nowrap;
+}

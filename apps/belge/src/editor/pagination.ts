@@ -2,6 +2,7 @@
 // bloğun (ya da satırın / tablo satırının) önüne sayfa boşluğu kadar yükseklikte bir
 // dekorasyon parçacığı konur. İçerik tek bir akışta kalır; sayfa zeminleri arkada çizilir.
 // Her sayfa kendi bölümünün boyut ve kenar boşluklarını kullanır.
+import { headerCloneWidget } from "./tableTools";
 import { Extension } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
@@ -111,6 +112,7 @@ export class PaginationController {
 }
 
 function makeWidget(b: PageBreakMark) {
+  if (b.kind === "rowhead") return headerCloneWidget;
   if (b.kind === "row") {
     return () => {
       const tr = document.createElement("tr");
@@ -151,7 +153,8 @@ function buildDeco(doc: PMNode, breaks: PageBreakMark[], styles: SectionStyle[])
   const decos: Decoration[] = [];
   for (const b of breaks) {
     if (b.pos <= 0 || b.pos > doc.content.size) continue;
-    decos.push(Decoration.widget(b.pos, makeWidget(b), { side: -1, key: `pg:${b.kind}:${b.pos}:${b.h.toFixed(2)}${b.tileRow ? ":t" : ""}`, ignoreSelection: true }));
+    const head = b.kind === "rowhead" ? `:${doc.resolve(b.pos).parent.firstChild?.textContent ?? ""}:${JSON.stringify(doc.resolve(b.pos).parent.attrs)}` : "";
+    decos.push(Decoration.widget(b.pos, makeWidget(b), { side: -1, key: `pg:${b.kind}:${b.pos}:${b.h.toFixed(2)}${b.tileRow ? ":t" : ""}${head}`, ignoreSelection: true }));
   }
   for (const s of styles) {
     const node = doc.nodeAt(s.pos);

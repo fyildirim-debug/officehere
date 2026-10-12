@@ -1,6 +1,7 @@
 // Sayfalama algoritması: ölçülen blok konumlarından sayfa listesi ve sayfa boşluğu parçacıkları.
 // Sayfalar sıralı oluşturulur; her sayfa bölümünün boyut/kenar boşluğunu taşır. Çok sütunlu
 // bölümler CSS sütunlarıyla akar; sayfa sınırları "column-span: all" ara parçalarıyla kesilir.
+import { repeatHeaderHeight } from "./tableTools";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
 import type { SecGeom } from "./sections";
@@ -43,7 +44,7 @@ export interface LayoutInfo {
 
 export interface PageBreakMark {
   pos: number;
-  kind: "block" | "row" | "line" | "span" | "spanline";
+  kind: "block" | "row" | "rowhead" | "line" | "span" | "spanline";
   h: number;
   /** Yan yana sayfa diziminde yeni satır başlatır (tüm sütunları kesen sıfır yükseklikli parça). */
   tileRow?: boolean;
@@ -403,6 +404,12 @@ export function layoutFlow(ctx: FlowCtx) {
     if (existing) existing.h += h;
     else breaks.push({ pos: t.breakPos, kind: t.kind === "row" ? "row" : "block", h });
     S += h;
+    // Başlık Satırlarını Yinele: yeni sayfadaki ilk satırın üstüne başlık satırının kopyası gelir.
+    const hh = t.kind === "row" ? repeatHeaderHeight(view, t.pos, ctx.scale) : 0;
+    if (hh > 0 && !breaks.some((b) => b.pos === t.breakPos && b.kind === "rowhead")) {
+      breaks.push({ pos: t.breakPos, kind: "rowhead", h: hh });
+      S += hh;
+    }
     for (let k = target; k <= i; k++) {
       sBefore[k] = S;
       record(k, np);
@@ -414,7 +421,8 @@ export function layoutFlow(ctx: FlowCtx) {
   for (let q = pageStarts.length - 1; q >= 0; q--) if (pageStarts[q] < 0) pageStarts[q] = pageStarts[q + 1] ?? pageStarts[q - 1] ?? 0;
   pageStarts[0] = 0;
   for (let q = 1; q < pageStarts.length; q++) if (pageStarts[q] < pageStarts[q - 1]) pageStarts[q] = pageStarts[q - 1];
-  breaks.sort((a, b) => a.pos - b.pos || (a.kind === "line" ? 1 : 0) - (b.kind === "line" ? 1 : 0));
+  const rank = (k: PageBreakMark["kind"]) => (k === "line" ? 2 : k === "rowhead" ? 1 : 0);
+  breaks.sort((a, b) => a.pos - b.pos || rank(a.kind) - rank(b.kind));
   return { breaks, styles, info: { pageCount: pages.length, pageStarts, footnotes, pages, bodyW } as LayoutInfo };
 }
 

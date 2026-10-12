@@ -1,0 +1,488 @@
+/* ------------------------------------------------------------------ */
+/* Şerit ekleri                                                         */
+/* ------------------------------------------------------------------ */
+
+.bl-grow {
+  font: 600 15px/1 "Segoe UI", system-ui, sans-serif;
+  display: inline-flex;
+  align-items: flex-start;
+}
+
+.bl-grow sup {
+  font-size: 7px;
+  margin-left: 1px;
+  line-height: 1;
+}
+
+.bl-grow.is-shrink {
+  font-size: 12px;
+}
+
+.bl-omega {
+  font: 400 26px/1 "Times New Roman", serif;
+}
+
+.bl-pct {
+  font: 600 13px/32px var(--oh-font-ui);
+}
+
+.bl-style-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 2px 4px;
+  overflow: hidden;
+  background: #fff;
+  color: #000;
+}
+
+.bl-style-sample {
+  white-space: nowrap;
+  line-height: 1.3;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.bl-style-name {
+  font: 10.5px var(--oh-font-ui);
+  color: #444;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.bl-libmenu {
+  padding-bottom: 4px;
+}
+
+.bl-libgrid {
+  display: grid;
+  grid-template-columns: repeat(4, 56px);
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.bl-libgrid.is-numbers {
+  grid-template-columns: repeat(4, 72px);
+}
+
+.bl-libtile {
+  height: 56px;
+  border: 1px solid var(--oh-border);
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.is-numbers .bl-libtile {
+  height: 72px;
+}
+
+.bl-libtile:hover {
+  border-color: var(--oh-accent);
+  background: #f0f6ff;
+}
+
+.bl-libtile.is-selected {
+  border: 2px solid var(--oh-accent);
+}
+
+.bl-lib-bullet {
+  font-size: 18px;
+}
+
+.bl-lib-none {
+  font-size: 12px;
+}
+
+.bl-lib-numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 80%;
+  font-size: 10px;
+}
+
+.bl-lib-numbers span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.bl-lib-numbers b {
+  font-weight: 400;
+  min-width: 14px;
+}
+
+.bl-lib-numbers i {
+  flex: 1;
+  border-top: 1px solid #999;
+}
+
+.bl-cover-menu {
+  width: 360px;
+}
+
+.bl-cover-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 8px;
+}
+
+.bl-cover-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  background: none;
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.bl-cover-tile:hover {
+  border-color: var(--oh-accent);
+  background: var(--oh-hover);
+}
+
+.bl-cover-prev {
+  position: relative;
+  width: 90px;
+  height: 126px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #ccc;
+  display: block;
+}
+
+.bl-cover-prev i,
+.bl-cover-prev b,
+.bl-cover-prev s {
+  position: absolute;
+  display: block;
+}
+
+.is-band .bl-cover-prev i {
+  left: 0;
+  right: 0;
+  top: 34px;
+  height: 22px;
+  background: #156082;
+}
+.is-band .bl-cover-prev s {
+  right: 8px;
+  bottom: 14px;
+  width: 36px;
+  height: 8px;
+  background: #c8d7e3;
+}
+.is-simple .bl-cover-prev i {
+  left: 15px;
+  right: 15px;
+  top: 46px;
+  height: 7px;
+  background: #333;
+}
+.is-simple .bl-cover-prev b {
+  left: 15px;
+  right: 15px;
+  top: 58px;
+  height: 1px;
+  background: #999;
+}
+.is-simple .bl-cover-prev s {
+  left: 30px;
+  right: 30px;
+  bottom: 18px;
+  height: 5px;
+  background: #ccc;
+}
+.is-side .bl-cover-prev i {
+  left: 10px;
+  top: 40px;
+  width: 3px;
+  height: 30px;
+  background: #e97132;
+}
+.is-side .bl-cover-prev b {
+  left: 18px;
+  top: 42px;
+  width: 55px;
+  height: 9px;
+  background: #0e2841;
+}
+.is-side .bl-cover-prev s {
+  left: 18px;
+  top: 58px;
+  width: 40px;
+  height: 5px;
+  background: #aaa;
+}
+
+.bl-symgrid {
+  display: grid;
+  grid-template-columns: repeat(10, 28px);
+  gap: 2px;
+  padding: 6px;
+}
+
+.bl-symgrid button,
+.bl-symbols button {
+  height: 28px;
+  border: 1px solid var(--oh-border);
+  background: var(--oh-surface);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.bl-symgrid button:hover,
+.bl-symbols button:hover {
+  border-color: var(--oh-accent);
+  background: var(--oh-hover);
+}
+
+.bl-shapegrid {
+  display: grid;
+  grid-template-columns: repeat(8, 32px);
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.bl-shapegrid button {
+  width: 32px;
+  height: 28px;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bl-shapegrid button:hover {
+  border-color: var(--oh-accent);
+  background: var(--oh-hover);
+}
+
+.bl-wm-menu {
+  width: 330px;
+}
+
+.bl-wm-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 4px 8px 8px;
+}
+
+.bl-wm-tile {
+  border: 1px solid var(--oh-border);
+  background: #fff;
+  height: 120px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.bl-wm-tile:hover {
+  border-color: var(--oh-accent);
+}
+
+.bl-wm-prev {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.bl-wm-prev span {
+  color: #b0b0b0;
+  font: 600 13px var(--oh-font-ui);
+}
+
+.bl-wm-prev.is-diagonal span {
+  transform: rotate(-52deg);
+}
+
+.bl-theme-item,
+.bl-font-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bl-font-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.bl-theme-swatches {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.bl-theme-swatches i {
+  width: 10px;
+  height: 14px;
+  display: inline-block;
+}
+
+.bl-setprev {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  padding: 4px 6px;
+  background: #fff;
+  color: #000;
+  overflow: hidden;
+}
+
+.bl-setprev span {
+  white-space: nowrap;
+}
+
+.bl-setprev-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.bl-setprev-lines i {
+  height: 2px;
+  background: #ccc;
+  display: block;
+}
+
+.bl-tsprev {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  background: #fff;
+}
+
+.bl-tsprev-row {
+  display: flex;
+  flex: 1;
+}
+
+.bl-tsprev-row i {
+  flex: 1;
+  border-width: 1px;
+  margin: 0 -1px -1px 0;
+}
+
+.bl-imgstyle-prev {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+}
+
+.bl-imgstyle-prev i {
+  width: 34px;
+  height: 26px;
+  background: linear-gradient(135deg, #8fb7d8, #3d7aa8);
+  display: block;
+}
+
+.bl-imgstyle-prev[data-img-style="frame"] i {
+  border: 3px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.bl-imgstyle-prev[data-img-style="shadow"] i {
+  box-shadow: 3px 3px 4px rgba(0, 0, 0, 0.5);
+}
+.bl-imgstyle-prev[data-img-style="rounded"] i {
+  border-radius: 0 10px;
+}
+.bl-imgstyle-prev[data-img-style="soft"] i {
+  mask-image: radial-gradient(ellipse at center, #000 55%, transparent 100%);
+}
+.bl-imgstyle-prev[data-img-style="oval"] i {
+  border-radius: 50%;
+}
+.bl-imgstyle-prev[data-img-style="thick"] i {
+  border: 3px solid #000;
+}
+
+.bl-cellalign {
+  display: inline-flex;
+  flex-direction: column;
+  width: 16px;
+  height: 16px;
+  border: 1px solid currentColor;
+  padding: 1px 2px;
+  gap: 1px;
+}
+
+.bl-cellalign.v-top {
+  justify-content: flex-start;
+}
+.bl-cellalign.v-middle {
+  justify-content: center;
+}
+.bl-cellalign.v-bottom {
+  justify-content: flex-end;
+}
+
+.bl-cellalign i {
+  display: block;
+  height: 1px;
+  background: currentColor;
+  width: 70%;
+}
+
+.bl-cellalign i:nth-child(2) {
+  width: 45%;
+}
+
+.bl-cellalign.h-center {
+  align-items: center;
+}
+.bl-cellalign.h-right {
+  align-items: flex-end;
+}
+
+.bl-u-sample {
+  text-decoration-line: underline;
+}
+
+/* Durum çubuğu */
+.bl-sb-icon {
+  width: 14px !important;
+  height: 14px !important;
+  vertical-align: -3px;
+}
+
+.bl-focus-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: auto !important;
+  padding: 0 6px !important;
+}
+
+.bl-focus-btn svg {
+  width: 14px;
+  height: 14px;
+}

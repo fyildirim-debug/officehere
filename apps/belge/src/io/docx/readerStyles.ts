@@ -18,6 +18,10 @@ export interface RunProps {
   caps?: boolean;
   smallCaps?: boolean;
   vanish?: boolean;
+  outline?: boolean;
+  shadow?: boolean;
+  emboss?: boolean;
+  imprint?: boolean;
   spacing?: number;
 }
 
@@ -95,6 +99,12 @@ export function parseRPr(rPr: Element | null, theme: ThemeFonts): RunProps {
         break;
       case "dstrike":
         p.dstrike = onOff(c) ?? undefined;
+        break;
+      case "outline":
+      case "shadow":
+      case "emboss":
+      case "imprint":
+        p[c.localName] = onOff(c) ?? undefined;
         break;
       case "caps":
         p.caps = onOff(c) ?? undefined;

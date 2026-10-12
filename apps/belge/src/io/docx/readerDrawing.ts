@@ -33,8 +33,31 @@ export function readDrawing(pr: PartReader, d: Element, push: (n: JSONContent) =
       rotate: rot || 0,
       flipH: xfrm?.getAttribute("flipH") === "1",
       flipV: xfrm?.getAttribute("flipV") === "1",
+      ...anchorAttrs(d),
     },
   });
+}
+
+/** wp:anchor yerleşimi → metni kaydır, yatay hizalama/konum, yığın sırası. */
+export function anchorAttrs(d: Element): Record<string, unknown> {
+  const anchor = d.localName === "anchor" ? d : descendants(d, "anchor")[0];
+  if (!anchor) return {};
+  const EMU = 9525;
+  const has = (n: string) => !!kid(anchor, n);
+  let wrap = "square";
+  if (has("wrapNone")) wrap = attr(anchor, "behindDoc") === "1" ? "behind" : "front";
+  else if (has("wrapTopAndBottom")) wrap = "topBottom";
+  else if (has("wrapTight") || has("wrapThrough")) wrap = "tight";
+  const posH = kid(anchor, "positionH");
+  const posV = kid(anchor, "positionV");
+  const alignH = posH ? kid(posH, "align")?.textContent?.trim() : undefined;
+  const offH = posH ? kid(posH, "posOffset")?.textContent : undefined;
+  const offV = posV ? kid(posV, "posOffset")?.textContent : undefined;
+  const posX = offH ? Math.round(parseInt(offH, 10) / EMU) : 0;
+  const posY = offV ? Math.round(parseInt(offV, 10) / EMU) : 0;
+  const floatSide = alignH === "right" || alignH === "outside" ? "right" : alignH === "center" ? "center" : posX > 300 ? "right" : "left";
+  const rel = attrNum(anchor, "relativeHeight");
+  return { wrap, floatSide, posX: wrap === "behind" || wrap === "front" ? posX : 0, posY: wrap === "behind" || wrap === "front" ? posY : 0, z: rel ? Math.max(-50, Math.min(50, Math.round((rel - 251658240) / 1024))) : 0 };
 }
 
 export function readPict(pr: PartReader, pc: Element, push: (n: JSONContent) => void, _extra: JSONContent[]) {

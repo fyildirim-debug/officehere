@@ -40,7 +40,7 @@ export function ZoomDialog({ current, onApply, onClose }: { current: number; onA
     </label>
   );
   return (
-    <Dialog open title="Yakınlaştır" width={420} onClose={onClose} onSubmit={apply} footer={okCancel(apply, onClose)}>
+    <Dialog open title="Yakınlaştır" width={460} onClose={onClose} onSubmit={apply} footer={okCancel(apply, onClose)}>
       <FieldSet legend="Yakınlaştırma oranı">
         <div className="bl-dlg-grid">
           <div>
@@ -339,16 +339,17 @@ export function SplitCellsDialog({ onClose }: { onClose: () => void }) {
 }
 
 export function TablePropsDialog({ onClose }: { onClose: () => void }) {
-  const { editor } = useBelge();
+  const { editor, openDialog } = useBelge();
   const info = tableInfo(editor);
   const a = info?.node.attrs ?? {};
   const [align, setAlign] = useState<string>((a.align as string | null) ?? "left");
   const [headerRow, setHeaderRow] = useState(!!a.headerRow);
+  const [repeat, setRepeat] = useState(!!a.repeatHeader);
   const apply = () => {
     editor
       .chain()
       .focus()
-      .updateAttributes("table", { align: align === "left" ? null : align, headerRow })
+      .updateAttributes("table", { align: align === "left" ? null : align, headerRow, repeatHeader: repeat })
       .run();
     onClose();
   };
@@ -369,7 +370,16 @@ export function TablePropsDialog({ onClose }: { onClose: () => void }) {
       </FieldSet>
       <FieldSet legend="Satır">
         <Check label="Üst bilgi satırı olarak biçimlendir" v={headerRow} set={setHeaderRow} />
+        <Check label="Her sayfanın üst kısmında başlık satırı olarak yinele" v={repeat} set={setRepeat} />
       </FieldSet>
+      <DialogButton
+        onClick={() => {
+          apply();
+          openDialog("cellMargins");
+        }}
+      >
+        Seçenekler...
+      </DialogButton>
       {info && (
         <p className="bl-dlg-note">
           Boyut: {info.rows} satır × {info.cols} sütun

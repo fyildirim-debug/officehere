@@ -19,6 +19,7 @@ import { collectNotes, setNoteContent } from "../editor/notes";
 import { sectionGeoms, type SecGeom } from "../editor/sections";
 import { applyPageSetup } from "../state/pageSetup";
 import { ChangeBars, revisionBalloons } from "./revisions";
+import { setOutline } from "../editor/outline";
 import type { TabStop } from "../editor/tabStops";
 import { resolveChanges } from "../editor/trackChanges";
 
@@ -132,6 +133,11 @@ export function DocumentView(props: Props) {
   const revisions = markup === "all" && print && !printing ? revisionBalloons(editor, view.balloons ?? "revisions") : [];
   const hasChanges = print && !printing && (markup === "all" || markup === "simple") && hasRevisions(editor);
   const pageAt = useCallback((pos: number) => controller.pageOf(pos), [controller]);
+  // Anahat görünümü: bloklar anahat düzeyine göre dizilir.
+  useEffect(() => {
+    if (printing) return;
+    setOutline(editor, { on: view.mode === "outline" });
+  }, [editor, view.mode, printing]);
   // İşaretleme görünümü değişince (silinen metin gizlenir/gösterilir) yeniden sayfala.
   useEffect(() => {
     controller.request();
@@ -271,7 +277,7 @@ export function DocumentView(props: Props) {
   const hfPg = hfEditing ? (pages[hfPage] ?? pages[0]) : null;
 
   return (
-    <div className={`bl-workspace is-${view.mode}${hfEditing ? " is-hf-editing" : ""}${props.formatPainter ? " is-painter" : ""}${tiled ? " is-tiled" : ""} is-markup-${markup} is-balloons-${view.balloons ?? "revisions"}`}>
+    <div className={`bl-workspace is-${view.mode}${view.mode === "draft" || view.mode === "outline" ? " is-web is-flowview" : ""}${hfEditing ? " is-hf-editing" : ""}${props.formatPainter ? " is-painter" : ""}${tiled ? " is-tiled" : ""} is-markup-${markup} is-balloons-${view.balloons ?? "revisions"}`}>
       {view.navPane && !printing && (
         <NavigationPane editor={editor} controller={controller} pageCount={pageCount} version={version} focusSearch={props.navFocus} onClose={() => setView({ navPane: false })} />
       )}

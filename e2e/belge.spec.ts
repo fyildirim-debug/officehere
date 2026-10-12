@@ -318,4 +318,275 @@ test.describe("OfficeHere Belge senaryoları", () => {
     await expect(page.getByRole("tab", { name: "Üst Bilgi ve Alt Bilgi", exact: true })).toHaveCount(0);
     await expect(page.locator(".bl-page").first()).toContainText("Şirket Adı");
   });
+
+  /* ---------------------------------------------------------------- */
+  /* 3. tur: kabul bulguları ve yeni özellikler                          */
+  /* ---------------------------------------------------------------- */
+
+  /** Panodan yapıştırır (uzun metinleri hızlıca girmek için). */
+  const paste = (page: Page, text: string) =>
+    page.evaluate((t) => {
+      const dt = new DataTransfer();
+      dt.setData("text/plain", t);
+      document.querySelector(".bl-body .ProseMirror")!.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+    }, text);
+  const dialog = (page: Page) => page.locator(".oh-dialog");
+  const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAGklEQVR4nGO4HyNEEmIY1TCqYVTDqAYqagAAcKKm8RLe1JYAAAAASUVORK5CYII=", "base64");
+
+  test("#1 sayfadan uzun ilk paragraf satır sınırından bölünür, taşma olmaz", async ({ page }) => {
+    await paste(page, "Uzun ilk paragraf metni sayfalar boyunca akar. ".repeat(260).trim());
+    await expect(pages(page)).toHaveCount(4);
+    // Her metin satırı bir sayfanın içinde (sayfa arası boşlukta ya da alt kenar boşluğunda satır yok).
+    const bad = await page.evaluate(() => {
+      const pgs = Array.from(document.querySelectorAll(".bl-pages > .bl-page")).map((e) => e.getBoundingClientRect());
+      // Yalnız metin satırları (sayfa sonu ara parçaları hariç).
+      const walk = document.createTreeWalker(document.querySelector(".bl-body .ProseMirror section > p")!, NodeFilter.SHOW_TEXT);
+      let n = 0;
+      for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+        if (t.parentElement?.closest(".bl-pg, .ProseMirror-widget")) continue;
+        const range = document.createRange();
+        range.selectNodeContents(t);
+        for (const r of Array.from(range.getClientRects())) {
+          if (r.height < 4 || r.width < 4) continue;
+          if (!pgs.some((x) => r.top >= x.top && r.bottom <= x.bottom - 60)) n++;
+        }
+      }
+      return n;
+    });
+    expect(bad).toBe(0);
+    await expect(body(page).locator("section > p")).toHaveCount(1);
+  });
+
+  test("#2 sürekli bölüm sonundan sonra yatay yönlendirme yeni sayfada başlar", async ({ page }) => {
+    await page.keyboard.type("Dikey sayfa metni");
+    await tab(page, "Düzen");
+    await button(page, "Kesmeler").click();
+    await menuItem(page, "Sürekli").click();
+    await page.keyboard.type("Yatay bölüm metni");
+    await expect(pages(page)).toHaveCount(1);
+    await button(page, "Yönlendirme").click();
+    await menuItem(page, "Yatay").click();
+    await expect(pages(page)).toHaveCount(2);
+    const [first, second] = [(await pages(page).nth(0).boundingBox())!, (await pages(page).nth(1).boundingBox())!];
+    expect(first.width).toBeLessThan(first.height);
+    expect(second.width).toBeGreaterThan(second.height);
+    const text = (await body(page).getByText("Yatay bölüm metni").boundingBox())!;
+    expect(text.y).toBeGreaterThan(second.y);
+  });
+
+  test("hata sınırı: çöken belge bölmesi kurtarılır, içerik kaybolmaz", async ({ page }) => {
+    await page.keyboard.type("Kaybolmaması gereken metin");
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent("officehere:crash-test", { detail: "document" })));
+    await expect(page.getByText("Bir sorun oluştu — belgeyi kurtar/kaydet")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Kaydet" }).last()).toBeVisible();
+    await page.getByRole("button", { name: "Belgeyi Kurtar" }).click();
+    await expect(body(page)).toContainText("Kaybolmaması gereken metin");
+  });
+
+  test("Dosya › Yazdır: önizleme, özel sayfa aralığı ve kopyalar gerçekten uygulanır", async ({ page }) => {
+    await page.evaluate(() => {
+      const w = window as unknown as { __printed: string[][]; print: () => void };
+      w.__printed = [];
+      w.print = () => w.__printed.push(Array.from(document.getElementById("bl-print-root")!.children).map((p) => /Sayfa (bir|iki|üç)/.exec(p.textContent ?? "")?.[0] ?? "?"));
+    });
+    for (const t of ["Sayfa bir", "Sayfa iki", "Sayfa üç"]) {
+      await page.keyboard.type(t);
+      if (t !== "Sayfa üç") await page.keyboard.press("Control+Enter");
+    }
+    await page.keyboard.press("Control+p");
+    await expect(page.locator(".bl-pr-count")).toHaveText("/ 3");
+    await page.getByLabel("Sayfalar", { exact: true }).fill("1, 3");
+    await expect(page.locator(".bl-pr-count")).toHaveText("/ 2");
+    await page.getByLabel("Geçerli sayfa").fill("1");
+    await expect(page.locator(".bl-pr-sheet")).toContainText("Sayfa bir");
+    await page.getByRole("button", { name: "Sonraki Sayfa" }).click();
+    await expect(page.locator(".bl-pr-sheet")).toContainText("Sayfa üç");
+    await page.getByLabel("Kopyalar").fill("2");
+    await page.locator(".bl-pr-print").click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __printed: string[][] }).__printed)).toEqual([["Sayfa bir", "Sayfa üç", "Sayfa bir", "Sayfa üç"]]);
+  });
+
+  test("otomatik düzelt: simgeler, kesir, tire, Türkçe cümle başı ve geri alma", async ({ page }) => {
+    await page.keyboard.type("istanbul (c) 1/2 bir -- iki. ılık :) ");
+    await expect(body(page)).toHaveText("İstanbul © ½ bir – iki. Ilık ☺ ");
+    // Ctrl+Z yalnız son düzeltmeyi geri alır.
+    await page.keyboard.press("Control+z");
+    await expect(body(page)).toHaveText("İstanbul © ½ bir – iki. Ilık :) ");
+    // Seçenekler: Dosya › Seçenekler › Otomatik Düzeltme Seçenekleri listesi
+    await page.locator(".oh-ribbon-file").click();
+    await page.locator(".oh-bs-item", { hasText: "Seçenekler" }).first().click();
+    await page.getByRole("button", { name: "Otomatik Düzeltme Seçenekleri..." }).click();
+    await expect(dialog(page)).toContainText("(c)");
+    await expect(dialog(page)).toContainText("☺");
+  });
+
+  test("mini araç çubuğu seçimde açılır ve biçim uygular", async ({ page }) => {
+    await page.keyboard.type("Mini araç çubuğu denemesi");
+    // "araç" sözcüğüne çift tıklama
+    const at = await page.evaluate(() => {
+      const range = document.createRange();
+      const text = document.querySelector(".bl-body .ProseMirror p")!.firstChild!;
+      range.setStart(text, 5);
+      range.setEnd(text, 9);
+      const r = range.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    await page.mouse.dblclick(at.x, at.y);
+    const bar = page.locator(".bl-minibar");
+    await expect(bar).toBeVisible();
+    await bar.getByRole("button", { name: "Kalın" }).click();
+    await expect(body(page).locator("strong")).toHaveText("araç");
+  });
+
+  test("sekme durakları: Paragraf › Sekmeler, ondalık ve noktalı öncü", async ({ page }) => {
+    await page.keyboard.type("Ürün\t12,50");
+    await page.locator('.oh-ribbon-launcher[data-tip="Paragraf Ayarları"]').first().click();
+    await dialog(page).getByRole("button", { name: "Sekmeler..." }).click();
+    await dialog(page).getByLabel("Sekme durak konumu").fill("12");
+    await dialog(page).getByLabel("Ondalık").check();
+    await dialog(page).getByLabel("2 .......").check();
+    await dialog(page).getByRole("button", { name: "Ayarla" }).click();
+    await dialog(page).getByRole("button", { name: "Tamam" }).click();
+    await expect(body(page).locator(".bl-tab.is-dot")).toHaveCount(1);
+    await expect(page.locator(".bl-ruler-tab.is-decimal")).toHaveCount(1);
+  });
+
+  test("resim: metni kaydır (kare, metnin arkasında) ve resim yazısı + çapraz başvuru", async ({ page }) => {
+    await tab(page, "Ekle");
+    await button(page, "Resimler").click();
+    const [fc] = await Promise.all([page.waitForEvent("filechooser"), menuItem(page, "Bu Cihaz...").click()]);
+    await fc.setFiles({ name: "kare.png", mimeType: "image/png", buffer: PNG });
+    await expect(body(page).locator('img[src^="data:"]')).toHaveCount(1);
+    await tab(page, "Resim Biçimi");
+    await button(page, "Metni Kaydır").click();
+    await menuItem(page, "Kare").click();
+    await expect(body(page).locator("img[data-wrap=square]")).toHaveCount(1);
+    await button(page, "Metni Kaydır").click();
+    await menuItem(page, "Metnin Arkasında").click();
+    await expect(body(page).locator("img[data-wrap=behind]")).toHaveCount(1);
+    await tab(page, "Başvurular");
+    await button(page, "Resim Yazısı Ekle").click();
+    await dialog(page).getByLabel("Resim yazısı", { exact: true }).fill(": Grafik");
+    await dialog(page).getByRole("button", { name: "Tamam" }).click();
+    await expect(body(page)).toContainText("Şekil 1: Grafik");
+    await page.keyboard.press("Control+End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Bkz. ");
+    await button(page, "Çapraz Başvuru").click();
+    await dialog(page).getByRole("button", { name: "Ekle" }).click();
+    await dialog(page).locator(".oh-btn", { hasText: "Kapat" }).click();
+    await expect(body(page).locator(".bl-xref")).toHaveText("Şekil 1");
+  });
+
+  test("alıntı ve kaynakça (APA), stil IEEE'ye geçince alıntı numaralanır", async ({ page }) => {
+    await page.keyboard.type("Bir alıntı ");
+    await tab(page, "Başvurular");
+    await button(page, "Alıntı Ekle").click();
+    await menuItem(page, "Yeni Kaynak Ekle...").click();
+    await dialog(page).getByLabel("Yazar").fill("Kaya, Ali");
+    await dialog(page).getByLabel("Başlık").fill("Türkçe Kitap");
+    await dialog(page).getByLabel("Yıl").fill("2019");
+    await dialog(page).getByLabel("Yayımcı").fill("Yayınevi");
+    await dialog(page).getByRole("button", { name: "Tamam" }).click();
+    await expect(body(page)).toContainText("Bir alıntı (Kaya, 2019)");
+    await page.keyboard.press("Enter");
+    await button(page, "Kaynakça").click();
+    await menuItem(page, "Kaynakça").click();
+    await expect(body(page).locator(".bl-bib")).toContainText("Kaya, A. (2019). Türkçe Kitap. Yayınevi.");
+    await button(page, "Stil: APA").click();
+    await menuItem(page, "IEEE").click();
+    await expect(body(page)).toContainText("Bir alıntı [1]");
+    await expect(body(page).locator(".bl-bib")).toContainText("[1] A. Kaya, Türkçe Kitap. Yayınevi, 2019.");
+  });
+
+  test("stiller bölmesi ve yeni stil oluşturma", async ({ page }) => {
+    await page.keyboard.type("Özel biçimli paragraf");
+    await page.keyboard.press("Control+Alt+Shift+s");
+    const pane = page.locator(".bl-styles-pane");
+    await expect(pane).toBeVisible();
+    await pane.getByRole("button", { name: "Yeni Stil" }).click();
+    await dialog(page).getByLabel("Ad").fill("Vurgum");
+    await dialog(page).getByRole("button", { name: "Kalın" }).click();
+    await dialog(page).getByRole("button", { name: "Tamam" }).click();
+    await expect(pane).toContainText("Vurgum");
+    await expect(body(page).locator("p[data-style=Vurgum]")).toHaveCount(1);
+  });
+
+  test("tablo: metni tabloya dönüştür, sırala, başlık satırlarını yinele, metne dönüştür", async ({ page }) => {
+    for (const r of ["Ad\tPuan", "Zeynep\t85", "Ali\t92", "Çiğdem\t7"]) {
+      await page.keyboard.type(r);
+      if (r !== "Çiğdem\t7") await page.keyboard.press("Enter");
+    }
+    await page.keyboard.press("Control+a");
+    await tab(page, "Ekle");
+    await button(page, "Tablo").click();
+    await menuItem(page, "Metni Tabloya Dönüştür...").click();
+    await expect(dialog(page).getByLabel("Satır sayısı")).toHaveValue("4");
+    await dialog(page).getByRole("button", { name: "Tamam" }).click();
+    const rows = body(page).locator("table tr:not(.bl-pg)");
+    await expect(rows).toHaveCount(4);
+    await page.getByRole("tab", { name: "Düzen", exact: true }).last().click();
+    await button(page, "Sırala").click();
+    await dialog(page).getByLabel("Üst bilgi satırı var").check();
+    await dialog(page).getByLabel("Sıralama türü").selectOption("number");
+    await dialog(page).getByLabel("Sıralama sütunu").selectOption({ label: "Puan" });
+    await dialog(page).getByRole("button", { name: "Tamam" }).click();
+    await expect(rows.locator("td:first-child")).toHaveText(["Ad", "Çiğdem", "Zeynep", "Ali"]);
+    await button(page, "Başlık Satırlarını Yinele").click();
+    await expect(button(page, "Başlık Satırlarını Yinele")).toHaveAttribute("aria-pressed", "true");
+    await button(page, "Metne Dönüştür").click();
+    await dialog(page).getByRole("button", { name: "Tamam" }).click();
+    await expect(body(page).locator("table")).toHaveCount(0);
+    await expect(body(page).locator("section > p").nth(1)).toHaveText("Çiğdem\t7");
+  });
+
+  test("Postalar: CSV alıcı listesi, birleştirme alanı ve sonuç önizleme", async ({ page }) => {
+    await page.keyboard.type("Sayın ");
+    await tab(page, "Postalar");
+    await page.getByTestId("bl-merge-input").setInputFiles({ name: "alicilar.csv", mimeType: "text/csv", buffer: Buffer.from("Ad;Şehir\nAyşe Yılmaz;İzmir\nAli Kaya;Ankara\n") });
+    await button(page, "Birleştirme Alanı Ekle").click();
+    await menuItem(page, "Ad").click();
+    await expect(body(page).locator(".bl-merge")).toHaveText("«Ad»");
+    await button(page, "Sonuçları Önizle").click();
+    await expect(body(page)).toContainText("Sayın Ayşe Yılmaz");
+    await page.getByRole("button", { name: "Sonraki Kayıt" }).click();
+    await expect(body(page)).toContainText("Sayın Ali Kaya");
+  });
+
+  test("Anahat ve Taslak görünümleri: düzey süzgeci, yükselt/düşür", async ({ page }) => {
+    await button(page, "Başlık 1").click();
+    await page.keyboard.type("Giriş");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Gövde metni");
+    await tab(page, "Görünüm");
+    await button(page, "Anahat").click();
+    await expect(page.getByRole("tab", { name: "Anahat", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(body(page).locator(".bl-ol-h")).toHaveCount(1);
+    await page.getByLabel("Düzey Göster").selectOption("1");
+    await expect(body(page).getByText("Gövde metni")).toBeHidden();
+    await page.getByLabel("Düzey Göster").selectOption("0");
+    await body(page).getByText("Gövde metni").click();
+    await page.keyboard.press("Alt+Shift+ArrowLeft");
+    await expect(body(page).locator("h1")).toHaveCount(2);
+    await button(page, "Anahatı Kapat").click();
+    await tab(page, "Görünüm");
+    await button(page, "Taslak").click();
+    await expect(pages(page)).toHaveCount(0);
+    await expect(body(page)).toContainText("Gövde metni");
+  });
+
+  test("belge özellikleri: Dosya › Bilgi'de başlık ve yazar düzenlenir", async ({ page }) => {
+    const info = async () => {
+      await page.locator(".oh-ribbon-file").click();
+      await page.locator(".oh-bs-item", { hasText: "Bilgi" }).first().click();
+    };
+    await info();
+    await page.getByLabel("Başlık").fill("Yıllık Rapor");
+    await page.getByLabel("Yazar").fill("Ayşe Yılmaz");
+    await page.locator(".oh-bs-back").click();
+    await expect(page.locator(".oh-backstage")).toHaveCount(0);
+    await info();
+    await expect(page.getByLabel("Başlık")).toHaveValue("Yıllık Rapor");
+    await expect(page.getByLabel("Yazar")).toHaveValue("Ayşe Yılmaz");
+  });
 });

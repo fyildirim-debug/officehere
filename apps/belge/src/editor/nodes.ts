@@ -121,6 +121,10 @@ export const TableOfContents = Node.create({
         renderHTML: (a) => ({ "data-entries": JSON.stringify(a.entries) }),
       },
       title: { default: "İçindekiler", parseHTML: (el) => el.getAttribute("data-title") ?? "İçindekiler", renderHTML: (a) => ({ "data-title": a.title }) },
+      /** "toc": başlıklardan İçindekiler; "tof": resim yazılarından Şekiller Tablosu (label etiketiyle). */
+      kind: { default: "toc", parseHTML: (el) => el.getAttribute("data-kind") ?? "toc", renderHTML: (a) => (a.kind !== "toc" ? { "data-kind": a.kind } : {}) },
+      label: { default: null, parseHTML: (el) => el.getAttribute("data-label"), renderHTML: (a) => (a.label ? { "data-label": a.label } : {}) },
+      showPages: { default: true, parseHTML: (el) => el.getAttribute("data-pages") !== "false", renderHTML: (a) => (a.showPages === false ? { "data-pages": "false" } : {}) },
     };
   },
   parseHTML() {
@@ -131,16 +135,16 @@ export const TableOfContents = Node.create({
     return [
       "div",
       mergeAttributes(HTMLAttributes, { "data-toc": "", class: "bl-toc", contenteditable: "false" }),
-      ["div", { class: "bl-toc-title" }, node.attrs.title as string],
+      ...(node.attrs.title ? [["div", { class: "bl-toc-title" }, node.attrs.title as string]] : []),
       ...(entries.length
         ? entries.map((e) => [
             "div",
             { class: `bl-toc-entry bl-toc-l${e.level}`, "data-pos": String(e.pos) },
             ["span", { class: "bl-toc-text" }, e.text],
             ["span", { class: "bl-toc-dots" }],
-            ["span", { class: "bl-toc-page" }, String(e.page)],
+            ["span", { class: "bl-toc-page" }, node.attrs.showPages === false ? "" : String(e.page)],
           ])
-        : [["div", { class: "bl-toc-empty" }, "İçindekiler girdisi bulunamadı."]]),
+        : [["div", { class: "bl-toc-empty" }, node.attrs.kind === "tof" ? "Şekiller tablosu girdisi bulunamadı." : "İçindekiler girdisi bulunamadı."]]),
     ] as unknown as [string, ...unknown[]] as never;
   },
   addCommands() {

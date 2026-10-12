@@ -3,7 +3,10 @@ import type { JSONContent } from "@tiptap/core";
 import { fontStack } from "@officehere/core";
 import { pageMetrics, type DocSettings } from "../model/document";
 import { resolveStyles, styleSheetCss } from "../model/styles";
-import documentCss from "../styles/document.css?raw";
+import documentCssMain from "../styles/document.css?raw";
+import documentCssMarks from "../styles/document-marks.css?raw";
+
+const documentCss = `${documentCssMain}\n${documentCssMarks}`;
 
 /** Baytları metne çevirir: UTF-8 (BOM'lu/BOM'suz) ya da Türkçe Windows-1254. */
 export function decodeText(data: ArrayBuffer | Uint8Array): string {

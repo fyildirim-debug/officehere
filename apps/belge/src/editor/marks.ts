@@ -138,6 +138,11 @@ export const TextStyleExtras = Extension.create({
             parseHTML: (el) => el.hasAttribute("data-dstrike"),
             renderHTML: (a) => (a.doubleStrike ? { "data-dstrike": "", style: "text-decoration-line:line-through;text-decoration-style:double" } : {}),
           },
+          // Metin efektleri (Yazı Tipi › Metin Efektleri; DOCX w:shadow, w:outline, w:emboss, w:imprint).
+          shadow: { default: false, parseHTML: (el) => el.hasAttribute("data-shadow"), renderHTML: (a) => (a.shadow ? { "data-shadow": "" } : {}) },
+          outline: { default: false, parseHTML: (el) => el.hasAttribute("data-outline-text"), renderHTML: (a) => (a.outline ? { "data-outline-text": "" } : {}) },
+          emboss: { default: false, parseHTML: (el) => el.hasAttribute("data-emboss"), renderHTML: (a) => (a.emboss ? { "data-emboss": "" } : {}) },
+          imprint: { default: false, parseHTML: (el) => el.hasAttribute("data-imprint"), renderHTML: (a) => (a.imprint ? { "data-imprint": "" } : {}) },
         },
       },
     ];

@@ -182,9 +182,32 @@ export function PageSetupDialog({ initialTab, onClose }: { initialTab?: string; 
             </FieldSet>
           </>
         )}
+        <FieldSet legend="Önizleme">
+          <PagePreview w={p(w)} h={p(h)} m={{ top: p(top), bottom: p(bottom), left: p(left) + p(gutter), right: p(right) }} />
+        </FieldSet>
         <ScopeField scope={scope} setScope={setScope} multi={multi} />
       </div>
     </Dialog>
+  );
+}
+
+/** Sayfa Yapısı önizlemesi: kağıt oranı, kenar boşlukları ve metin satırları (cm değerlerinden). */
+function PagePreview({ w, h, m }: { w: number; h: number; m: { top: number; bottom: number; left: number; right: number } }) {
+  const max = 86;
+  const sc = max / Math.max(w || 21, h || 29.7, 1);
+  const W = (w || 21) * sc;
+  const H = (h || 29.7) * sc;
+  const lines = Math.max(0, Math.floor((H - (m.top + m.bottom) * sc) / 5));
+  return (
+    <div className="bl-ps-preview" aria-label="Önizleme">
+      <div className="bl-ps-sheet" style={{ width: W, height: H }}>
+        <div className="bl-ps-text" style={{ left: m.left * sc, right: m.right * sc, top: m.top * sc, bottom: m.bottom * sc }}>
+          {Array.from({ length: Math.min(lines, 18) }, (_, i) => (
+            <i key={i} style={{ width: i % 5 === 4 ? "60%" : "100%" }} />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

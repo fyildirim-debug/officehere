@@ -2,6 +2,8 @@
 import { Extension } from "@tiptap/core";
 import { Fragment, Slice, type Schema } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
+import { syncDomSelection } from "./pagination";
 
 interface ListPara {
   el: HTMLElement;
@@ -162,6 +164,12 @@ export function lastInternalCopy(): Slice | null {
   return lastCopied;
 }
 
+/** Kopyalanan seçimi saklar (klavyeyle hemen önce değişen DOM seçimi önce okunur). */
+function remember(view: EditorView) {
+  syncDomSelection(view);
+  if (!view.state.selection.empty) lastCopied = view.state.selection.content();
+}
+
 export const PasteRules = Extension.create({
   name: "belgePaste",
   addProseMirrorPlugins() {
@@ -173,11 +181,11 @@ export const PasteRules = Extension.create({
           clipboardTextParser: (text, _ctx, _plain, view) => textToSlice(view.state.schema, text),
           handleDOMEvents: {
             copy: (view) => {
-              if (!view.state.selection.empty) lastCopied = view.state.selection.content();
+              remember(view);
               return false;
             },
             cut: (view) => {
-              if (!view.state.selection.empty) lastCopied = view.state.selection.content();
+              remember(view);
               return false;
             },
           },

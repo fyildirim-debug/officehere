@@ -17,6 +17,7 @@ import {
   Table32Regular,
   TextAddT20Regular,
   TableAdd20Regular,
+  TableSwitch20Regular,
   Delete20Regular,
   Edit20Regular,
   Textbox24Regular,
@@ -146,6 +147,7 @@ export function InsertTab() {
               <TableGridPicker onPick={(r, c) => insertTable(editor, r, c)} />
               <MenuSeparator />
               <MenuItem icon={<TableAdd20Regular />} label="Tablo Ekle..." onClick={() => ctx.openDialog("insertTable")} />
+              <MenuItem icon={<TableSwitch20Regular />} label="Metni Tabloya Dönüştür..." disabled={editor.state.selection.empty || !ctx.inBody} onClick={() => ctx.openDialog("textToTable")} />
             </div>
           }
         />

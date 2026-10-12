@@ -2,6 +2,14 @@
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import type { NodeView, ViewMutationRecord } from "@tiptap/pm/view";
+import { cellPadCss, type CellMargins } from "./tableTools";
+
+const cellMarginsAttr = (m: CellMargins) => [m.top, m.right, m.bottom, m.left].join(",");
+
+function parseCellMargins(v: string | null): CellMargins | null {
+  const n = (v ?? "").split(",").map(Number);
+  return n.length === 4 && n.every((x) => Number.isFinite(x)) ? { top: n[0], right: n[1], bottom: n[2], left: n[3] } : null;
+}
 
 export interface TableStyleDef {
   id: string;
@@ -55,6 +63,14 @@ class BelgeTableView implements NodeView {
     this.table.setAttribute("data-banded-rows", String(!!a.bandedRows));
     this.table.setAttribute("data-first-col", String(!!a.firstColumn));
     this.table.setAttribute("data-total-row", String(!!a.totalRow));
+    const pad = a.cellMargins as CellMargins | null;
+    if (pad) {
+      this.table.setAttribute("data-cpad", cellMarginsAttr(pad));
+      this.table.style.setProperty("--bl-cpad", cellPadCss(pad));
+    } else {
+      this.table.removeAttribute("data-cpad");
+      this.table.style.removeProperty("--bl-cpad");
+    }
     if (a.align) this.table.setAttribute("data-align", a.align as string);
     else this.table.removeAttribute("data-align");
     this.dom.style.justifyContent = a.align === "center" ? "center" : a.align === "right" ? "flex-end" : "";
@@ -121,6 +137,14 @@ export const BelgeTable = Table.extend({
       firstColumn: { default: false, parseHTML: (el) => el.getAttribute("data-first-col") === "true", renderHTML: (a) => ({ "data-first-col": String(a.firstColumn) }) },
       totalRow: { default: false, parseHTML: (el) => el.getAttribute("data-total-row") === "true", renderHTML: (a) => ({ "data-total-row": String(a.totalRow) }) },
       align: { default: null, parseHTML: (el) => el.getAttribute("data-align"), renderHTML: (a) => (a.align ? { "data-align": a.align } : {}) },
+      /** Başlık Satırlarını Yinele: ilk satır her sayfanın başında yinelenir. */
+      repeatHeader: { default: false, parseHTML: (el) => el.getAttribute("data-repeat-header") === "true", renderHTML: (a) => (a.repeatHeader ? { "data-repeat-header": "true" } : {}) },
+      /** Varsayılan hücre kenar boşlukları (pt; null: 0 / 0,19 cm). */
+      cellMargins: {
+        default: null,
+        parseHTML: (el) => parseCellMargins(el.getAttribute("data-cpad")),
+        renderHTML: (a) => (a.cellMargins ? { "data-cpad": cellMarginsAttr(a.cellMargins as CellMargins), style: `--bl-cpad:${cellPadCss(a.cellMargins as CellMargins)}` } : {}),
+      },
     };
   },
 }).configure({

@@ -1,0 +1,135 @@
+/* Taslak ve Anahat görünümleri: sayfa sınırı yok; metin sayfa genişliğinde, sola yaslı akar. */
+.is-flowview .bl-body {
+  padding: 16px 32px 96px 40px;
+}
+
+.is-flowview .bl-body .ProseMirror {
+  max-width: 17cm;
+}
+
+.is-flowview .bl-hf,
+.is-flowview .bl-header,
+.is-flowview .bl-footer,
+.is-flowview .bl-watermark {
+  display: none !important;
+}
+
+/* Taslak: resimler ve kayan öğeler satır içinde gösterilir; bölüm sonları kesik çizgiyle işaretlenir. */
+.is-draft .bl-section + .bl-section {
+  border-top: 3px double #8aa4d6;
+  margin-top: 6px;
+  padding-top: 6px !important;
+}
+
+.is-draft .bl-body .ProseMirror [data-wrap] {
+  float: none !important;
+  position: static !important;
+  transform: none !important;
+}
+
+/* Anahat: her üst düzey blok düzeyine göre girintilenir; başlık önünde ⊕ / ⊖, gövde metni önünde ○. */
+.is-outline .bl-body .ProseMirror {
+  max-width: none;
+}
+
+.is-outline .bl-ol {
+  position: relative;
+  margin-left: calc(var(--bl-ol, 0) * 24px + 22px) !important;
+  text-indent: 0 !important;
+}
+
+.is-outline .bl-ol::before {
+  position: absolute;
+  left: -20px;
+  top: 0.15em;
+  width: 14px;
+  font: 12px/1 var(--oh-font-ui);
+  color: #5b6b80;
+  text-align: center;
+  content: "○";
+  pointer-events: none;
+}
+
+.is-outline .bl-ol-h::before {
+  content: "⊖";
+  font-size: 14px;
+}
+
+.is-outline .bl-ol-h.has-kids::before {
+  content: "⊕";
+}
+
+.is-outline .bl-ol-h {
+  margin-top: 6px !important;
+  margin-bottom: 2px !important;
+  page-break-before: auto !important;
+}
+
+.is-outline .bl-ol-body {
+  margin-top: 0 !important;
+  margin-bottom: 4px !important;
+}
+
+.is-outline .bl-ol-hidden {
+  display: none !important;
+}
+
+.is-outline .bl-ol-first {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.is-outline .bl-ol-first::after {
+  content: " …";
+}
+
+.is-outline .bl-pagebreak,
+.is-outline .bl-colbreak,
+.is-outline .bl-tsp {
+  display: none !important;
+}
+
+.is-outline.bl-outline-plain .bl-body .ProseMirror * {
+  font-weight: inherit;
+  font-style: inherit;
+  text-decoration: inherit;
+}
+
+/* Anahat sekmesindeki düzey seçimleri */
+.bl-ol-select {
+  height: 22px;
+  min-width: 112px;
+  font: 12px var(--oh-font-ui);
+}
+
+.bl-ol-show {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 12px var(--oh-font-ui);
+  white-space: nowrap;
+}
+
+.bl-ol-show select {
+  height: 22px;
+  min-width: 112px;
+  font: inherit;
+}
+
+/* Tablo iletişim kutuları */
+.bl-sep-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+}
+
+.bl-sep-grid input[type="text"] {
+  width: 32px;
+  margin-left: 6px;
+  text-align: center;
+}
+
+.bl-dlg-note.is-error {
+  color: #a4262c;
+}

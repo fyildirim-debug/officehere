@@ -9,7 +9,8 @@ import { UNDERLINE_TYPES, type UnderlineType } from "../editor/marks";
 const STYLES = ["Normal", "İtalik", "Kalın", "Kalın İtalik"];
 
 export function FontDialog({ onClose }: { onClose: () => void }) {
-  const { editor, fmt } = useBelge();
+  const ctx = useBelge();
+  const { editor, fmt } = ctx;
   const ts = editor.getAttributes("textStyle");
   const [tab, setTab] = useState("font");
   const [font, setFont] = useState(fmt.font);
@@ -28,6 +29,8 @@ export function FontDialog({ onClose }: { onClose: () => void }) {
   const ls = (ts.letterSpacing as number | null) ?? 0;
   const [spacingKind, setSpacingKind] = useState(ls > 0 ? "expanded" : ls < 0 ? "condensed" : "normal");
   const [spacing, setSpacing] = useState(String(Math.abs(ls)).replace(".", ","));
+  const [effects, setEffects] = useState({ shadow: !!ts.shadow, outline: !!ts.outline, emboss: !!ts.emboss, imprint: !!ts.imprint });
+  const [showEffects, setShowEffects] = useState(false);
 
   const sizeNum = parseFloat(size.replace(",", ".")) || fmt.size;
   const bold = style.includes("Kalın");
@@ -43,8 +46,19 @@ export function FontDialog({ onClose }: { onClose: () => void }) {
     c = strike ? c.setStrike() : c.unsetStrike();
     c = sup ? c.setSuperscript() : c.unsetSuperscript();
     c = sub ? c.setSubscript() : c.unsetSubscript();
-    c = c.setMark("textStyle", { caps, smallCaps, hidden, doubleStrike: dstrike, letterSpacing: spacingVal || null });
+    c = c.setMark("textStyle", { caps, smallCaps, hidden, doubleStrike: dstrike, letterSpacing: spacingVal || null, ...effects });
     c.run();
+    onClose();
+  };
+
+  /** Varsayılan Olarak Ayarla: bu belgedeki Normal stilin yazı tipi. */
+  const setDefault = () => {
+    const normal = ctx.styles.Normal;
+    ctx.updateSettings((s) => ({
+      ...s,
+      customStyles: { ...(s.customStyles ?? {}), Normal: { ...normal, props: { ...normal.props, font, size: sizeNum, bold: bold || undefined, italic: italic || undefined, color: color ?? undefined } } },
+    }));
+    ctx.notify("Yazı tipi bu belgenin varsayılanı (Normal stili) olarak ayarlandı.", "success");
     onClose();
   };
 
@@ -61,6 +75,9 @@ export function FontDialog({ onClose }: { onClose: () => void }) {
     fontVariant: smallCaps ? "small-caps" : undefined,
     letterSpacing: spacingVal ? `${spacingVal}pt` : undefined,
     verticalAlign: sup ? "super" : sub ? "sub" : undefined,
+    textShadow: effects.shadow ? "1px 1px 1px rgba(0,0,0,0.45)" : effects.emboss ? "-1px -1px 0 #fff, 1px 1px 0 rgba(0,0,0,0.35)" : effects.imprint ? "1px 1px 0 #fff, -1px -1px 0 rgba(0,0,0,0.35)" : undefined,
+    WebkitTextStroke: effects.outline ? `0.6px ${color ?? "#000"}` : undefined,
+    WebkitTextFillColor: effects.outline ? "#fff" : undefined,
   };
 
   return (
@@ -72,6 +89,8 @@ export function FontDialog({ onClose }: { onClose: () => void }) {
       onSubmit={apply}
       footer={
         <>
+          <DialogButton onClick={setDefault}>Varsayılan Olarak Ayarla</DialogButton>
+          <DialogButton onClick={() => setShowEffects((v) => !v)}>Metin Efektleri...</DialogButton>
           <DialogButton primary onClick={apply}>
             Tamam
           </DialogButton>
@@ -79,6 +98,16 @@ export function FontDialog({ onClose }: { onClose: () => void }) {
         </>
       }
     >
+      {showEffects && (
+        <FieldSet legend="Metin Efektleri">
+          <div className="bl-dlg-checks">
+            <Check label="Gölge" v={effects.shadow} set={(v) => setEffects((e) => ({ ...e, shadow: v }))} />
+            <Check label="Anahat" v={effects.outline} set={(v) => setEffects((e) => ({ ...e, outline: v }))} />
+            <Check label="Kabartma" v={effects.emboss} set={(v) => setEffects((e) => ({ ...e, emboss: v, imprint: v ? false : e.imprint }))} />
+            <Check label="Oyma" v={effects.imprint} set={(v) => setEffects((e) => ({ ...e, imprint: v, emboss: v ? false : e.emboss }))} />
+          </div>
+        </FieldSet>
+      )}
       <DialogTabs
         tabs={[
           { id: "font", label: "Yazı Tipi" },

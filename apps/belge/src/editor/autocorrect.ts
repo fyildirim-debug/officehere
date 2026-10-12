@@ -26,21 +26,31 @@ function textBefore(state: EditorState, pos: number): { text: string; start: num
   return { text, start: $p.start(), parent: $p.parent, cell };
 }
 
-/** İmleçteki sözcüğü düzeltir (ayrı geri alma adımı). Düzeltme yapıldıysa true. */
-export function applyAutoCorrect(view: EditorView, pos: number): boolean {
-  const o = getAutoCorrect();
-  const info = textBefore(view.state, pos);
-  if (!info) return false;
+/** İmleçten önceki sözcük için yapılacak düzeltme (belge konumlarıyla); yoksa null. */
+function pendingCorrection(state: EditorState, pos: number): { from: number; to: number; text: string } | null {
+  const info = textBefore(state, pos);
+  if (!info) return null;
+  const c = correctBefore(info.text, getAutoCorrect(), info.cell);
   // Düzeltilecek metin satır içi düğüm içermemeli.
-  const c = correctBefore(info.text, o, info.cell);
-  if (!c || info.text.slice(c.start, c.end).includes("￼")) return false;
-  const tr = view.state.tr.insertText(c.text, info.start + c.start, info.start + c.end);
+  if (!c || info.text.slice(c.start, c.end).includes("\ufffc")) return null;
+  return { from: info.start + c.start, to: info.start + c.end, text: c.text };
+}
+
+/** Düzeltmeyi ayrı bir geri alma adımı olarak uygular. */
+function dispatchCorrection(view: EditorView, fix: { from: number; to: number; text: string }) {
+  const tr = view.state.tr.insertText(fix.text, fix.from, fix.to);
   closeHistory(tr);
   tr.setMeta(autoCorrectKey, true);
   view.dispatch(tr);
-  // Sonraki yazma düzeltmeyle aynı geri alma adımına eklenmez (Ctrl+Z önce yazılanı, sonra düzeltmeyi geri alır).
+  // Sonraki yazma düzeltmeyle aynı geri alma adımına eklenmez.
   view.dispatch(closeHistory(view.state.tr));
-  return true;
+}
+
+/** İmleçteki sözcüğü düzeltir (ayrı geri alma adımı). Düzeltme yapıldıysa true. */
+export function applyAutoCorrect(view: EditorView, pos: number): boolean {
+  const fix = pendingCorrection(view.state, pos);
+  if (fix) dispatchCorrection(view, fix);
+  return !!fix;
 }
 
 export const AutoCorrect = Extension.create({
@@ -62,10 +72,12 @@ export const AutoCorrect = Extension.create({
               return true;
             }
             if (from !== to || !DELIMITER.test(text)) return false;
-            // Önce sözcük düzeltilir (ayrı geri alma adımı), sonra ayraç yazılır.
-            if (!applyAutoCorrect(view, from)) return false;
-            const at = view.state.selection.from;
-            view.dispatch(view.state.tr.insertText(text, at, at));
+            const fix = pendingCorrection(view.state, from);
+            if (!fix) return false;
+            // Önce ayraç yazılır (yazmayla aynı adım), sonra sözcük düzeltilir: Word'deki gibi Ctrl+Z
+            // yalnız düzeltmeyi geri alır, yazılan ayraç kalır.
+            view.dispatch(view.state.tr.insertText(text, from, to));
+            dispatchCorrection(view, fix);
             return true;
           },
           handleKeyDown(view, event) {

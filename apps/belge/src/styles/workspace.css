@@ -1,0 +1,641 @@
+/* OfficeHere Belge — çalışma alanı, sayfa görünümü ve belge içeriği stilleri. */
+
+.bl-app {
+  height: 100%;
+}
+
+/* ------------------------------------------------------------------ */
+/* Çalışma alanı                                                        */
+/* ------------------------------------------------------------------ */
+
+.bl-workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: var(--oh-canvas-bg);
+}
+
+.bl-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.bl-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overflow-anchor: none;
+  position: relative;
+}
+
+.bl-canvas {
+  margin: 0 auto;
+  box-sizing: content-box;
+}
+
+.bl-pages {
+  position: relative;
+  margin: 0;
+}
+
+.bl-page {
+  position: absolute;
+  left: 0;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+:root[data-oh-theme="dark"] .bl-page,
+:root[data-oh-theme="black"] .bl-page {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.bl-body {
+  position: absolute;
+  left: 0;
+  z-index: 1;
+  color: #000;
+}
+
+.bl-body.has-columns {
+  overflow: clip;
+}
+
+.is-print .bl-body .ProseMirror {
+  min-height: var(--bl-minh);
+}
+
+/* Bölümler: kenar boşlukları ve sütunlar bölüm kutusuna dekorasyonla uygulanır. */
+.bl-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bl-section > * {
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+/* Çok sütunlu bölüm: metin CSS sütunları arasında satır satır akar. */
+.bl-section.is-cols {
+  display: block;
+}
+
+.is-web .bl-section {
+  padding: 0 !important;
+  column-count: auto !important;
+  height: auto !important;
+}
+
+.bl-measuring .bl-section {
+  height: auto !important;
+}
+
+/* Dar ölçüm: çok sütunlu bölüm tek ve sütun genişliğinde bir akışa döner. */
+.bl-section.is-cols.bl-narrow {
+  column-count: auto !important;
+  padding-right: var(--bl-npr) !important;
+  height: auto !important;
+}
+
+/* Sayfa sınırında tüm sütunları kesen ara parça. */
+.bl-pg-span {
+  column-span: all;
+}
+
+/* Birden Çok Sayfa: sayfalar yan yana (gövde CSS sütunlarıyla sayfa sayfa bölünür). */
+.bl-body.is-tiled .ProseMirror {
+  width: var(--bl-bodyw);
+  min-height: 0 !important;
+}
+
+/* Satır başı ara parçaları (column-span) esnek kutu içinde çalışmaz: genel bakış görünümünde
+   kök ve bölümler blok düzenine geçer (paragraf aralıkları HTML'deki gibi birleşir). */
+.bl-body.is-tiled .ProseMirror,
+.bl-body.is-tiled .bl-section {
+  display: block;
+}
+
+.bl-body.is-tiled.bl-measuring-body {
+  column-count: auto !important;
+  height: auto !important;
+}
+
+/* Kaydırılabilir kutu sütunlar arasında bölünemez: tablo sayfa sınırında bölünebilsin. */
+.bl-body.is-tiled .tableWrapper {
+  overflow: visible;
+}
+
+.bl-body.is-tiled .bl-section > .bl-toc {
+  display: flow-root;
+}
+
+/* Paragraf aralıklarının birleşmesini önleyen ayraç (net yüksekliği sıfır). */
+.bl-tsp {
+  display: block;
+  height: 1px;
+  margin-bottom: -1px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.bl-pg-tilerow,
+.bl-pg-fill {
+  display: block;
+}
+
+.bl-pg-tilerow {
+  column-span: all;
+  height: 0;
+}
+
+.is-tiled .bl-scroll {
+  overflow-x: auto;
+}
+
+/* Web Düzeni: sayfa sınırı yok, metin pencereye sarılır. */
+.is-web .bl-scroll {
+  background: #fff;
+}
+
+.is-web .bl-canvas {
+  width: auto !important;
+  min-height: 100%;
+}
+
+.is-web .bl-body {
+  position: static;
+  padding: 24px 48px 96px;
+  min-height: 100%;
+}
+
+.is-web .bl-body .ProseMirror {
+  min-height: calc(100vh - 260px);
+}
+
+/* Odak modu */
+.bl-app.is-focus .oh-shell {
+  background: #1b1b1b;
+}
+
+.bl-app.is-focus .bl-workspace,
+.bl-app.is-focus .bl-scroll {
+  background: #1b1b1b;
+}
+
+.bl-app.is-focus .oh-titlebar {
+  display: none;
+}
+
+.bl-focus-exit {
+  position: fixed;
+  right: 16px;
+  top: 10px;
+  z-index: 50;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(40, 40, 40, 0.8);
+  color: #eee;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.bl-focus-exit:hover {
+  opacity: 1;
+}
+
+.bl-app.is-read {
+  display: none;
+}
+
+.is-painter .ProseMirror {
+  cursor: copy;
+}
+
+/* ------------------------------------------------------------------ */
+/* Editör (ProseMirror)                                                 */
+/* ------------------------------------------------------------------ */
+
+.bl-doc .ProseMirror {
+  outline: none;
+  display: flex;
+  flex-direction: column;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-variant-ligatures: none;
+  tab-size: 1.25cm;
+  caret-color: #000;
+}
+
+.bl-doc .ProseMirror > * {
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.bl-doc .ProseMirror ::selection {
+  background: rgba(0, 120, 215, 0.3);
+}
+
+.bl-doc h1,
+.bl-doc h2,
+.bl-doc h3,
+.bl-doc h4,
+.bl-doc h5,
+.bl-doc h6 {
+  font-weight: 400;
+}
+
+.bl-doc p:empty::after,
+.bl-doc h1:empty::after {
+  content: "\200b";
+}
+
+.bl-doc a,
+.bl-doc .bl-link {
+  color: #467886;
+  text-decoration: underline;
+  cursor: text;
+}
+
+.bl-doc a:hover {
+  cursor: pointer;
+}
+
+.bl-doc strong,
+.bl-doc b {
+  font-weight: 700;
+}
+
+.bl-doc mark {
+  color: inherit;
+  padding: 0;
+}
+
+.bl-doc [data-hidden] {
+  border-bottom: 1px dotted #555;
+}
+
+.bl-doc:not(:has(.bl-show-marks)) [data-hidden] {
+  display: none;
+}
+
+.bl-doc hr {
+  border: 0;
+  border-top: 1px solid #a0a0a0;
+  margin: 6pt 0 8pt;
+  height: 0;
+}
+
+.bl-doc hr.ProseMirror-selectednode {
+  outline: 2px solid #4a90e2;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sayfa zemini öğeleri                                                 */
+/* ------------------------------------------------------------------ */
+
+.bl-watermark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.bl-watermark span {
+  white-space: nowrap;
+  font-weight: 400;
+  line-height: 1;
+  user-select: none;
+}
+
+.bl-page-border {
+  position: absolute;
+  pointer-events: none;
+}
+
+.bl-gridlines {
+  position: absolute;
+  background-image: linear-gradient(rgba(0, 0, 0, 0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 0, 0, 0.12) 1px, transparent 1px);
+  background-size: 0.5cm 0.5cm;
+}
+
+.bl-hf {
+  position: absolute;
+  overflow: hidden;
+  color: #000;
+  opacity: 0.6;
+}
+
+.bl-hf > p:last-child {
+  margin-bottom: 0;
+}
+
+.bl-hf p {
+  margin-bottom: 0;
+  line-height: 1.2;
+}
+
+.bl-hf-footer {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.is-hf-editing .bl-hf {
+  opacity: 0.35;
+}
+
+.is-hf-editing .bl-body .ProseMirror {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.bl-hf-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed #2b579a;
+}
+
+.bl-hf-line span {
+  position: absolute;
+  left: 8px;
+  top: 0;
+  background: #e7edf6;
+  color: #2b579a;
+  font: 11px var(--oh-font-ui);
+  padding: 1px 6px;
+  border: 1px solid #b7c7e3;
+  border-top: 0;
+}
+
+.bl-hf-line.is-footer span {
+  top: auto;
+  bottom: 0;
+  border-top: 1px solid #b7c7e3;
+  border-bottom: 0;
+}
+
+.bl-hf-edit {
+  position: absolute;
+  z-index: 3;
+  color: #000;
+}
+
+.bl-hf-edit .ProseMirror {
+  outline: none;
+  min-height: 1.2em;
+  white-space: pre-wrap;
+}
+
+.bl-hf-edit p {
+  margin-bottom: 0;
+  line-height: 1.2;
+}
+
+.bl-hf-edit .bl-field.is-editing {
+  background: #d9d9d9;
+}
+
+/* ------------------------------------------------------------------ */
+/* Cetvel                                                               */
+/* ------------------------------------------------------------------ */
+
+.bl-scroll-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.bl-scroll-row > .bl-scroll {
+  flex: 1;
+  min-width: 0;
+}
+
+.bl-ruler-corner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 25px;
+  background: var(--oh-canvas-bg);
+  z-index: 3;
+}
+
+/* Dikey cetvel */
+.bl-vruler-host {
+  width: 25px;
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  background: var(--oh-canvas-bg);
+  border-right: 1px solid var(--oh-separator);
+  user-select: none;
+}
+
+.bl-vruler {
+  position: absolute;
+  inset: 0;
+  font: 9px var(--oh-font-ui);
+  color: #555;
+}
+
+.bl-vruler-track {
+  position: absolute;
+  left: 4px;
+  width: 16px;
+  background: #fff;
+  border: 1px solid #c8c8c8;
+  box-sizing: border-box;
+}
+
+.bl-vruler-margin {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: #d6d6d6;
+}
+
+:root[data-oh-theme="dark"] .bl-vruler-track,
+:root[data-oh-theme="black"] .bl-vruler-track {
+  background: #4a4a4a;
+  border-color: #555;
+}
+
+:root[data-oh-theme="dark"] .bl-vruler-margin,
+:root[data-oh-theme="black"] .bl-vruler-margin {
+  background: #333;
+}
+
+:root[data-oh-theme="dark"] .bl-vruler,
+:root[data-oh-theme="black"] .bl-vruler {
+  color: #ccc;
+}
+
+.bl-vruler-tick {
+  position: absolute;
+  left: 10.5px;
+  width: 3px;
+  height: 1px;
+  background: #777;
+}
+
+.bl-vruler-tick.is-half {
+  left: 8.5px;
+  width: 6px;
+}
+
+.bl-vruler-num {
+  position: absolute;
+  left: 4px;
+  width: 16px;
+  text-align: center;
+  transform: translateY(-50%);
+  line-height: 10px;
+}
+
+.bl-vruler-mhandle {
+  position: absolute;
+  left: 4px;
+  height: 7px;
+  width: 16px;
+  cursor: ns-resize;
+  z-index: 1;
+}
+
+.bl-vruler-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dotted #000;
+  pointer-events: none;
+}
+
+.bl-ruler-host {
+  height: 25px;
+  flex: none;
+  background: var(--oh-canvas-bg);
+  border-bottom: 1px solid var(--oh-separator);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+}
+
+.bl-ruler {
+  position: absolute;
+  inset: 0;
+  font: 9px var(--oh-font-ui);
+  color: #555;
+}
+
+.bl-ruler-track {
+  position: absolute;
+  top: 4px;
+  height: 16px;
+  background: #fff;
+  border: 1px solid #c8c8c8;
+  box-sizing: border-box;
+}
+
+.bl-ruler-margin {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #d6d6d6;
+}
+
+:root[data-oh-theme="dark"] .bl-ruler-track,
+:root[data-oh-theme="black"] .bl-ruler-track {
+  background: #4a4a4a;
+  border-color: #555;
+}
+
+:root[data-oh-theme="dark"] .bl-ruler-margin,
+:root[data-oh-theme="black"] .bl-ruler-margin {
+  background: #333;
+}
+
+:root[data-oh-theme="dark"] .bl-ruler,
+:root[data-oh-theme="black"] .bl-ruler {
+  color: #ccc;
+}
+
+.bl-ruler-tick {
+  position: absolute;
+  top: 10.5px;
+  height: 3px;
+  width: 1px;
+  background: #777;
+}
+
+.bl-ruler-tick.is-half {
+  top: 8.5px;
+  height: 6px;
+}
+
+.bl-ruler-num {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+  line-height: 12px;
+}
+
+.bl-ruler-mhandle {
+  position: absolute;
+  top: 4px;
+  width: 7px;
+  height: 16px;
+  cursor: ew-resize;
+  z-index: 1;
+}
+
+.bl-ind {
+  position: absolute;
+  width: 11px;
+  margin-left: -5.5px;
+  z-index: 2;
+  cursor: default;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.bl-ind-first {
+  top: 1px;
+  height: 8px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='8'%3E%3Cpath d='M0.5 0.5h10L5.5 7.5z' fill='%23f4f4f4' stroke='%23505050'/%3E%3C/svg%3E");
+}
+
+.bl-ind-hanging {
+  top: 11px;
+  height: 7px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M5.5 0.5l5 6h-10z' fill='%23f4f4f4' stroke='%23505050'/%3E%3C/svg%3E");
+}
+
+.bl-ind-left {
+  top: 18px;
+  height: 5px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='5'%3E%3Crect x='0.5' y='0.5' width='10' height='4' fill='%23f4f4f4' stroke='%23505050'/%3E%3C/svg%3E");
+}
+
+.bl-ind-right {
+  top: 11px;
+  height: 7px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M5.5 0.5l5 6h-10z' fill='%23f4f4f4' stroke='%23505050'/%3E%3C/svg%3E");
+}
+
+.bl-ruler-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed #333;
+  pointer-events: none;
+}
