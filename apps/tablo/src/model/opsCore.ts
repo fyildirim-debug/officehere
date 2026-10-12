@@ -112,6 +112,49 @@ export class OpsCore {
     this.done(label);
   }
 
+  /**
+   * Satır permütasyonu (sıralama): yeni i. satır = eski order[i]. Hücreler,
+   * stiller, notlar ve köprüler taşınır; geri alma ters permütasyondur.
+   * Formül kaydırması #BAŞV! üretecekse false döner (çağıran genel yola düşer).
+   */
+  permuteRowsOp(sheet: SheetModel, r: Rect, order: number[], label: string): boolean {
+    const wb = this.wb;
+    const inv: number[] = new Array(order.length);
+    order.forEach((src, i) => (inv[src] = i));
+    const moveMaps = (ord: number[]) => {
+      const pos: number[] = new Array(ord.length);
+      ord.forEach((src, i) => (pos[src] = i));
+      for (const m of [sheet.styles, sheet.notes, sheet.links] as Map<number, unknown>[]) {
+        if (!m.size) continue;
+        const moved: [number, unknown][] = [];
+        for (const [k, v] of m) {
+          const row = Math.floor(k / 16384);
+          const col = k % 16384;
+          if (row < r.r1 || row > r.r2 || col < r.c1 || col > r.c2) continue;
+          moved.push([(r.r1 + pos[row - r.r1]) * 16384 + col, v]);
+          m.delete(k);
+        }
+        for (const [k, v] of moved) m.set(k, v);
+      }
+    };
+    if (!wb.engine.permuteRows(sheet.id, r.r1, r.c1, r.r2, r.c2, order)) return false;
+    moveMaps(order);
+    this.history.push({
+      label,
+      cost: ((r.r2 - r.r1 + 1) * (r.c2 - r.c1 + 1)) / 20 + 10,
+      undo: () => {
+        wb.engine.permuteRows(sheet.id, r.r1, r.c1, r.r2, r.c2, inv);
+        moveMaps(inv);
+      },
+      redo: () => {
+        wb.engine.permuteRows(sheet.id, r.r1, r.c1, r.r2, r.c2, order);
+        moveMaps(order);
+      },
+    });
+    this.done(label);
+    return true;
+  }
+
   /** Tanımlı ad değişiklikleri (Ad Yöneticisi). */
   namesOp(label: string, mutate: () => void): void {
     const eng = this.wb.engine;

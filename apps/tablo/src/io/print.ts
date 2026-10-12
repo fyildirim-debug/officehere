@@ -32,36 +32,45 @@ export function fitModeOf(sheet: SheetModel): "sheet" | "cols" | "rows" | undefi
 }
 
 /** Sayfa sonu satır/sütun dizinleri (Sayfa Sonu Önizleme). */
-export function computePageBreaks(wb: WorkbookModel, sheet: SheetModel, range?: Rect | null): { rows: number[]; cols: number[] } {
+export interface PageBreakInfo {
+  /** Her sayfanın bittiği yerden sonraki satır/sütun (son öğe aralığın sonu + 1). */
+  rows: number[];
+  cols: number[];
+  /** Bunlardan el ile eklenenler. */
+  manualRows: number[];
+  manualCols: number[];
+  /** Yazdırılan aralık (boş sayfada null). */
+  range: Rect | null;
+}
+
+/** Bir eksendeki sayfa sonları: el ile sonlar önce, sığmayan yerlerde otomatik sonlar. */
+function axisBreaks(start: number, end: number, size: (i: number) => number, limit: number, manual: Set<number>): number[] {
+  const out: number[] = [];
+  let acc = 0;
+  for (let i = start; i <= end; i++) {
+    const sz = size(i);
+    if ((manual.has(i) && i > start) || (acc + sz > limit + 0.5 && acc > 0)) {
+      out.push(i);
+      acc = 0;
+    }
+    acc += sz;
+  }
+  out.push(end + 1);
+  return out;
+}
+
+export function computePageBreaks(wb: WorkbookModel, sheet: SheetModel, range?: Rect | null): PageBreakInfo {
   const r = range ?? printRange(wb, sheet);
-  if (!r) return { rows: [], cols: [] };
+  if (!r) return { rows: [], cols: [], manualRows: [], manualCols: [], range: null };
   const inner = pageInner(sheet);
   const scale = fitScale(sheet, r);
-  const w = inner.w / scale;
-  const h = inner.h / scale;
-  const rows: number[] = [];
-  const cols: number[] = [];
-  let acc = 0;
-  for (let c = r.c1; c <= r.c2; c++) {
-    const cw = sheet.cols.size(c);
-    if (acc + cw > w + 0.5 && acc > 0) {
-      cols.push(c);
-      acc = 0;
-    }
-    acc += cw;
-  }
-  cols.push(r.c2 + 1);
-  acc = 0;
-  for (let row = r.r1; row <= r.r2; row++) {
-    const rh = sheet.rows.size(row);
-    if (acc + rh > h && acc > 0) {
-      rows.push(row);
-      acc = 0;
-    }
-    acc += rh;
-  }
-  rows.push(r.r2 + 1);
-  return { rows, cols };
+  const mode = fitModeOf(sheet);
+  // Tek sayfaya sığdırılan eksende el ile sonlar yok sayılır (Excel gibi)
+  const mRows = new Set(mode === "sheet" || mode === "rows" ? [] : (sheet.page.rowBreaks ?? []));
+  const mCols = new Set(mode === "sheet" || mode === "cols" ? [] : (sheet.page.colBreaks ?? []));
+  const cols = axisBreaks(r.c1, r.c2, (c) => sheet.cols.size(c), inner.w / scale, mCols);
+  const rows = axisBreaks(r.r1, r.r2, (row) => sheet.rows.size(row), inner.h / scale - 0.5, mRows);
+  return { rows, cols, manualRows: rows.filter((x) => mRows.has(x)), manualCols: cols.filter((x) => mCols.has(x)), range: r };
 }
 
 /** Sığdırma ölçeği (1 = ölçeksiz): sayfayı / tüm sütunları / tüm satırları tek sayfaya. */
@@ -90,7 +99,12 @@ export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts:
   const covered = new Set<string>();
   const cols: string[] = [];
   if (opts.headings) cols.push(`<col style="width:32px">`);
-  for (let c = r.c1; c <= r.c2; c++) cols.push(`<col style="width:${sheet.cols.size(c)}px">`);
+  // Tablo genişliği açıkça verilir: yoksa table-layout:fixed uygulanmaz ve sütunlar içeriğe göre kayar
+  let tableW = opts.headings ? 32 : 0;
+  for (let c = r.c1; c <= r.c2; c++) {
+    tableW += sheet.cols.size(c);
+    cols.push(`<col style="width:${sheet.cols.size(c)}px">`);
+  }
   const rows: string[] = [];
   if (opts.headings) {
     const hs = ["<th></th>"];
@@ -118,7 +132,7 @@ export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts:
     }
     rows.push(`<tr style="height:${rh}px">${tds.join("")}</tr>`);
   }
-  const table = `<table class="tb-print-table${opts.gridlines ? " has-grid" : ""}"><colgroup>${cols.join("")}</colgroup>${rows.join("")}</table>`;
+  const table = `<table class="tb-print-table${opts.gridlines ? " has-grid" : ""}" style="width:${tableW}px"><colgroup>${cols.join("")}</colgroup>${rows.join("")}</table>`;
   if (!opts.objects || !(sheet.charts.length || sheet.images.length || sheet.shapes.length)) return table;
   return `<div class="tb-print-sheet">${table}${objectsHtml(wb, sheet, r, !!opts.headings)}</div>`;
 }

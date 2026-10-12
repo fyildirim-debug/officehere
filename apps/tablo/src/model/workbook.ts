@@ -226,6 +226,10 @@ export class SheetModel {
     }
     this.sparklines = this.sparklines.filter((g) => g.items.length);
     if (this.page.printArea) this.page.printArea = sr(this.page.printArea) ?? undefined;
+    // El ile sayfa sonları satır/sütunlarıyla birlikte kayar
+    const key = axis === "row" ? "rowBreaks" : "colBreaks";
+    const brk = this.page[key];
+    if (brk?.length) this.page[key] = [...new Set(brk.map((i) => shiftIndex(i, at, count)).filter((i): i is number => i !== null && i > 0))];
   }
 }
 
@@ -382,10 +386,10 @@ export class WorkbookModel {
   }
 
   getInput(sheet: SheetModel, row: number, col: number): CellInput {
-    const f = this.engine.getFormula(sheet.id, row, col);
-    if (f) return { formula: f };
-    if (!this.engine.hasInput(sheet.id, row, col)) return null;
-    return this.engine.getValue(sheet.id, row, col);
+    // Tek kayıt araması (sıralama gibi toplu işlemlerde sık çağrılır)
+    const rec = this.engine.getRecord(sheet.id, row, col);
+    if (!rec) return null;
+    return rec.formula ? { formula: "=" + rec.formula.text } : rec.value;
   }
 
   styleIdAt(sheet: SheetModel, row: number, col: number): number {
@@ -453,7 +457,18 @@ export class WorkbookModel {
   cellState(sheet: SheetModel, k: number): CellState {
     const row = keyRow(k);
     const col = keyCol(k);
-    return { input: this.getInput(sheet, row, col), style: sheet.styles.get(k), note: sheet.notes.get(k), link: sheet.links.get(k) };
+    const st: CellState = { input: this.getInput(sheet, row, col) };
+    const style = sheet.styles.get(k);
+    if (style !== undefined) st.style = style;
+    if (sheet.notes.size) {
+      const note = sheet.notes.get(k);
+      if (note) st.note = note;
+    }
+    if (sheet.links.size) {
+      const link = sheet.links.get(k);
+      if (link) st.link = link;
+    }
+    return st;
   }
 
   applyCellState(sheet: SheetModel, k: number, st: CellState | undefined): void {

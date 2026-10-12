@@ -3,6 +3,8 @@
  * kılavuz çizgileri, dolgular, taşan metin ve birleştirme zeminleri,
  * kenarlıklar, metin, işaretler; ardından seçim katmanları ve başlıklar.
  */
+import type { PageBreakInfo } from "../io/print";
+import { drawPageBreakPreview, type PageBreakDragPreview } from "./renderPageBreak";
 import { colToName, keyRow, keyCol } from "@officehere/formula";
 import type { CondFormatter } from "../model/condfmt";
 import { computeView, type CellView } from "../model/display";
@@ -13,6 +15,7 @@ import type { GridLayout, Quadrant } from "./layout";
 import { cellFont, drawBorder, drawCellText, drawFilterButton, drawPattern, measureText, snap } from "./renderCell";
 import { drawArrows, drawErrorTriangles } from "./renderAudit";
 import { drawIcon } from "./icons";
+import { drawOutline } from "./renderOutline";
 import { drawSparkGroupOutline, drawSparklines } from "./renderSpark";
 import type { TraceArrow } from "../actions/audit";
 
@@ -35,11 +38,15 @@ export interface RenderState {
   spill: Rect | null;
   dark: boolean;
   printArea?: Rect | null;
-  pageBreaks?: { rows: number[]; cols: number[] } | null;
+  pageBreaks?: PageBreakInfo | null;
+  /** Sürüklenen sayfa sonu (Sayfa Sonu Önizleme). */
+  pageBreakDrag?: PageBreakDragPreview | null;
   /** Formül Denetimi okları. */
   arrows?: TraceArrow[];
   /** Arka planda hata denetimi (yeşil üçgenler). */
   errorCheck?: boolean;
+  /** Filtre uygulanmış listedeki satır mı (satır numarası mavi çizilir)? */
+  filtered?: (row: number) => boolean;
 }
 
 const LIGHT = {
@@ -88,6 +95,7 @@ export function renderGrid(ctx: CanvasRenderingContext2D, st: RenderState): void
   if (st.sheet.sparklines.length && st.showSelection) drawSparkGroupOutline(ctx, st.sheet, L, st.selection.active);
   if (st.arrows?.length) drawArrows(ctx, st.arrows, st.sheet, L);
   drawHeaders(ctx, st, quads);
+  drawOutline(ctx, st.sheet, L, st.dark);
   // Dondurulmuş bölme çizgileri
   ctx.fillStyle = COLORS.freeze;
   if (L.fr > 0) ctx.fillRect(0, snap(L.cellsY, dpr) - 1 / dpr, L.width, 1 / dpr);
@@ -381,6 +389,8 @@ function visibleRect(st: RenderState, q: Quadrant, r: Rect): { x: number; y: num
 function drawOverlays(ctx: CanvasRenderingContext2D, st: RenderState, q: Quadrant): void {
   const { layout: L, dpr } = st;
   const px = 1 / dpr;
+  // Sayfa Sonu Önizleme: gri dış alan, sayfa numaraları ve sayfa sonları (seçimin altında)
+  if (st.pageBreaks) drawPageBreakPreview(ctx, L, q, st.pageBreaks, st.pageBreakDrag, st.dark);
   ctx.save();
   clipQuad(ctx, q);
   // Taşan dizi çerçevesi
@@ -481,29 +491,6 @@ function drawOverlays(ctx: CanvasRenderingContext2D, st: RenderState, q: Quadran
     ctx.strokeRect(snap(vr.x, dpr), snap(vr.y, dpr), snap(vr.w, dpr) - px, snap(vr.h, dpr) - px);
     ctx.setLineDash([]);
   }
-  // Sayfa sonları (Sayfa Sonu Önizleme)
-  if (st.pageBreaks) {
-    ctx.strokeStyle = "#1F5FBF";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    for (const r of st.pageBreaks.rows) {
-      if (r < q.r1 || r > q.r2 + 1) continue;
-      const y = L.rowY(r);
-      ctx.beginPath();
-      ctx.moveTo(q.x, y);
-      ctx.lineTo(q.x + q.w, y);
-      ctx.stroke();
-    }
-    for (const c of st.pageBreaks.cols) {
-      if (c < q.c1 || c > q.c2 + 1) continue;
-      const x = L.colX(c);
-      ctx.beginPath();
-      ctx.moveTo(x, q.y);
-      ctx.lineTo(x, q.y + q.h);
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
-  }
   ctx.restore();
 }
 
@@ -530,16 +517,20 @@ function drawHeaders(ctx: CanvasRenderingContext2D, st: RenderState, quads: Quad
   const colFull = (c: number) => sel.ranges.some((r) => c >= r.c1 && c <= r.c2 && r.r1 === 0 && r.r2 === MAX_ROWS - 1);
   const rowFull = (r: number) => sel.ranges.some((x) => r >= x.r1 && r <= x.r2 && x.c1 === 0 && x.c2 === MAX_COLS - 1);
 
-  // Sütun başlıkları
+  // Sütun başlıkları (anahat şeridinin altında)
+  const oy = L.outlineH;
+  const ox = L.outlineW;
+  const colH = L.headerH - oy;
+  const rowW = L.headerW - ox;
   ctx.fillStyle = COLORS.headerBg;
-  ctx.fillRect(0, 0, L.width, L.headerH);
+  ctx.fillRect(0, oy, L.width, colH);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const colQuads = quads.filter((q) => !q.frozenRows);
   for (const q of colQuads) {
     ctx.save();
     ctx.beginPath();
-    ctx.rect(q.x, 0, q.w, L.headerH);
+    ctx.rect(q.x, oy, q.w, colH);
     ctx.clip();
     for (let c = q.c1; c <= q.c2; c++) {
       const w = L.colW(c);
@@ -548,29 +539,29 @@ function drawHeaders(ctx: CanvasRenderingContext2D, st: RenderState, quads: Quad
       const s = colSel(c);
       if (s) {
         ctx.fillStyle = colFull(c) ? COLORS.headerFullBg : COLORS.headerSelBg;
-        ctx.fillRect(x, 0, w, L.headerH);
+        ctx.fillRect(x, oy, w, colH);
         ctx.fillStyle = COLORS.accent;
         ctx.fillRect(x, L.headerH - 2, w, 2);
       }
       ctx.fillStyle = COLORS.headerLine;
-      ctx.fillRect(snap(x + w, dpr) - px, 0, px, L.headerH);
+      ctx.fillRect(snap(x + w, dpr) - px, oy, px, colH);
       ctx.font = s ? boldFont : font;
       ctx.fillStyle = s ? COLORS.headerSelText : COLORS.headerText;
-      if (w > fontSize * 0.8) ctx.fillText(colToName(c), x + w / 2, L.headerH / 2 + 1);
+      if (w > fontSize * 0.8) ctx.fillText(colToName(c), x + w / 2, oy + colH / 2 + 1);
     }
     ctx.restore();
   }
   ctx.fillStyle = COLORS.headerLine;
   ctx.fillRect(0, snap(L.headerH, dpr) - px, L.width, px);
 
-  // Satır başlıkları
+  // Satır başlıkları (anahat şeridinin sağında)
   ctx.fillStyle = COLORS.headerBg;
-  ctx.fillRect(0, L.headerH, L.headerW, L.height - L.headerH);
+  ctx.fillRect(ox, L.headerH, rowW, L.height - L.headerH);
   const rowQuads = quads.filter((q) => !q.frozenCols);
   for (const q of rowQuads) {
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, q.y, L.headerW, q.h);
+    ctx.rect(ox, q.y, rowW, q.h);
     ctx.clip();
     for (let r = q.r1; r <= q.r2; r++) {
       const h = L.rowH(r);
@@ -579,26 +570,27 @@ function drawHeaders(ctx: CanvasRenderingContext2D, st: RenderState, quads: Quad
       const s = rowSel(r);
       if (s) {
         ctx.fillStyle = rowFull(r) ? COLORS.headerFullBg : COLORS.headerSelBg;
-        ctx.fillRect(0, y, L.headerW, h);
+        ctx.fillRect(ox, y, rowW, h);
         ctx.fillStyle = COLORS.accent;
         ctx.fillRect(L.headerW - 2, y, 2, h);
       }
       ctx.fillStyle = COLORS.headerLine;
-      ctx.fillRect(0, snap(y + h, dpr) - px, L.headerW, px);
+      ctx.fillRect(ox, snap(y + h, dpr) - px, rowW, px);
       ctx.font = s ? boldFont : font;
-      ctx.fillStyle = s ? COLORS.headerSelText : COLORS.headerText;
-      if (h > fontSize * 0.7) ctx.fillText(String(r + 1), L.headerW / 2, y + h / 2 + 1);
+      // Filtreyle gizlenmiş satırların bulunduğu bölgede satır numaraları mavi (Excel gibi)
+      ctx.fillStyle = s ? COLORS.headerSelText : st.filtered && st.filtered(r) ? "#0F6CBD" : COLORS.headerText;
+      if (h > fontSize * 0.7) ctx.fillText(String(r + 1), ox + rowW / 2, y + h / 2 + 1);
     }
     ctx.restore();
   }
   ctx.fillStyle = COLORS.headerLine;
-  ctx.fillRect(snap(L.headerW, dpr) - px, 0, px, L.height);
+  ctx.fillRect(snap(L.headerW, dpr) - px, oy, px, L.height - oy);
   // Köşe (Tümünü Seç)
   ctx.fillStyle = COLORS.headerBg;
-  ctx.fillRect(0, 0, L.headerW - px, L.headerH - px);
+  ctx.fillRect(ox, oy, rowW - px, colH - px);
   ctx.fillStyle = COLORS.corner;
   ctx.beginPath();
-  const t = Math.min(L.headerW, L.headerH) * 0.55;
+  const t = Math.min(rowW, colH) * 0.55;
   ctx.moveTo(L.headerW - 3, L.headerH - 3 - t);
   ctx.lineTo(L.headerW - 3, L.headerH - 3);
   ctx.lineTo(L.headerW - 3 - t, L.headerH - 3);

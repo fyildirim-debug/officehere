@@ -11,9 +11,18 @@ import {
   TextColumnTwo24Regular,
   TableDismiss24Regular,
   CheckboxChecked24Regular,
+  Target24Regular,
+  Group24Regular,
+  GroupDismiss24Regular,
+  TableCalculator20Regular,
+  AddSquare20Regular,
+  SubtractSquare20Regular,
+  Flash24Regular,
 } from "@fluentui/react-icons";
 import { openFile } from "@officehere/core";
-import { Menu, MenuItem, RibbonButton, RibbonGroup, RibbonSplitButton, RibbonStack } from "@officehere/ui";
+import { Menu, MenuItem, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack } from "@officehere/ui";
+import { clearOutline, groupSelection, showDetail, ungroupSelection } from "../actions/outline";
+import { flashFill } from "../actions/whatIf";
 import type { Controller } from "../controller";
 import * as D from "../actions/data";
 import { refreshAll } from "../pivot/pivotOps";
@@ -50,6 +59,7 @@ export function DataTab({ ctl }: { ctl: Controller }) {
       </RibbonGroup>
       <RibbonGroup label="Veri Araçları" icon={<CheckboxChecked24Regular />}>
         <RibbonButton size="large" icon={<TextColumnTwo24Regular />} label="Metni Sütunlara Dönüştür" className="tb-wide" description="Tek bir sütundaki metni ayırıcıya göre birden çok sütuna böler." onClick={() => ctl.openDialog("textToColumns")} />
+        <RibbonButton size="large" icon={<Flash24Regular />} label="Akıllı Doldurma" shortcut="Ctrl+E" description="Yazdığınız örneklerdeki deseni bulur ve sütunun geri kalanını otomatik doldurur." onClick={() => flashFill(ctl)} />
         <RibbonButton size="large" icon={<TableDismiss24Regular />} label="Yinelenenleri Kaldır" description="Sayfadaki yinelenen satırları siler." onClick={() => ctl.openDialog("removeDuplicates")} />
         <RibbonSplitButton
           size="large"
@@ -72,6 +82,53 @@ export function DataTab({ ctl }: { ctl: Controller }) {
             </Menu>
           }
         />
+      </RibbonGroup>
+      <RibbonGroup label="Tahmin" icon={<Target24Regular />}>
+        <RibbonMenuButton
+          size="large"
+          icon={<Target24Regular />}
+          label="Durum Çözümlemesi"
+          className="tb-wide"
+          menu={
+            <Menu width={200}>
+              <MenuItem label="Hedef Ara..." onClick={() => ctl.openDialog("goalSeek")} />
+            </Menu>
+          }
+        />
+      </RibbonGroup>
+      <RibbonGroup label="Anahat" icon={<Group24Regular />}>
+        <RibbonSplitButton
+          size="large"
+          icon={<Group24Regular />}
+          label="Gruplandır"
+          shortcut="Alt+Shift+Sağ Ok"
+          description="Satır ya da sütun aralığını, daraltılıp genişletilebilen bir grupta birleştirir."
+          onClick={() => groupSelection(ctl)}
+          menu={
+            <Menu width={200}>
+              <MenuItem label="Gruplandır..." onClick={() => groupSelection(ctl)} />
+            </Menu>
+          }
+        />
+        <RibbonSplitButton
+          size="large"
+          icon={<GroupDismiss24Regular />}
+          label="Grubu Çöz"
+          shortcut="Alt+Shift+Sol Ok"
+          description="Gruplandırılmış satır ya da sütunları gruptan çıkarır."
+          onClick={() => ungroupSelection(ctl)}
+          menu={
+            <Menu width={200}>
+              <MenuItem label="Grubu Çöz..." onClick={() => ungroupSelection(ctl)} />
+              <MenuItem label="Anahattı Temizle" onClick={() => clearOutline(ctl)} />
+            </Menu>
+          }
+        />
+        <RibbonButton size="large" icon={<TableCalculator20Regular />} label="Alt Toplam" description="İlgili veri satırlarına alt toplam ve genel toplam ekleyerek gruplandırır." onClick={() => ctl.openDialog("subtotal")} />
+        <RibbonStack>
+          <RibbonButton icon={<AddSquare20Regular />} label="Ayrıntıyı Göster" onClick={() => showDetail(ctl, true)} />
+          <RibbonButton icon={<SubtractSquare20Regular />} label="Ayrıntıyı Gizle" onClick={() => showDetail(ctl, false)} />
+        </RibbonStack>
       </RibbonGroup>
     </>
   );

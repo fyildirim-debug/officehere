@@ -22,6 +22,8 @@ interface PlainAxis {
   sizes: [number, number][];
   hidden: number[];
   manual: number[];
+  levels?: [number, number][];
+  collapsed?: number[];
 }
 
 export interface DraftSheet {
@@ -53,7 +55,7 @@ export interface WorkbookDraft {
 }
 
 function plainAxis(a: AxisSizes): PlainAxis {
-  return { defaultSize: a.defaultSize, count: a.count, sizes: a.customItems(), hidden: a.hiddenItems(), manual: a.manualItems() };
+  return { defaultSize: a.defaultSize, count: a.count, sizes: a.customItems(), hidden: a.hiddenItems(), manual: a.manualItems(), levels: a.levelItems(), collapsed: a.collapsedItems() };
 }
 
 function restoreAxis(a: AxisSizes, p: PlainAxis): void {
@@ -61,6 +63,8 @@ function restoreAxis(a: AxisSizes, p: PlainAxis): void {
   const manual = new Set(p.manual);
   for (const [i, v] of p.sizes) a.set(i, v, manual.has(i));
   a.setHiddenMany(p.hidden, true);
+  for (const [i, lv] of p.levels ?? []) a.setLevel(i, lv);
+  for (const i of p.collapsed ?? []) a.setCollapsed(i, true);
 }
 
 /**

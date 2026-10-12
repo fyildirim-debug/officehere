@@ -44,6 +44,8 @@ export function FloatingLayer({ ctl, layout }: { ctl: Controller; layout: GridLa
     ctl.emit();
     start.current = { x: e.clientX, y: e.clientY, handle, id: obj.o.id, kind: obj.kind };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    // Klavye (Delete, Ctrl+C, oklar) nesneye gitsin: şerit ya da bölmede kalan odağı al
+    ((e.currentTarget as HTMLElement).closest(".tb-float") as HTMLElement | null)?.focus({ preventScroll: true });
     setDrag({ id: obj.o.id, dx: 0, dy: 0, dw: 0, dh: 0 });
   };
   const onMove = (e: React.PointerEvent) => {

@@ -4,6 +4,7 @@
  * bölmeleri dondurma, otomatik filtre, notlar, köprüler, koşullu biçimlendirme,
  * veri doğrulama, adlandırılmış aralıklar, tablolar, resimler ve grafikler.
  */
+import { readPageBreaksFromData } from "./xlsxBreaks";
 import { addr, cellKey, colToName, errorFromCode, formatRange, isError, parseRangeAddress, resolveFunctionName, stripFunctionPrefix, type Scalar } from "@officehere/formula";
 import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import { widthCharsToPx, widthPxToChars, ptToPx, pxToPt } from "../model/axis";
@@ -160,6 +161,11 @@ export async function readXlsx(input: ArrayBuffer): Promise<WorkbookModel> {
   } catch {
     warnings.push("mini grafikler");
   }
+  try {
+    await readPageBreaksFromData(data, wb);
+  } catch {
+    warnings.push("sayfa sonları");
+  }
   wb.loadWarnings = [...new Set(warnings)];
   return wb;
 }
@@ -179,6 +185,7 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
       if (Math.abs(w - sheet.cols.defaultSize) > 0.5) sheet.cols.set(c - 1, w);
     }
     if (col.hidden) sheet.cols.setHidden(c - 1, true);
+    if (col.outlineLevel) sheet.cols.setLevel(c - 1, col.outlineLevel);
     const st = col.style && Object.keys(col.style).length ? fromXStyle(col.style, cr) : null;
     if (st && Object.keys(st).length) sheet.colStyles.set(c - 1, wb.styles.intern(st));
   }
@@ -189,6 +196,8 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
     if (r >= MAX_ROWS) return;
     if (row.height !== undefined && row.height !== null && (row.customHeight || Math.abs(row.height - 15) > 0.1)) sheet.rows.set(r, ptToPx(row.height), !!row.customHeight);
     if (row.hidden) sheet.rows.setHidden(r, true);
+    if (row.outlineLevel) sheet.rows.setLevel(r, row.outlineLevel);
+    if (row.collapsed) sheet.rows.setCollapsed(r, true);
     row.eachCell({ includeEmpty: true }, (cell: any, cn: number) => {
       const c = cn - 1;
       readCell(wb, sheet, cell, r, c, cr);
@@ -441,21 +450,25 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
   });
   if (Math.abs(sheet.cols.defaultSize - 64) > 0.5) ws.properties.defaultColWidth = widthPxToChars(sheet.cols.defaultSize);
   // Sütunlar
-  const colSet = new Set<number>([...sheet.cols.customItems().map(([c]) => c), ...sheet.cols.hiddenItems(), ...sheet.colStyles.keys()]);
+  const colSet = new Set<number>([...sheet.cols.customItems().map(([c]) => c), ...sheet.cols.hiddenItems(), ...sheet.colStyles.keys(), ...sheet.cols.levelItems().map(([c]) => c)]);
   for (const c of [...colSet].sort((a, b) => a - b)) {
     if (c >= MAX_COLS) continue;
     const col = ws.getColumn(c + 1);
     if (sheet.cols.isCustom(c)) col.width = widthPxToChars(sheet.cols.rawSize(c));
     if (sheet.cols.isHidden(c)) col.hidden = true;
+    if (sheet.cols.level(c)) col.outlineLevel = sheet.cols.level(c);
     const cs = sheet.colStyles.get(c);
     if (cs) col.style = toXStyle(wb.styles.get(cs));
   }
+  if (sheet.rows.maxLevel()) ws.properties.outlineLevelRow = sheet.rows.maxLevel();
+  if (sheet.cols.maxLevel()) ws.properties.outlineLevelCol = sheet.cols.maxLevel();
   // Satırlar
-  const rowSet = new Set<number>([...sheet.rows.customItems().map(([r]) => r), ...sheet.rows.hiddenItems(), ...sheet.rowStyles.keys()]);
+  const rowSet = new Set<number>([...sheet.rows.customItems().map(([r]) => r), ...sheet.rows.hiddenItems(), ...sheet.rowStyles.keys(), ...sheet.rows.levelItems().map(([r]) => r), ...sheet.rows.collapsedItems()]);
   for (const r of rowSet) {
     const row = ws.getRow(r + 1);
     if (sheet.rows.isCustom(r)) row.height = pxToPt(sheet.rows.rawSize(r));
     if (sheet.rows.isHidden(r)) row.hidden = true;
+    if (sheet.rows.level(r)) row.outlineLevel = sheet.rows.level(r);
     const rs = sheet.rowStyles.get(r);
     if (rs) row.style = toXStyle(wb.styles.get(rs));
   }

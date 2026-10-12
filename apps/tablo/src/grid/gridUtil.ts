@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { formatValue } from "@officehere/formula";
 import type { Controller } from "../controller";
-import { filterAt } from "../actions/data";
+import { filterAt, filtersOf } from "../actions/data";
 import { MAX_COLS, MAX_ROWS, rectCols, rectRows } from "../model/rect";
 import type { Rect } from "../model/types";
 import type { SheetModel } from "../model/workbook";
@@ -20,8 +20,20 @@ export interface Hit {
 }
 
 /** Ekran noktasının ızgaradaki karşılığı (başlıklar, kenarlıklar, doldurma tutamacı, filtre düğmesi). */
+/** Fare imleci: başlık kenarı, doldurma tutamacı, taşıma kenarı, filtre düğmesi, köprü. */
+export function cursorFor(hit: Hit, sheet: SheetModel): string {
+  if (hit.area === "colHeader") return hit.colBorder !== undefined ? "col-resize" : "s-resize";
+  if (hit.area === "rowHeader") return hit.rowBorder !== undefined ? "row-resize" : "e-resize";
+  if (hit.area === "corner") return "se-resize";
+  if (hit.fillHandle) return "crosshair";
+  if (hit.selBorder) return "move";
+  if (hit.filterButton) return "default";
+  return hit.area === "cell" && sheet.linkAt(hit.row, hit.col) ? "pointer" : "cell";
+}
+
 export function hitTestGrid(L: GridLayout, ctl: Controller, sheet: SheetModel, x: number, y: number): Hit {
   const z = L.z;
+  if ((L.outlineW && x < L.outlineW) || (L.outlineH && y < L.outlineH)) return { area: "none", row: -1, col: -1 };
   if (x < L.headerW && y < L.headerH) return { area: "corner", row: -1, col: -1 };
   if (y < L.headerH) {
     const col = L.colAtX(x);
@@ -116,4 +128,11 @@ export function useDarkUi(): boolean {
     };
   }, []);
   return dark;
+}
+
+/** Ölçütü olan filtrelerin veri satırları (satır numaraları mavi gösterilir); filtre yoksa undefined. */
+export function activeFilterRows(sheet: SheetModel): ((row: number) => boolean) | undefined {
+  const fs = filtersOf(sheet).filter((f) => Object.keys(f.columns).length > 0);
+  if (!fs.length) return undefined;
+  return (row) => fs.some((f) => row > f.range.r1 && row <= f.range.r2);
 }

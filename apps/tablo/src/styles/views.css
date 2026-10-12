@@ -291,19 +291,22 @@
 
 /* ---------------- Sayfa Düzeni görünümü ---------------- */
 .tb-pl {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
   background: var(--oh-canvas-bg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
   padding: 12px 16px 40px;
 }
-.tb-pl-hint {
-  font-size: 12px;
-  color: var(--oh-text-muted);
+.tb-pl-pages {
+  display: grid;
+  gap: 22px 14px;
+  justify-content: center;
+  width: max-content;
+  min-width: 100%;
+}
+.tb-pl-wrap {
+  position: relative;
 }
 .tb-pl-page {
   position: relative;
@@ -316,6 +319,116 @@
   position: absolute;
   overflow: hidden;
   outline: 1px dashed #d8d8d8;
+  cursor: cell;
+}
+.tb-pl .tb-print-table td.is-sel {
+  background-image: linear-gradient(rgba(20, 110, 60, 0.14), rgba(20, 110, 60, 0.14));
+}
+.tb-pl .tb-print-table td.is-active {
+  outline: 2px solid #107c41;
+  outline-offset: -1px;
+}
+.tb-pl-editor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  resize: none;
+  border: 0;
+  padding: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.tb-pl-editor.is-editing {
+  opacity: 1;
+  z-index: 3;
+  width: auto;
+  padding: 0 3px;
+  background: #fff;
+  color: #000;
+  outline: 2px solid #107c41;
+  outline-offset: -1px;
+  font-family: Calibri, Carlito, "Segoe UI", sans-serif;
+  pointer-events: auto;
+  white-space: pre;
+}
+.tb-pl-ruler {
+  position: relative;
+  background: var(--oh-surface);
+  border: 1px solid var(--oh-border);
+  box-sizing: border-box;
+  overflow: hidden;
+  font-size: 9px;
+  color: var(--oh-text-muted);
+}
+.tb-pl-rmargin {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--oh-canvas-bg);
+}
+.tb-pl-ruler.is-v .tb-pl-rmargin {
+  left: 0;
+  right: 0;
+  top: auto;
+  bottom: auto;
+}
+.tb-pl-tick {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 4px;
+  background: currentColor;
+}
+.tb-pl-tick.is-full {
+  height: 7px;
+}
+.tb-pl-ruler.is-v .tb-pl-tick {
+  bottom: auto;
+  left: auto;
+  right: 0;
+  width: 4px;
+  height: 1px;
+}
+.tb-pl-rnum {
+  position: absolute;
+  top: 1px;
+  transform: translateX(-50%);
+}
+.tb-pl-ruler.is-v .tb-pl-rnum {
+  top: auto;
+  left: 2px;
+  transform: translateY(-50%);
+}
+.tb-pl-heads {
+  display: flex;
+  font-size: 10px;
+  color: var(--oh-text-muted);
+}
+.tb-pl-heads.is-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+.tb-pl-head {
+  flex: none;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-right: 1px solid var(--oh-border);
+}
+.tb-pl-heads.is-row .tb-pl-head {
+  border-right: 0;
+  border-bottom: 1px solid var(--oh-border);
+  text-align: right;
+  padding-right: 4px;
+}
+.tb-pl-head.is-on {
+  color: #0f6b39;
+  font-weight: 600;
 }
 .tb-pl-hf {
   position: absolute;
@@ -341,6 +454,7 @@
   position: absolute;
   right: 6px;
   bottom: -16px;
+  font-size: 10px;
   color: var(--oh-text-muted);
 }
 .tb-pl-empty {

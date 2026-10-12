@@ -61,7 +61,11 @@ export class Controller {
   corner: CellPos = { row: 0, col: 0 };
   /** Sekme (Tab) dizisinin başladığı sütun: ardından Enter bu sütunun altına döner. */
   tabStartCol: number | null = null;
+  /** Kitap içeriği her değiştiğinde artar (seçim/düzenleme değişiminde artmaz); önbellekler için. */
+  dataVersion = 0;
   showFormulaBar = true;
+  /** Sayfa Düzeni görünümünde cetveller (Görünüm > Göster > Cetvel). */
+  showRuler = true;
   formulaBarExpanded = false;
   /** Durum çubuğu iletisi (ör. "Hedefi seçin ve ENTER tuşuna basın"). */
   status = "";
@@ -115,6 +119,7 @@ export class Controller {
   private makeOps(wb: WorkbookModel): Ops {
     const ops = new Ops(wb);
     ops.onChange = () => {
+      this.dataVersion++;
       this.dirty = true;
       this.pristine = false;
       // Tema geri al/yinele ile değişmiş olabilir
@@ -131,6 +136,7 @@ export class Controller {
   /** Yeni çalışma kitabı yükler. */
   load(wb: WorkbookModel, fileName: string, ref: FileRef | null): void {
     this.wb = wb;
+    this.dataVersion++;
     this.ops = this.makeOps(wb);
     this.cf = new CondFormatter(wb);
     activateTheme(wb.theme);

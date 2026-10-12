@@ -1,10 +1,11 @@
 /** Sayfa Düzeni sekmesi: Sayfa Yapısı, Sığdırmak İçin Ölçeklendir, Sayfa Seçenekleri, Yerleştir. */
-import { ArrowStepIn24Regular, DocumentLandscape24Regular, DocumentMargins24Regular, DocumentPageBreak24Regular, OrientationPortrait20Regular, DocumentLandscape20Regular, Print24Regular, PageFit24Regular, Layer24Regular, Layer20Regular, ArrowUp20Regular, ArrowDown20Regular, Grid24Regular } from "@fluentui/react-icons";
+import { ArrowStepIn24Regular, DocumentLandscape24Regular, DocumentMargins24Regular, DocumentPageBreak24Regular, OrientationPortrait20Regular, DocumentLandscape20Regular, Print24Regular, PageFit24Regular, Layer24Regular, Layer20Regular, ArrowUp20Regular, ArrowDown20Regular, Grid24Regular, DocumentSplitHint24Regular } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonStack, RibbonLabel } from "@officehere/ui";
 import type { Controller } from "../controller";
 import { MARGIN_PRESETS, PAPERS, setPage } from "../dialogs/PageSetupDialog";
 import { reorderObject } from "../actions/objects";
 import { ThemesGroup } from "./ThemesGroup";
+import { insertPageBreak, resetPageBreaks } from "../grid/pageBreakDrag";
 
 const cmText = (inch: number) => (inch * 2.54).toLocaleString("tr-TR", { maximumFractionDigits: 2 });
 
@@ -74,6 +75,18 @@ export function PageLayoutTab({ ctl }: { ctl: Controller }) {
             <Menu width={220}>
               <MenuItem label="Yazdırma Alanını Belirle" onClick={() => setPage(ctl, { printArea: { ...ctl.range } }, "Yazdırma Alanı")} />
               <MenuItem label="Yazdırma Alanını Temizle" disabled={!p.printArea} onClick={() => setPage(ctl, { printArea: undefined }, "Yazdırma Alanı")} />
+            </Menu>
+          }
+        />
+        <RibbonMenuButton
+          size="large"
+          icon={<DocumentSplitHint24Regular />}
+          label="Sonlar"
+          menu={
+            <Menu width={230}>
+              <MenuItem label="Sayfa Sonu Ekle" onClick={() => insertPageBreak(ctl, false)} />
+              <MenuItem label="Sayfa Sonunu Kaldır" disabled={!p.rowBreaks?.length && !p.colBreaks?.length} onClick={() => insertPageBreak(ctl, true)} />
+              <MenuItem label="Tüm Sayfa Sonlarını Sıfırla" disabled={!p.rowBreaks?.length && !p.colBreaks?.length} onClick={() => resetPageBreaks(ctl)} />
             </Menu>
           }
         />

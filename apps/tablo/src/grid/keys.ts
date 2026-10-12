@@ -8,6 +8,8 @@ import { validationList } from "../controller";
 import { pivotAt, refreshAll, refreshPivot } from "../pivot/pivotOps";
 import { quickChart } from "../actions/objects";
 import { handleObjectKey } from "../actions/objectClip";
+import { groupSelection, ungroupSelection } from "../actions/outline";
+import { flashFill } from "../actions/whatIf";
 
 export interface GridKeyContext {
   pageRows: () => number;
@@ -29,6 +31,12 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
     case "ArrowDown":
     case "ArrowLeft":
     case "ArrowRight": {
+      // Alt+Shift+Sağ/Sol: Gruplandır / Grubu Çöz
+      if (alt && shift && (key === "ArrowRight" || key === "ArrowLeft")) {
+        if (key === "ArrowRight") groupSelection(ctl);
+        else ungroupSelection(ctl);
+        return true;
+      }
       if (alt && key === "ArrowDown") {
         const { row, col } = ctl.sel.active;
         const v = sheet.validations.find((x) => x.rule.type === "list" && x.ranges.some((r) => row >= r.r1 && row <= r.r2 && col >= r.c1 && col <= r.c2));
@@ -214,6 +222,10 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
         return true;
       case "D":
         E.fillDirection(ctl, "down");
+        return true;
+      case "E":
+        // Ctrl+E: Akıllı Doldurma
+        flashFill(ctl);
         return true;
       case "R":
         E.fillDirection(ctl, "right");

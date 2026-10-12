@@ -14,7 +14,8 @@ import { shiftFormula } from "./transform";
 import { Errors, FormulaError, type RefValue, type Scalar, type Value } from "./values";
 import { DependencyIndex, analyzeDeps } from "./depindex";
 import type { TableInfo } from "./structref";
-import { renameTableColumnInFormula, renameTableInFormula } from "./transform";
+import { findTable, permuteRowsImpl, renameTableColumnImpl, renameTableImpl, replaceHiddenRowsImpl, setRowsHiddenImpl, setTablesImpl } from "./engine-tables";
+import { evaluateImpl, forEachValueImpl, getSpillImpl, noteChangeImpl, recomputeExtentImpl } from "./engine-read";
 import { DeferSignal, normalizeResult, sameScalar } from "./engine-util";
 import { applySpillImpl, clearSpillImpl, exportInputsImpl, importInputsImpl, moveRangeImpl, removeSheetImpl, renameSheetImpl, shiftCellsImpl, structuralChange } from "./engine-structure";
 import {
@@ -58,7 +59,8 @@ export class FormulaEngine implements EvalHost {
   spillOwner = new Map<number, number>();
   /** @internal */
   spillAnchors = new Set<number>();
-  private dirty = new Set<number>();
+  /** @internal */
+  dirty = new Set<number>();
   /** @internal */
   changed = new Set<number>();
   private computing = new Set<number>();
@@ -121,43 +123,27 @@ export class FormulaEngine implements EvalHost {
     return undefined;
   }
 
+  /* Gizli satırlar (ALTTOPLAM bunlara bağlıdır; işaretleme sonraki hesaplamaya ertelenir) */
   setRowHidden(sheet: number, row: number, hidden: boolean, filtered = false): void {
-    const s = this.sheets.get(sheet);
-    if (!s) return;
-    const set = filtered ? s.filteredRows : s.hiddenRows;
-    if (hidden) set.add(row);
-    else set.delete(row);
-    // ALTTOPLAM gizli satırlara bağlıdır (işaretleme sonraki hesaplamaya ertelenir)
-    this.subtotalsStale = true;
+    setRowsHiddenImpl(this, sheet, [row], hidden, filtered);
   }
 
   /** Toplu gizleme/gösterme (filtre, anahat): tek seferde. */
   setRowsHidden(sheet: number, rows: Iterable<number>, hidden: boolean, filtered = false): void {
-    const s = this.sheets.get(sheet);
-    if (!s) return;
-    const set = filtered ? s.filteredRows : s.hiddenRows;
-    if (hidden) for (const r of rows) set.add(r);
-    else for (const r of rows) set.delete(r);
-    this.subtotalsStale = true;
+    setRowsHiddenImpl(this, sheet, rows, hidden, filtered);
   }
 
   clearFilteredRows(sheet: number): void {
-    const s = this.sheets.get(sheet);
-    if (!s) return;
-    s.filteredRows.clear();
-    this.subtotalsStale = true;
+    replaceHiddenRowsImpl(this, sheet, null, []);
   }
 
   /** Gizli satır kümesini tümüyle değiştirir (geri al / eşitleme). */
   replaceHiddenRows(sheet: number, hidden: Iterable<number>, filtered: Iterable<number>): void {
-    const s = this.sheets.get(sheet);
-    if (!s) return;
-    s.hiddenRows = new Set(hidden);
-    s.filteredRows = new Set(filtered);
-    this.subtotalsStale = true;
+    replaceHiddenRowsImpl(this, sheet, hidden, filtered);
   }
 
-  private subtotalsStale = false;
+  /** @internal */
+  subtotalsStale = false;
   /** ALTTOPLAM/TOPLAMA içeren formül hücreleri (gizli satır değişince yeniden hesaplanır). */
   private subtotalCells = new Set<number>();
 
@@ -168,15 +154,14 @@ export class FormulaEngine implements EvalHost {
 
   /* ------------------------------ Tablolar ------------------------------ */
 
-  private tables: TableInfo[] = [];
-  private tablesSig = "";
+  /** @internal */
+  tables: TableInfo[] = [];
+  /** @internal */
+  tablesSig = "";
 
   /** Yapısal başvurular için tablo listesini ayarlar; değiştiyse bağımlılıklar yenilenir. */
   setTables(list: TableInfo[]): void {
-    const sig = JSON.stringify(list);
-    if (sig === this.tablesSig) return;
-    this.tablesSig = sig;
-    this.tables = list.map((t) => ({ ...t, columns: [...t.columns] }));
+    if (!setTablesImpl(this, list)) return;
     this.reregisterAll();
     this.markAllDirty();
   }
@@ -186,39 +171,24 @@ export class FormulaEngine implements EvalHost {
   }
 
   getTable(name: string | undefined, sheet: number, row: number, col: number): TableInfo | undefined {
-    if (name !== undefined) {
-      const u = name.toLocaleUpperCase("tr-TR");
-      return this.tables.find((t) => t.name.toLocaleUpperCase("tr-TR") === u);
-    }
-    return this.tables.find((t) => t.sheet === sheet && row >= t.r1 && row <= t.r2 && col >= t.c1 && col <= t.c2);
+    return findTable(this.tables, name, sheet, row, col);
   }
 
   /** Tablo yeniden adlandırılınca formüllerdeki yapısal başvuruları günceller. */
   renameTable(oldName: string, newName: string): void {
-    for (const id of this.order) {
-      const sh = this.sheets.get(id)!;
-      for (const [k, rec] of sh.cells) {
-        if (!rec.formula || !rec.formula.text.includes("[")) continue;
-        const t = renameTableInFormula(rec.formula.text, oldName, newName);
-        if (t !== rec.formula.text) this.setFormulaInternal(id, keyRow(k), keyCol(k), t);
-      }
-    }
-    for (const t of this.tables) if (t.name.toLocaleUpperCase("tr-TR") === oldName.toLocaleUpperCase("tr-TR")) t.name = newName;
-    this.tablesSig = JSON.stringify(this.tables);
+    renameTableImpl(this, oldName, newName);
     this.reregisterAll();
     this.markAllDirty();
   }
 
   /** Tablo sütunu yeniden adlandırılınca formülleri günceller. */
   renameTableColumn(table: string, oldCol: string, newCol: string): void {
-    for (const id of this.order) {
-      const sh = this.sheets.get(id)!;
-      for (const [k, rec] of sh.cells) {
-        if (!rec.formula || !rec.formula.text.includes("[")) continue;
-        const t = renameTableColumnInFormula(rec.formula.text, table, oldCol, newCol);
-        if (t !== rec.formula.text) this.setFormulaInternal(id, keyRow(k), keyCol(k), t);
-      }
-    }
+    renameTableColumnImpl(this, table, oldCol, newCol);
+  }
+
+  /** Satırları yeniden sıralar (yeni i. satır = eski order[i]); formüller göreli kaydırılır. */
+  permuteRows(sheet: number, r1: number, c1: number, r2: number, c2: number, order: number[]): boolean {
+    return permuteRowsImpl(this, sheet, r1, c1, r2, c2, order);
   }
 
   /* ------------------------------ EvalHost ------------------------------ */
@@ -283,23 +253,7 @@ export class FormulaEngine implements EvalHost {
   }
 
   private recomputeExtent(s: SheetData): void {
-    let mr = -1;
-    let mc = -1;
-    for (const [k, rec] of s.cells) {
-      const r = keyRow(k);
-      const c = keyCol(k);
-      let rr = r;
-      let cc = c;
-      if (rec.formula?.spill) {
-        rr += rec.formula.spill.rows - 1;
-        cc += rec.formula.spill.cols - 1;
-      }
-      if (rr > mr) mr = rr;
-      if (cc > mc) mc = cc;
-    }
-    s.maxRow = mr;
-    s.maxCol = mc;
-    s.extentDirty = false;
+    recomputeExtentImpl(s);
   }
 
   /** @internal */
@@ -308,21 +262,11 @@ export class FormulaEngine implements EvalHost {
     if (col > s.maxCol) s.maxCol = col;
   }
 
-  sheetIdByName(name: string): number | undefined {
-    return this.getSheetId(name);
-  }
-
-  sheetName(id: number): string | undefined {
-    return this.getSheetName(id);
-  }
-
-  sheetIndex(id: number): number {
-    return this.order.indexOf(id);
-  }
-
-  sheetCount(): number {
-    return this.order.length;
-  }
+  /* EvalHost sayfa bilgileri */
+  sheetIdByName = (name: string): number | undefined => this.getSheetId(name);
+  sheetName = (id: number): string | undefined => this.getSheetName(id);
+  sheetIndex = (id: number): number => this.order.indexOf(id);
+  sheetCount = (): number => this.order.length;
 
   getDefinedName(name: string, sheet: number): Node | undefined {
     const u = name.toLocaleUpperCase("tr-TR");
@@ -350,13 +294,8 @@ export class FormulaEngine implements EvalHost {
     return !!f && /^\s*(SUBTOTAL|AGGREGATE)\s*\(/i.test(f.text);
   }
 
-  now(): number {
-    return this.nowFn();
-  }
-
-  random(): number {
-    return this.randomFn();
-  }
+  now = (): number => this.nowFn();
+  random = (): number => this.randomFn();
 
   /* ------------------------------ Hücreler ------------------------------ */
 
@@ -439,6 +378,11 @@ export class FormulaEngine implements EvalHost {
     return f ? "=" + f.text : undefined;
   }
 
+  /** Hücrenin kaydı (girdi ve önbellekteki değer); toplu okumalar için tek aramalı erişim. */
+  getRecord(sheet: number, row: number, col: number): CellRecord | undefined {
+    return this.sheets.get(sheet)?.cells.get(cellKey(row, col));
+  }
+
   /** Hücrede kullanıcı girdisi (sabit ya da formül) var mı? */
   hasInput(sheet: number, row: number, col: number): boolean {
     return !!this.sheets.get(sheet)?.cells.has(cellKey(row, col));
@@ -446,12 +390,7 @@ export class FormulaEngine implements EvalHost {
 
   /** Hücre taşan bir dizinin parçasıysa bilgisi. */
   getSpill(sheet: number, row: number, col: number): SpillInfo | undefined {
-    const k = gk(sheet, row, col);
-    const ownerKey = this.spillOwner.get(k) ?? (this.sheets.get(sheet)?.cells.get(cellKey(row, col))?.formula?.spill ? k : undefined);
-    if (ownerKey === undefined) return undefined;
-    const sp = this.sheets.get(gkSheet(ownerKey))?.cells.get(gkLocal(ownerKey))?.formula?.spill;
-    if (!sp) return undefined;
-    return { anchorRow: keyRow(gkLocal(ownerKey)), anchorCol: keyCol(gkLocal(ownerKey)), rows: sp.rows, cols: sp.cols };
+    return getSpillImpl(this, sheet, row, col);
   }
 
   /** Sayfadaki girdili hücreleri gezer. */
@@ -467,19 +406,15 @@ export class FormulaEngine implements EvalHost {
 
   /** Taşan değerler dahil, değeri olan tüm konumlar. */
   forEachValue(sheet: number, cb: (row: number, col: number, v: Scalar) => void): void {
-    const s = this.sheets.get(sheet);
-    if (!s) return;
-    for (const [k, rec] of s.cells) {
-      const r = keyRow(k);
-      const c = keyCol(k);
-      const sp = rec.formula?.spill;
-      if (sp) {
-        for (let i = 0; i < sp.rows; i++) for (let j = 0; j < sp.cols; j++) cb(r + i, c + j, sp.data[i][j]);
-      } else cb(r, c, rec.value);
-    }
+    forEachValueImpl(this, sheet, cb);
   }
 
   /* ------------------------- Bağımlılık grafiği ------------------------- */
+
+  /** @internal Hazır formül bilgisini bağımlılık dizinine kaydeder. */
+  registerInfo(g: number, info: FormulaInfo, sheet: number): void {
+    this.register(g, info, sheet);
+  }
 
   private register(g: number, info: FormulaInfo, sheet: number): void {
     if (!info.ast) return;
@@ -527,20 +462,9 @@ export class FormulaEngine implements EvalHost {
     }
   }
 
-  private noteChange(g: number): void {
-    this.changed.add(g);
-    // Engellenmiş/taşan dizilerin alanına yazıldıysa çapa yeniden hesaplanmalı
-    if (this.spillAnchors.size) {
-      const sheet = gkSheet(g);
-      const local = gkLocal(g);
-      const row = keyRow(local);
-      const col = keyCol(local);
-      for (const a of this.spillAnchors) {
-        if (a === g || gkSheet(a) !== sheet) continue;
-        const t = this.sheets.get(sheet)?.cells.get(gkLocal(a))?.formula?.spillTarget;
-        if (t && row >= t.r1 && row <= t.r2 && col >= t.c1 && col <= t.c2) this.dirty.add(a);
-      }
-    }
+  /** @internal */
+  noteChange(g: number): void {
+    noteChangeImpl(this, g);
   }
 
   markAllDirty(): void {
@@ -686,24 +610,14 @@ export class FormulaEngine implements EvalHost {
 
   /** Bir formülü verilen hücre bağlamında değerlendirir (koşullu biçim, veri doğrulama). */
   evaluate(sheet: number, row: number, col: number, formula: string): Scalar {
-    const text = formula.startsWith("=") ? formula.slice(1) : formula;
-    const ast = safeParse(text);
-    if (!ast) return Errors.NAME;
     if (this.dirty.size && this.autoCalc && !this.inRecalc) this.recalc();
-    const ctx = createContext({ host: this, sheet, row, col, locale: this.locale });
-    const v = evaluateNode(ast, ctx);
-    const n = normalizeResult(v, this, sheet);
+    const n = evaluateImpl(this, sheet, row, col, formula);
     return Array.isArray(n) ? (n[0]?.[0] ?? null) : n;
   }
 
   /** Formülün sonucunu dizi olarak döndürür (veri doğrulama listeleri). */
   evaluateArray(sheet: number, row: number, col: number, formula: string): Scalar[][] {
-    const text = formula.startsWith("=") ? formula.slice(1) : formula;
-    const ast = safeParse(text);
-    if (!ast) return [[Errors.NAME]];
-    const ctx = createContext({ host: this, sheet, row, col, locale: this.locale });
-    const v = evaluateNode(ast, ctx);
-    const n = normalizeResult(v, this, sheet);
+    const n = evaluateImpl(this, sheet, row, col, formula);
     return Array.isArray(n) ? n : [[n]];
   }
 

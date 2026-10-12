@@ -3,6 +3,7 @@
  * olarak XLSX paketine yazılması ve geri okunması. exceljs grafik
  * desteklemediğinden paket JSZip ile sonradan işlenir.
  */
+import { writePageBreaksInto } from "./xlsxBreaks";
 import JSZip from "jszip";
 import { formatQualifiedRange, parseQualifiedRange } from "@officehere/formula";
 import { PALETTES, extractChartData, seriesRefs } from "../charts/chartData";
@@ -138,7 +139,7 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise
   for (const sheet of wb.sheets) {
     const sheetPath = paths.get(sheet.name);
     if (!sheetPath) continue;
-    const rows = new Set<number>([...sheet.rows.customItems().map(([r]) => r), ...sheet.rows.hiddenItems()]);
+    const rows = new Set<number>([...sheet.rows.customItems().map(([r]) => r), ...sheet.rows.hiddenItems(), ...sheet.rows.levelItems().map(([r]) => r)]);
     if (!rows.size) continue;
     let xml = await zip.file(sheetPath)!.async("string");
     // İçeriğe göre (otomatik) yükseklikteki satırlar customHeight taşımaz
@@ -151,7 +152,7 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise
     }
     if (/<sheetData\/>/.test(xml)) xml = xml.replace("<sheetData/>", "<sheetData></sheetData>");
     for (const r of missing) {
-      const attrs = `${sheet.rows.isCustom(r) ? ` ht="${Math.round(((sheet.rows.rawSize(r) * 72) / 96) * 100) / 100}"${sheet.rows.isManual(r) ? ' customHeight="1"' : ""}` : ""}${sheet.rows.isHidden(r) ? ' hidden="1"' : ""}`;
+      const attrs = `${sheet.rows.isCustom(r) ? ` ht="${Math.round(((sheet.rows.rawSize(r) * 72) / 96) * 100) / 100}"${sheet.rows.isManual(r) ? ' customHeight="1"' : ""}` : ""}${sheet.rows.isHidden(r) ? ' hidden="1"' : ""}${sheet.rows.level(r) ? ` outlineLevel="${sheet.rows.level(r)}"` : ""}`;
       const tag = `<row r="${r + 1}"${attrs}/>`;
       const re = /<row r="(\d+)"/g;
       let pos = -1;
@@ -169,6 +170,7 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise
   if (wb.sheets.some((s) => s.charts.length)) await writeChartsInto(zip, wb, paths);
   if (wb.sheets.some((s) => s.pivots.length)) await writePivotsInto(zip, wb, paths);
   await writeSparklinesInto(zip, wb);
+  await writePageBreaksInto(zip, wb, paths);
   await writeDefinedNamesInto(zip, wb);
   // Çalışma kitabı teması (renk ve yazı tipi şemaları)
   const themeFile = zip.file("xl/theme/theme1.xml");

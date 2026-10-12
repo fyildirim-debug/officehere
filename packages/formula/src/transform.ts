@@ -4,8 +4,9 @@
  * adlandırma/silme ve taşıma (kes-yapıştır).
  */
 import { EN_SYNTAX, tokenize, type RefPart, type RefToken } from "./lexer";
-import { MAX_COLS, MAX_ROWS, colToName, quoteSheetName } from "./references";
+import { MAX_COLS, MAX_ROWS, colToName, nameToCol, quoteSheetName } from "./references";
 import { renameTableInRef, renderStructRef, type StructRef } from "./structref";
+import type { Node } from "./ast";
 
 /** Yapısal başvuru belirteçlerine işlev uygulayıp formülü yeniden yazar. */
 function mapStructRefs(formula: string, fn: (r: StructRef) => StructRef): string {
@@ -86,9 +87,35 @@ function cloneRef(r: RefToken): RefToken {
   return { ...r, a: { ...r.a }, b: r.b ? { ...r.b } : undefined };
 }
 
+const SIMPLE_REF = /(?<![A-Za-z0-9_.$])(\$?)([A-Z]{1,3})(\$?)(\d{1,7})(?![\w(.])/g;
+
+/**
+ * Hızlı yol: metin, sayfa adı, tablo, hata ve satır/sütun aralığı içermeyen
+ * yalın formüllerde A1 başvurularını belirteçlere ayırmadan kaydırır.
+ * Uygun değilse ya da taşma olursa null döner.
+ */
+function fastShift(formula: string, dRow: number, dCol: number): string | null {
+  if (/["'!\[#{]/.test(formula) || /(^|[^A-Za-z$\d])\$?\d+\s*:|:\s*\$?[A-Za-z]{1,3}(?![\d$A-Za-z])/.test(formula) || /[a-z]/.test(formula.replace(/[A-Z_][A-Za-z0-9_.]*\(/g, ""))) return null;
+  let bad = false;
+  const out = formula.replace(SIMPLE_REF, (m, ca: string, c: string, ra: string, r: string) => {
+    let col = nameToCol(c);
+    let row = Number(r) - 1;
+    if (!ca) col += dCol;
+    if (!ra) row += dRow;
+    if (col < 0 || col >= MAX_COLS || row < 0 || row >= MAX_ROWS) {
+      bad = true;
+      return m;
+    }
+    return `${ca}${colToName(col)}${ra}${row + 1}`;
+  });
+  return bad ? null : out;
+}
+
 /** Kopyalanan formüldeki göreli başvuruları kaydırır; taşan başvurular #REF! olur. */
 export function shiftFormula(formula: string, dRow: number, dCol: number): string {
   if (dRow === 0 && dCol === 0) return formula;
+  const fast = fastShift(formula, dRow, dCol);
+  if (fast !== null) return fast;
   return mapRefs(formula, (ref) => {
     const r = cloneRef(ref);
     const parts = r.b ? [r.a, r.b] : [r.a];
@@ -271,4 +298,46 @@ export function cycleAbsolute(ref: RefToken): RefToken {
     p.colAbs = next[1];
   }
   return r;
+}
+
+/**
+ * Ayrıştırılmış formülü göreli olarak kaydırır (shiftFormula'nın AST karşılığı;
+ * yeniden ayrıştırmadan kopyalama/sıralama için). Taşan başvuru #REF! olur.
+ */
+export function shiftAst(node: Node, dRow: number, dCol: number): Node {
+  if (dRow === 0 && dCol === 0) return node;
+  const shiftRef = (ref: RefToken): RefToken => {
+    if (ref.refError) return ref;
+    const r = cloneRef(ref);
+    const parts = r.b ? [r.a, r.b] : [r.a];
+    for (const p of parts) {
+      if (r.kind !== "cols" && !p.rowAbs) {
+        p.row += dRow;
+        if (p.row < 0 || p.row >= MAX_ROWS) return { ...ref, refError: true };
+      }
+      if (r.kind !== "rows" && !p.colAbs) {
+        p.col += dCol;
+        if (p.col < 0 || p.col >= MAX_COLS) return { ...ref, refError: true };
+      }
+    }
+    return r;
+  };
+  const rec = (n: Node): Node => {
+    switch (n.type) {
+      case "ref":
+        return { type: "ref", ref: shiftRef(n.ref) };
+      case "func":
+        return { ...n, args: n.args.map(rec) };
+      case "unary":
+      case "postfix":
+        return { ...n, arg: rec(n.arg) } as Node;
+      case "binary":
+        return { ...n, left: rec(n.left), right: rec(n.right) };
+      case "union":
+        return { ...n, items: n.items.map(rec) };
+      default:
+        return n;
+    }
+  };
+  return rec(node);
 }

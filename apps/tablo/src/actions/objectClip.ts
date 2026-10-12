@@ -59,10 +59,12 @@ export function pasteObject(ctl: Controller): boolean {
   const src = structuredClone(clip.obj);
   const prefix = clip.kind === "chart" ? "chart" : clip.kind === "image" ? "img" : "shape";
   const id = wb.newId(prefix);
-  // Aynı sayfaya kopya: biraz sağa/aşağı kaydır; aksi halde etkin hücreye yerleştir
+  // Nesne hâlâ seçiliyken aynı sayfaya kopya: biraz sağa/aşağı kaydır; bir hücre seçildiyse ya da
+  // başka sayfadaysa etkin hücreye yerleştir
   const sameSheet = listOf(ctl, clip.kind).some((o) => o.id === clip!.obj.id);
   let anchor = src.anchor;
-  if (sameSheet && clip.pasted > 0) {
+  if (!ctl.selObj) anchor = { row: ctl.sel.active.row, col: ctl.sel.active.col, dx: 0, dy: 0 };
+  else if (sameSheet && clip.pasted > 0) {
     const x = sheet.cols.offset(src.anchor.col) + src.anchor.dx + 16 * clip.pasted;
     const y = sheet.rows.offset(src.anchor.row) + src.anchor.dy + 16 * clip.pasted;
     anchor = anchorAt(sheet, x, y);

@@ -227,6 +227,11 @@ describe("Grafik nesnesi ve dış grafik serileri (#8, #9)", () => {
     expect(v(ctl, 0, 0)).toBe("Bölge");
     ctl.ops.undo();
     expect(ctl.sheet.charts).toHaveLength(2);
+    // Bir hücre seçilip yapıştırılınca grafik o hücreye yerleşir
+    ctl.selObj = null;
+    ctl.selectRange({ r1: 19, c1: 7, r2: 19, c2: 7 });
+    expect(pasteObject(ctl)).toBe(true);
+    expect(ctl.sheet.charts[2].anchor).toMatchObject({ row: 19, col: 7, dx: 0, dy: 0 });
   });
 });
 

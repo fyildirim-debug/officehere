@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import type { Controller } from "../controller";
 import type { FileActions } from "../FileView";
 import { GoToSpecialDialog, SpellingDialog, ValidationErrorDialog } from "./Round3Dialogs";
+import { GoalSeekDialog, GoalSeekStatusDialog, GroupAxisDialog, SubtotalDialog } from "./DataToolsDialogs";
 import * as D from "../actions/data";
 import * as M from "./MiscDialogs";
 import { FormatCellsDialog } from "./FormatCellsDialog";
@@ -108,6 +109,14 @@ function OneDialog({ ctl, state, onClose, files, onBackstage }: { ctl: Controlle
       return <GoToSpecialDialog {...p} />;
     case "spelling":
       return <SpellingDialog {...p} />;
+    case "groupAxis":
+      return <GroupAxisDialog {...p} />;
+    case "subtotal":
+      return <SubtotalDialog {...p} />;
+    case "goalSeek":
+      return <GoalSeekDialog {...p} />;
+    case "goalSeekStatus":
+      return <GoalSeekStatusDialog {...p} />;
     case "confirm":
       return <M.ConfirmDialog {...p} />;
     case "formatCells":

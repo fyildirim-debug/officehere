@@ -27,6 +27,9 @@ export class GridLayout {
   frozenW: number;
   fr: number;
   fc: number;
+  /** Anahat simgeleri bölgesi: satırlar için soldaki şerit genişliği, sütunlar için üstteki şerit yüksekliği. */
+  outlineW = 0;
+  outlineH = 0;
 
   constructor(
     public sheet: SheetModel,
@@ -40,6 +43,13 @@ export class GridLayout {
     const z = this.z;
     const show = sheet.showHeadings;
     this.headerH = show ? Math.round(20 * Math.max(0.6, z)) : 0;
+    // Anahat düzeyleri varsa başlıkların dışında simge şeritleri (düzey başına 14 px)
+    const rl = sheet.rows.maxLevel();
+    const cl = sheet.cols.maxLevel();
+    const step = 14 * Math.max(0.75, Math.min(z, 1.5));
+    if (rl) this.outlineW = Math.round((rl + 1) * step + 4);
+    if (cl) this.outlineH = Math.round((cl + 1) * step + 4);
+    this.headerH += this.outlineH;
     // Satır başlığı genişliği görünen en büyük satır numarasına göre
     this.fr = Math.min(sheet.frozen.rows, MAX_ROWS - 1);
     this.fc = Math.min(sheet.frozen.cols, MAX_COLS - 1);
@@ -51,6 +61,7 @@ export class GridLayout {
       const digits = String(Math.max(lastRow + 1, 100)).length;
       this.headerW = Math.round(Math.max(26 * Math.max(0.6, z), measureDigits(digits) + 10 * Math.max(0.6, z)));
     }
+    this.headerW += this.outlineW;
   }
 
   get cellsX(): number {

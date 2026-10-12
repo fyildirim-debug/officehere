@@ -21,8 +21,11 @@ export function ViewTab({ ctl }: { ctl: Controller }) {
       </RibbonGroup>
       <RibbonGroup label="Göster" icon={<Eye24Regular />}>
         <RibbonStack>
-          <RibbonCheckbox label="Formül Çubuğu" checked={ctl.showFormulaBar} onChange={(v) => ((ctl.showFormulaBar = v), ctl.emit())} />
+          <RibbonCheckbox label="Cetvel" checked={ctl.showRuler} disabled={sheet.viewMode !== "pageLayout"} onChange={(v) => ((ctl.showRuler = v), ctl.emit())} />
           <RibbonCheckbox label="Kılavuz Çizgileri" checked={sheet.showGridlines} onChange={(v) => toggle("showGridlines", v)} />
+        </RibbonStack>
+        <RibbonStack>
+          <RibbonCheckbox label="Formül Çubuğu" checked={ctl.showFormulaBar} onChange={(v) => ((ctl.showFormulaBar = v), ctl.emit())} />
           <RibbonCheckbox label="Başlıklar" checked={sheet.showHeadings} onChange={(v) => toggle("showHeadings", v)} />
         </RibbonStack>
       </RibbonGroup>

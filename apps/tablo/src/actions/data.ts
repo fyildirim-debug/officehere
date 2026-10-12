@@ -84,6 +84,29 @@ export function sortRange(ctl: Controller, r: Rect, keys: SortKey[], hasHeader: 
   }
   const data: Rect = hasHeader ? (byColumns ? { ...r, c1: r.c1 + 1 } : { ...r, r1: r.r1 + 1 }) : r;
   if (data.r1 > data.r2 || data.c1 > data.c2) return;
+  // Hızlı yol (yukarıdan aşağı): satırların permütasyonu motor içinde yapılır, geri alma ters permütasyondur
+  if (!byColumns) {
+    const n = data.r2 - data.r1 + 1;
+    const keyVals: Scalar[][] = [];
+    for (let i = 0; i < n; i++) {
+      const row = data.r1 + i;
+      keyVals.push(
+        keys.map((k) => {
+          if (k.by === "fill") return wb.styleAt(sheet, row, k.col).fill ?? null;
+          if (k.by === "color") return wb.styleAt(sheet, row, k.col).color ?? null;
+          return wb.getValue(sheet, row, k.col);
+        }),
+      );
+    }
+    const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => {
+      for (let k = 0; k < keys.length; k++) {
+        const c = compareForSort(keyVals[a][k], keyVals[b][k], keys[k].desc, keys[k].order);
+        if (c) return c;
+      }
+      return a - b;
+    });
+    if (ctl.ops.permuteRowsOp(sheet, data, order, "Sırala")) return;
+  }
   ctl.ops.cellsOp(sheet, [data], "Sırala", () => {
     const lines: { idx: number; cells: CellState[]; keyVals: Scalar[] }[] = [];
     const count = byColumns ? data.c2 - data.c1 + 1 : data.r2 - data.r1 + 1;
@@ -316,6 +339,10 @@ export function clearAllFilters(ctl: Controller): void {
     for (const f of filtersOf(ctl.sheet)) f.columns = {};
     recomputeFilters(ctl);
   });
+  if (ctl.status.endsWith("tanesi bulundu")) {
+    ctl.status = "";
+    ctl.emit();
+  }
 }
 
 export function reapplyFilters(ctl: Controller): void {

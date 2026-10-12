@@ -13,17 +13,20 @@ import type { CellPos, Rect } from "../model/types";
 import { widthPxToChars, pxToPt, type AxisSizes } from "../model/axis";
 import { CellEditor } from "./CellEditor";
 import { handleGridKey } from "./keys";
+import { handleOutlineClick } from "../actions/outline";
+import { activeFilterRows } from "./gridUtil";
 import { GridLayout } from "./layout";
 import { measureText, renderGrid, type RenderState } from "./render";
 import { SheetTabs } from "./SheetTabs";
 import { autoFitCols, autoFitRows } from "./autofit";
 import { FloatingLayer } from "../charts/FloatingLayer";
-import { fillTipText, hitTestGrid, openLink, selectedLines, useDarkUi, type Hit } from "./gridUtil";
+import { cursorFor, fillTipText, hitTestGrid, openLink, selectedLines, useDarkUi, type Hit } from "./gridUtil";
 import { PivotPlaceholders } from "../pivot/PivotPlaceholder";
 import { pivotButtons } from "../pivot/pivotOps";
 import { AllNotes, ValidationUi } from "./ValidationUi";
 import { ErrorTag } from "./ErrorTag";
 import { computePageBreaks } from "../io/print";
+import { pageBreakCursor, pageBreakDrop, pageBreakHit, pageBreakMove, type PageBreakDrag } from "./pageBreakDrag";
 import { filtersOf } from "../actions/data";
 
 type Drag =
@@ -34,8 +37,8 @@ type Drag =
   | { kind: "rowresize"; row: number; startY: number; startH: number; saved: AxisSizes }
   | { kind: "fill"; src: Rect; target: Rect | null }
   | { kind: "point"; anchor: CellPos; sheetId: number }
-  | { kind: "move"; src: Rect; grab: CellPos; target: Rect | null; copy: boolean };
-
+  | { kind: "move"; src: Rect; grab: CellPos; target: Rect | null; copy: boolean }
+  | { kind: "pagebreak"; pb: PageBreakDrag };
 
 export interface GridProps {
   ctl: Controller;
@@ -120,6 +123,8 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         arrows: ctl.arrows,
         errorCheck: ctl.errorChecking,
         pageBreaks: sheet.viewMode === "pageBreak" ? computePageBreaks(ctl.wb, sheet) : null,
+        pageBreakDrag: drag.current?.kind === "pagebreak" ? drag.current.pb : null,
+        filtered: activeFilterRows(sheet),
       };
       renderGrid(ctx, st);
       syncScrollbars(L);
@@ -243,6 +248,19 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
     if (!fromGrid(e)) return;
     if ((e.target as HTMLElement).closest(".tb-float, .tb-editor.is-visible, .tb-assist, .tb-errtag")) return;
     const { x, y } = local(e);
+    // Anahat şeritleri (düzey ve +/- düğmeleri)
+    if (e.button === 0 && handleOutlineClick(ctl, layoutRef.current!, x, y)) {
+      e.preventDefault();
+      return;
+    }
+    // Sayfa Sonu Önizleme: sayfa sonunu ya da yazdırma alanı kenarını sürükle
+    const pb = e.button === 0 && !ctl.edit ? pageBreakHit(ctl, layoutRef.current!, x, y) : null;
+    if (pb) {
+      e.preventDefault();
+      wrapRef.current?.setPointerCapture(e.pointerId);
+      drag.current = { kind: "pagebreak", pb };
+      return;
+    }
     const hit = hitTest(x, y);
     setTip(null);
     if (e.button === 2) {
@@ -406,6 +424,10 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         ctl.pointTo(r, sheet, d.anchor, p);
         return;
       }
+      case "pagebreak":
+        pageBreakMove(L, d.pb, x, y);
+        draw();
+        return;
     }
   };
 
@@ -444,14 +466,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
     }
     // İmleç ve not ipucu
     const hit = hitTest(x, y);
-    let cur = "cell";
-    if (hit.area === "colHeader") cur = hit.colBorder !== undefined ? "col-resize" : "s-resize";
-    else if (hit.area === "rowHeader") cur = hit.rowBorder !== undefined ? "row-resize" : "e-resize";
-    else if (hit.area === "corner") cur = "se-resize";
-    else if (hit.fillHandle) cur = "crosshair";
-    else if (hit.selBorder) cur = "move";
-    else if (hit.filterButton) cur = "default";
-    else if (hit.area === "cell" && sheet.linkAt(hit.row, hit.col)) cur = "pointer";
+    const cur = (sheet.viewMode === "pageBreak" && pageBreakCursor(ctl, layoutRef.current!, x, y)) || cursorFor(hit, sheet);
     if (cur !== cursor) setCursor(cur);
     if (hit.area === "cell") {
       const m = sheet.mergeAt(hit.row, hit.col);
@@ -512,6 +527,10 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
           ctl.selectRange(d.target, ctl.sel.active);
         }
         break;
+      case "pagebreak":
+        pageBreakDrop(ctl, d.pb);
+        draw();
+        break;
       case "move":
         if (d.target && (d.target.r1 !== d.src.r1 || d.target.c1 !== d.src.c1)) {
           const { payload } = buildClipboard(ctl.wb, sheet, d.src, false);
@@ -524,7 +543,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
-    if (!fromGrid(e)) return;
+    if (!fromGrid(e) || (e.target as Element).closest(".tb-float, .tb-editor.is-visible, .tb-assist, .tb-errtag")) return;
     const { x, y } = local(e);
     const hit = hitTest(x, y);
     if (hit.area === "colHeader" && hit.colBorder !== undefined) {

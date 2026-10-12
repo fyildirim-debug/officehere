@@ -208,6 +208,9 @@ export interface PageSetup {
   fitToWidth?: boolean;
   /** Ölçek: sayfayı tek sayfaya / tüm sütunları / tüm satırları tek sayfaya sığdır (fitToWidth'in yerine geçer). */
   fitMode?: "sheet" | "cols" | "rows";
+  /** El ile eklenen sayfa sonları: yeni sayfanın ilk satırı / sütunu (0 tabanlı, artan sırada). */
+  rowBreaks?: number[];
+  colBreaks?: number[];
 }
 
 export type PivotFn = "sum" | "count" | "average" | "max" | "min" | "product" | "countNums";
