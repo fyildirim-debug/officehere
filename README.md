@@ -94,7 +94,11 @@ ilişkilendirir.
 denetler (Seçenekler'den kapatılabilir). Windows kurulumu ve AppImage yeni sürümü
 arka planda indirir, yeniden başlatınca kurar; taşınabilir `.exe`, `.deb` ve
 macOS paketi yeni sürümü bildirir ve indirme sayfasını açar. Otomatik
-güncelleştirme 0.1.2 ile gelir; daha eski sürümlerden bir kez elle yükseltin. Paketler henüz kod imzalı değildir; Windows SmartScreen ilk
+güncelleştirme 0.1.2 ile gelir; daha eski sürümlerden bir kez elle yükseltin.
+
+**Otomatik kaydetme:** Masaüstünde diskte kayıtlı `.docx`, `.xlsx` ve `.pptx`
+belgeleri değiştikçe kendiliğinden kaydedilir; ilk otomatik kayıttan önce özgün
+dosyanın yedeği (`<dosya>.bak`) alınır. Seçenekler'den kapatılabilir. Paketler henüz kod imzalı değildir; Windows SmartScreen ilk
 açılışta uyarı gösterebilir ("Ek bilgi" → "Yine de çalıştır").
 
 Tarayıcıda kurulumsuz kullanmak için web sürümünü derleyip herhangi bir statik
