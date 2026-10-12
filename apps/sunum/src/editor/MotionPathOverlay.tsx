@@ -1,6 +1,8 @@
 /** Animasyonlar sekmesinde hareket yolları: kesik çizgi, yeşil başlangıç ve kırmızı bitiş işareti. */
 import { findShape } from "../model/ops";
 import type { Slide } from "../model/types";
+import type { AppState } from "../state/store";
+import { GridOverlay } from "./canvasUtils";
 import { motionPathSvg } from "../show/motionPaths";
 
 export function MotionPathOverlay({ slide, z, W, H, selected }: { slide: Slide; z: number; W: number; H: number; selected: string[] }) {
@@ -22,5 +24,25 @@ export function MotionPathOverlay({ slide, z, W, H, selected }: { slide: Slide; 
         );
       })}
     </svg>
+  );
+}
+
+/** Slayt alanı üstündeki yardımcı katmanlar: ızgara, hareket yolları ve sürüklenebilir kılavuzlar. */
+export function StageGuides({ state, slide, z, W, H, guides, motion }: { state: AppState; slide: Slide | undefined; z: number; W: number; H: number; guides: { h: number[]; v: number[] }; motion: boolean }) {
+  return (
+    <>
+      {state.showGrid && <GridOverlay w={W} h={H} z={z} />}
+      {motion && slide && <MotionPathOverlay slide={slide} z={z} W={W} H={H} selected={state.sel} />}
+      {state.showGuides && (
+        <>
+          {guides.v.map((x, i) => (
+            <div key={`gv${i}`} className="drawing-guide is-v" data-guide="v" data-index={i} style={{ left: x * z - 3, height: H * z }} />
+          ))}
+          {guides.h.map((y, i) => (
+            <div key={`gh${i}`} className="drawing-guide is-h" data-guide="h" data-index={i} style={{ top: y * z - 3, width: W * z }} />
+          ))}
+        </>
+      )}
+    </>
   );
 }

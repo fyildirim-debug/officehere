@@ -17,10 +17,10 @@ import { angleFromCenter, constrainLine, geomFromEnds, geomOf, HANDLES, lineEnds
 import { Rulers } from "./Rulers";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { snapMove, snapValue, type GuideLine } from "./snap";
-import { cellSelRects, childOfGroupContaining, cropGhostOf, GridOverlay, InkPreview, inkIdsAt, MARGIN, topLevelOf, type Drag, type Pt } from "./canvasUtils";
+import { cellSelRects, childOfGroupContaining, cropGhostOf, InkPreview, inkIdsAt, MARGIN, topLevelOf, type Drag, type Pt } from "./canvasUtils";
 import { useAutofit } from "./useAutofit";
 import { contextKind, isInEditedShape, type CanvasMenuKind } from "./contextKind";
-import { MotionPathOverlay } from "./MotionPathOverlay";
+import { StageGuides } from "./MotionPathOverlay";
 import { PointEditor } from "./PointEditor";
 import { useAnimBadges } from "./contextKind";
 import { useViewportZoom } from "./useViewportZoom";
@@ -675,18 +675,7 @@ export function Canvas(props: CanvasProps) {
                 Slayt eklemek için tıklayın
               </div>
             )}
-            {state.showGrid && <GridOverlay w={pres.width} h={pres.height} z={z} />}
-            {props.showAnimBadges && slide && <MotionPathOverlay slide={slide} z={z} W={pres.width} H={pres.height} selected={state.sel} />}
-            {state.showGuides && (
-              <>
-                {props.guides.v.map((x, i) => (
-                  <div key={`gv${i}`} className="drawing-guide is-v" data-guide="v" data-index={i} style={{ left: x * z - 3, height: pres.height * z }} />
-                ))}
-                {props.guides.h.map((y, i) => (
-                  <div key={`gh${i}`} className="drawing-guide is-h" data-guide="h" data-index={i} style={{ top: y * z - 3, width: pres.width * z }} />
-                ))}
-              </>
-            )}
+            <StageGuides state={state} slide={slide} z={z} W={pres.width} H={pres.height} guides={props.guides} motion={props.showAnimBadges} />
             {inkPts && state.ink && <InkPreview pts={inkPts} ink={state.ink} z={z} w={pres.width} h={pres.height} />}
             {state.pointEdit && selShapes.length === 1 && selShapes[0].id === state.pointEdit && selShapes[0].kind === "sp" && <PointEditor shape={selShapes[0]} zoom={z} actions={actions} />}
             <SelectionOverlay
