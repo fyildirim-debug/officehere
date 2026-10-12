@@ -50,7 +50,7 @@ export function Canvas(props: CanvasProps) {
   const [overrides, setOverrides] = useState<Map<string, GeomOverride> | undefined>(undefined);
   const [guideLines, setGuideLines] = useState<GuideLine[]>([]);
   const [lasso, setLasso] = useState<Box | null>(null);
-  const [preview, setPreview] = useState<(Box & { line?: boolean; flipH?: boolean; flipV?: boolean }) | null>(null);
+  const [preview, setPreview] = useState<(Box & { line?: boolean; flipH?: boolean; flipV?: boolean; geom?: string }) | null>(null);
   const [inkPts, setInkPts] = useState<Pt[] | null>(null);
   const [rotInfo, setRotInfo] = useState<{ x: number; y: number; text: string } | null>(null);
   const [scrollPos, setScrollPos] = useState({ x: 0, y: 0 });
@@ -454,7 +454,9 @@ export function Canvas(props: CanvasProps) {
           w = Math.sign(w || 1) * m;
           h = Math.sign(h || 1) * m;
         }
-        setPreview({ x: Math.min(d.start[0], d.start[0] + w), y: Math.min(d.start[1], d.start[1] + h), w: Math.abs(w), h: Math.abs(h) });
+        // Çizilirken şeklin kendisi gösterilir (üçgen, yıldız, ok…); metin kutusunda çerçeve.
+        const geom = st.insert?.kind === "shape" ? st.insert.geom : undefined;
+        setPreview({ x: Math.min(d.start[0], d.start[0] + w), y: Math.min(d.start[1], d.start[1] + h), w: Math.abs(w), h: Math.abs(h), geom });
         break;
       }
       case "cells": {

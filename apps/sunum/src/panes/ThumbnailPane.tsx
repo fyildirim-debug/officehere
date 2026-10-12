@@ -1,5 +1,7 @@
 /** Soldaki slayt küçük resimleri bölmesi: seçim, sürükle-bırak sıralama, bağlam menüsü. */
 import { memo, useEffect, useRef, useState } from "react";
+import { Add16Regular } from "@fluentui/react-icons";
+import { tipProps } from "@officehere/ui";
 import type { Presentation, Slide } from "../model/types";
 import { ScaledSlide } from "../render/SlideView";
 import type { Actions } from "../state/actions";
@@ -167,6 +169,22 @@ export function ThumbnailPane({ state, actions, width, onContextMenu, onSectionM
         );
       })}
       {dropAt === pres.slides.length && <div className="thumb-drop" />}
+      {pres.slides.length > 0 && (
+        <button
+          type="button"
+          className="thumb-add"
+          style={{ width: thumbW + 2 }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => actions.appendSlide()}
+          aria-label="Yeni slayt ekle"
+          {...tipProps("Yeni Slayt", undefined, "Sununun sonuna yeni bir slayt ekler.")}
+        >
+          <span className="thumb-add-icon">
+            <Add16Regular />
+          </span>
+          <span className="thumb-add-label">Yeni slayt</span>
+        </button>
+      )}
       {pres.slides.length === 0 && (
         <button type="button" className="thumb-empty" onClick={() => actions.newSlide()}>
           Yeni slayt eklemek için tıklayın

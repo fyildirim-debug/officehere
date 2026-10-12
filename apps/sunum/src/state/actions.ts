@@ -109,6 +109,13 @@ export class Actions {
     this.store.commit((p) => ({ ...p, slides: [...p.slides.slice(0, at), slide, ...p.slides.slice(at)] }), { slideIdx: at, sel: [], editing: null });
   }
 
+  /** Sununun sonuna yeni slayt ekler (küçük resim bölmesindeki + düğmesi); düzen son slayttan alınır. */
+  appendSlide() {
+    const last = this.s.pres.slides.length - 1;
+    if (last >= 0 && this.s.slideIdx !== last) this.goToSlide(last);
+    this.newSlide();
+  }
+
   duplicateSlides(ids = this.selectedSlideIds()) {
     if (inMasterView(this)) return masterDuplicateLayout(this);
     const s = this.s;

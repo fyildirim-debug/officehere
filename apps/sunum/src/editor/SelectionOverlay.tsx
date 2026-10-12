@@ -1,6 +1,6 @@
 /** Seçim çerçeveleri, boyut/döndürme/ayar tutamaçları ve kılavuz çizgileri (ekran koordinatlarında). */
 import type { GeomOverride } from "../render/SlideView";
-import { isLineGeom } from "../render/geometry";
+import { isLineGeom, presetGeometry } from "../render/geometry";
 import type { Shape } from "../model/types";
 import { ADJUST_HANDLES, effectiveAdj } from "./adjust";
 import { cursorFor, HANDLES, lineEnds, rotateVec } from "./interact";
@@ -15,7 +15,7 @@ export interface OverlayProps {
   parentGroup?: Shape | null;
   guides: GuideLine[];
   lasso: { x: number; y: number; w: number; h: number } | null;
-  preview: { x: number; y: number; w: number; h: number; line?: boolean; flipH?: boolean; flipV?: boolean } | null;
+  preview: { x: number; y: number; w: number; h: number; line?: boolean; flipH?: boolean; flipV?: boolean; geom?: string } | null;
   animBadges?: { shape: Shape; labels: string[] }[];
   cellSel?: { shape: Shape; rects: { x: number; y: number; w: number; h: number }[] } | null;
   rotInfo?: { x: number; y: number; text: string } | null;
@@ -130,6 +130,8 @@ export function SelectionOverlay({ shapes, overrides, zoom: z, editingId, parent
               y2={preview.flipV ? 0 : preview.h * z}
             />
           </svg>
+        ) : preview.geom ? (
+          <ShapePreview geom={preview.geom} x={preview.x * z} y={preview.y * z} w={preview.w * z} h={preview.h * z} />
         ) : (
           <div className="insert-preview" style={{ left: preview.x * z, top: preview.y * z, width: preview.w * z, height: preview.h * z }} />
         ))}
@@ -143,3 +145,16 @@ export function SelectionOverlay({ shapes, overrides, zoom: z, editingId, parent
 }
 
 export { rotateVec };
+
+/** Çizilmekte olan şeklin önizlemesi: gerçek geometri, ince kenar ve yarı saydam dolgu. */
+function ShapePreview({ geom, x, y, w, h }: { geom: string; x: number; y: number; w: number; h: number }) {
+  if (w < 1 && h < 1) return null;
+  const g = presetGeometry(geom, Math.max(1, w), Math.max(1, h));
+  return (
+    <svg className="insert-preview-shape" style={{ left: x, top: y }} width={Math.max(1, w)} height={Math.max(1, h)} overflow="visible" aria-hidden="true">
+      {g.paths.map((p, i) => (
+        <path key={i} d={p.d} fillRule={p.evenodd ? "evenodd" : undefined} className={g.open || p.fill === "none" ? "is-open" : undefined} />
+      ))}
+    </svg>
+  );
+}

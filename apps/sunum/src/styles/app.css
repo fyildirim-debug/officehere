@@ -103,6 +103,75 @@
   top: 1px;
 }
 
+/* Son küçük resmin altında yeni slayt düğmesi: küçük resimlerle aynı hizada, sakin; üzerine gelince vurgu renginde. */
+.thumb-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  margin: 6px 0 0 34px;
+  padding: 0;
+  border: 1px dashed color-mix(in srgb, var(--oh-text) 24%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--oh-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease,
+    translate 0.2s var(--oh-ease-out);
+}
+
+.thumb-add-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--oh-text) 9%, transparent);
+  color: var(--oh-text);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.thumb-add-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.thumb-add:hover,
+.thumb-add:focus-visible {
+  border-style: solid;
+  border-color: var(--oh-accent);
+  background: color-mix(in srgb, var(--oh-accent) 8%, transparent);
+  color: var(--oh-text);
+  translate: 0 -1px;
+}
+
+.thumb-add:hover .thumb-add-icon,
+.thumb-add:focus-visible .thumb-add-icon {
+  background: var(--oh-accent);
+  color: var(--oh-accent-fg);
+}
+
+.thumb-add:active {
+  translate: 0;
+  background: color-mix(in srgb, var(--oh-accent) 14%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb-add,
+  .thumb-add:hover,
+  .thumb-add:focus-visible {
+    translate: none;
+  }
+}
+
 .thumb-empty {
   margin: 20px 10px;
   padding: 10px;
