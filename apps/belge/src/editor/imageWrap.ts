@@ -132,7 +132,12 @@ export function arrange(editor: Editor, dir: "forward" | "front" | "backward" | 
 
 export interface PositionPreset {
   id: string;
+  /** Tam ad (erişilebilir ad): "Sol Üst, Kare Metin Kaydırma ile". */
   label: string;
+  /** Kısa ad (galeri ipucu): "Sol Üst". */
+  short: string;
+  /** Kaydırma biçimi: ortadaki sütun üst ve alt, yanlar kare kaydırmayla yerleşir. */
+  wrapLabel: string;
   v: "top" | "middle" | "bottom";
   h: "left" | "center" | "right";
 }
@@ -141,8 +146,36 @@ const V_LABEL = { top: "Üst", middle: "Orta", bottom: "Alt" };
 const H_LABEL = { left: "Sol", center: "Orta", right: "Sağ" };
 
 export const POSITION_PRESETS: PositionPreset[] = (["top", "middle", "bottom"] as const).flatMap((v) =>
-  (["left", "center", "right"] as const).map((h) => ({ id: `${v}-${h}`, label: `${V_LABEL[v]} ${H_LABEL[h]}, Kare Metin Kaydırma ile`, v, h })),
+  (["left", "center", "right"] as const).map((h) => {
+    const short = v === "middle" && h === "center" ? "Orta" : `${H_LABEL[h]} ${V_LABEL[v]}`;
+    const wrapLabel = h === "center" ? "Üst ve Alt Metin Kaydırma ile" : "Kare Metin Kaydırma ile";
+    return { id: `${v}-${h}`, label: `${short}, ${wrapLabel}`, short, wrapLabel, v, h };
+  }),
 );
+
+/** Resmin sayfadaki yeri: üst kenarı içeriğin üstüne, ortası ortasına, alt kenarı altına en yakın olan. */
+export function nearestVertical(img: { top: number; bottom: number }, content: { top: number; bottom: number }): PositionPreset["v"] {
+  const d = {
+    top: Math.abs(img.top - content.top),
+    middle: Math.abs((img.top + img.bottom) / 2 - (content.top + content.bottom) / 2),
+    bottom: Math.abs(img.bottom - content.bottom),
+  };
+  return d.top <= d.middle && d.top <= d.bottom ? "top" : d.middle <= d.bottom ? "middle" : "bottom";
+}
+
+/**
+ * Konum galerisinde seçili öğe: satır içi resim "inline"; Konum'un bıraktığı yerleşim (kare sol/sağ ya da
+ * üst-alt orta, uzaklıklar sıfır) dikey yerle birlikte önayar kimliği; elle taşınmış resimde null.
+ */
+export function positionPresetId(attrs: Partial<WrapAttrs>, v: PositionPreset["v"] | null): string | null {
+  const wrap = attrs.wrap ?? "inline";
+  if (wrap === "inline") return "inline";
+  if (!v || attrs.posX || attrs.posY) return null;
+  const side = attrs.floatSide ?? "left";
+  if (wrap === "square" && side !== "center") return `${v}-${side}`;
+  if (wrap === "topBottom" && side === "center") return `${v}-center`;
+  return null;
+}
 
 /**
  * Konum: resim imlecin bulunduğu sayfanın üst/orta/alt kısmındaki paragrafa taşınır ve kare metin

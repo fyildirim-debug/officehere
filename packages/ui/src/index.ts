@@ -22,3 +22,5 @@ export * from "./hooks/autoSaveCore";
 export * from "./hooks/useAutoSave";
 export * from "./components/MiniToolbar";
 export * from "./components/DeveloperCredit";
+export * from "./components/ArrangeIcons";
+export * from "./components/MenuGallery";

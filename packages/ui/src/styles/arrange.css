@@ -1,0 +1,56 @@
+/* Yerleşim çizimleri (Metni Kaydır, Konum, Öne Getir / Arkaya Gönder, Hizala) ve menü galerisi */
+
+/* Koyu temalarda vurgu açılır, sayfa zemini menüden bir ton açık olur (çizimler okunur kalsın). */
+:root[data-oh-theme="dark"],
+:root[data-oh-theme="black"] {
+  --oh-arrange-accent: color-mix(in srgb, var(--oh-accent) 55%, #ffffff);
+  --oh-arrange-page: #3d3d3d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-oh-theme="system"] {
+    --oh-arrange-accent: color-mix(in srgb, var(--oh-accent) 55%, #ffffff);
+    --oh-arrange-page: #3d3d3d;
+  }
+}
+
+.oh-arrange-icon {
+  display: block;
+  flex: none;
+  overflow: visible;
+}
+
+/* Menüde çizim kendi boyutunda görünür (16 px'e sıkıştırılmaz). */
+.oh-menu-icon:has(> .oh-arrange-icon) {
+  width: auto;
+  min-width: 20px;
+}
+
+.oh-menu-icon > svg.oh-arrange-icon {
+  width: auto;
+  height: auto;
+}
+
+.oh-menu-item:disabled .oh-arrange-icon {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.oh-rbtn:disabled .oh-arrange-icon,
+.oh-split.is-disabled .oh-arrange-icon {
+  filter: grayscale(1);
+}
+
+/* Menü içi önizleme ızgarası */
+.oh-menu-gallery {
+  display: grid;
+  gap: 4px;
+  padding: 2px 6px 6px;
+}
+
+.oh-menu-gallery .oh-gallery-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--oh-float-item-radius, 6px);
+}

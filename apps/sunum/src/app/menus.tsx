@@ -9,8 +9,6 @@ import {
   EyeOff20Regular,
   Group20Regular,
   PaintBucket20Regular,
-  PositionBackward20Regular,
-  PositionForward20Regular,
   SlideAdd20Regular,
   SlideLayout20Regular,
   SlideMultiple20Regular,
@@ -25,7 +23,7 @@ import {
   ArrowCollapseAll20Regular,
   ArrowExpandAll20Regular,
 } from "@fluentui/react-icons";
-import { Menu, MenuItem, MenuSeparator } from "@officehere/ui";
+import { LayerIcon, Menu, MenuItem, MenuSeparator } from "@officehere/ui";
 import { LayoutGallery } from "../ribbon/common";
 import type { Actions } from "../state/actions";
 import type { AppCommands } from "../ribbon/types";
@@ -83,22 +81,22 @@ export function shapeMenu(a: Actions, cmd: AppCommands, openDialog: (d: "sizePos
         }
       />
       <MenuItem
-        icon={<PositionForward20Regular />}
+        icon={<LayerIcon kind="forward" />}
         label="Öne Getir"
         submenu={
           <Menu>
-            <MenuItem label="En Öne Getir" onClick={() => a.reorderSelection("front")} />
-            <MenuItem label="Öne Getir" onClick={() => a.reorderSelection("forward")} />
+            <MenuItem icon={<LayerIcon kind="front" />} label="En Öne Getir" onClick={() => a.reorderSelection("front")} />
+            <MenuItem icon={<LayerIcon kind="forward" />} label="Öne Getir" onClick={() => a.reorderSelection("forward")} />
           </Menu>
         }
       />
       <MenuItem
-        icon={<PositionBackward20Regular />}
+        icon={<LayerIcon kind="backward" />}
         label="Arkaya Gönder"
         submenu={
           <Menu>
-            <MenuItem label="En Arkaya Gönder" onClick={() => a.reorderSelection("back")} />
-            <MenuItem label="Arkaya Gönder" onClick={() => a.reorderSelection("backward")} />
+            <MenuItem icon={<LayerIcon kind="back" />} label="En Arkaya Gönder" onClick={() => a.reorderSelection("back")} />
+            <MenuItem icon={<LayerIcon kind="backward" />} label="Arkaya Gönder" onClick={() => a.reorderSelection("backward")} />
           </Menu>
         }
       />

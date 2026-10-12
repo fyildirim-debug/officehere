@@ -1,7 +1,6 @@
 /** Bağlamsal sekmeler: Şekil Biçimi ve Resim Biçimi. */
 import { useState } from "react";
 import {
-  AlignLeft24Regular,
   ArrowRotateClockwise24Regular,
   BrightnessHigh24Regular,
   Color24Regular,
@@ -11,8 +10,6 @@ import {
   ImageArrowCounterclockwise20Regular,
   ImageEdit20Regular,
   LayerDiagonal20Regular,
-  PositionBackward24Regular,
-  PositionForward24Regular,
   TextColor20Regular,
   TextEffects20Regular,
   ColorLine20Regular,
@@ -25,7 +22,7 @@ import {
   ResizeLarge24Regular,
   Shapes24Regular,
   TextEffects24Regular, ArrowMinimize20Regular } from "@fluentui/react-icons";
-import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonSplitButton, RibbonStack, useMenuClose } from "@officehere/ui";
+import { AlignIcon, LayerIcon, Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonSplitButton, RibbonStack, useMenuClose } from "@officehere/ui";
 import { cssColor } from "../model/color";
 import type { Color, PicShape, Shape } from "../model/types";
 import { applyRun } from "../state/textActions";
@@ -46,32 +43,32 @@ function ArrangeGroup({ ctx }: { ctx: RibbonCtx }) {
     <RibbonGroup label="Yerleştir" icon={<Shapes24Regular />}>
       <RibbonSplitButton
         size="large"
-        icon={<PositionForward24Regular />}
+        icon={<LayerIcon kind="forward" size={32} />}
         label="Öne Getir"
         onClick={() => a.reorderSelection("forward")}
         menu={
           <Menu>
-            <MenuItem label="Öne Getir" onClick={() => a.reorderSelection("forward")} />
-            <MenuItem label="En Öne Getir" onClick={() => a.reorderSelection("front")} />
+            <MenuItem icon={<LayerIcon kind="forward" />} label="Öne Getir" onClick={() => a.reorderSelection("forward")} />
+            <MenuItem icon={<LayerIcon kind="front" />} label="En Öne Getir" onClick={() => a.reorderSelection("front")} />
           </Menu>
         }
       />
       <RibbonSplitButton
         size="large"
-        icon={<PositionBackward24Regular />}
+        icon={<LayerIcon kind="backward" size={32} />}
         label="Arkaya Gönder"
         onClick={() => a.reorderSelection("backward")}
         menu={
           <Menu>
-            <MenuItem label="Arkaya Gönder" onClick={() => a.reorderSelection("backward")} />
-            <MenuItem label="En Arkaya Gönder" onClick={() => a.reorderSelection("back")} />
+            <MenuItem icon={<LayerIcon kind="backward" />} label="Arkaya Gönder" onClick={() => a.reorderSelection("backward")} />
+            <MenuItem icon={<LayerIcon kind="back" />} label="En Arkaya Gönder" onClick={() => a.reorderSelection("back")} />
           </Menu>
         }
       />
       <RibbonStack>
         <RibbonButton icon={<LayerDiagonal20Regular />} label="Seçim Bölmesi" checked={ctx.state.pane === "selection"} onClick={() => cmd.togglePane("selection")} />
         <RibbonMenuButton
-          icon={<AlignLeft24Regular />}
+          icon={<AlignIcon kind="left" />}
           label="Hizala"
           menu={
             <Menu>

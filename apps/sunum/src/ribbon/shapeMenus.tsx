@@ -10,24 +10,12 @@ import {
   Group20Regular,
   GroupDismiss20Regular,
   Image20Regular,
-  PositionBackward20Regular,
-  PositionForward20Regular,
-  PositionToBack20Regular,
-  PositionToFront20Regular,
   Shapes32Regular,
   TextEffects20Regular,
-  AlignLeft20Regular,
-  AlignCenterHorizontal20Regular,
-  AlignRight20Regular,
-  AlignTop20Regular,
-  AlignCenterVertical20Regular,
-  AlignBottom20Regular,
-  AlignSpaceEvenlyHorizontal20Regular,
-  AlignSpaceEvenlyVertical20Regular,
   LayerDiagonal20Regular,
   ArrowSort20Regular,
 } from "@fluentui/react-icons";
-import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonMenuButton, useMenuClose } from "@officehere/ui";
+import { AlignIcon, LayerIcon, Menu, MenuHeader, MenuItem, MenuSeparator, RibbonMenuButton, useMenuClose } from "@officehere/ui";
 import { cssColor } from "../model/color";
 import type { Color, Fill, Line, Shape, Theme } from "../model/types";
 import { fillToCss } from "../render/style";
@@ -361,16 +349,16 @@ export function AlignItems({ a }: { a: Actions }) {
   const [toSlide, setToSlide] = useState(a.s.sel.length < 2);
   return (
     <>
-      <MenuItem icon={<AlignLeft20Regular />} label="Sola Hizala" onClick={() => a.alignSelection("left", toSlide)} />
-      <MenuItem icon={<AlignCenterHorizontal20Regular />} label="Ortala" onClick={() => a.alignSelection("center", toSlide)} />
-      <MenuItem icon={<AlignRight20Regular />} label="Sağa Hizala" onClick={() => a.alignSelection("right", toSlide)} />
+      <MenuItem icon={<AlignIcon kind="left" />} label="Sola Hizala" onClick={() => a.alignSelection("left", toSlide)} />
+      <MenuItem icon={<AlignIcon kind="center" />} label="Ortala" onClick={() => a.alignSelection("center", toSlide)} />
+      <MenuItem icon={<AlignIcon kind="right" />} label="Sağa Hizala" onClick={() => a.alignSelection("right", toSlide)} />
       <MenuSeparator />
-      <MenuItem icon={<AlignTop20Regular />} label="Üste Hizala" onClick={() => a.alignSelection("top", toSlide)} />
-      <MenuItem icon={<AlignCenterVertical20Regular />} label="Ortaya Hizala" onClick={() => a.alignSelection("middle", toSlide)} />
-      <MenuItem icon={<AlignBottom20Regular />} label="Alta Hizala" onClick={() => a.alignSelection("bottom", toSlide)} />
+      <MenuItem icon={<AlignIcon kind="top" />} label="Üste Hizala" onClick={() => a.alignSelection("top", toSlide)} />
+      <MenuItem icon={<AlignIcon kind="middle" />} label="Ortaya Hizala" onClick={() => a.alignSelection("middle", toSlide)} />
+      <MenuItem icon={<AlignIcon kind="bottom" />} label="Alta Hizala" onClick={() => a.alignSelection("bottom", toSlide)} />
       <MenuSeparator />
-      <MenuItem icon={<AlignSpaceEvenlyHorizontal20Regular />} label="Yatay Olarak Dağıt" onClick={() => a.alignSelection("distH", toSlide)} />
-      <MenuItem icon={<AlignSpaceEvenlyVertical20Regular />} label="Dikey Olarak Dağıt" onClick={() => a.alignSelection("distV", toSlide)} />
+      <MenuItem icon={<AlignIcon kind="distH" />} label="Yatay Olarak Dağıt" onClick={() => a.alignSelection("distH", toSlide)} />
+      <MenuItem icon={<AlignIcon kind="distV" />} label="Dikey Olarak Dağıt" onClick={() => a.alignSelection("distV", toSlide)} />
       <MenuSeparator />
       <MenuItem label="Slayda Hizala" checked={toSlide} keepOpen onClick={() => setToSlide(true)} />
       <MenuItem label="Seçili Nesneleri Hizala" checked={!toSlide} disabled={a.s.sel.length < 2} keepOpen onClick={() => setToSlide(false)} />
@@ -402,10 +390,10 @@ export function ArrangeMenu({ a, onSelectionPane, onMoreRotate }: { a: Actions; 
   return (
     <Menu className="menu-wide">
       <MenuHeader>Nesneleri Sırala</MenuHeader>
-      <MenuItem icon={<PositionToFront20Regular />} label="En Öne Getir" disabled={!has} onClick={() => a.reorderSelection("front")} />
-      <MenuItem icon={<PositionToBack20Regular />} label="En Arkaya Gönder" disabled={!has} onClick={() => a.reorderSelection("back")} />
-      <MenuItem icon={<PositionForward20Regular />} label="Öne Getir" disabled={!has} onClick={() => a.reorderSelection("forward")} />
-      <MenuItem icon={<PositionBackward20Regular />} label="Arkaya Gönder" disabled={!has} onClick={() => a.reorderSelection("backward")} />
+      <MenuItem icon={<LayerIcon kind="front" />} label="En Öne Getir" disabled={!has} onClick={() => a.reorderSelection("front")} />
+      <MenuItem icon={<LayerIcon kind="back" />} label="En Arkaya Gönder" disabled={!has} onClick={() => a.reorderSelection("back")} />
+      <MenuItem icon={<LayerIcon kind="forward" />} label="Öne Getir" disabled={!has} onClick={() => a.reorderSelection("forward")} />
+      <MenuItem icon={<LayerIcon kind="backward" />} label="Arkaya Gönder" disabled={!has} onClick={() => a.reorderSelection("backward")} />
       <MenuHeader>Grup Nesneleri</MenuHeader>
       <MenuItem icon={<Group20Regular />} label="Grupla" shortcut="Ctrl+G" disabled={!a.canGroup()} onClick={() => a.groupSelection()} />
       <MenuItem icon={<GroupDismiss20Regular />} label="Grubu Çöz" shortcut="Ctrl+Shift+G" disabled={!shapes.some((s) => s.kind === "group")} onClick={() => a.ungroupSelection()} />
