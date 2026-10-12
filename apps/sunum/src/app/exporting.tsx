@@ -3,13 +3,13 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import JSZip from "jszip";
-import { downloadBlob } from "@officehere/core";
+import { downloadBlob, getNative } from "@officehere/core";
 import type { Presentation } from "../model/types";
 import { SlideView } from "../render/SlideView";
 import slideCss from "../styles/slide.css?raw";
 
 /** Yazdırma kökü: yalnız yazdırmada görünür; @page boyutu slayt oranındadır. */
-export function PrintRoot({ pres, onDone, includeHidden = false }: { pres: Presentation; onDone: () => void; includeHidden?: boolean }) {
+export function PrintRoot({ pres, onDone, includeHidden = false, onReady }: { pres: Presentation; onDone: () => void; includeHidden?: boolean; onReady?: () => Promise<void> }) {
   useEffect(() => {
     const style = document.createElement("style");
     style.textContent = `@page { size: ${(pres.width / 96) * 2.54}cm ${(pres.height / 96) * 2.54}cm; margin: 0; }`;
@@ -21,6 +21,11 @@ export function PrintRoot({ pres, onDone, includeHidden = false }: { pres: Prese
     Promise.all(imgs.map((i) => (i.complete ? Promise.resolve() : new Promise((r) => ((i.onload = r), (i.onerror = r)))))).then(() =>
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
+          if (onReady) {
+            // Masaüstü: yazdırma CSS'iyle doğrudan PDF (pencere açmadan).
+            void onReady().finally(after);
+            return;
+          }
           window.print();
           // Bazı tarayıcılar afterprint göndermez.
           window.setTimeout(after, 500);
@@ -117,4 +122,15 @@ export function outlineText(pres: Presentation): string {
     lines.push("");
   });
   return lines.join("\r\n");
+}
+
+/** Masaüstü kabuğunda slaytları doğrudan PDF'e yazar (her slayt bir yatay sayfa). */
+export async function exportPdfNative(pres: Presentation, baseName: string): Promise<string | null> {
+  const native = getNative();
+  if (!native?.exportPdf) return null;
+  const w = pres.width / 96;
+  const h = pres.height / 96;
+  // Kâğıt boyutu dikey verilir, yönlendirme "landscape" ile döndürülür; @page boyutu önceliklidir.
+  const r = await native.exportPdf(`${baseName}.pdf`, { landscape: w >= h, pageSize: { width: Math.min(w, h), height: Math.max(w, h) } });
+  return r?.name ?? null;
 }

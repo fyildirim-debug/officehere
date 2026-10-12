@@ -238,8 +238,20 @@ export interface PicAdjust {
   alpha?: number;
 }
 
+export interface MediaInfo {
+  kind: "video" | "audio";
+  /** data: URL */
+  src: string;
+  mime: string;
+  /** Gösteride slayt açılınca kendiliğinden başlasın. */
+  autoPlay?: boolean;
+  loop?: boolean;
+}
+
 export interface PicShape extends ShapeBase {
   kind: "pic";
+  /** Video/ses: resim, ortamın kapak (poster) görüntüsüdür. */
+  media?: MediaInfo;
   src: string;
   crop?: { l: number; t: number; r: number; b: number };
   geom?: string;
@@ -293,7 +305,31 @@ export interface GroupShape extends ShapeBase {
   children: Shape[];
 }
 
-export type Shape = SpShape | PicShape | TableShape | GroupShape;
+export type ChartType = "col" | "bar" | "line" | "pie" | "doughnut" | "area";
+
+export interface ChartSeries {
+  name: string;
+  values: (number | null)[];
+  color?: Color;
+}
+
+export interface ChartData {
+  type: ChartType;
+  /** Grafik başlığı; boşsa tek seride seri adı, değilse "Grafik Başlığı". */
+  title?: string;
+  showTitle: boolean;
+  categories: string[];
+  series: ChartSeries[];
+  legend: "b" | "t" | "l" | "r" | "none";
+  dataLabels?: boolean;
+}
+
+export interface ChartShape extends ShapeBase {
+  kind: "chart";
+  chart: ChartData;
+}
+
+export type Shape = SpShape | PicShape | TableShape | GroupShape | ChartShape;
 
 export type TransitionType =
   | "none"
@@ -361,6 +397,8 @@ export interface Slide {
   transition?: Transition;
   animations: Animation[];
   comments?: Comment[];
+  /** Bu slayttan başlayan bölüm (PowerPoint 2010+ bölümleri). */
+  section?: { id: string; name: string };
 }
 
 export type LayoutType =
@@ -435,4 +473,6 @@ export interface Presentation {
   slides: Slide[];
   headerFooter: HeaderFooter;
   props: DocProps;
+  /** Asıl slayt/düzenler elle düzenlendi (slayt boyutu değişince yeniden üretilmez). */
+  masterEdited?: boolean;
 }

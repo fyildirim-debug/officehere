@@ -137,7 +137,21 @@ export function useKeyboard(actions: Actions, h: KeyHandlers) {
         if (sh.kind === "sp" && sh.geom !== "line" && sh.geom !== "straightConnector1") return run(() => actions.startEditing({ shapeId: sh.id, replaceWith: key }));
       }
     };
+    // Şeritteki kutularda Enter/Esc sonrası odak belgeye döner (kısayollar yeniden çalışsın).
+    const onRibbonKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if ((e.key !== "Enter" && e.key !== "Escape") || t?.tagName !== "INPUT" || !t.closest(".oh-ribbon")) return;
+      window.setTimeout(() => {
+        if (document.activeElement !== t) return;
+        if (actions.s.editing && actions.textHandle) actions.textHandle.focus();
+        else t.blur();
+      }, 0);
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onRibbonKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onRibbonKey);
+    };
   }, [actions]);
 }

@@ -4,6 +4,7 @@ import type { Presentation } from "../model/types";
 import { readPptx } from "../io/pptxReader";
 import { writePptx } from "../io/pptxWriter";
 import type { Actions } from "../state/actions";
+import { abortMasterView, documentPres } from "../state/masterActions";
 import { TEMPLATES } from "../templates/templates";
 
 export const PPTX_FILTERS: FileFilter[] = [{ name: "Sunu", extensions: ["pptx"] }];
@@ -16,6 +17,7 @@ export function nextUntitled(): string {
 }
 
 export function loadPresentation(a: Actions, pres: Presentation, fileName: string, fileRef: FileRef | null) {
+  abortMasterView(a);
   a.store.set({
     pres,
     slideIdx: 0,
@@ -34,6 +36,8 @@ export function loadPresentation(a: Actions, pres: Presentation, fileName: strin
     fit: true,
     message: null,
     ribbonTab: "home",
+    collapsedSections: [],
+    masterBase: null,
   });
   a.store.resetHistory();
 }
@@ -88,7 +92,8 @@ export async function save(a: Actions, forceAs = false): Promise<boolean> {
   const s = a.s;
   a.stopEditing();
   try {
-    const bytes = await writePptx({ ...s.pres, props: { ...s.pres.props, title: s.pres.props.title || s.fileName } });
+    const doc = documentPres(a);
+    const bytes = await writePptx({ ...doc, props: { ...doc.props, title: doc.props.title || s.fileName } });
     const name = `${s.fileName}.pptx`;
     const ref = forceAs || !s.fileRef ? await saveFileAs(name, PPTX_FILTERS, bytes) : await saveFile(s.fileRef, name, PPTX_FILTERS, bytes);
     if (!ref) return false;

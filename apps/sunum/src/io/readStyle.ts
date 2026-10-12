@@ -1,6 +1,7 @@
 /** DrawingML renk, dolgu, çizgi ve efekt okuyucuları. */
 import type {
   ArrowType,
+  ChartData,
   Color,
   DashType,
   Effects,
@@ -24,6 +25,10 @@ export interface ReadCtx {
   /** Tema satır kalınlıkları (lnStyleLst, pt). */
   lnWidths: number[];
   phClr?: Color;
+  /** Grafik parçaları (paket yolu → veri). */
+  charts?: Map<string, ChartData>;
+  /** Tema efekt stilleri (effectStyleLst; effectRef idx-1). */
+  effectStyles?: (Effects | undefined)[];
 }
 
 export const DEFAULT_CLRMAP: Record<string, SchemeColorName> = {

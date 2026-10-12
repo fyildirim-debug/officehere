@@ -2,6 +2,8 @@
 import { uid } from "../model/factory";
 import type {
   CellBorder,
+  ChartShape,
+  MediaInfo,
   CustomPath,
   Effects,
   Fill,
@@ -17,7 +19,7 @@ import type {
 } from "../model/types";
 import { isLineGeom } from "../render/geometry";
 import { tableStyleByGuid, DEFAULT_TABLE_STYLE } from "../render/tableStyles";
-import { attr, boolAttr, descendants, fromEmu, kid, kidPath, kids, numAttr } from "./xml";
+import { attr, boolAttr, descendants, fromEmu, kid, kidPath, kids, numAttr, relId } from "./xml";
 
 import { type ReadCtx, readColor, mediaFor, readFill, readLine, readEffects } from "./readStyle";
 import { readHlink, readTextBody } from "./readText";
@@ -197,7 +199,10 @@ function styleRefs(style: Element | undefined, ctx: ReadCtx) {
   const line: Line | undefined = lnRef ? (lnIdx > 0 && lnColor ? { fill: { type: "solid", color: lnColor }, width: ctx.lnWidths[lnIdx - 1] ?? 1, dash: "solid" } : { fill: { type: "none" }, width: 1, dash: "solid" }) : undefined;
   const fontColor = readColor(fontRef, ctx);
   const fontIdx = attr(fontRef, "idx");
-  const effects: Effects | undefined = (numAttr(fx, "idx") ?? 0) >= 3 ? { shadow: { color: { rgb: "#000000", alpha: 0.4 }, blur: 4, dist: 2, dir: 90 } } : undefined;
+  // effectRef: tema efekt stili (effectStyleLst); tema okunamadıysa 3. stil gölge sayılır.
+  const fxIdx = numAttr(fx, "idx") ?? 0;
+  const themeFx = ctx.effectStyles ? ctx.effectStyles[fxIdx - 1] : fxIdx >= 3 ? { shadow: { color: { rgb: "#000000", alpha: 0.4 }, blur: 4, dist: 2, dir: 90 } } : undefined;
+  const effects: Effects | undefined = fxIdx > 0 && themeFx ? structuredClone(themeFx) : undefined;
   return { fill, line, fontColor, font: fontIdx === "major" ? "+mj" : fontIdx === "minor" ? "+mn" : undefined, effects };
 }
 
@@ -239,7 +244,8 @@ function readSp(el: Element, ctx: ReadCtx, connector: boolean): SpShape {
     paths: geomEl ? g.paths : inh?.paths,
     fill,
     line,
-    effects: readEffects(spPr, ctx) ?? st.effects,
+    // Açık (boş da olsa) effectLst stil başvurusunu geçersiz kılar.
+    effects: kid(spPr, "effectLst") ? readEffects(spPr, ctx) : (st.effects ?? inh?.effects),
     text,
     ph: info.ph,
     txBox: info.txBox,
@@ -271,8 +277,24 @@ function readPic(el: Element, ctx: ReadCtx): PicShape {
     alpha: amt !== undefined ? amt / 100000 : undefined,
   };
   const g = readGeom(spPr);
+  // Video/ses (a:videoFile / a:audioFile, p14:media).
+  const nvPr = kidPath(el, "nvPicPr", "nvPr");
+  const vf = kid(nvPr, "videoFile") ?? kid(nvPr, "audioFile");
+  let media: MediaInfo | undefined;
+  if (vf) {
+    const embed = descendants(nvPr, "media")[0];
+    const rel = ctx.rels.get(relId(embed) ?? "") ?? ctx.rels.get(attr(vf, "link") ?? "");
+    const data = rel && !rel.external ? ctx.media.get(rel.target) : undefined;
+    if (data) {
+      media = { kind: vf.localName === "videoFile" ? "video" : "audio", src: data, mime: /^data:([^;,]+)/.exec(data)?.[1] ?? "" };
+      const opt = descendants(nvPr, "media").find((m) => m !== embed);
+      if (opt && boolAttr(opt, "autoPlay")) media.autoPlay = true;
+      if (opt && boolAttr(opt, "loop")) media.loop = true;
+    }
+  }
   return {
     kind: "pic",
+    media,
     id: info.id,
     name: info.name,
     descr: info.descr,
@@ -410,6 +432,14 @@ function readShapeEl(el: Element, ctx: ReadCtx): Shape | undefined {
     case "graphicFrame": {
       const tbl = descendants(el, "tbl")[0];
       if (tbl) return readTable(el, tbl, ctx);
+      const chartRef = descendants(el, "chart")[0];
+      const chartRel = chartRef ? ctx.rels.get(relId(chartRef) ?? "") : undefined;
+      const chart = chartRel && !chartRel.external ? ctx.charts?.get(chartRel.target) : undefined;
+      if (chart) {
+        const info = nvProps(kid(el, "nvGraphicFramePr"), ctx);
+        const xf = readXfrm(kid(el, "xfrm"));
+        return { kind: "chart", id: info.id, name: info.name || "Grafik", descr: info.descr, hidden: info.hidden, link: info.link, x: xf?.x ?? 0, y: xf?.y ?? 0, w: xf?.w ?? 0, h: xf?.h ?? 0, rot: xf?.rot ?? 0, chart: structuredClone(chart) } satisfies ChartShape;
+      }
       // Grafik/diyagram: yedek resim varsa onu kullan.
       const pic = descendants(el, "pic")[0];
       if (pic) {

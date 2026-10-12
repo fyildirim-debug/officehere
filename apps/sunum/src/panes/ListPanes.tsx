@@ -163,6 +163,9 @@ export function CommentsPane({ state, actions: a, onClose }: { state: AppState; 
           <textarea
             value={c.text}
             placeholder="Açıklama yazın..."
+            aria-label="Açıklama"
+            // Yeni eklenen açıklamaya hemen yazılabilsin.
+            autoFocus={!c.text && Date.now() - c.date < 3000}
             rows={3}
             style={{ width: "100%", resize: "vertical", border: "1px solid var(--oh-border)", borderRadius: 4, padding: 6, background: "var(--oh-surface)" }}
             onChange={(e) => update(c.id, e.target.value)}

@@ -2,6 +2,8 @@
 import type {
   BulletDef,
   CellBorder,
+  ChartData,
+  ChartShape,
   Color,
   CustomPath,
   Effects,
@@ -20,11 +22,18 @@ import type {
 } from "../model/types";
 import { isLineGeom } from "../render/geometry";
 import { tableStyleById } from "../render/tableStyles";
-import { attrs, emu, esc, REL, type RelsBuilder } from "./xml";
+import { attrs, emu, esc, MEDIA_EXT_URI, NS, OH_EXT_URI, REL, type RelsBuilder } from "./xml";
 
 export interface MediaStore {
   /** data URL → paket yolu ("ppt/media/image1.png"). */
   add(dataUrl: string): string | null;
+  /** Video/ses dosyası → paket yolu ("ppt/media/media1.mp4"). */
+  addMedia?(dataUrl: string): string | null;
+}
+
+export interface ChartStore {
+  /** Grafik parçasını kaydeder, paket yolunu döndürür ("ppt/charts/chart1.xml"). */
+  add(chart: ChartData): string;
 }
 
 export interface WriteCtx {
@@ -38,6 +47,7 @@ export interface WriteCtx {
   slideContent: boolean;
   /** Slayt kimliği → slayt numarası (1 tabanlı), sunu içi köprüler için. */
   slideNumbers?: Map<string, number>;
+  charts?: ChartStore;
 }
 
 const JUMP_ACTIONS: Record<string, string> = {
@@ -82,7 +92,7 @@ export function colorXml(c: Color, ctx?: { slideContent: boolean }): string {
   return mods ? `<a:srgbClr val="${hex}">${mods}</a:srgbClr>` : `<a:srgbClr val="${hex}"/>`;
 }
 
-function relativeTarget(fromPart: string, target: string): string {
+export function relativeTarget(fromPart: string, target: string): string {
   const from = fromPart.split("/");
   from.pop();
   const to = target.split("/");
@@ -337,8 +347,22 @@ export function picXml(s: PicShape, ctx: WriteCtx): string {
   const c = s.crop;
   const src = c && (c.l || c.t || c.r || c.b) ? `<a:srcRect${attrs({ l: c.l ? pct(c.l) : undefined, t: c.t ? pct(c.t) : undefined, r: c.r ? pct(c.r) : undefined, b: c.b ? pct(c.b) : undefined })}/>` : "";
   const blip = rid ? `<a:blip r:embed="${rid}">${blipInner}</a:blip>` : "<a:blip/>";
+  let nvPr = phXml(s);
+  let cnv = cNvPr(s, ctx);
+  const mediaPath = s.media && ctx.media.addMedia ? ctx.media.addMedia(s.media.src) : null;
+  if (s.media && mediaPath) {
+    // Video/ses: a:videoFile/a:audioFile bağlantısı + p14:media gömülü ortam (ECMA-376 §20.1.3, PowerPoint 2010 uzantısı).
+    const target = relativeTarget(ctx.part, mediaPath);
+    const linkRid = ctx.rels.add(s.media.kind === "video" ? REL.video : REL.audio, target);
+    const embedRid = ctx.rels.add(REL.media, target);
+    const tag = s.media.kind === "video" ? "a:videoFile" : "a:audioFile";
+    const opts = s.media.autoPlay || s.media.loop ? `<p:ext uri="${OH_EXT_URI}"><oh:media xmlns:oh="${NS.oh}"${attrs({ autoPlay: s.media.autoPlay, loop: s.media.loop })}/></p:ext>` : "";
+    const ph = s.ph ? `<p:ph${attrs({ type: s.ph.type === "obj" ? undefined : s.ph.type, idx: s.ph.idx })}/>` : "";
+    nvPr = `<p:nvPr>${ph}<${tag} r:link="${linkRid}"/><p:extLst><p:ext uri="${MEDIA_EXT_URI}"><p14:media xmlns:p14="${NS.p14}" r:embed="${embedRid}"/></p:ext>${opts}</p:extLst></p:nvPr>`;
+    if (!s.link) cnv = cnv.replace(/\/>$/, '><a:hlinkClick r:id="" action="ppaction://media"/></p:cNvPr>');
+  }
   return (
-    `<p:pic><p:nvPicPr>${cNvPr(s, ctx)}<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>${phXml(s)}</p:nvPicPr>` +
+    `<p:pic><p:nvPicPr>${cnv}<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>${nvPr}</p:nvPicPr>` +
     `<p:blipFill>${blip}${src}<a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
     `<p:spPr>${xfrmXml(s)}${geomXml(s.geom ?? "rect", undefined)}${lineXml(s.line, ctx)}${effectsXml(s.effects, ctx)}</p:spPr></p:pic>`
   );
@@ -389,7 +413,20 @@ export function shapeXml(s: Shape, ctx: WriteCtx, opts: { promptAsText?: (s: SpS
       return tableXml(s, ctx);
     case "group":
       return groupXml(s, ctx);
+    case "chart":
+      return chartFrameXml(s, ctx);
   }
+}
+
+/** Grafik çerçevesi (p:graphicFrame + c:chart başvurusu). */
+export function chartFrameXml(s: ChartShape, ctx: WriteCtx): string {
+  if (!ctx.charts) return "";
+  const path = ctx.charts.add(s.chart);
+  const rid = ctx.rels.add(REL.chart, relativeTarget(ctx.part, path));
+  return (
+    `<p:graphicFrame><p:nvGraphicFramePr>${cNvPr(s, ctx)}<p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr>` +
+    `${xfrmXml(s, "p:xfrm")}<a:graphic><a:graphicData uri="${NS.c}"><c:chart xmlns:c="${NS.c}" r:id="${rid}"/></a:graphicData></a:graphic></p:graphicFrame>`
+  );
 }
 
 export function spTreeXml(shapes: Shape[], ctx: WriteCtx, opts: { promptAsText?: (s: SpShape) => string | undefined } = {}): string {

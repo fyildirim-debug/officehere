@@ -407,7 +407,7 @@ export function ArrangeMenu({ a, onSelectionPane, onMoreRotate }: { a: Actions; 
       <MenuItem icon={<PositionForward20Regular />} label="Öne Getir" disabled={!has} onClick={() => a.reorderSelection("forward")} />
       <MenuItem icon={<PositionBackward20Regular />} label="Arkaya Gönder" disabled={!has} onClick={() => a.reorderSelection("backward")} />
       <MenuHeader>Grup Nesneleri</MenuHeader>
-      <MenuItem icon={<Group20Regular />} label="Grupla" shortcut="Ctrl+G" disabled={shapes.length < 2} onClick={() => a.groupSelection()} />
+      <MenuItem icon={<Group20Regular />} label="Grupla" shortcut="Ctrl+G" disabled={!a.canGroup()} onClick={() => a.groupSelection()} />
       <MenuItem icon={<GroupDismiss20Regular />} label="Grubu Çöz" shortcut="Ctrl+Shift+G" disabled={!shapes.some((s) => s.kind === "group")} onClick={() => a.ungroupSelection()} />
       <MenuHeader>Nesneleri Konumlandır</MenuHeader>
       <MenuItem

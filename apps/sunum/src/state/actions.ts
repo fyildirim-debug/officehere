@@ -10,7 +10,6 @@ import {
   groupShapes,
   mapShapes,
   moveShape,
-  moveSlides,
   pruneAnimations,
   removeShapes,
   reorder,
@@ -25,10 +24,14 @@ import {
 } from "../model/ops";
 import { footerShapes, layoutByType, relayoutSlide, newSlide as makeSlide } from "../model/presentation";
 import { layoutOf } from "../model/textStyle";
-import type { Animation, Fill, Layout, PathCmd, Presentation, Shape, Slide, SpShape, TableShape, Transition } from "../model/types";
+import type { Animation, Fill, Layout, Presentation, Shape, Slide, SpShape, TableShape, Transition } from "../model/types";
 import { isLineGeom } from "../render/geometry";
 import type { TextEditorHandle } from "../editor/TextEditor";
 import type { AppState, EditTarget, InkTool, Store } from "./store";
+import { inkShape } from "../model/ink";
+import { moveSlidesKeepSections, removeSlidesKeepSections } from "../model/sections";
+import { inMasterView, masterDeleteLayout, masterDuplicateLayout, masterInsertLayout } from "./masterActions";
+import type { ShowStroke } from "../show/ShowInk";
 
 export class Actions {
   textHandle: TextEditorHandle | null = null;
@@ -87,6 +90,7 @@ export class Actions {
   }
 
   newSlide(layoutId?: string) {
+    if (inMasterView(this)) return masterInsertLayout(this);
     const s = this.s;
     const cur = this.slide();
     let lid = layoutId;
@@ -100,6 +104,7 @@ export class Actions {
   }
 
   duplicateSlides(ids = this.selectedSlideIds()) {
+    if (inMasterView(this)) return masterDuplicateLayout(this);
     const s = this.s;
     const set = new Set(ids);
     const lastIdx = s.pres.slides.reduce((m, x, i) => (set.has(x.id) ? i : m), -1);
@@ -110,6 +115,7 @@ export class Actions {
   }
 
   deleteSlides(ids = this.selectedSlideIds()) {
+    if (inMasterView(this)) return masterDeleteLayout(this);
     const s = this.s;
     const set = new Set(ids);
     if (set.size >= s.pres.slides.length) {
@@ -119,10 +125,11 @@ export class Actions {
       return;
     }
     const firstIdx = s.pres.slides.findIndex((x) => set.has(x.id));
-    this.store.commit((p) => ({ ...p, slides: p.slides.filter((x) => !set.has(x.id)) }), { slideIdx: Math.max(0, firstIdx - 1), sel: [], editing: null });
+    this.store.commit((p) => ({ ...p, slides: removeSlidesKeepSections(p.slides, set) }), { slideIdx: Math.max(0, firstIdx - 1), sel: [], editing: null });
   }
 
   toggleHideSlides(ids = this.selectedSlideIds()) {
+    if (inMasterView(this)) return;
     const set = new Set(ids);
     const s = this.s;
     const allHidden = s.pres.slides.filter((x) => set.has(x.id)).every((x) => x.hidden);
@@ -130,14 +137,16 @@ export class Actions {
   }
 
   moveSlidesTo(ids: string[], toIndex: number) {
+    if (inMasterView(this)) return;
     const s = this.s;
-    const moved = moveSlides(s.pres.slides, ids, toIndex);
+    const moved = moveSlidesKeepSections(s.pres.slides, ids, toIndex);
     const cur = s.pres.slides[s.slideIdx]?.id;
     this.store.commit((p) => ({ ...p, slides: moved }), { slideIdx: Math.max(0, moved.findIndex((x) => x.id === cur)) });
     this.store.set({ slideSel: ids });
   }
 
   setLayout(layoutId: string, ids = this.selectedSlideIds()) {
+    if (inMasterView(this)) return;
     const set = new Set(ids);
     this.store.commit((p) => {
       const nl = p.layouts.find((l) => l.id === layoutId);
@@ -147,6 +156,7 @@ export class Actions {
   }
 
   resetSlides(ids = this.selectedSlideIds()) {
+    if (inMasterView(this)) return;
     const set = new Set(ids);
     this.store.commit((p) => ({
       ...p,
@@ -194,6 +204,10 @@ export class Actions {
 
   /** Geçerli slayda boş bir açıklama ekler (seçimin sağ üstüne; üst üste binmez). */
   addComment(author: string) {
+    if (inMasterView(this)) {
+      this.message("Açıklamalar slaytlara eklenir; Asıl Slayt Görünümünü kapatın.", "info");
+      return;
+    }
     const i = this.s.slideIdx;
     const sl = this.slide();
     if (!sl) return;
@@ -359,44 +373,24 @@ export class Actions {
   addInk(points: [number, number][], tool: InkTool) {
     const i = this.s.slideIdx;
     if (!this.slide() || !points.length) return;
-    const pad = 0.5;
-    let x0 = Infinity;
-    let y0 = Infinity;
-    let x1 = -Infinity;
-    let y1 = -Infinity;
-    for (const [x, y] of points) {
-      x0 = Math.min(x0, x);
-      y0 = Math.min(y0, y);
-      x1 = Math.max(x1, x);
-      y1 = Math.max(y1, y);
-    }
-    x0 -= pad;
-    y0 -= pad;
-    const w = Math.max(1, x1 + pad - x0);
-    const h = Math.max(1, y1 + pad - y0);
-    const loc = points.map(([x, y]) => [x - x0, y - y0] as [number, number]);
-    // Noktalar arası orta noktalardan geçen ikinci derece eğrilerle yumuşatılır.
-    const cmds: PathCmd[] = [{ c: "M", pts: [loc[0][0], loc[0][1]] }];
-    if (loc.length === 1) cmds.push({ c: "L", pts: [loc[0][0] + 0.01, loc[0][1] + 0.01] });
-    else if (loc.length === 2) cmds.push({ c: "L", pts: [loc[1][0], loc[1][1]] });
-    else {
-      for (let k = 1; k < loc.length - 1; k++) {
-        const [cx, cy] = loc[k];
-        const [nx, ny] = loc[k + 1];
-        cmds.push({ c: "Q", pts: [cx, cy, (cx + nx) / 2, (cy + ny) / 2] });
-      }
-      const last = loc[loc.length - 1];
-      cmds.push({ c: "L", pts: [last[0], last[1]] });
-    }
     const count = (this.slide()?.shapes.filter((x) => x.kind === "sp" && x.ink).length ?? 0) + 1;
-    const sh = makeSp("custom", x0, y0, w, h, {
-      name: `Mürekkep ${count}`,
-      fill: NO_FILL,
-      line: { fill: { type: "solid", color: { rgb: tool.color, alpha: tool.tool === "highlighter" ? 0.5 : tool.tool === "pencil" ? 0.85 : undefined } }, width: tool.width, dash: "solid", cap: "rnd" },
-      paths: [{ w, h, cmds, fill: false }],
-    }) as SpShape;
-    sh.ink = true;
+    const sh = inkShape(points, { color: tool.color, width: tool.width, alpha: tool.tool === "highlighter" ? 0.5 : tool.tool === "pencil" ? 0.85 : undefined }, `Mürekkep ${count}`);
+    if (!sh) return;
     this.store.commit((p) => updateSlideShapes(p, i, (list) => [...list, sh]));
+  }
+
+  /** Gösteride çizilen mürekkebi slaytlara şekil olarak ekler (tek geri alma adımı). */
+  keepShowInk(ink: Record<string, ShowStroke[]>) {
+    this.store.commit((p) => ({
+      ...p,
+      slides: p.slides.map((sl) => {
+        const strokes = ink[sl.id];
+        if (!strokes?.length) return sl;
+        let n = sl.shapes.filter((x) => x.kind === "sp" && x.ink).length;
+        const added = strokes.map((st) => inkShape(st.pts, { color: st.color, width: st.width, alpha: st.tool === "highlighter" ? 0.5 : undefined }, `Mürekkep ${++n}`)).filter((x): x is SpShape => !!x);
+        return { ...sl, shapes: [...sl.shapes, ...added] };
+      }),
+    }));
   }
 
   /** Mürekkep şekillerini siler; aynı sürüklemedeki silmeler tek geri alma adımıdır. */
@@ -501,9 +495,19 @@ export class Actions {
     this.store.commit((p) => updateSlideShapes(p, i, (list) => alignShapes(list, sel, op, toSlide || sel.length === 1, p0.width, p0.height)));
   }
 
+  /** Seçim gruplanabilir mi (en az iki şekil, yer tutucu yok — PowerPoint'te yer tutucular gruplanamaz). */
+  canGroup(): boolean {
+    const shapes = this.selectedShapes();
+    return shapes.length >= 2 && !shapes.some((x) => (x.kind === "sp" || x.kind === "pic") && x.ph);
+  }
+
   groupSelection() {
     const sel = this.s.sel;
     if (sel.length < 2) return;
+    if (!this.canGroup()) {
+      this.message("Yer tutucular gruplanamaz. Gruplamak için yalnızca şekilleri seçin.", "info");
+      return;
+    }
     const i = this.s.slideIdx;
     let gid: string | undefined;
     this.store.commit((p) =>
@@ -542,6 +546,7 @@ export class Actions {
   }
 
   copySlides(cut = false) {
+    if (inMasterView(this)) return;
     const ids = new Set(this.selectedSlideIds());
     const slides = this.pres.slides.filter((x) => ids.has(x.id));
     this.store.clipboard = { kind: "slides", slides: structuredClone(slides) };
@@ -552,6 +557,7 @@ export class Actions {
     const cb = this.store.clipboard;
     if (!cb) return false;
     if (cb.kind === "slides" && cb.slides?.length) {
+      if (inMasterView(this)) return false;
       const at = this.s.slideIdx + 1;
       const p = this.pres;
       const copies = cb.slides.map((sl) => {
@@ -618,6 +624,10 @@ export class Actions {
   /* ------------------------------ Üst bilgi / alt bilgi ------------------------------ */
 
   applyHeaderFooter(hf: Presentation["headerFooter"], all: boolean) {
+    if (inMasterView(this)) {
+      this.message("Üst bilgi ve alt bilgi, Asıl Slayt Görünümü kapatıldıktan sonra slaytlara uygulanabilir.", "info");
+      return;
+    }
     const set = new Set(this.selectedSlideIds());
     this.store.commit((p) => {
       const np = { ...p, headerFooter: hf };

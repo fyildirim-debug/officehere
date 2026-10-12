@@ -4,8 +4,9 @@
  */
 import JSZip from "jszip";
 import { flatShapes } from "../model/ops";
-import type { Layout, Presentation, Shape, SpShape } from "../model/types";
-import { bgXml, spTreeXml, type MediaStore, type WriteCtx } from "./writeDrawing";
+import type { ChartData, Layout, Presentation, Shape, SpShape } from "../model/types";
+import { bgXml, spTreeXml, type ChartStore, type MediaStore, type WriteCtx } from "./writeDrawing";
+import { chartWorkbook, chartXml } from "./writeChart";
 import { appXml, CLR_MAP, coreXml, notesMasterXml, notesSlideXml, NS_DECL, presentationXml, PRES_PROPS, samplePrompt, tableStylesXml, themeXml, txStylesXml, VIEW_PROPS } from "./writeParts";
 import { slideExtXml, timingXml, transitionXml } from "./writeTiming";
 import { attrs, esc, NS, REL, RelsBuilder, XML_HEAD } from "./xml";
@@ -24,6 +25,7 @@ const CT = {
   comments: "application/vnd.openxmlformats-officedocument.presentationml.comments+xml",
   commentAuthors: "application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml",
   core: "application/vnd.openxmlformats-package.core-properties+xml",
+  chart: "application/vnd.openxmlformats-officedocument.drawingml.chart+xml",
   app: "application/vnd.openxmlformats-officedocument.extended-properties+xml",
 };
 
@@ -38,6 +40,39 @@ const MIME_EXT: Record<string, string> = {
   "image/tiff": "tiff",
   "image/x-emf": "emf",
   "image/x-wmf": "wmf",
+};
+
+/** Video/ses uzantıları ve içerik türleri. */
+export const MEDIA_MIME: Record<string, string> = {
+  mp4: "video/mp4",
+  m4v: "video/mp4",
+  webm: "video/webm",
+  ogv: "video/ogg",
+  mov: "video/quicktime",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  aac: "audio/aac",
+  flac: "audio/flac",
+};
+
+const MEDIA_EXT: Record<string, string> = {
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "video/ogg": "ogv",
+  "video/quicktime": "mov",
+  "audio/mpeg": "mp3",
+  "audio/mp3": "mp3",
+  "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+  "audio/wave": "wav",
+  "audio/ogg": "ogg",
+  "audio/aac": "aac",
+  "audio/flac": "flac",
 };
 
 export const EXT_MIME: Record<string, string> = {
@@ -82,11 +117,31 @@ class Media implements MediaStore {
     this.map.set(src, path);
     return path;
   }
+  private mediaCount = 0;
+  addMedia(src: string): string | null {
+    const hit = this.map.get(src);
+    if (hit) return hit;
+    const d = dataUrlToBytes(src);
+    if (!d) return null;
+    const ext = MEDIA_EXT[d.mime] ?? (d.mime.startsWith("audio/") ? "mp3" : "mp4");
+    const path = `ppt/media/media${++this.mediaCount}.${ext}`;
+    this.files.push({ path, bytes: d.bytes, ext });
+    this.map.set(src, path);
+    return path;
+  }
 }
 
-function makeCtx(part: string, media: Media, slideContent: boolean, slideNumbers?: Map<string, number>): WriteCtx {
+class Charts implements ChartStore {
+  list: ChartData[] = [];
+  add(chart: ChartData): string {
+    this.list.push(chart);
+    return `ppt/charts/chart${this.list.length}.xml`;
+  }
+}
+
+function makeCtx(part: string, media: Media, slideContent: boolean, slideNumbers?: Map<string, number>, charts?: Charts): WriteCtx {
   let id = 1;
-  return { rels: new RelsBuilder(), media, part, nextId: () => ++id, idMap: new Map(), slideContent, slideNumbers };
+  return { rels: new RelsBuilder(), media, part, nextId: () => ++id, idMap: new Map(), slideContent, slideNumbers, charts };
 }
 
 function tableStyleIds(shapes: Shape[], out: Set<string>) {
@@ -99,6 +154,7 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
   // OPC okuyucularının çoğu içerik türleri parçasını ilk sırada bekler.
   zip.file("[Content_Types].xml", "");
   const media = new Media();
+  const charts = new Charts();
   const overrides: [string, string][] = [];
   const add = (path: string, xml: string, ct?: string) => {
     zip.file(path, XML_HEAD + xml);
@@ -106,12 +162,12 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
   };
 
   // Tema
-  add("ppt/theme/theme1.xml", themeXml(pres.theme), CT.theme);
+  add("ppt/theme/theme1.xml", themeXml(pres.theme, pres.theme.name, !!pres.masterEdited), CT.theme);
   add("ppt/theme/theme2.xml", themeXml(pres.theme, "Not Teması"), CT.theme);
 
   // Asıl slayt
   const masterPath = "ppt/slideMasters/slideMaster1.xml";
-  const mctx = makeCtx(masterPath, media, false);
+  const mctx = makeCtx(masterPath, media, false, undefined, charts);
   const layoutPaths = pres.layouts.map((_, i) => `ppt/slideLayouts/slideLayout${i + 1}.xml`);
   const layoutRids = layoutPaths.map((p) => mctx.rels.add(REL.slideLayout, `../slideLayouts/${p.split("/").pop()}`));
   const masterTree = spTreeXml(withFooterFields(pres.master.shapes), mctx, { promptAsText: (s) => samplePrompt(s, true) });
@@ -124,7 +180,7 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
   // Düzenler
   pres.layouts.forEach((l: Layout, i) => {
     const path = layoutPaths[i];
-    const ctx = makeCtx(path, media, false);
+    const ctx = makeCtx(path, media, false, undefined, charts);
     ctx.rels.add(REL.slideMaster, "../slideMasters/slideMaster1.xml");
     const tree = spTreeXml(withFooterFields(l.shapes), ctx, { promptAsText: (s) => samplePrompt(s, false) });
     const type = l.type === "cust" ? undefined : l.type;
@@ -156,7 +212,7 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
   const slideNumbers = new Map(pres.slides.map((s, i) => [s.id, i + 1]));
   pres.slides.forEach((slide, i) => {
     const path = `ppt/slides/slide${i + 1}.xml`;
-    const ctx = makeCtx(path, media, true, slideNumbers);
+    const ctx = makeCtx(path, media, true, slideNumbers, charts);
     const li = Math.max(0, pres.layouts.findIndex((l) => l.id === slide.layoutId));
     ctx.rels.add(REL.slideLayout, `../slideLayouts/slideLayout${li + 1}.xml`);
     tableStyleIds(slide.shapes, tableStyles);
@@ -228,6 +284,20 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
   root.add(REL.extProps, "docProps/app.xml");
   zip.file("_rels/.rels", root.xml());
 
+  // Grafikler: chartN.xml + gömülü çalışma kitabı.
+  let hasXlsx = false;
+  for (let i = 0; i < charts.list.length; i++) {
+    const cp = `ppt/charts/chart${i + 1}.xml`;
+    const xp = `ppt/embeddings/Calisma_Sayfasi${i + 1}.xlsx`;
+    const rels = new RelsBuilder();
+    const rid = rels.add(REL.package, `../embeddings/Calisma_Sayfasi${i + 1}.xlsx`);
+    zip.file(cp, chartXml(charts.list[i], rid));
+    overrides.push([`/${cp}`, CT.chart]);
+    zip.file(`ppt/charts/_rels/chart${i + 1}.xml.rels`, rels.xml());
+    zip.file(xp, await chartWorkbook(charts.list[i]));
+    hasXlsx = true;
+  }
+
   // Ortam
   const exts = new Set<string>();
   for (const f of media.files) {
@@ -238,7 +308,8 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
   const defaults = [
     `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`,
     `<Default Extension="xml" ContentType="application/xml"/>`,
-    ...[...exts].map((e) => `<Default Extension="${e}" ContentType="${EXT_MIME[e] ?? "application/octet-stream"}"/>`),
+    ...[...exts].map((e) => `<Default Extension="${e}" ContentType="${EXT_MIME[e] ?? MEDIA_MIME[e] ?? "application/octet-stream"}"/>`),
+    ...(hasXlsx ? ['<Default Extension="xlsx" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>'] : []),
   ].join("");
   const ov = overrides.map(([p, c]) => `<Override PartName="${p}" ContentType="${c}"/>`).join("");
   zip.file("[Content_Types].xml", `${XML_HEAD}<Types xmlns="${NS.ct}">${defaults}${ov}</Types>`);

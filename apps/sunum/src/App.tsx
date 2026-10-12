@@ -15,8 +15,13 @@ import { textInfo } from "./state/textActions";
 import { useKeyboard } from "./app/keyboard";
 import { insertImageFiles, pasteFromRibbon, useClipboard } from "./app/clipboard";
 import { loadPresentation, newFromTemplate, openBytes, openDialog, openFromPath, openRecent, save } from "./app/fileOps";
-import { exportPngs, outlineText, PrintRoot } from "./app/exporting";
-import { shapeMenu, slideAreaMenu, thumbMenu } from "./app/menus";
+import { exportPdfNative, exportPngs, outlineText, PrintRoot } from "./app/exporting";
+import { masterMenu, sectionMenu, shapeMenu, slideAreaMenu, thumbMenu } from "./app/menus";
+import { MasterTab } from "./ribbon/MasterTab";
+import { ChartDesignTab, PlaybackTab } from "./ribbon/ChartTabs";
+import { MasterThumbPane } from "./panes/MasterThumbPane";
+import { MASTER_SLIDE_ID } from "./model/masterView";
+import { closeMasterView, documentPres, masterLayoutName, masterRenameLayout, openMasterView } from "./state/masterActions";
 import { StatusArea } from "./app/StatusArea";
 import { FileBackstage } from "./app/FileBackstage";
 import { HomeTab } from "./ribbon/HomeTab";
@@ -33,12 +38,13 @@ import { WORDART_PRESETS } from "./ribbon/presets";
 import type { AppCommands, DialogKind, RibbonCtx } from "./ribbon/types";
 import { SlideShow, type ShowMode } from "./show/SlideShow";
 import { NotesPageView, SorterView } from "./views/SorterView";
-import { FontDialog, ParagraphDialog } from "./dialogs/TextDialogs";
-import { DateTimeDialog, HeaderFooterDialog, IconsDialog, InsertTableDialog, SymbolDialog } from "./dialogs/InsertDialogs";
-import { AboutDialog, FindDialog, ReplaceFontsDialog, ShortcutsDialog, ShowSetupDialog, SizePosDialog, SlideSizeDialog, ZoomDialog, type ShowSettings } from "./dialogs/MiscDialogs";
-import { downloadBlob } from "@officehere/core";
-import { LinkDialog } from "./dialogs/LinkDialog";
-import { applyLink, currentLink, followLink, linkContext, removeLink, type LinkContext } from "./state/linkActions";
+import type { ShowSettings } from "./dialogs/MiscDialogs";
+import { AppDialogs, type ExtraDialog } from "./app/AppDialogs";
+import { pickMedia, selectedChart } from "./state/mediaActions";
+import { downloadBlob, getNative } from "@officehere/core";
+import { sectionsOf } from "./model/sections";
+import { addSection, renameSectionCmd } from "./state/sectionActions";
+import { currentLink, followLink, linkContext, removeLink } from "./state/linkActions";
 import "./styles/slide.css";
 import "./styles/editor.css";
 import "./styles/app.css";
@@ -75,6 +81,8 @@ function initialState(): AppState {
     ink: null,
     textTick: 0,
     ribbonTab: "home",
+    collapsedSections: [],
+    masterBase: null,
     message: null,
   };
 }
@@ -109,14 +117,14 @@ export function App() {
   const [backstage, setBackstage] = useState(false);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   const [show, setShow] = useState<ShowState | null>(null);
-  const [printing, setPrinting] = useState(false);
+  const [printing, setPrinting] = useState<null | "print" | "pdf">(null);
   const [collapsed, setCollapsed] = useState(false);
   const [guides, setGuides] = useState({ h: [360], v: [640] });
-  const [linkCtx, setLinkCtx] = useState<LinkContext | null>(null);
+  const [extra, setExtra] = useState<ExtraDialog | null>(null);
   const [showSettings, setShowSettings] = useState<ShowSettings>({ loop: false, noAnimations: false, presenter: false });
   const ctxMenu = useContextMenu();
   const blockedRef = useRef(false);
-  blockedRef.current = !!dialog || !!linkCtx || backstage || (!!show && !show.preview);
+  blockedRef.current = !!dialog || !!extra || backstage || (!!show && !show.preview);
 
   const lifecycle = useDocumentLifecycle({
     title: state.fileName,
@@ -161,6 +169,7 @@ export function App() {
         input.click();
       },
       startShow: (from) => {
+        if (a.s.masterBase) closeMasterView(a);
         const s = a.s;
         if (!s.pres.slides.length) return;
         a.stopEditing();
@@ -169,19 +178,33 @@ export function App() {
         setShow({ mode: showSettings.presenter ? "presenter" : "full", start: from === "start" ? 0 : s.slideIdx });
       },
       presenterView: () => {
+        if (a.s.masterBase) closeMasterView(a);
         document.documentElement.requestFullscreen?.().catch(() => undefined);
         setShow({ mode: "presenter", start: a.s.slideIdx });
       },
       print: () => {
         a.stopEditing();
+        if (a.s.masterBase) closeMasterView(a);
         setBackstage(false);
-        setPrinting(true);
+        setPrinting("print");
+      },
+      exportPdf: () => {
+        if (!getNative()?.exportPdf) {
+          cmdRef.current.print();
+          return;
+        }
+        a.stopEditing();
+        if (a.s.masterBase) closeMasterView(a);
+        setBackstage(false);
+        setPrinting("pdf");
       },
       previewTransition: () => a.s.pres.slides.length && setShow({ mode: "window", start: a.s.slideIdx, preview: "transition", frame: stageFrame() }),
       previewAnimations: () => a.s.pres.slides.length && setShow({ mode: "window", start: a.s.slideIdx, preview: "animations", frame: stageFrame() }),
       setView: (v: ViewMode) => {
         a.stopEditing();
-        a.store.set({ view: v, sel: [] });
+        if (v === "master") openMasterView(a);
+        else if (a.s.masterBase) closeMasterView(a, v);
+        else a.store.set({ view: v, sel: [] });
       },
       togglePane: (p: PaneKind) => a.store.set((s) => ({ pane: s.pane === p ? null : p })),
       pickShape: (item) => {
@@ -212,15 +235,44 @@ export function App() {
         a.store.set({ spellcheck: on, message: { text: on ? "Yazım denetimi açık: hatalı sözcükler metin düzenlenirken kırmızı dalgalı çizgiyle gösterilir." : "Yazım denetimi kapatıldı.", kind: "info" } });
       },
       zoomTo: (z, fit) => a.store.set({ zoom: Math.max(10, Math.min(400, z)), fit: !!fit }),
-      insertLink: () => setLinkCtx(linkContext(a)),
+      insertLink: () => setExtra({ kind: "link", ctx: linkContext(a) }),
+      insertChart: () => setExtra({ kind: "chartType" }),
+      changeChartType: () => {
+        const ch = selectedChart(a);
+        if (ch) setExtra({ kind: "chartType", changeId: ch.id, current: ch.chart });
+      },
+      editChartData: () => {
+        const ch = selectedChart(a);
+        if (ch) setExtra({ kind: "chartData", id: ch.id, chart: ch.chart });
+      },
+      insertMedia: (kind) => pickMedia(a, kind),
+      playMedia: () => {
+        const sh = a.selectedShapes()[0];
+        if (sh?.kind === "pic" && sh.media) setExtra({ kind: "media", shape: sh });
+      },
       openLink: () => {
         const l = currentLink(a);
         if (l) followLink(a, l);
       },
       removeLink: () => removeLink(a),
+      addSection: () => {
+        const id = addSection(a);
+        if (id) cmdRef.current.renameSection(id);
+      },
+      renameLayout: () => {
+        if (!a.s.masterBase || a.slide()?.id === MASTER_SLIDE_ID) return;
+        setExtra({ kind: "rename", req: { title: "Düzeni Yeniden Adlandır", label: "Düzen adı:", value: masterLayoutName(a), onOk: (n) => masterRenameLayout(a, n) } });
+      },
+      renameSection: (id) => {
+        const sec = sectionsOf(a.s.pres.slides).find((x) => x.id === id);
+        if (sec) setExtra({ kind: "rename", req: { title: "Bölümü Yeniden Adlandır", label: "Bölüm adı:", value: sec.name, onOk: (n) => renameSectionCmd(a, id, n) } });
+      },
     }),
     [a, store, showSettings.presenter],
   );
+
+  const cmdRef = useRef(cmd);
+  cmdRef.current = cmd;
 
   const newDoc = useCallback(async () => {
     if (!(await lifecycle.confirmDiscard())) return;
@@ -254,20 +306,26 @@ export function App() {
   const hasSpLike = shapes.some((s) => s.kind === "sp" || s.kind === "group");
   const hasPic = !!one && one.kind === "pic";
   const hasTable = !!one && one.kind === "table";
-  const editView = state.view === "normal" || state.view === "outline";
+  const hasChart = !!one && one.kind === "chart";
+  const hasMedia = !!one && one.kind === "pic" && !!one.media;
+  const editView = state.view === "normal" || state.view === "outline" || state.view === "master";
+  const masterView = state.view === "master";
   const tabs: RibbonTabDef[] = [
+    ...(masterView ? [{ id: "master", label: "Asıl Slayt", content: <MasterTab ctx={ctx} /> }] : []),
     { id: "home", label: "Giriş", content: <HomeTab ctx={ctx} /> },
     { id: "insert", label: "Ekle", content: <InsertTab ctx={ctx} /> },
     { id: "draw", label: "Çizim", content: <DrawTab ctx={ctx} /> },
-    { id: "design", label: "Tasarım", content: <DesignTab ctx={ctx} /> },
-    { id: "transitions", label: "Geçişler", content: <TransitionsTab ctx={ctx} /> },
-    { id: "animations", label: "Animasyonlar", content: <AnimationsTab ctx={ctx} /> },
-    { id: "slideshow", label: "Slayt Gösterisi", content: <SlideShowTab ctx={ctx} /> },
+    { id: "design", label: "Tasarım", hidden: masterView, content: <DesignTab ctx={ctx} /> },
+    { id: "transitions", label: "Geçişler", hidden: masterView, content: <TransitionsTab ctx={ctx} /> },
+    { id: "animations", label: "Animasyonlar", hidden: masterView, content: <AnimationsTab ctx={ctx} /> },
+    { id: "slideshow", label: "Slayt Gösterisi", hidden: masterView, content: <SlideShowTab ctx={ctx} /> },
     { id: "review", label: "Gözden Geçir", content: <ReviewTab ctx={ctx} /> },
     { id: "view", label: "Görünüm", content: <ViewTab ctx={ctx} /> },
     { id: "help", label: "Yardım", content: <HelpTab ctx={ctx} /> },
     { id: "shapeFormat", label: "Şekil Biçimi", contextual: true, hidden: !hasSpLike || !editView, content: <ShapeFormatTab ctx={ctx} /> },
-    { id: "pictureFormat", label: "Resim Biçimi", contextual: true, hidden: !hasPic || !editView, content: <PictureFormatTab ctx={ctx} /> },
+    { id: "pictureFormat", label: hasMedia ? (one?.kind === "pic" && one.media?.kind === "audio" ? "Ses Biçimi" : "Video Biçimi") : "Resim Biçimi", contextual: true, hidden: !hasPic || !editView, content: <PictureFormatTab ctx={ctx} /> },
+    { id: "playback", label: "Kayıttan Yürüt", contextual: true, hidden: !hasMedia || !editView, content: <PlaybackTab ctx={ctx} /> },
+    { id: "chartDesign", label: "Grafik Tasarımı", contextual: true, hidden: !hasChart || !editView, content: <ChartDesignTab ctx={ctx} /> },
     { id: "tableDesign", label: "Tablo Tasarımı", contextual: true, hidden: !hasTable || !editView, content: <TableDesignTab ctx={ctx} /> },
     { id: "tableLayout", label: "Düzen", contextual: true, hidden: !hasTable || !editView, content: <TableLayoutTab ctx={ctx} /> },
   ];
@@ -331,6 +389,8 @@ export function App() {
           a.store.set({ view: "normal" });
         }}
         onContextMenu={(e) => ctxMenu.open(e, thumbMenu(a, cmd, true))}
+        onSectionMenu={(e, id) => ctxMenu.open(e, sectionMenu(a, cmd, id))}
+        onRenameSection={cmd.renameSection}
       />
     );
   } else if (state.view === "notes") {
@@ -343,9 +403,10 @@ export function App() {
           pres={state.pres}
           startIndex={state.slideIdx}
           mode="window"
-          onExit={(i) => {
+          onExit={(i, ink) => {
             a.goToSlide(Math.min(i, a.s.pres.slides.length - 1));
             a.store.set({ view: "normal" });
+            if (ink && Object.keys(ink).length) setExtra({ kind: "ink", ink });
           }}
           onViewChange={(v) => a.store.set({ view: v })}
         />
@@ -354,10 +415,12 @@ export function App() {
   } else {
     main = (
       <>
-        {state.view === "outline" ? (
+        {masterView ? (
+          <MasterThumbPane state={state} actions={a} width={state.thumbWidth} onContextMenu={(e) => ctxMenu.open(e, masterMenu(a, cmd))} />
+        ) : state.view === "outline" ? (
           <OutlinePane state={state} actions={a} width={Math.max(300, state.thumbWidth * 1.5)} />
         ) : (
-          <ThumbnailPane state={state} actions={a} width={state.thumbWidth} onContextMenu={(e, onSlide) => ctxMenu.open(e, thumbMenu(a, cmd, onSlide))} />
+          <ThumbnailPane state={state} actions={a} width={state.thumbWidth} onContextMenu={(e, onSlide) => ctxMenu.open(e, thumbMenu(a, cmd, onSlide))} onSectionMenu={(e, id) => ctxMenu.open(e, sectionMenu(a, cmd, id))} onRenameSection={cmd.renameSection} />
         )}
         <Splitter dir="v" onDrag={(d) => a.store.set((s) => ({ thumbWidth: Math.max(110, Math.min(420, s.thumbWidth + (s.view === "outline" ? d / 1.5 : d))) }))} />
         <div className="app-center" style={{ position: "relative" }} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
@@ -372,7 +435,9 @@ export function App() {
               else cmd.insertPictures();
             }}
             onShapeDoubleClick={(s) => {
-              if (s.kind === "pic") a.store.set({ ribbonTab: "pictureFormat" });
+              if (s.kind === "chart") cmd.editChartData();
+              else if (s.kind === "pic" && s.media) a.store.set({ ribbonTab: "playback" });
+              else if (s.kind === "pic") a.store.set({ ribbonTab: "pictureFormat" });
               else if (s.kind === "sp" && !s.text) a.store.set({ ribbonTab: "shapeFormat" });
             }}
             showAnimBadges={activeTab === "animations" || state.pane === "animation"}
@@ -380,7 +445,7 @@ export function App() {
             onGuidesChange={setGuides}
             onZoomChange={(zoom, fit) => a.store.set({ zoom, fit })}
           />
-          {state.showNotes && (
+          {state.showNotes && !masterView && (
             <>
               <Splitter dir="h" onDrag={(d) => a.store.set((s) => ({ notesHeight: Math.max(30, Math.min(500, s.notesHeight - d)) }))} />
               <NotesPane state={state} actions={a} height={state.notesHeight} spellcheck={state.spellcheck} />
@@ -440,7 +505,7 @@ export function App() {
             </MessageBar>
           ) : undefined
         }
-        statusBar={<StatusArea state={state} actions={a} onStartShow={() => cmd.startShow("current")} onComments={() => cmd.togglePane("comments")} onZoomDialog={() => setDialog("zoom")} />}
+        statusBar={<StatusArea state={state} actions={a} onSetView={cmd.setView} onStartShow={() => cmd.startShow("current")} onComments={() => cmd.togglePane("comments")} onZoomDialog={() => setDialog("zoom")} />}
         backstage={
           backstage ? (
             <FileBackstage
@@ -471,10 +536,11 @@ export function App() {
               onPrint={cmd.print}
               onExport={async (id) => {
                 const base = state.fileName;
-                if (id === "pdf") cmd.print();
-                else if (id === "png") await exportPngs(state.pres, base, "current", state.slideIdx);
-                else if (id === "pngAll") await exportPngs(state.pres, base, "all", state.slideIdx);
-                else if (id === "outline") downloadBlob(new Blob([outlineText(state.pres)], { type: "text/plain;charset=utf-8" }), `${base}-AnaHat.txt`);
+                const doc = documentPres(a);
+                if (id === "pdf") cmd.exportPdf();
+                else if (id === "png") await exportPngs(doc, base, "current", Math.min(state.masterBase?.slideIdx ?? state.slideIdx, doc.slides.length - 1));
+                else if (id === "pngAll") await exportPngs(doc, base, "all", 0);
+                else if (id === "outline") downloadBlob(new Blob([outlineText(doc)], { type: "text/plain;charset=utf-8" }), `${base}-AnaHat.txt`);
                 else if (id === "pptx") void save(a, true);
                 setBackstage(false);
               }}
@@ -499,45 +565,34 @@ export function App() {
           mode={show.mode}
           loop={showSettings.loop}
           noAnimations={showSettings.noAnimations}
-          onExit={(i) => {
+          onExit={(i, ink) => {
             setShow(null);
             if (i >= 0 && i < a.s.pres.slides.length) a.goToSlide(i);
+            if (ink && Object.keys(ink).length) setExtra({ kind: "ink", ink });
           }}
         />
       )}
-      {printing && <PrintRoot pres={state.pres} onDone={() => setPrinting(false)} />}
+      {printing && (
+        <PrintRoot
+          pres={state.pres}
+          onDone={() => setPrinting(null)}
+          onReady={
+            printing === "pdf"
+              ? async () => {
+                  try {
+                    const name = await exportPdfNative(a.s.pres, a.s.fileName);
+                    if (name) a.message(`PDF olarak kaydedildi: ${name}`, "success");
+                  } catch (e) {
+                    a.message(`PDF oluşturulamadı: ${(e as Error).message}`, "error");
+                  }
+                }
+              : undefined
+          }
+        />
+      )}
       {ctxMenu.element}
       {lifecycle.dialog}
-      <FontDialog open={dialog === "font"} onClose={closeDialog} actions={a} info={info} />
-      <ParagraphDialog open={dialog === "paragraph"} onClose={closeDialog} actions={a} info={info} />
-      <InsertTableDialog open={dialog === "insertTable"} onClose={closeDialog} actions={a} />
-      <HeaderFooterDialog open={dialog === "headerFooter"} onClose={closeDialog} actions={a} />
-      <SymbolDialog
-        open={dialog === "symbol"}
-        onClose={closeDialog}
-        onInsert={(ch) => {
-          if (a.s.editing && a.textHandle) a.textHandle.insert(ch);
-          else a.pasteText(ch);
-        }}
-      />
-      <DateTimeDialog
-        open={dialog === "dateTime"}
-        onClose={closeDialog}
-        onInsert={(t) => {
-          if (a.s.editing && a.textHandle) a.textHandle.insert(t);
-          else a.pasteText(t);
-        }}
-      />
-      <IconsDialog open={dialog === "icons"} onClose={closeDialog} actions={a} />
-      <SlideSizeDialog open={dialog === "slideSize"} onClose={closeDialog} actions={a} />
-      <FindDialog open={dialog === "find" || dialog === "replace"} replaceMode={dialog === "replace"} onClose={closeDialog} actions={a} />
-      <ReplaceFontsDialog open={dialog === "replaceFonts"} onClose={closeDialog} actions={a} />
-      <ZoomDialog open={dialog === "zoom"} onClose={closeDialog} zoom={state.zoom} onZoom={cmd.zoomTo} />
-      <SizePosDialog open={dialog === "sizePos"} onClose={closeDialog} actions={a} />
-      <ShowSetupDialog open={dialog === "showSetup"} onClose={closeDialog} value={showSettings} onChange={setShowSettings} />
-      <ShortcutsDialog open={dialog === "shortcuts"} onClose={closeDialog} />
-      <AboutDialog open={dialog === "about"} onClose={closeDialog} />
-      <LinkDialog context={linkCtx} pres={state.pres} onApply={(c, l, t) => applyLink(a, c, l, t)} onClose={() => setLinkCtx(null)} />
+      <AppDialogs a={a} state={state} info={info} cmd={cmd} dialog={dialog} closeDialog={closeDialog} extra={extra} setExtra={setExtra} showSettings={showSettings} setShowSettings={setShowSettings} />
     </>
   );
 }

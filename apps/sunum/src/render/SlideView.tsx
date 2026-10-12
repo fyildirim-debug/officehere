@@ -10,6 +10,8 @@ import type { GroupShape, Layout, Master, PicShape, Presentation, Shape, ShapeBa
 import { customPathD, presetGeometry, type GeomResult } from "./geometry";
 import { effectsFilter, fillToCss, lineStroke, PT, reflectionCss, svgPaint, type SvgPaint } from "./style";
 import { cellFormat } from "./tableStyles";
+import { ChartSvg } from "./ChartSvg";
+import { MediaBody } from "./MediaBody";
 import { paragraphsHtml, type TextRenderCtx } from "./textHtml";
 
 export type RenderMode = "edit" | "thumb" | "show" | "print";
@@ -135,7 +137,11 @@ export const ShapeView = memo(function ShapeView({ shape, ctx, override, overrid
     case "pic":
       return (
         <div {...common}>
-          <PicBody shape={shape} w={g.w} h={g.h} ctx={ctx} flipH={flipH} flipV={flipV} crop={override?.crop} />
+          {shape.media && (ctx.mode === "show" || ctx.mode === "edit") ? (
+            <MediaBody shape={shape} media={shape.media} w={g.w} h={g.h} mode={ctx.mode} />
+          ) : (
+            <PicBody shape={shape} w={g.w} h={g.h} ctx={ctx} flipH={flipH} flipV={flipV} crop={override?.crop} />
+          )}
         </div>
       );
     case "table":
@@ -148,6 +154,12 @@ export const ShapeView = memo(function ShapeView({ shape, ctx, override, overrid
       return (
         <div {...common} style={{ ...style, transform: `${style.transform ?? ""}${flipH ? " scaleX(-1)" : ""}${flipV ? " scaleY(-1)" : ""}` || undefined }}>
           <GroupBody shape={shape} g={g} ctx={ctx} overrides={overrides} deco={deco} />
+        </div>
+      );
+    case "chart":
+      return (
+        <div {...common}>
+          <ChartSvg chart={shape.chart} w={g.w} h={g.h} theme={ctx.theme} />
         </div>
       );
   }

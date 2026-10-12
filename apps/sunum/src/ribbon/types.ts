@@ -30,6 +30,8 @@ export interface AppCommands {
   startShow: (from: "start" | "current") => void;
   presenterView: () => void;
   print: () => void;
+  /** Dosya > Dışarı Aktar > PDF (masaüstünde doğrudan, tarayıcıda yazdırma penceresiyle). */
+  exportPdf: () => void;
   previewTransition: () => void;
   previewAnimations: () => void;
   setView: (v: ViewMode) => void;
@@ -40,10 +42,22 @@ export interface AppCommands {
   insertSlideNumber: () => void;
   spelling: () => void;
   zoomTo: (z: number, fit?: boolean) => void;
+  /** Ekle > Grafik; grafik türünü değiştir; verileri düzenle. */
+  insertChart: () => void;
+  changeChartType: () => void;
+  editChartData: () => void;
+  /** Ekle > Medya > Video / Ses. */
+  insertMedia: (kind: "video" | "audio") => void;
+  playMedia: () => void;
   /** Ekle > Bağlantı (Ctrl+K). */
   insertLink: () => void;
   openLink: () => void;
   removeLink: () => void;
+  /** Bölüm Ekle (ardından yeniden adlandırma kutusu açılır). */
+  addSection: () => void;
+  renameSection: (id: string) => void;
+  /** Asıl görünümde seçili düzeni yeniden adlandırır. */
+  renameLayout: () => void;
 }
 
 export interface RibbonCtx {

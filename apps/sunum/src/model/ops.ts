@@ -303,8 +303,10 @@ export function duplicateShapes(shapes: Shape[], ids: string[], offset = 16): { 
 export function cloneSlide(slide: Slide): Slide {
   const idMap = new Map<string, string>();
   const shapes = slide.shapes.map((s) => cloneShape(s, idMap));
+  const { section: _sec, ...rest } = slide;
+  void _sec;
   return {
-    ...structuredClone(slide),
+    ...structuredClone(rest),
     id: uid("sl"),
     shapes,
     animations: slide.animations.filter((a) => idMap.has(a.shapeId)).map((a) => ({ ...a, id: uid("a"), shapeId: idMap.get(a.shapeId)! })),

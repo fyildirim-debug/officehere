@@ -969,8 +969,8 @@
 }
 
 .link-dlg-tab.is-active {
-  border-color: var(--oh-accent);
-  background: var(--oh-accent-soft);
+  border-color: var(--oh-checked-border);
+  background: var(--oh-checked);
 }
 
 .link-dlg-body {
@@ -988,4 +988,205 @@
   overflow: auto;
   border: 1px solid var(--oh-border);
   padding: 2px;
+}
+
+/* Bölüm başlıkları (küçük resim bölmesi ve sıralayıcı) */
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 6px 2px 2px;
+  margin: 2px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--oh-text);
+  cursor: default;
+  border-radius: 3px;
+  user-select: none;
+}
+
+.section-head:hover {
+  background: var(--oh-hover);
+}
+
+.section-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.section-count {
+  color: var(--oh-text-muted);
+  font-weight: 400;
+}
+
+.section-chev {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--oh-text-muted);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+}
+
+.section-chev:hover {
+  background: var(--oh-hover);
+  color: var(--oh-text);
+}
+
+.sorter-grid > .section-head {
+  flex-basis: 100%;
+  font-size: 13px;
+}
+
+/* Asıl Slayt Görünümü bölmesi */
+.master-item {
+  position: relative;
+}
+
+.master-item.is-layout {
+  padding-left: 34px;
+}
+
+.master-item.is-layout .thumb-num {
+  display: none;
+}
+
+.master-item.is-layout::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: -6px;
+  height: calc(50% + 6px);
+  width: 12px;
+  border-left: 1px solid var(--oh-text-muted);
+  border-bottom: 1px solid var(--oh-text-muted);
+  opacity: 0.6;
+}
+
+.master-item.is-layout + .master-item.is-layout::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: -6px;
+  height: 6px;
+  border-left: 1px solid var(--oh-text-muted);
+  opacity: 0.6;
+}
+
+.oh-rbtn-large.rb-wide {
+  max-width: 96px;
+}
+
+/* Grafik iletişim kutuları */
+.chart-dlg {
+  display: flex;
+  gap: 12px;
+  min-height: 300px;
+}
+
+.chart-dlg-list {
+  width: 150px;
+  flex: none;
+  border: 1px solid var(--oh-border);
+  padding: 4px;
+}
+
+.chart-dlg-list .list-row svg {
+  flex: none;
+}
+
+.chart-dlg-preview {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chart-dlg-cap {
+  font-weight: 600;
+}
+
+.chart-dlg-box {
+  position: relative;
+  width: 400px;
+  height: 250px;
+  background: #fff;
+  border: 1px solid var(--oh-border);
+}
+
+.chart-grid-tools {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.chart-grid-tools .oh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chart-grid {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--oh-border);
+}
+
+.chart-grid table {
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.chart-grid th {
+  background: var(--oh-hover);
+  color: var(--oh-text-muted);
+  font-weight: 400;
+  padding: 2px 6px;
+  border: 1px solid var(--oh-border);
+  min-width: 24px;
+}
+
+.chart-grid td {
+  border: 1px solid var(--oh-border);
+  padding: 0;
+}
+
+.chart-grid td input {
+  width: 100px;
+  height: 24px;
+  border: 0;
+  padding: 0 6px;
+  background: transparent;
+  color: var(--oh-text);
+  font: inherit;
+}
+
+.chart-grid td.is-series input {
+  color: #2f6db5;
+  font-weight: 600;
+}
+
+.chart-grid td.is-cat input {
+  color: #b04a1f;
+}
+
+.chart-grid td input:focus {
+  outline: 2px solid var(--oh-accent);
+  outline-offset: -2px;
+}
+
+.chart-grid-note {
+  margin: 6px 0 0;
+  color: var(--oh-text-muted);
+  font-size: 12px;
 }

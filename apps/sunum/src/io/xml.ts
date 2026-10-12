@@ -7,7 +7,15 @@ export const NS = {
   rel: "http://schemas.openxmlformats.org/package/2006/relationships",
   ct: "http://schemas.openxmlformats.org/package/2006/content-types",
   oh: "urn:officehere:sunum:1",
+  /** PowerPoint 2010 uzantıları (bölümler, ortam). */
+  p14: "http://schemas.microsoft.com/office/powerpoint/2010/main",
+  c: "http://schemas.openxmlformats.org/drawingml/2006/chart",
 };
+
+/** p:presentation/p:extLst içindeki bölüm listesi uzantısı. */
+export const SECTION_EXT_URI = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
+/** p:nvPr/p:extLst içindeki gömülü ortam (p14:media) uzantısı. */
+export const MEDIA_EXT_URI = "{DAA4B4D4-6D71-4841-9C94-3DE6BF3C1D3E}";
 
 export const REL = {
   officeDocument: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
@@ -26,6 +34,12 @@ export const REL = {
   comments: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments",
   commentAuthors: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors",
   hyperlink: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+  chart: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+  package: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package",
+  video: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video",
+  audio: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio",
+  /** PowerPoint 2010 gömülü ortam ilişkisi (p14:media). */
+  media: "http://schemas.microsoft.com/office/2007/relationships/media",
 };
 
 /** Uygulamaya özgü uzantı kimliği (ECMA-376 extLst mekanizması). */

@@ -19,6 +19,10 @@ import {
   CommentAdd24Regular,
   Link24Regular,
   Link32Regular,
+  ChartMultiple32Regular,
+  Video24Regular,
+  Video32Regular,
+  Speaker232Regular,
 } from "@fluentui/react-icons";
 import { getUserName, Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack, TableGridPicker, useMenuClose } from "@officehere/ui";
 import { cssColor } from "../model/color";
@@ -101,6 +105,7 @@ export function InsertTab({ ctx }: { ctx: RibbonCtx }) {
       <RibbonGroup label="Çizimler" icon={<Shapes24Regular />}>
         <RibbonMenuButton size="large" icon={<Shapes32Regular />} label="Şekiller" description="Hazır şekiller ekleyin: dikdörtgen, daire, ok, çizgi, belirtme çizgisi…" menu={<ShapeGalleryMenu onPick={cmd.pickShape} />} />
         <RibbonButton size="large" icon={<Icons24Regular />} label="Simgeler" description="Simge kitaplığından vektörel simge ekleyin." onClick={() => ctx.openDialog("icons")} />
+        <RibbonButton size="large" icon={<ChartMultiple32Regular />} label="Grafik" description="Verileri göstermek için sütun, çizgi, pasta, çubuk, alan ya da halka grafiği ekleyin." onClick={cmd.insertChart} />
       </RibbonGroup>
       <RibbonGroup label="Bağlantılar" icon={<Link24Regular />}>
         <RibbonButton size="large" icon={<Link32Regular />} label="Bağlantı" shortcut="Ctrl+K" description="Web sayfasına, e-posta adresine ya da sunudaki başka bir slayta köprü ekleyin." disabled={!state.pres.slides.length} onClick={cmd.insertLink} />
@@ -130,6 +135,30 @@ export function InsertTab({ ctx }: { ctx: RibbonCtx }) {
       </RibbonGroup>
       <RibbonGroup label="Simgeler" icon={<Symbols24Regular />}>
         <RibbonButton size="large" icon={<Symbols24Regular />} label="Simge" description="Klavyede bulunmayan karakterler ekleyin." onClick={() => ctx.openDialog("symbol")} />
+      </RibbonGroup>
+      <RibbonGroup label="Medya" icon={<Video24Regular />}>
+        <RibbonMenuButton
+          size="large"
+          icon={<Video32Regular />}
+          label="Video"
+          description="Slayta video ekleyin."
+          menu={
+            <Menu>
+              <MenuItem label="Bu Cihaz..." onClick={() => cmd.insertMedia("video")} />
+            </Menu>
+          }
+        />
+        <RibbonMenuButton
+          size="large"
+          icon={<Speaker232Regular />}
+          label="Ses"
+          description="Slayta ses ekleyin."
+          menu={
+            <Menu>
+              <MenuItem label="Bilgisayarımdaki Ses..." onClick={() => cmd.insertMedia("audio")} />
+            </Menu>
+          }
+        />
       </RibbonGroup>
     </>
   );

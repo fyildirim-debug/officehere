@@ -81,7 +81,7 @@ function ArrangeGroup({ ctx }: { ctx: RibbonCtx }) {
           label="Grupla"
           menu={
             <Menu>
-              <MenuItem label="Grupla" shortcut="Ctrl+G" disabled={shapes.length < 2} onClick={() => a.groupSelection()} />
+              <MenuItem label="Grupla" shortcut="Ctrl+G" disabled={!a.canGroup()} onClick={() => a.groupSelection()} />
               <MenuItem label="Grubu Çöz" shortcut="Ctrl+Shift+G" disabled={!shapes.some((s) => s.kind === "group")} onClick={() => a.ungroupSelection()} />
             </Menu>
           }

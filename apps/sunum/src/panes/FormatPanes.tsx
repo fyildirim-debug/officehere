@@ -134,7 +134,7 @@ export function ShapePane({ state, actions: a, onClose }: { state: AppState; act
   const line: Line | undefined = s && (s.kind === "sp" || s.kind === "pic") ? s.line : undefined;
   const fx = s && (s.kind === "sp" || s.kind === "pic") ? s.effects : undefined;
   const body: TextBody | undefined = sp?.text;
-  const title = s?.kind === "pic" ? "Resmi Biçimlendir" : "Şekli Biçimlendir";
+  const title = s?.kind === "pic" ? "Resmi Biçimlendir" : s?.kind === "chart" ? "Grafik Alanını Biçimlendir" : "Şekli Biçimlendir";
   const tabs = (
     <div className="side-tabs">
       <button type="button" className={tab === "shape" ? "is-active" : ""} onClick={() => setTab("shape")}>

@@ -4,13 +4,13 @@ import { StatusBar, StatusItem, ViewSwitcher, ZoomSlider, tipProps } from "@offi
 import type { Actions } from "../state/actions";
 import type { AppState } from "../state/store";
 
-export function StatusArea({ state, actions: a, onStartShow, onComments, onZoomDialog }: { state: AppState; actions: Actions; onStartShow: () => void; onComments: () => void; onZoomDialog: () => void }) {
+export function StatusArea({ state, actions: a, onSetView, onStartShow, onComments, onZoomDialog }: { state: AppState; actions: Actions; onSetView: (v: AppState["view"]) => void; onStartShow: () => void; onComments: () => void; onZoomDialog: () => void }) {
   const n = state.pres.slides.length;
   return (
     <StatusBar
       left={
         <>
-          <StatusItem>{n ? `Slayt ${state.slideIdx + 1} / ${n}` : "Slayt yok"}</StatusItem>
+          <StatusItem>{state.view === "master" ? "Asıl Slayt" : n ? `Slayt ${state.slideIdx + 1} / ${n}` : "Slayt yok"}</StatusItem>
           <StatusItem tip="Dil">
             <span className="status-btn">
               <Globe20Regular /> Türkçe (Türkiye)
@@ -20,7 +20,13 @@ export function StatusArea({ state, actions: a, onStartShow, onComments, onZoomD
       }
       right={
         <>
-          <StatusItem onClick={() => a.store.set({ showNotes: !state.showNotes, view: "normal" })} tip="Notlar">
+          <StatusItem
+            onClick={() => {
+              if (state.view !== "normal") onSetView("normal");
+              a.store.set({ showNotes: !state.showNotes });
+            }}
+            tip="Notlar"
+          >
             <span className="status-btn" style={{ fontWeight: state.showNotes ? 600 : undefined }}>
               <Notepad20Regular /> Notlar
             </span>
@@ -34,10 +40,7 @@ export function StatusArea({ state, actions: a, onStartShow, onComments, onZoomD
             active={state.view}
             onChange={(v) => {
               if (v === "show") onStartShow();
-              else {
-                a.stopEditing();
-                a.store.set({ view: v as AppState["view"] });
-              }
+              else onSetView(v as AppState["view"]);
             }}
             views={[
               { id: "normal", icon: <SlideText20Regular />, tip: "Normal" },

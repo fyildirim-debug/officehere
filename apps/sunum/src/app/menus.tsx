@@ -19,12 +19,20 @@ import {
   LinkDismiss20Regular,
   LinkEdit20Regular,
   Open20Regular,
+  Rename20Regular,
+  ArrowUp20Regular,
+  ArrowDown20Regular,
+  ArrowCollapseAll20Regular,
+  ArrowExpandAll20Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator } from "@officehere/ui";
 import { LayoutGallery } from "../ribbon/common";
 import type { Actions } from "../state/actions";
 import type { AppCommands } from "../ribbon/types";
 import { currentLink } from "../state/linkActions";
+import { sectionsOf } from "../model/sections";
+import { MASTER_SLIDE_ID } from "../model/masterView";
+import { collapseAllSections, moveSectionCmd, removeAllSectionsCmd, removeSectionCmd } from "../state/sectionActions";
 
 
 export function shapeMenu(a: Actions, cmd: AppCommands, openDialog: (d: "sizePos") => void) {
@@ -39,12 +47,18 @@ export function shapeMenu(a: Actions, cmd: AppCommands, openDialog: (d: "sizePos
       <MenuItem icon={<ClipboardPaste20Regular />} label="Yapıştır" shortcut="Ctrl+V" onClick={() => cmd.paste()} />
       <MenuSeparator />
       {sp && <MenuItem icon={<Edit20Regular />} label="Metni Düzenle" onClick={() => a.startEditing({ shapeId: sp.id, selectAll: true })} />}
+      {shapes.length === 1 && shapes[0].kind === "chart" && (
+        <>
+          <MenuItem label="Verileri Düzenle..." onClick={cmd.editChartData} />
+          <MenuItem label="Grafik Türünü Değiştir..." onClick={cmd.changeChartType} />
+        </>
+      )}
       <MenuItem
         icon={<Group20Regular />}
         label="Grupla"
         submenu={
           <Menu>
-            <MenuItem label="Grupla" disabled={shapes.length < 2} onClick={() => a.groupSelection()} />
+            <MenuItem label="Grupla" disabled={!a.canGroup()} onClick={() => a.groupSelection()} />
             <MenuItem label="Grubu Çöz" disabled={!shapes.some((s) => s.kind === "group")} onClick={() => a.ungroupSelection()} />
           </Menu>
         }
@@ -81,7 +95,7 @@ export function shapeMenu(a: Actions, cmd: AppCommands, openDialog: (d: "sizePos
       )}
       <MenuSeparator />
       <MenuItem label="Boyut ve Konum..." onClick={() => openDialog("sizePos")} />
-      <MenuItem icon={<PaintBucket20Regular />} label={isPic ? "Resmi Biçimlendir..." : "Şekli Biçimlendir..."} onClick={() => cmd.togglePane("shape")} />
+      <MenuItem icon={<PaintBucket20Regular />} label={isPic ? "Resmi Biçimlendir..." : shapes.length === 1 && shapes[0].kind === "chart" ? "Grafik Alanını Biçimlendir..." : "Şekli Biçimlendir..."} onClick={() => cmd.togglePane("shape")} />
       <MenuSeparator />
       <MenuItem icon={<Delete20Regular />} label="Sil" shortcut="Delete" onClick={() => a.deleteSelection()} />
     </Menu>
@@ -95,9 +109,13 @@ export function slideAreaMenu(a: Actions, cmd: AppCommands, toggleRuler: () => v
     <Menu>
       <MenuItem icon={<ClipboardPaste20Regular />} label="Yapıştır" shortcut="Ctrl+V" onClick={() => cmd.paste()} />
       <MenuSeparator />
-      <MenuItem icon={<SlideLayout20Regular />} label="Düzen" disabled={!slide} submenu={<LayoutGallery pres={s.pres} selectedId={slide?.layoutId} onPick={(id) => a.setLayout(id)} />} />
-      <MenuItem icon={<ArrowReset20Regular />} label="Slaytı Sıfırla" disabled={!slide} onClick={() => a.resetSlides()} />
-      <MenuSeparator />
+      {s.view !== "master" && (
+        <>
+          <MenuItem icon={<SlideLayout20Regular />} label="Düzen" disabled={!slide} submenu={<LayoutGallery pres={s.pres} selectedId={slide?.layoutId} onPick={(id) => a.setLayout(id)} />} />
+          <MenuItem icon={<ArrowReset20Regular />} label="Slaytı Sıfırla" disabled={!slide} onClick={() => a.resetSlides()} />
+          <MenuSeparator />
+        </>
+      )}
       <MenuItem icon={<Ruler20Regular />} label="Cetvel" checked={rulerOn} onClick={toggleRuler} />
       <MenuItem label="Kılavuz Çizgileri" checked={s.showGrid} onClick={() => a.store.set({ showGrid: !s.showGrid })} />
       <MenuItem label="Kılavuzlar" checked={s.showGuides} onClick={() => a.store.set({ showGuides: !s.showGuides })} />
@@ -131,8 +149,49 @@ export function thumbMenu(a: Actions, cmd: AppCommands, onSlide: boolean) {
           <MenuItem icon={<ArrowReset20Regular />} label="Slaytı Sıfırla" onClick={() => a.resetSlides()} />
           <MenuItem icon={<PaintBucket20Regular />} label="Arka Planı Biçimlendir..." onClick={() => cmd.togglePane("background")} />
           <MenuItem icon={<EyeOff20Regular />} label={hidden ? "Slaytı Göster" : "Slaytı Gizle"} checked={hidden} onClick={() => a.toggleHideSlides()} />
+          <MenuSeparator />
+          <MenuItem label="Bölüm Ekle" onClick={cmd.addSection} />
         </>
       )}
+    </Menu>
+  );
+}
+
+/** Bölüm başlığı sağ tık menüsü ve Giriş > Bölüm menüsü. */
+export function sectionMenu(a: Actions, cmd: AppCommands, id: string | undefined) {
+  const secs = sectionsOf(a.s.pres.slides);
+  const i = id ? secs.findIndex((s) => s.id === id) : -1;
+  return (
+    <Menu>
+      <MenuItem icon={<SlideAdd20Regular />} label="Bölüm Ekle" disabled={!a.s.pres.slides.length} onClick={cmd.addSection} />
+      <MenuItem icon={<Rename20Regular />} label="Bölümü Yeniden Adlandır..." disabled={i < 0} onClick={() => id && cmd.renameSection(id)} />
+      <MenuItem icon={<Delete20Regular />} label="Bölümü Kaldır" disabled={i < 0} onClick={() => id && removeSectionCmd(a, id)} />
+      <MenuItem label="Bölümü ve Slaytları Kaldır" disabled={i < 0} onClick={() => id && removeSectionCmd(a, id, true)} />
+      <MenuItem label="Tüm Bölümleri Kaldır" disabled={!secs.length} onClick={() => removeAllSectionsCmd(a)} />
+      <MenuSeparator />
+      <MenuItem icon={<ArrowUp20Regular />} label="Bölümü Yukarı Taşı" disabled={i <= 0} onClick={() => id && moveSectionCmd(a, id, -1)} />
+      <MenuItem icon={<ArrowDown20Regular />} label="Bölümü Aşağı Taşı" disabled={i < 0 || i >= secs.length - 1} onClick={() => id && moveSectionCmd(a, id, 1)} />
+      <MenuSeparator />
+      <MenuItem icon={<ArrowCollapseAll20Regular />} label="Tümünü Daralt" disabled={!secs.length} onClick={() => collapseAllSections(a, true)} />
+      <MenuItem icon={<ArrowExpandAll20Regular />} label="Tümünü Genişlet" disabled={!secs.length} onClick={() => collapseAllSections(a, false)} />
+    </Menu>
+  );
+}
+
+/** Asıl görünüm bölmesi sağ tık menüsü. */
+export function masterMenu(a: Actions, cmd: AppCommands) {
+  const cur = a.s.pres.slides[a.s.slideIdx];
+  const isMaster = cur?.id === MASTER_SLIDE_ID;
+  return (
+    <Menu>
+      <MenuItem icon={<SlideAdd20Regular />} label="Düzen Ekle" onClick={() => a.newSlide()} />
+      <MenuItem icon={<SlideMultiple20Regular />} label="Düzeni Çoğalt" disabled={isMaster} onClick={() => a.duplicateSlides()} />
+      <MenuItem icon={<Delete20Regular />} label="Düzeni Sil" disabled={isMaster} onClick={() => a.deleteSlides()} />
+      <MenuItem icon={<Rename20Regular />} label="Düzeni Yeniden Adlandır..." disabled={isMaster} onClick={cmd.renameLayout} />
+      <MenuSeparator />
+      <MenuItem icon={<PaintBucket20Regular />} label="Arka Planı Biçimlendir..." onClick={() => cmd.togglePane("background")} />
+      <MenuSeparator />
+      <MenuItem label="Asıl Görünümü Kapat" onClick={() => cmd.setView("normal")} />
     </Menu>
   );
 }

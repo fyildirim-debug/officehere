@@ -214,3 +214,74 @@
   pointer-events: auto;
   cursor: pointer;
 }
+
+/* Grafik */
+.chart-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+
+.sv-edit .sh-chart {
+  pointer-events: auto;
+}
+
+/* Video / ses */
+.media-edit,
+.media-audio {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+}
+
+.media-edit img,
+.media-audio img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.media-blank {
+  width: 100%;
+  height: 100%;
+  background: #1f1f1f;
+}
+
+.media-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18%;
+  max-width: 64px;
+  min-width: 18px;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+}
+
+.sv-edit .media-edit {
+  pointer-events: auto;
+}
+
+.media-el {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: #000;
+  object-fit: contain;
+}
+
+.sv-show .media-el,
+.sv-show .media-audio {
+  pointer-events: auto;
+}
+
+.sv-show .media-audio {
+  cursor: pointer;
+}
+
+.media-audio.is-playing img {
+  filter: drop-shadow(0 0 6px rgba(0, 120, 212, 0.8));
+}

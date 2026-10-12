@@ -26,6 +26,7 @@ import {
   Settings24Regular,
   SlideMultiple24Regular,
   TextBulletListTree24Regular,
+  SlideLayout24Regular,
 } from "@fluentui/react-icons";
 import { RibbonButton, RibbonCheckbox, RibbonGroup, RibbonStack } from "@officehere/ui";
 import { getUserName } from "@officehere/ui";
@@ -100,6 +101,9 @@ export function ViewTab({ ctx }: { ctx: RibbonCtx }) {
         <RibbonButton size="large" icon={<SlideGrid24Regular />} label="Slayt Sıralayıcısı" checked={state.view === "sorter"} onClick={() => cmd.setView("sorter")} />
         <RibbonButton size="large" icon={<DocumentOnePage24Regular />} label="Not Sayfası" checked={state.view === "notes"} onClick={() => cmd.setView("notes")} />
         <RibbonButton size="large" icon={<ReadingModeMobile24Regular />} label="Okuma Görünümü" checked={state.view === "reading"} onClick={() => cmd.setView("reading")} />
+      </RibbonGroup>
+      <RibbonGroup label="Asıl Görünümler" icon={<SlideLayout24Regular />}>
+        <RibbonButton size="large" icon={<SlideLayout24Regular />} label="Asıl Slayt" checked={state.view === "master"} description="Asıl slaydı ve düzenlerini düzenleyin: yer tutucu konumları, yazı tipleri ve arka plan tüm slaytlara yansır." disabled={!state.pres.layouts.length} onClick={() => cmd.setView(state.view === "master" ? "normal" : "master")} />
       </RibbonGroup>
       <RibbonGroup label="Göster" icon={<Eye24Regular />}>
         <RibbonStack>

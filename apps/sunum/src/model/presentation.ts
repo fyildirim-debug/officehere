@@ -150,7 +150,7 @@ export function relayoutSlide(_pres: Presentation, slide: Slide, newLayout: Layo
 export function applyTheme(pres: Presentation, themeId: string, variant = 0): Presentation {
   const def = getThemeDef(themeId) ?? THEMES[0];
   const { master, layouts } = buildMasterAndLayouts(pres.width, pres.height, def.style);
-  const next: Presentation = { ...pres, theme: themeFromDef(def.id, variant), master, layouts };
+  const next: Presentation = { ...pres, theme: themeFromDef(def.id, variant), master, layouts, masterEdited: undefined };
   next.slides = pres.slides.map((s) => {
     const old = pres.layouts.find((l) => l.id === s.layoutId);
     const nl = layouts.find((l) => l.type === old?.type) ?? layouts.find((l) => l.type === "obj")!;
@@ -182,7 +182,7 @@ export function resizePresentation(pres: Presentation, width: number, height: nu
   const def = getThemeDef(pres.theme.id);
   let master = pres.master;
   let layouts = pres.layouts;
-  if (def) {
+  if (def && !pres.masterEdited) {
     const built = buildMasterAndLayouts(width, height, def.style);
     master = built.master;
     layouts = pres.layouts.map((l) => {
@@ -195,7 +195,7 @@ export function resizePresentation(pres: Presentation, width: number, height: nu
   }
   // Düzenden konum alan (özelleştirilmemiş) yer tutucular yeni düzenin konumuna geçer; diğerleri ölçeklenir.
   const slides = pres.slides.map((sl) => {
-    const oldL = def ? pres.layouts.find((l) => l.id === sl.layoutId) : undefined;
+    const oldL = def && !pres.masterEdited ? pres.layouts.find((l) => l.id === sl.layoutId) : undefined;
     const newL = oldL ? layouts.find((l) => l.id === sl.layoutId) : undefined;
     return {
       ...sl,

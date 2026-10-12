@@ -10,6 +10,8 @@ import { findShape } from "../model/ops";
 import { linkSlideIndex } from "../model/links";
 import { ScaledSlide, SlideView } from "../render/SlideView";
 import { animationKeyframes, buildSteps, initiallyHidden, transitionPlan, type StepEffect } from "./effects";
+import { InkOverlay, type ShowStroke } from "./ShowInk";
+import { ShowSlideGrid, ShowToolbar, useShowTools } from "./ShowControls";
 
 export type ShowMode = "full" | "window" | "presenter";
 
@@ -17,7 +19,8 @@ export interface SlideShowProps {
   pres: Presentation;
   startIndex: number;
   mode: ShowMode;
-  onExit: (lastIndex: number) => void;
+  /** Gösteri bittiğinde; gösteride çizilen mürekkep (slayt kimliğine göre) ile. */
+  onExit: (lastIndex: number, ink?: Record<string, ShowStroke[]>) => void;
   loop?: boolean;
   noAnimations?: boolean;
   /** Pencere modunda alt çubuk için görünüm değiştirme. */
@@ -80,6 +83,11 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
   const index = current.index;
   const slide: Slide | undefined = pres.slides[index];
   const steps = useMemo(() => (slide && !noAnimations ? buildSteps(slide) : { auto: [], clicks: [] }), [slide, noAnimations]);
+  const tools = useShowTools(slide?.id);
+  const [grid, setGrid] = useState(false);
+  const exitRef = useRef((i: number) => onExit(i, tools.allInk()));
+  exitRef.current = (i: number) => onExit(i, tools.allInk());
+  const exit = (i: number) => exitRef.current(i);
   const stateRef = useRef({ index, step, ended, steps, layers });
   stateRef.current = { index, step, ended, steps, layers };
 
@@ -101,7 +109,7 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
     const el = rootRef.current;
     const onFs = () => {
       if (document.fullscreenElement) wasFullscreen.current = true;
-      else if (wasFullscreen.current) onExit(stateRef.current.index);
+      else if (wasFullscreen.current) exitRef.current(stateRef.current.index);
     };
     document.addEventListener("fullscreenchange", onFs);
     if (document.fullscreenElement) wasFullscreen.current = true;
@@ -272,7 +280,7 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
     (auto = false) => {
       const st = stateRef.current;
       if (st.ended) {
-        if (!auto) onExit(st.index);
+        if (!auto) exitRef.current(st.index);
         return;
       }
       if (!auto && finishRunning()) return;
@@ -297,7 +305,7 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
       }
       goTo(ni);
     },
-    [pres, goTo, runEffects, loop, onExit],
+    [pres, goTo, runEffects, loop],
   );
 
   const back = useCallback(() => {
@@ -323,6 +331,11 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const k = e.key;
     e.stopPropagation();
+    if (!preview && tools.handleKey(e)) return;
+    if (grid && k === "Escape") {
+      setGrid(false);
+      return;
+    }
     if (/^[0-9]$/.test(k)) {
       setNumBuf((b) => (b + k).slice(-4));
       return;
@@ -379,7 +392,7 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
       case "-":
         e.preventDefault();
         if (screen !== "none") setScreen("none");
-        else onExit(index);
+        else exit(index);
         break;
       default:
         break;
@@ -398,7 +411,8 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
 
   const onClick = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    if ((e.target as Element).closest("button, .show-bar, .presenter-side")) return;
+    if ((e.target as Element).closest("button, .show-bar, .presenter-side, .show-toolbar, .show-grid, video, audio, [data-media]")) return;
+    if (tools.tool === "pen" || tools.tool === "highlighter" || tools.tool === "eraser") return;
     const linkEl = (e.target as Element).closest("[data-link]") as HTMLElement | null;
     if (linkEl?.dataset.link && screen === "none") {
       followShowLink(linkEl.dataset.link);
@@ -411,9 +425,9 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
     advance();
   };
 
-  const openMenu = (e: React.MouseEvent) => {
-    ctx.open(
-      e,
+  const openMenu = (e: React.MouseEvent) => ctx.open(e, mainMenu());
+
+  const mainMenu = () => (
       <Menu>
         <MenuItem label="Sonraki" onClick={() => advance()} />
         <MenuItem label="Önceki" onClick={() => back()} />
@@ -428,6 +442,7 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
             </Menu>
           }
         />
+        {!preview && tools.pointerMenu()}
         <MenuItem
           label="Ekran"
           submenu={
@@ -438,10 +453,9 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
           }
         />
         <MenuSeparator />
-        <MenuItem label="Gösteriyi Bitir" shortcut="Esc" onClick={() => onExit(index)} />
-      </Menu>,
-    );
-  };
+        <MenuItem label="Gösteriyi Bitir" shortcut="Esc" onClick={() => exit(index)} />
+      </Menu>
+  );
 
   const hiddenSets = useMemo(() => new Map(layers.map((l) => [l.key, noAnimations ? new Set<string>() : initiallyHidden(pres.slides[l.index] ?? { animations: [] } as unknown as Slide)])), [layers, pres, noAnimations]);
 
@@ -468,9 +482,10 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
             </div>
           );
         })}
+        {!preview && <InkOverlay width={pres.width} height={pres.height} tool={tools.tool} color={tools.color} strokes={tools.strokes} visible={tools.visible} onAdd={tools.add} onErase={tools.erase} />}
       </div>
       {ended && (
-        <div className="show-end" onClick={() => onExit(index)}>
+        <div className="show-end" onClick={() => exit(index)}>
           Slayt gösterisinin sonu. Çıkmak için tıklayın.
         </div>
       )}
@@ -486,7 +501,7 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
         <div className="presenter-top">
           <span className="presenter-timer">{formatTime(now - startTime)}</span>
           <span>{new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit" }).format(now)}</span>
-          <button type="button" className="presenter-btn" onClick={() => onExit(index)}>
+          <button type="button" className="presenter-btn" onClick={() => exit(index)}>
             Gösteriyi Bitir
           </button>
         </div>
@@ -527,6 +542,9 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
           <button type="button" className="presenter-btn" onClick={() => advance()} title="Sonraki">
             ▶
           </button>
+          <button type="button" className={`presenter-btn${tools.tool !== "pointer" ? " is-on" : ""}`} onClick={(e) => ctx.open(e, tools.toolMenu())}>
+            Kalem ve Lazer İşaretçisi
+          </button>
           <button type="button" className="presenter-btn" onClick={() => setScreen((s) => (s === "black" ? "none" : "black"))}>
             Siyah Ekran
           </button>
@@ -552,6 +570,18 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
       <div className="show-area" ref={areaRef}>
         {stage}
       </div>
+      {mode === "full" && !grid && <ShowToolbar tools={tools} onPrev={back} onNext={() => advance()} onOpenMenu={(e, m) => ctx.open(e, m)} onAllSlides={() => setGrid(true)} moreMenu={mainMenu} />}
+      {grid && (
+        <ShowSlideGrid
+          pres={pres}
+          current={index}
+          onPick={(i) => {
+            setGrid(false);
+            goTo(i, false, false);
+          }}
+          onClose={() => setGrid(false)}
+        />
+      )}
       {mode === "window" && !preview && (
         <div className="show-bar" onClick={(e) => e.stopPropagation()}>
           <span className="show-bar-title">{`Slayt ${index + 1} / ${pres.slides.length}`}</span>
@@ -575,7 +605,7 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
               </button>
             </>
           )}
-          <button type="button" className="show-bar-btn" onClick={() => onExit(index)} title="Okuma Görünümünü Kapat">
+          <button type="button" className="show-bar-btn" onClick={() => exit(index)} title="Okuma Görünümünü Kapat">
             ✕
           </button>
         </div>

@@ -218,3 +218,138 @@
 html:has(.show-root) .oh-popover {
   z-index: 3100;
 }
+
+/* İşaretçi araçları (kalem, vurgulayıcı, lazer, silgi) */
+.show-ink {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+  touch-action: none;
+}
+
+.show-ink.is-active {
+  pointer-events: auto;
+}
+
+.show-ink.is-pen,
+.show-ink.is-highlighter {
+  cursor: crosshair;
+}
+
+.show-ink.is-eraser {
+  cursor: cell;
+}
+
+.show-ink.is-laser,
+.show-root:has(.show-ink.is-laser) {
+  cursor: none;
+}
+
+.show-toolbar {
+  position: absolute;
+  left: 18px;
+  bottom: 14px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.25s;
+  z-index: 8;
+}
+
+.show-root:hover .show-toolbar,
+.show-toolbar.is-tool,
+.show-toolbar:focus-within {
+  opacity: 0.55;
+}
+
+.show-toolbar:hover {
+  opacity: 1 !important;
+}
+
+.show-root.no-cursor .show-toolbar:not(.is-tool) {
+  opacity: 0;
+}
+
+.show-tb-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(40, 40, 40, 0.85);
+  color: #fff;
+  cursor: pointer;
+}
+
+.show-tb-btn:hover,
+.show-tb-btn.is-on {
+  background: rgba(70, 70, 70, 0.95);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+
+.presenter-btn.is-on {
+  background: #555;
+  border-color: #aaa;
+}
+
+.show-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 2px;
+}
+
+.show-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  background: #1e1e1e;
+  overflow: auto;
+  padding: 16px 24px;
+  font-family: var(--oh-font-ui);
+}
+
+.show-grid-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+
+.show-grid-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.show-grid-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 0;
+  border: 2px solid transparent;
+  background: transparent;
+  color: #ddd;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.show-grid-item:hover {
+  border-color: #888;
+}
+
+.show-grid-item.is-current {
+  border-color: #e0663e;
+}
+
+.show-grid-item.is-hidden {
+  opacity: 0.5;
+}

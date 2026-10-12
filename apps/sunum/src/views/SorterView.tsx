@@ -4,13 +4,15 @@ import type { Presentation, Slide } from "../model/types";
 import { ScaledSlide } from "../render/SlideView";
 import type { Actions } from "../state/actions";
 import type { AppState } from "../state/store";
-import { sameThumb } from "../panes/ThumbnailPane";
+import { sameThumb, SectionHeader } from "../panes/ThumbnailPane";
+import { sectionsOf } from "../model/sections";
+import { selectSection, toggleSectionCollapsed } from "../state/sectionActions";
 
 const Thumb = memo(function Thumb({ pres, slide, index, width }: { pres: Presentation; slide: Slide; index: number; width: number }) {
   return <ScaledSlide pres={pres} slide={slide} slideNumber={index + 1} width={width} />;
 }, sameThumb);
 
-export function SorterView({ state, actions: a, onOpenSlide, onContextMenu }: { state: AppState; actions: Actions; onOpenSlide: (i: number) => void; onContextMenu: (e: React.MouseEvent) => void }) {
+export function SorterView({ state, actions: a, onOpenSlide, onContextMenu, onSectionMenu, onRenameSection }: { state: AppState; actions: Actions; onOpenSlide: (i: number) => void; onContextMenu: (e: React.MouseEvent) => void; onSectionMenu: (e: React.MouseEvent, id: string) => void; onRenameSection: (id: string) => void }) {
   const pres = state.pres;
   const w = Math.round(220 * (state.zoom / 66));
   const width = Math.max(120, Math.min(560, w));
@@ -24,20 +26,19 @@ export function SorterView({ state, actions: a, onOpenSlide, onContextMenu }: { 
 
   const indexAt = (x: number, y: number): number => {
     const items = Array.from(ref.current?.querySelectorAll<HTMLElement>(".sorter-item") ?? []);
-    let best = items.length;
-    for (let i = 0; i < items.length; i++) {
-      const r = items[i].getBoundingClientRect();
-      if (y < r.top - 10) {
-        best = i;
-        break;
-      }
-      if (y <= r.bottom + 10 && x < r.left + r.width / 2) {
-        best = i;
+    let best = items.length ? Number(items[items.length - 1].dataset.index) + 1 : 0;
+    for (const it of items) {
+      const r = it.getBoundingClientRect();
+      if (y < r.top - 10 || (y <= r.bottom + 10 && x < r.left + r.width / 2)) {
+        best = Number(it.dataset.index);
         break;
       }
     }
     return best;
   };
+
+  let curSection: string | undefined;
+  const counts = new Map(sectionsOf(pres.slides).map((x) => [x.id, x.slideIds.length]));
 
   return (
     <div
@@ -68,9 +69,29 @@ export function SorterView({ state, actions: a, onOpenSlide, onContextMenu }: { 
       <div className="sorter-grid">
         {pres.slides.map((s, i) => {
           const sel = state.slideSel.includes(s.id);
-          return (
+          if (s.section) curSection = s.section.id;
+          const collapsed = !!curSection && state.collapsedSections.includes(curSection);
+          const head = s.section ? (
+            <SectionHeader
+              key={`h-${s.section.id}`}
+              name={s.section.name}
+              count={counts.get(s.section.id) ?? 0}
+              collapsed={collapsed}
+              onToggle={() => toggleSectionCollapsed(a, s.section!.id)}
+              onSelect={() => selectSection(a, s.section!.id)}
+              onRename={() => onRenameSection(s.section!.id)}
+              onMenu={(e) => {
+                selectSection(a, s.section!.id);
+                onSectionMenu(e, s.section!.id);
+              }}
+            />
+          ) : null;
+          if (collapsed) return head;
+          return [
+            head,
             <div
               key={s.id}
+              data-index={i}
               className={`sorter-item${sel ? " is-selected" : ""}${s.hidden ? " is-hidden" : ""}`}
               onPointerDown={(e) => {
                 a.store.set({ focus: "slides" });
@@ -97,8 +118,8 @@ export function SorterView({ state, actions: a, onOpenSlide, onContextMenu }: { 
                 </span>
                 <span style={{ textDecoration: s.hidden ? "line-through" : undefined }}>{i + 1}</span>
               </div>
-            </div>
-          );
+            </div>,
+          ];
         })}
         {drop === pres.slides.length && <div style={{ width: 3, background: "var(--oh-accent)" }} />}
       </div>

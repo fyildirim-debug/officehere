@@ -4,12 +4,17 @@ import type { Presentation, Slide } from "../model/types";
 import { ScaledSlide } from "../render/SlideView";
 import type { Actions } from "../state/actions";
 import type { AppState } from "../state/store";
+import { sectionsOf } from "../model/sections";
+import { selectSection, toggleSectionCollapsed } from "../state/sectionActions";
 
 export interface ThumbnailPaneProps {
   state: AppState;
   actions: Actions;
   width: number;
   onContextMenu: (e: React.MouseEvent, onSlide: boolean) => void;
+  /** Bölüm başlığı sağ tık menüsü. */
+  onSectionMenu: (e: React.MouseEvent, sectionId: string) => void;
+  onRenameSection: (sectionId: string) => void;
 }
 
 type ThumbProps = { pres: Presentation; slide: Slide; index: number; width: number };
@@ -32,7 +37,7 @@ const Thumb = memo(function Thumb({ pres, slide, index, width }: ThumbProps) {
   return <ScaledSlide pres={pres} slide={slide} slideNumber={index + 1} width={width} />;
 }, sameThumb);
 
-export function ThumbnailPane({ state, actions, width, onContextMenu }: ThumbnailPaneProps) {
+export function ThumbnailPane({ state, actions, width, onContextMenu, onSectionMenu, onRenameSection }: ThumbnailPaneProps) {
   const pres = state.pres;
   const listRef = useRef<HTMLDivElement>(null);
   const [dropAt, setDropAt] = useState<number | null>(null);
@@ -45,12 +50,13 @@ export function ThumbnailPane({ state, actions, width, onContextMenu }: Thumbnai
   }, [state.slideIdx]);
 
   const indexFromY = (clientY: number): number => {
+    // Daraltılmış bölümlerin slaytları listede yoktur: dizin öğenin kendisinden okunur.
     const items = Array.from(listRef.current?.querySelectorAll<HTMLElement>(".thumb-item") ?? []);
-    for (let i = 0; i < items.length; i++) {
-      const r = items[i].getBoundingClientRect();
-      if (clientY < r.top + r.height / 2) return i;
+    for (const it of items) {
+      const r = it.getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return Number(it.dataset.index);
     }
-    return items.length;
+    return items.length ? Number(items[items.length - 1].dataset.index) + 1 : 0;
   };
 
   const onPointerDown = (e: React.PointerEvent, i: number) => {
@@ -95,6 +101,9 @@ export function ThumbnailPane({ state, actions, width, onContextMenu }: Thumbnai
     setDropAt(null);
   };
 
+  let curSection: string | undefined;
+  const sectionCounts = new Map(sectionsOf(pres.slides).map((x) => [x.id, x.slideIds.length]));
+
   return (
     <div
       className="thumb-pane oh-scroll"
@@ -110,11 +119,29 @@ export function ThumbnailPane({ state, actions, width, onContextMenu }: Thumbnai
       }}
     >
       {pres.slides.map((slide, i) => {
+        if (slide.section) curSection = slide.section.id;
+        const collapsed = !!curSection && state.collapsedSections.includes(curSection);
+        const head = slide.section ? (
+          <SectionHeader
+            name={slide.section.name}
+            count={sectionCounts.get(slide.section.id) ?? 0}
+            collapsed={collapsed}
+            onToggle={() => toggleSectionCollapsed(actions, slide.section!.id)}
+            onSelect={() => selectSection(actions, slide.section!.id)}
+            onRename={() => onRenameSection(slide.section!.id)}
+            onMenu={(e) => {
+              selectSection(actions, slide.section!.id);
+              onSectionMenu(e, slide.section!.id);
+            }}
+          />
+        ) : null;
+        if (collapsed) return <div key={slide.id}>{head}</div>;
         const selected = state.slideSel.includes(slide.id);
         const current = i === state.slideIdx;
         const hasFx = (slide.transition && slide.transition.type !== "none") || slide.animations.length > 0;
         return (
           <div key={slide.id}>
+            {head}
             {dropAt === i && <div className="thumb-drop" />}
             <div
               className={`thumb-item${selected ? " is-selected" : ""}${current ? " is-current" : ""}${slide.hidden ? " is-hidden" : ""}`}
@@ -145,6 +172,43 @@ export function ThumbnailPane({ state, actions, width, onContextMenu }: Thumbnai
           Yeni slayt eklemek için tıklayın
         </button>
       )}
+    </div>
+  );
+}
+
+/** Küçük resim bölmesi / sıralayıcıdaki bölüm başlığı. */
+export function SectionHeader({ name, count, collapsed, onToggle, onSelect, onRename, onMenu }: { name: string; count: number; collapsed: boolean; onToggle: () => void; onSelect: () => void; onRename: () => void; onMenu: (e: React.MouseEvent) => void }) {
+  return (
+    <div
+      className={`section-head${collapsed ? " is-collapsed" : ""}`}
+      role="heading"
+      aria-level={3}
+      title={name}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={onSelect}
+      onDoubleClick={onRename}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onMenu(e);
+      }}
+    >
+      <button
+        type="button"
+        className="section-chev"
+        aria-label={collapsed ? "Bölümü genişlet" : "Bölümü daralt"}
+        aria-expanded={!collapsed}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+      >
+        <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
+          <path d={collapsed ? "M3 1.5 L7 5 L3 8.5 Z" : "M1.5 3 L5 7 L8.5 3 Z"} fill="currentColor" />
+        </svg>
+      </button>
+      <span className="section-name">{name}</span>
+      {collapsed && <span className="section-count">({count})</span>}
     </div>
   );
 }

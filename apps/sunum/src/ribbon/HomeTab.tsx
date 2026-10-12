@@ -45,6 +45,7 @@ import {
   SlideAdd24Regular,
   TextFont24Regular,
   TextParagraph24Regular,
+  SlideMultiple20Regular,
 } from "@fluentui/react-icons";
 import { FONT_LIST, FONT_SIZES, fontStack } from "@officehere/core";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonCombo, RibbonGroup, RibbonMenuButton, RibbonRow, RibbonSplitButton, RibbonStack, useMenuClose } from "@officehere/ui";
@@ -57,6 +58,8 @@ import { InlineShapeGallery, LayoutGallery, ThemeColorSplit } from "./common";
 import { BULLET_PRESETS, NUMBER_PRESETS, SPACING_PRESETS } from "./presets";
 import { ArrangeMenu, QuickStylesMenu, ShapeEffectsMenu, ShapeFillButton, ShapeOutlineButton } from "./shapeMenus";
 import type { RibbonCtx } from "./types";
+import { sectionMenu } from "../app/menus";
+import { currentSection } from "../state/sectionActions";
 
 function BulletGrid({ onPick, kind }: { onPick: (b: BulletDef) => void; kind: "bullet" | "number" }) {
   const close = useMenuClose();
@@ -166,6 +169,7 @@ export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
           shortcut="Ctrl+M"
           description="Sunuya slayt ekleyin."
           onClick={() => a.newSlide()}
+          disabled={state.view === "master"}
           menu={
             <>
               <LayoutGallery pres={state.pres} header="Tema" onPick={(id) => a.newSlide(id)} />
@@ -176,8 +180,9 @@ export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
           }
         />
         <RibbonStack>
-          <RibbonMenuButton icon={<SlideLayout20Regular />} label="Düzen" tip="Düzen" description="Seçili slaydın düzenini değiştirin." disabled={!slide} menu={<LayoutGallery pres={state.pres} selectedId={slide?.layoutId} onPick={(id) => a.setLayout(id)} />} />
-          <RibbonButton icon={<ArrowReset20Regular />} label="Sıfırla" tip="Sıfırla" description="Slayt yer tutucularının konumunu, boyutunu ve biçimini varsayılana sıfırlayın." disabled={!slide} onClick={() => a.resetSlides()} />
+          <RibbonMenuButton icon={<SlideLayout20Regular />} label="Düzen" tip="Düzen" description="Seçili slaydın düzenini değiştirin." disabled={!slide || state.view === "master"} menu={<LayoutGallery pres={state.pres} selectedId={slide?.layoutId} onPick={(id) => a.setLayout(id)} />} />
+          <RibbonButton icon={<ArrowReset20Regular />} label="Sıfırla" tip="Sıfırla" description="Slayt yer tutucularının konumunu, boyutunu ve biçimini varsayılana sıfırlayın." disabled={!slide || state.view === "master"} onClick={() => a.resetSlides()} />
+          <RibbonMenuButton icon={<SlideMultiple20Regular />} label="Bölüm" tip="Bölüm" description="Slaytlarınızı bölümler halinde düzenleyin." disabled={!slide || state.view === "master"} menu={() => sectionMenu(a, cmd, currentSection(a)?.id)} />
         </RibbonStack>
       </RibbonGroup>
 

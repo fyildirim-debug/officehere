@@ -3,7 +3,7 @@ import { ArrowDownload24Regular, DocumentPdf24Regular, Image24Regular, ImageMult
 import { useLayoutEffect, useRef, useState } from "react";
 import { OfficeBackstage, type BackstageExport } from "@officehere/ui";
 import type { RecentFile } from "@officehere/core";
-import { formatDateTime } from "@officehere/core";
+import { formatDateTime, isDesktop } from "@officehere/core";
 import type { Presentation } from "../model/types";
 import { ScaledSlide } from "../render/SlideView";
 import type { Actions } from "../state/actions";
@@ -22,7 +22,12 @@ function templatePres(id: string): Presentation {
 }
 
 const EXPORTS: BackstageExport[] = [
-  { id: "pdf", title: "PDF Belgesi Oluştur", description: "Her slayt yatay bir sayfa olarak yazdırılır; yazıcı olarak “PDF olarak kaydet” seçin.", icon: <DocumentPdf24Regular /> },
+  {
+    id: "pdf",
+    title: "PDF Belgesi Oluştur",
+    description: isDesktop() ? "Her slayt yatay bir sayfa olarak PDF dosyasına kaydedilir." : "Her slayt yatay bir sayfa olarak yazdırılır; yazıcı olarak “PDF olarak kaydet” seçin.",
+    icon: <DocumentPdf24Regular />,
+  },
   { id: "png", title: "Geçerli Slaytı Resim Olarak Kaydet", description: "Geçerli slaydı PNG resmi olarak indirir.", icon: <Image24Regular /> },
   { id: "pngAll", title: "Tüm Slaytları Resim Olarak Kaydet", description: "Her slaydı PNG olarak bir ZIP arşivinde indirir.", icon: <ImageMultiple24Regular /> },
   { id: "outline", title: "Ana Hat Olarak Kaydet", description: "Slayt başlıkları ve metinleri düz metin dosyası olarak.", icon: <TextBulletListLtr24Regular /> },

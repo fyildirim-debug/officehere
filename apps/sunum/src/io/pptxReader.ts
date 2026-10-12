@@ -6,13 +6,15 @@
 import JSZip from "jszip";
 import { uid } from "../model/factory";
 import { mapSlideLinks } from "../model/links";
+import { normalizeSections } from "../model/sections";
 import { DEFAULT_HF } from "../model/presentation";
 import { findPlaceholder, placeholderKind } from "../model/textStyle";
-import type { Fill, Layout, LayoutType, LevelStyle, Master, Placeholder, Presentation, SchemeColorName, Shape, Slide, SpShape, TextStyles, Theme } from "../model/types";
+import type { ChartData, Fill, Layout, LayoutType, LevelStyle, Master, Placeholder, Presentation, SchemeColorName, Shape, Slide, SpShape, TextStyles, Theme } from "../model/types";
 import { buildTextStyles, LAYOUT_NAMES } from "../themes/build";
 import { getThemeDef } from "../themes/themes";
-import { EXT_MIME } from "./pptxWriter";
-import { DEFAULT_CLRMAP, readColor, readFill, readLevels, readShapeList, readTextBody, type ReadCtx } from "./readDrawing";
+import { EXT_MIME, MEDIA_MIME } from "./pptxWriter";
+import { readChartXml } from "./readChart";
+import { DEFAULT_CLRMAP, readColor, readEffects, readFill, readLevels, readShapeList, readTextBody, type ReadCtx } from "./readDrawing";
 import { readAnimations, readTransition } from "./readTiming";
 import { attr, fromEmu, kid, kidPath, kids, numAttr, parseRels, parseXml, relId, relsPathFor, REL, type Rel } from "./xml";
 
@@ -27,13 +29,13 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 const SCHEME_KEYS: SchemeColorName[] = ["dk1", "lt1", "dk2", "lt2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "hlink", "folHlink"];
 
-function readTheme(xml: string | undefined): { theme: Theme; lnWidths: number[] } {
+function readTheme(xml: string | undefined): { theme: Theme; lnWidths: number[]; edited?: boolean; effectEls: Element[] } {
   const def: Theme = {
     name: "Tema",
     colors: { dk1: "#000000", lt1: "#FFFFFF", dk2: "#44546A", lt2: "#E7E6E6", accent1: "#4472C4", accent2: "#ED7D31", accent3: "#A5A5A5", accent4: "#FFC000", accent5: "#5B9BD5", accent6: "#70AD47", hlink: "#0563C1", folHlink: "#954F72" },
     fonts: { major: "Calibri Light", minor: "Calibri" },
   };
-  if (!xml) return { theme: def, lnWidths: [0.75, 1.5, 2] };
+  if (!xml) return { theme: def, lnWidths: [0.75, 1.5, 2], effectEls: [] };
   const doc = parseXml(xml);
   const root = doc.documentElement;
   const te = kid(root, "themeElements");
@@ -51,14 +53,18 @@ function readTheme(xml: string | undefined): { theme: Theme; lnWidths: number[] 
   const minor = attr(kidPath(fs, "minorFont", "latin"), "typeface") || def.fonts.minor;
   const lnWidths = kids(kidPath(te, "fmtScheme", "lnStyleLst"), "ln").map((l) => (numAttr(l, "w") ?? 12700) / 12700);
   const theme: Theme = { name: attr(root, "name") ?? def.name, colors, fonts: { major, minor } };
+  let edited: boolean | undefined;
   for (const e of kids(kid(root, "extLst"), "ext")) {
     const t = kid(e, "theme");
     if (t && attr(t, "id") && getThemeDef(attr(t, "id"))) {
       theme.id = attr(t, "id");
       theme.variant = numAttr(t, "variant") ?? 0;
+      edited = attr(t, "edited") === "1" || undefined;
     }
   }
-  return { theme, lnWidths: lnWidths.length ? lnWidths : [0.75, 1.5, 2] };
+  // Efekt stilleri (effectRef idx 1..3) ana slayt renk eşlemesi bilindikten sonra okunur.
+  const effectEls = kids(kidPath(te, "fmtScheme", "effectStyleLst"), "effectStyle");
+  return { theme, lnWidths: lnWidths.length ? lnWidths : [0.75, 1.5, 2], edited, effectEls };
 }
 
 function readClrMap(el: Element | undefined, base: Record<string, SchemeColorName> = DEFAULT_CLRMAP): Record<string, SchemeColorName> {
@@ -152,12 +158,12 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
 
   // Ortam dosyaları
   const media = new Map<string, string>();
-  const mediaFiles = Object.keys(zip.files).filter((p) => /\.(png|jpe?g|gif|bmp|svg|webp|tiff?|emf|wmf)$/i.test(p) && !zip.files[p].dir);
+  const mediaFiles = Object.keys(zip.files).filter((p) => /\.(png|jpe?g|gif|bmp|svg|webp|tiff?|emf|wmf|mp4|m4v|webm|ogv|mov|mp3|m4a|wav|ogg|oga|aac|flac)$/i.test(p) && !zip.files[p].dir);
   await Promise.all(
     mediaFiles.map(async (p) => {
       const bytes = await zip.file(p)!.async("uint8array");
       const ext = p.split(".").pop()!.toLowerCase();
-      media.set(p, `data:${EXT_MIME[ext] ?? "application/octet-stream"};base64,${bytesToBase64(bytes)}`);
+      media.set(p, `data:${EXT_MIME[ext] ?? MEDIA_MIME[ext] ?? "application/octet-stream"};base64,${bytesToBase64(bytes)}`);
     }),
   );
 
@@ -178,10 +184,24 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
   const masterDoc = parseXml((await text(masterPath)) ?? "<x/>").documentElement;
   const masterRels = parseRels(await text(relsPathFor(masterPath)), masterPath);
   const themePath = [...masterRels.values()].find((r) => r.type === REL.theme)?.target ?? [...presRels.values()].find((r) => r.type === REL.theme)?.target;
-  const { theme, lnWidths } = readTheme(themePath ? await text(themePath) : undefined);
+  const { theme, lnWidths, edited: masterEdited, effectEls } = readTheme(themePath ? await text(themePath) : undefined);
   const clrMap = readClrMap(kid(masterDoc, "clrMap"));
+  const effectStyles = effectEls.map((e) => readEffects(e, { rels: new Map(), media: new Map(), clrMap, idMap: new Map(), lnWidths }));
 
-  const mkCtx = (rels: Map<string, Rel>, map = clrMap, inherit?: ReadCtx["inherit"]): ReadCtx => ({ rels, media, clrMap: map, idMap: new Map(), inherit, lnWidths });
+  // Grafik parçaları (önbellekli verileriyle) önceden okunur.
+  const charts = new Map<string, ChartData>();
+  for (const cp of Object.keys(zip.files).filter((p) => /^ppt\/charts\/[^/]+\.xml$/i.test(p))) {
+    const cx = await text(cp);
+    if (!cx) continue;
+    try {
+      const data = readChartXml(cx, { rels: new Map(), media, clrMap, idMap: new Map(), lnWidths });
+      if (data) charts.set(cp, data);
+    } catch {
+      // Okunamayan grafik yedek resmiyle (varsa) gösterilir.
+    }
+  }
+
+  const mkCtx = (rels: Map<string, Rel>, map = clrMap, inherit?: ReadCtx["inherit"]): ReadCtx => ({ rels, media, clrMap: map, idMap: new Map(), inherit, lnWidths, charts, effectStyles });
 
   // Açıklama yazarları (yalnız gerektiğinde okunur).
   let authorsCache: Map<string, string> | undefined;
@@ -344,6 +364,30 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
     slideByPath.set(sp, slide);
   }
 
+  // Bölümler (p14:sectionLst): her bölümün ilk slaydına işaret konur.
+  const sldIdNum = new Map<string, Slide>();
+  sldIds.forEach((sid) => {
+    const rid = relId(sid);
+    const sp = rid ? presRels.get(rid)?.target : undefined;
+    const sl = sp ? slideByPath.get(sp) : undefined;
+    const num = attr(sid, "id");
+    if (sl && num) sldIdNum.set(num, sl);
+  });
+  for (const ext of kids(kid(presDoc, "extLst"), "ext")) {
+    const lst = kid(ext, "sectionLst");
+    if (!lst) continue;
+    for (const sec of kids(lst, "section")) {
+      const first = kids(kid(sec, "sldIdLst"), "sldId")
+        .map((e) => sldIdNum.get(attr(e, "id") ?? ""))
+        .find((x): x is Slide => !!x);
+      if (!first || first.section) continue;
+      const k = slides.indexOf(first);
+      if (k >= 0) slides[k] = { ...first, section: { id: uid("sec"), name: attr(sec, "name") ?? "Bölüm" } };
+    }
+  }
+  const sectioned = normalizeSections(slides);
+  if (sectioned !== slides) slides.splice(0, slides.length, ...sectioned);
+
   // Slayt atlama köprüleri (parça yolu) slayt kimliklerine çevrilir.
   const idByPath = new Map<string, string>();
   sldIds.forEach((sid) => {
@@ -380,5 +424,5 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
     footerText: ftr?.text ? ftr.text.paragraphs.map((p) => p.runs.map((r) => r.text).join("")).join(" ") : "",
   };
 
-  return { width, height, theme, master, layouts, slides, headerFooter, props };
+  return { width, height, theme, master, layouts, slides, headerFooter, props, masterEdited };
 }

@@ -19,7 +19,7 @@ export interface EditTarget {
   range?: [{ p: number; o: number }, { p: number; o: number }];
 }
 
-export type ViewMode = "normal" | "outline" | "sorter" | "notes" | "reading";
+export type ViewMode = "normal" | "outline" | "sorter" | "notes" | "reading" | "master";
 export type PaneKind = "background" | "shape" | "animation" | "selection" | "comments" | null;
 
 export interface InsertMode {
@@ -74,6 +74,10 @@ export interface AppState {
   /** Seçim değişimini şeride bildirmek için sayaç. */
   textTick: number;
   ribbonTab: string;
+  /** Daraltılmış bölümlerin kimlikleri. */
+  collapsedSections: string[];
+  /** Asıl Slayt Görünümü açıkken: girişteki sunu ve slayt dizini. */
+  masterBase: { pres: Presentation; slideIdx: number; dirty: boolean; tab: string } | null;
   message: { text: string; kind: "info" | "warning" | "error" | "success" } | null;
 }
 
@@ -106,7 +110,11 @@ export class Store {
   private listeners = new Set<() => void>();
   private history = new History<Snapshot>(300);
   private lastMerge: { key: string; time: number } | null = null;
+  /** Ayrı geri alma geçmişiyle yürüyen oturum (Asıl Slayt Görünümü) sırasında asıl geçmiş. */
+  private savedHistory: History<Snapshot> | null = null;
   clipboard: ClipboardData | null = null;
+  /** Her değişiklikten sonra sunuya uygulanır (asıl görünümde asıl slaytı eşitler). */
+  normalize: ((p: Presentation) => Presentation) | null = null;
 
   constructor(initial: AppState) {
     this.state = initial;
@@ -133,7 +141,8 @@ export class Store {
 
   commit(fn: (p: Presentation, s: AppState) => Presentation, opts: CommitOptions = {}) {
     const s = this.state;
-    const next = fn(s.pres, s);
+    let next = fn(s.pres, s);
+    if (next !== s.pres && this.normalize) next = this.normalize(next);
     if (next === s.pres && opts.sel === undefined && opts.slideIdx === undefined) return;
     if (!opts.silent && next !== s.pres) {
       const now = Date.now();
@@ -188,6 +197,29 @@ export class Store {
   resetHistory() {
     this.history.clear();
     this.lastMerge = null;
+  }
+
+  /** Ayrı geçmişli oturum başlatır (asıl görünüm). */
+  beginSession() {
+    if (this.savedHistory) return;
+    this.savedHistory = this.history;
+    this.history = new History<Snapshot>(300);
+    this.lastMerge = null;
+  }
+
+  /** Oturumu bitirir; oturumda değişiklik yapıldıysa true. */
+  endSession(): boolean {
+    if (!this.savedHistory) return false;
+    const changed = this.history.canUndo;
+    this.history = this.savedHistory;
+    this.savedHistory = null;
+    this.lastMerge = null;
+    this.normalize = null;
+    return changed;
+  }
+
+  get inSession(): boolean {
+    return !!this.savedHistory;
   }
 }
 

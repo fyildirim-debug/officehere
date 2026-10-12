@@ -2,11 +2,12 @@
 import type { LevelStyle, Presentation, SpShape, TextStyles, Theme } from "../model/types";
 import { TABLE_STYLES, tableStyleById, type BorderSpec, type PartStyle } from "../render/tableStyles";
 import { colorXml, pPrXml, type WriteCtx } from "./writeDrawing";
-import { attrs, esc, NS } from "./xml";
+import { attrs, esc, NS, SECTION_EXT_URI } from "./xml";
+import { sectionsOf } from "../model/sections";
 
 export const NS_DECL = `xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}"`;
 
-export function themeXml(t: Theme, name = t.name): string {
+export function themeXml(t: Theme, name = t.name, masterEdited = false): string {
   const c = t.colors;
   const slot = (k: keyof Theme["colors"], tag: string) => `<a:${tag}><a:srgbClr val="${c[k].replace("#", "").toUpperCase()}"/></a:${tag}>`;
   const clr =
@@ -34,7 +35,7 @@ export function themeXml(t: Theme, name = t.name): string {
     `<a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst><a:outerShdw blurRad="57150" dist="19050" dir="5400000" algn="ctr" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="63000"/></a:srgbClr></a:outerShdw></a:effectLst></a:effectStyle></a:effectStyleLst>` +
     `<a:bgFillStyleLst><a:solidFill>${ph}</a:solidFill><a:solidFill><a:schemeClr val="phClr"><a:tint val="95000"/><a:satMod val="170000"/></a:schemeClr></a:solidFill><a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"><a:tint val="93000"/><a:satMod val="150000"/><a:shade val="98000"/><a:lumMod val="102000"/></a:schemeClr></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"><a:shade val="63000"/><a:satMod val="120000"/></a:schemeClr></a:gs></a:gsLst><a:lin ang="5400000" scaled="0"/></a:gradFill></a:bgFillStyleLst>` +
     "</a:fmtScheme>";
-  const ext = t.id ? `<a:extLst><a:ext uri="{0FF1CE00-5A5A-4E7E-9B0B-5448454D4531}"><oh:theme xmlns:oh="${NS.oh}"${attrs({ id: t.id, variant: t.variant ?? 0 })}/></a:ext></a:extLst>` : "";
+  const ext = t.id ? `<a:extLst><a:ext uri="{0FF1CE00-5A5A-4E7E-9B0B-5448454D4531}"><oh:theme xmlns:oh="${NS.oh}"${attrs({ id: t.id, variant: t.variant ?? 0, edited: masterEdited ? "1" : undefined })}/></a:ext></a:extLst>` : "";
   return `<a:theme xmlns:a="${NS.a}" name="${esc(name)}"><a:themeElements>${clr}${fonts}${fmt}</a:themeElements><a:objectDefaults/><a:extraClrSchemeLst/>${ext}</a:theme>`;
 }
 
@@ -153,8 +154,36 @@ export function presentationXml(pres: Presentation, masterRid: string, notesRid:
     `<p:sldSz cx="${Math.round(pres.width * 9525)}" cy="${Math.round(pres.height * 9525)}"${type}/>` +
     `<p:notesSz cx="${NOTES_W}" cy="${NOTES_H}"/>` +
     defaultTextStyleXml(pres.master.textStyles, ctx) +
+    sectionsXml(pres) +
     "</p:presentation>"
   );
+}
+
+/** Dizgeden kararlı GUID ("{8-4-4-4-12}"). */
+export function guidFrom(str: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  const hex: string[] = [];
+  for (let round = 0; round < 4; round++) {
+    for (let i = 0; i < str.length; i++) {
+      h1 = Math.imul(h1 ^ str.charCodeAt(i), 16777619) >>> 0;
+      h2 = Math.imul(h2 + str.charCodeAt(i) + round, 2246822519) >>> 0;
+    }
+    hex.push(((h1 ^ h2 ^ (round * 0x9e3779b9)) >>> 0).toString(16).toUpperCase().padStart(8, "0"));
+  }
+  const x = hex.join("");
+  return `{${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20, 32)}}`;
+}
+
+/** Bölümler (p14:sectionLst, PowerPoint 2010 uzantısı; sldId kimlikleri 256'dan başlar). */
+function sectionsXml(pres: Presentation): string {
+  const secs = sectionsOf(pres.slides);
+  if (!secs.length) return "";
+  const idx = new Map(pres.slides.map((s, i) => [s.id, i]));
+  const body = secs
+    .map((sec) => `<p14:section name="${esc(sec.name)}" id="${guidFrom(sec.id)}"><p14:sldIdLst>${sec.slideIds.map((id) => `<p14:sldId id="${256 + idx.get(id)!}"/>`).join("")}</p14:sldIdLst></p14:section>`)
+    .join("");
+  return `<p:extLst><p:ext uri="${SECTION_EXT_URI}"><p14:sectionLst xmlns:p14="${NS.p14}">${body}</p14:sectionLst></p:ext></p:extLst>`;
 }
 
 export function coreXml(pres: Presentation): string {

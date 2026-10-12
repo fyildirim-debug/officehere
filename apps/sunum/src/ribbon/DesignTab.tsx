@@ -38,7 +38,7 @@ export const ThemeTile = memo(function ThemeTile({ themeId, variant, width, rati
   return <ScaledSlide pres={p} slide={p.slides[0]} slideNumber={1} width={width} />;
 });
 
-function PaletteRow({ c }: { c: ColorScheme }) {
+export function PaletteRow({ c }: { c: ColorScheme }) {
   return (
     <span style={{ display: "inline-flex", gap: 1 }}>
       {(["dk1", "lt1", "dk2", "lt2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6"] as const).map((k) => (
@@ -48,7 +48,7 @@ function PaletteRow({ c }: { c: ColorScheme }) {
   );
 }
 
-const FONT_PAIRS: { name: string; major: string; minor: string }[] = [
+export const FONT_PAIRS: { name: string; major: string; minor: string }[] = [
   { name: "OfficeHere", major: "Aptos Display", minor: "Aptos" },
   { name: "Klasik", major: "Calibri Light", minor: "Calibri" },
   { name: "Arial", major: "Arial", minor: "Arial" },
@@ -79,7 +79,7 @@ function bgStyles(): Fill[] {
   ];
 }
 
-function BgStyleGrid({ ctx }: { ctx: RibbonCtx }) {
+export function BgStyleGrid({ ctx }: { ctx: RibbonCtx }) {
   const close = useMenuClose();
   const theme = ctx.state.pres.theme;
   return (
@@ -92,7 +92,10 @@ function BgStyleGrid({ ctx }: { ctx: RibbonCtx }) {
           title={`Stil ${i + 1}`}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
-            ctx.actions.store.commit((p) => ({ ...p, master: { ...p.master, background: f }, slides: p.slides.map((s) => ({ ...s, background: undefined })) }));
+            if (ctx.state.view === "master")
+              // Asıl görünümde: asıl slayta uygulanır, düzenlerin kendi arka planları kaldırılır.
+              ctx.actions.store.commit((p) => ({ ...p, slides: p.slides.map((s, i) => ({ ...s, background: i === 0 ? f : undefined })) }));
+            else ctx.actions.store.commit((p) => ({ ...p, master: { ...p.master, background: f }, slides: p.slides.map((s) => ({ ...s, background: undefined })) }));
             close();
           }}
         >
