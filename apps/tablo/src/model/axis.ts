@@ -8,6 +8,9 @@ export class AxisSizes {
   private hiddenSet = new Set<number>();
   /** Kullanıcının elle boyutlandırdığı öğeler (satırda customHeight); diğerleri içeriğe göre otomatik. */
   private manualSet = new Set<number>();
+  /** Anahat düzeyleri (1–7; yoksa 0) ve daraltılmış grupların özet satır/sütunları. */
+  private levelMap = new Map<number, number>();
+  private collapsedSet = new Set<number>();
   private idx: number[] | null = null;
   private pre: number[] = [];
 
@@ -80,6 +83,46 @@ export class AxisSizes {
     if (hidden) this.hiddenSet.add(i);
     else this.hiddenSet.delete(i);
     this.invalidate();
+  }
+
+  /* ------------------------------ Anahat ------------------------------ */
+
+  level(i: number): number {
+    return this.levelMap.get(i) ?? 0;
+  }
+
+  setLevel(i: number, level: number): void {
+    const v = Math.max(0, Math.min(7, Math.round(level)));
+    if (v) this.levelMap.set(i, v);
+    else this.levelMap.delete(i);
+  }
+
+  maxLevel(): number {
+    let m = 0;
+    for (const v of this.levelMap.values()) if (v > m) m = v;
+    return m;
+  }
+
+  levelItems(): [number, number][] {
+    return [...this.levelMap.entries()].sort((a, b) => a[0] - b[0]);
+  }
+
+  isCollapsed(i: number): boolean {
+    return this.collapsedSet.has(i);
+  }
+
+  setCollapsed(i: number, on: boolean): void {
+    if (on) this.collapsedSet.add(i);
+    else this.collapsedSet.delete(i);
+  }
+
+  collapsedItems(): number[] {
+    return [...this.collapsedSet].sort((a, b) => a - b);
+  }
+
+  clearOutline(): void {
+    this.levelMap.clear();
+    this.collapsedSet.clear();
   }
 
   /** Toplu gizle/göster (tek geçersizleştirme). */
@@ -162,6 +205,10 @@ export class AxisSizes {
     const ms = new Map<number, true>();
     for (const k of this.manualSet) ms.set(k, true);
     this.manualSet = new Set(move(ms).keys());
+    this.levelMap = move(this.levelMap);
+    const cs = new Map<number, true>();
+    for (const k of this.collapsedSet) cs.set(k, true);
+    this.collapsedSet = new Set(move(cs).keys());
     this.invalidate();
   }
 
@@ -170,6 +217,8 @@ export class AxisSizes {
     a.sizes = new Map(this.sizes);
     a.hiddenSet = new Set(this.hiddenSet);
     a.manualSet = new Set(this.manualSet);
+    a.levelMap = new Map(this.levelMap);
+    a.collapsedSet = new Set(this.collapsedSet);
     return a;
   }
 
@@ -178,6 +227,8 @@ export class AxisSizes {
     this.sizes = new Map(other.sizes);
     this.hiddenSet = new Set(other.hiddenSet);
     this.manualSet = new Set(other.manualSet);
+    this.levelMap = new Map(other.levelMap);
+    this.collapsedSet = new Set(other.collapsedSet);
     this.invalidate();
   }
 }
