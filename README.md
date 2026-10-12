@@ -16,6 +16,17 @@ Belge, Tablo ve Sunum — `.docx`, `.xlsx`, `.pptx` dosyalarını açar, düzenl
 
 ![OfficeHere Belge](docs/ekran/belge.png)
 
+<table>
+<tr>
+<td><img src="docs/ekran/tablo.png" alt="OfficeHere Tablo" /></td>
+<td><img src="docs/ekran/sunum.png" alt="OfficeHere Sunum" /></td>
+</tr>
+<tr>
+<td align="center">Tablo — koşullu biçimlendirme, grafikler, Türkçe formüller</td>
+<td align="center">Sunum — temalar, slayt bölmesi, notlar</td>
+</tr>
+</table>
+
 ## Uygulamalar
 
 | | Uygulama | Karşılığı | Dosyalar |
