@@ -24,8 +24,7 @@ import {
   PaintBucket24Regular,
   ResizeLarge24Regular,
   Shapes24Regular,
-  TextEffects24Regular,
-} from "@fluentui/react-icons";
+  TextEffects24Regular, ArrowMinimize20Regular } from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonSplitButton, RibbonStack, useMenuClose } from "@officehere/ui";
 import { cssColor } from "../model/color";
 import type { Color, PicShape, Shape } from "../model/types";
@@ -356,6 +355,7 @@ export function PictureFormatTab({ ctx }: { ctx: RibbonCtx }) {
           }
         />
         <RibbonStack>
+          <RibbonButton icon={<ArrowMinimize20Regular />} label="Resimleri Sıkıştır" description="Dosya boyutunu küçültmek için sunudaki resimleri sıkıştırın." onClick={() => ctx.openDialog("compress")} />
           <RibbonButton
             icon={<ImageEdit20Regular />}
             label="Resmi Değiştir"

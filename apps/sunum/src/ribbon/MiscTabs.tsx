@@ -31,8 +31,7 @@ import {
   Timer24Regular,
   Color24Regular,
   DarkTheme24Regular,
-  CircleHalfFill24Regular,
-} from "@fluentui/react-icons";
+  CircleHalfFill24Regular, AccessibilityCheckmark24Regular } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonStack } from "@officehere/ui";
 import type { ShowSettings } from "../show/settings";
 import { getUserName } from "@officehere/ui";
@@ -110,6 +109,9 @@ export function ReviewTab({ ctx }: { ctx: RibbonCtx }) {
     <>
       <RibbonGroup label="Yazım Denetleme" icon={<TextProofingTools24Regular />}>
         <RibbonButton size="large" icon={<TextProofingTools24Regular />} label="Yazım Denetimi" shortcut="F7" checked={state.pane === "spelling"} description="Yazım Denetimi bölmesini açar: denetim dili, açma/kapama ve metin kutularında sırayla gezinme." onClick={cmd.spelling} />
+      </RibbonGroup>
+      <RibbonGroup label="Erişilebilirlik" icon={<AccessibilityCheckmark24Regular />}>
+        <RibbonButton size="large" icon={<AccessibilityCheckmark24Regular />} label="Erişilebilirliği Denetle" checked={state.pane === "accessibility"} description="Sunuyu engelli kişilerin okumasını zorlaştırabilecek içerik için denetleyin: alternatif metin, başlıklar, okuma sırası, kontrast." onClick={() => cmd.togglePane("accessibility")} />
       </RibbonGroup>
       <RibbonGroup label="Açıklamalar" icon={<Comment24Regular />}>
         <RibbonButton

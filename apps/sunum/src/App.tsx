@@ -10,6 +10,7 @@ import { NotesPane, Splitter } from "./panes/NotesPane";
 import { BackgroundPane, ShapePane } from "./panes/FormatPanes";
 import { AnimationPane, CommentsPane, SelectionPane } from "./panes/ListPanes";
 import { ReusePane, SpellingPane } from "./panes/ToolPanes";
+import { AccessibilityPane } from "./panes/AccessibilityPane";
 import { useStore, type AppState } from "./state/store";
 import { textInfo } from "./state/textActions";
 import { useKeyboard } from "./app/keyboard";
@@ -44,6 +45,7 @@ import "./styles/show.css";
 import "./styles/print.css";
 import "./styles/extra.css";
 import "./styles/theme.css";
+import "./styles/round4.css";
 
 export function App() {
   const { store, actions: a } = useMemo(() => appSession(), []);
@@ -69,6 +71,13 @@ export function App() {
     onOpenPath: (p) => void openFromPath(a, p),
     onSave: () => save(a),
   });
+
+  // Eylemlerin istediği iletişim kutusu (ör. eylem düğmesi çizilince Eylem Ayarları).
+  useEffect(() => {
+    if (!state.dialogRequest) return;
+    setDialog(state.dialogRequest as DialogKind);
+    a.store.set({ dialogRequest: null });
+  }, [state.dialogRequest, a]);
 
   // Kılavuzlar slayt boyutu değişince ortalanır.
   useEffect(() => setGuides({ h: [state.pres.height / 2], v: [state.pres.width / 2] }), [state.pres.width, state.pres.height]);
@@ -164,6 +173,8 @@ export function App() {
         return <SpellingPane state={state} actions={a} onClose={close} />;
       case "reuse":
         return <ReusePane state={state} actions={a} onClose={close} />;
+      case "accessibility":
+        return <AccessibilityPane state={state} actions={a} onClose={close} />;
       default:
         return null;
     }

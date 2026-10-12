@@ -59,6 +59,13 @@ export function shapeMenu(a: Actions, cmd: AppCommands, openDialog: (d: "sizePos
           }}
         />
       )}
+      {shapes.length === 1 && shapes[0].kind === "pic" && shapes[0].zoom && (
+        <MenuItem
+          label="Yakınlaştırmaya Dön"
+          checked={!!shapes[0].zoom.ret}
+          onClick={() => a.updateShapes((s) => (s.kind === "pic" && s.zoom ? { ...s, zoom: { ...s.zoom, ret: s.zoom.ret ? undefined : true } } : s), [shapes[0].id])}
+        />
+      )}
       {shapes.length === 1 && shapes[0].kind === "chart" && (
         <>
           <MenuItem label="Verileri Düzenle..." onClick={cmd.editChartData} />

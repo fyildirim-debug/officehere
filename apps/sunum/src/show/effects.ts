@@ -4,6 +4,7 @@
  * kendi döndürmesi (transform) korunur. Desenli geçişler clip-path çokgen
  * kareleriyle yapılır.
  */
+import { motionKeyframes } from "./motionPaths";
 import type { Animation, Slide, Transition } from "../model/types";
 
 type KF = Keyframe[];
@@ -272,6 +273,11 @@ export function animationKeyframes(a: Animation, g: ShapeGeomInfo, W: number, H:
       return { kf: [{ opacity: 1, scale: "1" }, { opacity: 0, scale: "0.1" }], easing: "ease-in" };
     case "shrinkTurn":
       return { kf: [{ opacity: 1, scale: "1", rotate: "0deg" }, { opacity: 0, scale: "0", rotate: "90deg" }], easing: "ease-in" };
+    case "pathLine":
+    case "pathArc":
+    case "pathCircle":
+    case "pathCustom":
+      return { kf: motionKeyframes(a, W, H), easing: "ease-in-out" };
     default:
       return { kf: [{ opacity: 0 }, { opacity: 1 }], easing: "linear" };
   }

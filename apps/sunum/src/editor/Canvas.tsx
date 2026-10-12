@@ -20,6 +20,7 @@ import { snapMove, snapValue, type GuideLine } from "./snap";
 import { cellSelRects, childOfGroupContaining, cropGhostOf, GridOverlay, InkPreview, inkIdsAt, MARGIN, topLevelOf, type Drag, type Pt } from "./canvasUtils";
 import { useAutofit } from "./useAutofit";
 import { contextKind, isInEditedShape, type CanvasMenuKind } from "./contextKind";
+import { MotionPathOverlay } from "./MotionPathOverlay";
 import { PointEditor } from "./PointEditor";
 import { useAnimBadges } from "./contextKind";
 import { useViewportZoom } from "./useViewportZoom";
@@ -675,6 +676,7 @@ export function Canvas(props: CanvasProps) {
               </div>
             )}
             {state.showGrid && <GridOverlay w={pres.width} h={pres.height} z={z} />}
+            {props.showAnimBadges && slide && <MotionPathOverlay slide={slide} z={z} W={pres.width} H={pres.height} selected={state.sel} />}
             {state.showGuides && (
               <>
                 {props.guides.v.map((x, i) => (

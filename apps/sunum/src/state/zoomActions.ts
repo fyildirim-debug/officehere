@@ -69,7 +69,11 @@ export async function insertSlideZoom(a: Actions, slideIds: string[]) {
   const pres = a.s.pres;
   const targets = slideIds.map((id) => pres.slides.find((s) => s.id === id)).filter((s): s is Slide => !!s);
   if (!targets.length || !a.slide()) return;
-  const boxes = grid(pres, targets.length, pres.height * 0.25).map((b) => ({ ...b, w: Math.min(b.w, pres.width * 0.3), h: Math.min(b.h, pres.height * 0.3) }));
+  // Yakınlaştırmalar slaydın alt bölümüne, içeriği örtmeyecek boyutta yerleşir.
+  const bw = Math.min(pres.width * 0.22, (pres.width * 0.84) / targets.length - pres.width * 0.02);
+  const bh = (bw * pres.height) / pres.width;
+  const x0 = (pres.width - targets.length * bw - (targets.length - 1) * pres.width * 0.02) / 2;
+  const boxes = targets.map((_, k) => ({ x: x0 + k * (bw + pres.width * 0.02), y: pres.height - bh - pres.height * 0.08, w: bw, h: bh }));
   const pics: PicShape[] = [];
   for (const [k, t] of targets.entries()) pics.push(await zoomPic(pres, t, boxes[k], false, a.nextShapeNumber() + k));
   const i = a.s.slideIdx;

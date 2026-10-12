@@ -550,7 +550,7 @@ function ZoomBody({ pres, zoom, w, h, fallback }: { pres: Presentation; zoom: No
   if (i < 0) return <img className="pic-img" src={fallback} alt="" draggable={false} style={{ width: w, height: h }} />;
   const k = w / pres.width;
   return (
-    <div className="zoom-body" style={{ width: w, height: h, overflow: "hidden", position: "relative" }}>
+    <div className="zoom-body" style={{ width: w, height: h, overflow: "hidden", position: "relative", boxShadow: "0 0 0 0.75px rgba(0,0,0,0.3)" }}>
       <SlideView pres={pres} slide={pres.slides[i]} slideNumber={i + 1} mode="thumb" zoomHost style={{ transform: `scale(${k}, ${h / pres.height})`, transformOrigin: "0 0", position: "absolute", left: 0, top: 0 }} />
     </div>
   );

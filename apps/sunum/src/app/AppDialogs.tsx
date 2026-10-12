@@ -18,6 +18,7 @@ import type { RehearsalResult } from "../show/Rehearsal";
 import { LinkDialog } from "../dialogs/LinkDialog";
 import { RenameDialog, type RenameRequest } from "../dialogs/RenameDialog";
 import { ChartDataDialog, InsertChartDialog } from "../dialogs/ChartDialogs";
+import { ActionDialog, CompressDialog, InsertZoomDialog } from "../dialogs/Round4Dialogs";
 
 /** Parametreli iletişim kutuları. */
 export type ExtraDialog =
@@ -71,6 +72,9 @@ export function AppDialogs({ a, state, info, cmd, dialog, closeDialog, extra, se
       <RehearsalDialog result={extra?.kind === "rehearsal" ? extra.result : null} onClose={closeExtra} actions={a} />
       <ScaleChoiceDialog req={extra?.kind === "scaleChoice" ? { w: extra.w, h: extra.h } : null} onClose={closeExtra} actions={a} />
       <ShortcutsDialog open={dialog === "shortcuts"} onClose={closeDialog} />
+      <ActionDialog open={dialog === "action"} onClose={closeDialog} actions={a} />
+      <InsertZoomDialog kind={dialog === "slideZoom" ? "slide" : dialog === "summaryZoom" ? "summary" : null} onClose={closeDialog} actions={a} />
+      <CompressDialog open={dialog === "compress"} onClose={closeDialog} actions={a} />
       <AboutDialog open={dialog === "about"} onClose={closeDialog} />
       <Dialog
         open={extra?.kind === "ink"}

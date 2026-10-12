@@ -113,6 +113,13 @@ const WIPE_DIRS: Option[] = [
   { id: "t", label: "Üstten" },
 ];
 
+const PATH_DIRS: Option[] = [
+  { id: "down", label: "Aşağı" },
+  { id: "left", label: "Sola" },
+  { id: "right", label: "Sağa" },
+  { id: "up", label: "Yukarı" },
+];
+
 const SPLIT_OPTS: Option[] = [
   { id: "horzIn", label: "Yatay İçe" },
   { id: "horzOut", label: "Yatay Dışa" },
@@ -148,10 +155,16 @@ export const ANIMATIONS: AnimDef[] = [
   { id: "wipeOut", cls: "exit", label: "Sil", options: WIPE_DIRS, defaultOption: "b", presetId: 22, filter: "wipe" },
   { id: "zoomOut", cls: "exit", label: "Uzaklaştır", presetId: 53 },
   { id: "shrinkTurn", cls: "exit", label: "Küçülerek Dön", presetId: 31 },
+  { id: "pathLine", cls: "path", label: "Çizgiler", options: PATH_DIRS, defaultOption: "down", presetId: 42 },
+  { id: "pathArc", cls: "path", label: "Yaylar", options: PATH_DIRS, defaultOption: "down", presetId: 37 },
+  { id: "pathCircle", cls: "path", label: "Şekiller", presetId: 1 },
 ];
 
+/** İçe aktarılmış (galeride olmayan) özel hareket yolu. */
+export const CUSTOM_PATH: AnimDef = { id: "pathCustom", cls: "path", label: "Özel Yol", presetId: 0 };
+
 export function animDef(id: string): AnimDef | undefined {
-  return ANIMATIONS.find((a) => a.id === id);
+  return ANIMATIONS.find((a) => a.id === id) ?? (id === CUSTOM_PATH.id ? CUSTOM_PATH : undefined);
 }
 
 export const TRIGGER_LABELS: Record<string, string> = {
@@ -164,10 +177,12 @@ export const CLASS_LABELS: Record<AnimClass, string> = {
   entr: "Giriş",
   emph: "Vurgu",
   exit: "Çıkış",
+  path: "Hareket Yolları",
 };
 
 export const CLASS_COLORS: Record<AnimClass, string> = {
   entr: "#3a9d23",
   emph: "#d8a200",
   exit: "#c8102e",
+  path: "#7a7a7a",
 };

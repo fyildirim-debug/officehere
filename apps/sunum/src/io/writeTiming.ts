@@ -2,6 +2,7 @@
 import type { Animation, Slide, Transition } from "../model/types";
 import { animDef } from "../show/catalog";
 import { buildSteps } from "../show/effects";
+import { motionPathOf } from "../show/motionPaths";
 import { attrs, esc, NS, OH_EXT_URI } from "./xml";
 
 function speed(d: number): string {
@@ -162,6 +163,12 @@ function behaviors(c: Ctx, a: Animation, spid: number): string {
     case "transparency":
     case "colorPulse":
       return `<p:set><p:cBhvr><p:cTn id="${cTnId(c)}" dur="${dur}" fill="hold"/><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl><p:attrNameLst><p:attrName>style.opacity</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="0.5"/></p:to></p:set>`;
+    case "pathLine":
+    case "pathArc":
+    case "pathCircle":
+    case "pathCustom":
+      // Hareket yolu (ECMA-376 §19.5.4 p:animMotion; yol slayt boyutuna göre kesirli).
+      return `<p:animMotion origin="layout" path="${esc(motionPathOf(a))}" pathEditMode="relative"><p:cBhvr><p:cTn id="${cTnId(c)}" dur="${dur}" fill="hold"/><p:tgtEl><p:spTgt spid="${spid}"/></p:tgtEl><p:attrNameLst><p:attrName>ppt_x</p:attrName><p:attrName>ppt_y</p:attrName></p:attrNameLst></p:cBhvr></p:animMotion>`;
     default:
       return vis + animEffect(c, spid, "fade", entr ? "in" : "out", dur) + hide;
   }
@@ -221,7 +228,7 @@ export function slideExtXml(slide: Slide, idMap: Map<string, number>): string {
   const anims = slide.animations.filter((a) => idMap.has(a.shapeId));
   if (!anims.length) return "";
   const items = anims
-    .map((a) => `<oh:anim${attrs({ spid: idMap.get(a.shapeId), cls: a.cls, effect: a.effect, option: a.option, trigger: a.trigger, dur: Math.round(a.duration * 1000), delay: Math.round(a.delay * 1000) })}/>`)
+    .map((a) => `<oh:anim${attrs({ spid: idMap.get(a.shapeId), cls: a.cls, effect: a.effect, option: a.option, trigger: a.trigger, dur: Math.round(a.duration * 1000), delay: Math.round(a.delay * 1000), path: a.path })}/>`)
     .join("");
   return `<p:extLst><p:ext uri="${OH_EXT_URI}"><oh:anims xmlns:oh="${NS.oh}">${items}</oh:anims></p:ext></p:extLst>`;
 }

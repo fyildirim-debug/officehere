@@ -22,8 +22,7 @@ import {
   ChartMultiple32Regular,
   Video24Regular,
   Video32Regular,
-  Speaker232Regular,
-} from "@fluentui/react-icons";
+  Speaker232Regular, SlideSearch32Regular, CursorClick24Regular } from "@fluentui/react-icons";
 import { getUserName, Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack, TableGridPicker, useMenuClose } from "@officehere/ui";
 import { cssColor } from "../model/color";
 import { LayoutGallery, ShapeGalleryMenu } from "./common";
@@ -109,7 +108,21 @@ export function InsertTab({ ctx }: { ctx: RibbonCtx }) {
         <RibbonButton size="large" icon={<ChartMultiple32Regular />} label="Grafik" description="Verileri göstermek için sütun, çizgi, pasta, çubuk, alan ya da halka grafiği ekleyin." onClick={cmd.insertChart} />
       </RibbonGroup>
       <RibbonGroup label="Bağlantılar" icon={<Link24Regular />}>
+        <RibbonMenuButton
+          size="large"
+          icon={<SlideSearch32Regular />}
+          label="Yakınlaştırma"
+          description="Gösteride tıklanınca seçili slayda ya da bölüme yakınlaşarak giden canlı küçük resimler ekleyin."
+          disabled={!state.pres.slides.length}
+          menu={
+            <Menu>
+              <MenuItem label="Özet Yakınlaştırma..." onClick={() => ctx.openDialog("summaryZoom")} />
+              <MenuItem label="Slayt Yakınlaştırma..." onClick={() => ctx.openDialog("slideZoom")} />
+            </Menu>
+          }
+        />
         <RibbonButton size="large" icon={<Link32Regular />} label="Bağlantı" shortcut="Ctrl+K" description="Web sayfasına, e-posta adresine ya da sunudaki başka bir slayta köprü ekleyin." disabled={!state.pres.slides.length} onClick={cmd.insertLink} />
+        <RibbonButton size="large" icon={<CursorClick24Regular />} label="Eylem" description="Seçili nesneye tıklanınca ya da üzerine gelinince yapılacak eylemi belirleyin." disabled={!state.sel.length} onClick={() => ctx.openDialog("action")} />
       </RibbonGroup>
       <RibbonGroup label="Açıklamalar" icon={<CommentAdd24Regular />}>
         <RibbonButton size="large" icon={<CommentAdd24Regular />} label="Açıklama" description="Seçili içerik hakkında açıklama ekleyin." disabled={!state.pres.slides.length} onClick={() => a.addComment(getUserName())} />

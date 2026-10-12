@@ -30,7 +30,7 @@ function AnimMenu({ onPick }: { onPick: (d: AnimDef) => void }) {
   const close = useMenuClose();
   return (
     <div className="oh-menu" style={{ maxHeight: "70vh", width: 420 }}>
-      {(["entr", "emph", "exit"] as AnimClass[]).map((cls) => (
+      {(["entr", "emph", "exit", "path"] as AnimClass[]).map((cls) => (
         <div key={cls}>
           <MenuHeader>{CLASS_LABELS[cls]}</MenuHeader>
           <div className="preset-grid" style={{ gridTemplateColumns: "repeat(6, 64px)" }}>

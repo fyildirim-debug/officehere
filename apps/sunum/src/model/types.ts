@@ -407,7 +407,7 @@ export interface Transition {
   sound?: string;
 }
 
-export type AnimClass = "entr" | "exit" | "emph";
+export type AnimClass = "entr" | "exit" | "emph" | "path";
 
 export interface Animation {
   id: string;
@@ -419,6 +419,8 @@ export interface Animation {
   /** saniye */
   duration: number;
   delay: number;
+  /** Hareket yolu (p:animMotion yol verisi; hazır yollar seçenekten üretilir). */
+  path?: string;
 }
 
 export interface Comment {

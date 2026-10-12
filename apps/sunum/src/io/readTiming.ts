@@ -2,6 +2,7 @@
 import { uid } from "../model/factory";
 import type { AnimClass, Animation, Transition, TransitionType } from "../model/types";
 import { ANIMATIONS, TRANSITIONS } from "../show/catalog";
+import { classifyPath } from "../show/motionPaths";
 import { attr, descendants, kid, kids, numAttr, OH_EXT_URI } from "./xml";
 
 function findTransition(sld: Element): Element | undefined {
@@ -188,6 +189,7 @@ export function readAnimations(sld: Element, idMap: Map<number, string>): Animat
         trigger: (attr(a, "trigger") as Animation["trigger"]) ?? "click",
         duration: (numAttr(a, "dur") ?? 500) / 1000,
         delay: (numAttr(a, "delay") ?? 0) / 1000,
+        ...(attr(a, "path") ? { path: attr(a, "path")! } : {}),
       });
     }
     return out;
@@ -197,17 +199,19 @@ export function readAnimations(sld: Element, idMap: Map<number, string>): Animat
   const out: Animation[] = [];
   for (const ctn of descendants(timing, "cTn")) {
     const cls = attr(ctn, "presetClass");
-    if (cls !== "entr" && cls !== "exit" && cls !== "emph") continue;
+    if (cls !== "entr" && cls !== "exit" && cls !== "emph" && cls !== "path") continue;
     const spidEl = descendants(ctn, "spTgt")[0];
     const spid = numAttr(spidEl, "spid");
     const shapeId = spid !== undefined ? idMap.get(spid) : undefined;
     if (!shapeId) continue;
     const nodeType = attr(ctn, "nodeType");
     const trigger: Animation["trigger"] = nodeType === "withEffect" ? "with" : nodeType === "afterEffect" ? "after" : "click";
-    const { effect, option } = mapPreset(cls, numAttr(ctn, "presetID") ?? 10, numAttr(ctn, "presetSubtype") ?? 0);
+    // Hareket yolu: p:animMotion yolu hazır yollardan birine eşlenir, eşleşmezse özel yol olarak saklanır.
+    const motion = cls === "path" ? classifyPath(attr(descendants(ctn, "animMotion")[0], "path") ?? "M 0 0 L 0 0.25 E") : null;
+    const { effect, option } = motion ?? mapPreset(cls, numAttr(ctn, "presetID") ?? 10, numAttr(ctn, "presetSubtype") ?? 0);
     const delayAttr = attr(kid(kid(ctn, "stCondLst"), "cond"), "delay");
     const delay = delayAttr && delayAttr !== "indefinite" ? Number(delayAttr) / 1000 : 0;
-    out.push({ id: uid("a"), shapeId, cls, effect, option, trigger, duration: firstDuration(ctn), delay: Number.isFinite(delay) ? delay : 0 });
+    out.push({ id: uid("a"), shapeId, cls, effect, option, trigger, duration: firstDuration(ctn), delay: Number.isFinite(delay) ? delay : 0, ...(motion?.path ? { path: motion.path } : {}) });
   }
   return out;
 }

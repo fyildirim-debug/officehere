@@ -1,0 +1,134 @@
+/* 4. tur: Eylem Ayarları, Yakınlaştırma, Resimleri Sıkıştır, Erişilebilirlik bölmesi. */
+.oh-radio,
+.oh-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+  color: var(--oh-text);
+}
+
+.action-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.action-panel .oh-field {
+  margin-left: 22px;
+}
+
+.zoom-pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  max-height: 380px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.zoom-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--oh-text);
+}
+
+.zoom-pick:hover {
+  background: var(--oh-hover);
+}
+
+.zoom-pick.is-selected {
+  border-color: var(--oh-accent);
+  background: var(--oh-checked);
+}
+
+.zoom-pick-cap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.zoom-body {
+  pointer-events: none;
+  background: #fff;
+}
+
+.a11y-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--oh-text);
+}
+
+.a11y-head {
+  font-weight: 600;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--oh-separator);
+}
+
+.a11y-group > summary,
+.a11y-kind > summary {
+  cursor: pointer;
+  padding: 3px 0;
+  font-weight: 600;
+}
+
+.a11y-kind {
+  margin-left: 10px;
+}
+
+.a11y-kind > summary {
+  font-weight: 400;
+}
+
+.a11y-slide {
+  color: var(--oh-text-muted);
+  font-size: 11px;
+}
+
+.a11y-ok {
+  color: var(--oh-text-muted);
+}
+
+.a11y-info p {
+  margin: 4px 0 8px;
+  color: var(--oh-text-muted);
+  line-height: 1.4;
+}
+
+.a11y-alt {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.a11y-alt textarea {
+  resize: vertical;
+  font: inherit;
+  color: var(--oh-text);
+  background: var(--oh-surface);
+  border: 1px solid var(--oh-border);
+  padding: 4px;
+}
+
+.a11y-alt .oh-btn {
+  align-self: flex-start;
+}
+
+.motion-paths {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 4;
+}

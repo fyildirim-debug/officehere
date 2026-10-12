@@ -114,3 +114,57 @@ describe("Seçili Slaytlara Uygula (D6)", () => {
     expect(r.slides).toHaveLength(3);
   });
 });
+
+describe("4. tur özellikleri gidiş-dönüş", () => {
+  it("Dönüştür geçişi p159:morph ve soluklaştırma yedeğiyle yazılır, geri okunur", async () => {
+    const p = deck(1);
+    p.slides[1].transition = { type: "morph", duration: 2, advanceOnClick: true };
+    const bytes = await writePptx(p);
+    const xml = await slideXml(bytes, 2);
+    expect(xml).toContain('<p159:morph option="byObject"/>');
+    expect(xml).toContain("<mc:Fallback>");
+    const r = await readPptx(bytes);
+    expect(r.slides[1].transition?.type).toBe("morph");
+    expect(r.slides[1].transition?.duration).toBe(2);
+  });
+  it("hareket yolu p:animMotion olarak yazılır; uzantısız dosyada da yol okunur", async () => {
+    const p = deck(1);
+    const sh = p.slides[1].shapes[0];
+    p.slides[1].animations = [{ id: "a1", shapeId: sh.id, cls: "path", effect: "pathLine", option: "right", trigger: "click", duration: 2, delay: 0 }];
+    const bytes = await writePptx(p);
+    const xml = await slideXml(bytes, 2);
+    expect(xml).toContain('<p:animMotion origin="layout" path="M 0 0 L 0.25 0 E"');
+    expect(xml).toContain('presetClass="path"');
+    const r = await readPptx(bytes);
+    expect(r.slides[1].animations[0]).toMatchObject({ cls: "path", effect: "pathLine", option: "right" });
+    // Uygulama uzantısı olmadan (yalnız standart zamanlama ağacı) okuma.
+    const zip = await JSZip.loadAsync(bytes);
+    zip.file("ppt/slides/slide2.xml", xml.replace(/<p:extLst><p:ext uri="[^"]+"><oh:anims[\s\S]*?<\/p:extLst>/, ""));
+    const r2 = await readPptx(await zip.generateAsync({ type: "uint8array" }));
+    expect(r2.slides[1].animations[0]).toMatchObject({ cls: "path", effect: "pathLine", option: "right" });
+  });
+  it("yakınlaştırma resmi slayt köprüsü ve uzantısıyla gidip gelir; hedef kimliği çözülür", async () => {
+    const p = deck(2);
+    const target = p.slides[2];
+    p.slides[0].shapes.push({ kind: "pic", id: "z1", name: "Slayt Yakınlaştırma 1", x: 100, y: 100, w: 320, h: 180, rot: 0, src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", line: { fill: { type: "none" }, width: 1, dash: "solid" }, link: `#slide:${target.id}`, zoom: { slideId: target.id, ret: true } });
+    const bytes = await writePptx(p);
+    const xml = await slideXml(bytes, 1);
+    expect(xml).toContain('action="ppaction://hlinksldjump"');
+    expect(xml).toContain("<oh:zoom");
+    const r = await readPptx(bytes);
+    const z = r.slides[0].shapes.find((s) => s.kind === "pic");
+    expect(z?.kind === "pic" && z.zoom).toMatchObject({ slideId: r.slides[2].id, ret: true });
+  });
+  it("eylem düğmesi geometrisi ve fare üzerine gelme köprüsü korunur", async () => {
+    const p = deck(1);
+    const btn = { ...bodyOf(p, 1), id: "b1", ph: undefined, geom: "actionButtonForwardNext", text: undefined, link: "#next", hoverLink: "https://ornek.com/" } as SpShape;
+    p.slides[1].shapes.push(btn);
+    const bytes = await writePptx(p);
+    const xml = await slideXml(bytes, 2);
+    expect(xml).toContain('prst="actionButtonForwardNext"');
+    expect(xml).toContain("<a:hlinkHover");
+    const r = await readPptx(bytes);
+    const rb = r.slides[1].shapes.find((s) => s.kind === "sp" && s.geom === "actionButtonForwardNext");
+    expect(rb).toMatchObject({ link: "#next", hoverLink: "https://ornek.com/" });
+  });
+});

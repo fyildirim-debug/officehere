@@ -128,7 +128,7 @@ export function ActionDialog({ open, onClose, actions: a }: { open: boolean; onC
 }
 
 /** Yakınlaştırma Ekle: slaytları seçme ızgarası (Slayt Yakınlaştırma / Özet Yakınlaştırma). */
-export function ZoomDialog({ kind, onClose, actions: a }: { kind: "slide" | "summary" | null; onClose: () => void; actions: Actions }) {
+export function InsertZoomDialog({ kind, onClose, actions: a }: { kind: "slide" | "summary" | null; onClose: () => void; actions: Actions }) {
   const [sel, setSel] = useState<string[]>([]);
   const [last, setLast] = useState<typeof kind>(null);
   const [busy, setBusy] = useState(false);
