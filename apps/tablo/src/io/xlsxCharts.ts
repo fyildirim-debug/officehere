@@ -3,16 +3,12 @@
  * olarak XLSX paketine yazılması ve geri okunması. exceljs grafik
  * desteklemediğinden paket JSZip ile sonradan işlenir.
  */
-import { writePageBreaksInto } from "./xlsxBreaks";
 import JSZip from "jszip";
 import { formatQualifiedRange, parseQualifiedRange } from "@officehere/formula";
-import { PALETTES, extractChartData, seriesRefs } from "../charts/chartData";
+import { PALETTES, rawChartData, seriesRefs } from "../charts/chartData";
 import type { ChartDef, ChartSeriesDef, ChartType, Rect } from "../model/types";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
-import { writePivotsInto } from "./xlsxPivot";
-import { writeSparklinesInto } from "./xlsxSpark";
-import { writeDefinedNamesInto } from "./xlsxNames";
-import { patchThemeXml } from "../model/theme";
+import type { PackageParts } from "./xlsxPost";
 import { NS_R, esc, nextRid, relsPathOf, resolveTarget, sheetPaths, unescapeXml } from "./ooxmlZip";
 
 const NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
@@ -74,21 +70,23 @@ function solid(hex: string): string {
 
 export function chartXml(wb: WorkbookModel, def: ChartDef): string {
   const refs = seriesRefs(wb, def);
-  const data = extractChartData(wb, def);
+  const data = rawChartData(wb, def);
   const t = chartTypeXml(def);
   const colors = PALETTES[def.palette % PALETTES.length];
   const isPie = def.type === "pie" || def.type === "doughnut";
   const isLine = def.type === "line" || def.type === "lineMarkers";
   const scatter = def.type === "scatter";
   const sers = (refs?.series ?? []).map((s, i) => {
-    const color = colors[i % colors.length];
+    const color = def.seriesFmt?.[i]?.color ?? colors[i % colors.length];
+    const sf = def.seriesFmt?.[i];
     const tx = s.name ? `<c:tx><c:strRef><c:f>${esc(absRef(refs!.sheetName, s.name))}</c:f>${strCache([data.series[i]?.name ?? ""])}</c:strRef></c:tx>` : `<c:tx><c:v>${esc(data.series[i]?.name ?? `Seri${i + 1}`)}</c:v></c:tx>`;
     let sp: string;
-    if (isLine) sp = `<c:spPr><a:ln w="28575" cap="rnd"><a:solidFill><a:srgbClr val="${color.slice(1)}"/></a:solidFill><a:round/></a:ln></c:spPr><c:marker><c:symbol val="${def.type === "lineMarkers" ? "circle" : "none"}"/>${def.type === "lineMarkers" ? `<c:size val="5"/><c:spPr>${solid(color)}</c:spPr>` : ""}</c:marker>`;
+    if (isLine) sp = `<c:spPr><a:ln w="${Math.round((sf?.lineWidth ?? 2.25) * 12700)}" cap="rnd"><a:solidFill><a:srgbClr val="${color.slice(1)}"/></a:solidFill><a:round/></a:ln></c:spPr><c:marker><c:symbol val="${def.type === "lineMarkers" ? "circle" : "none"}"/>${def.type === "lineMarkers" ? `<c:size val="5"/><c:spPr>${solid(color)}</c:spPr>` : ""}</c:marker>`;
     else if (scatter) sp = `<c:spPr><a:ln w="25400"><a:noFill/></a:ln></c:spPr><c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr>${solid(color)}</c:spPr></c:marker>`;
     else if (isPie) sp = (data.categories.map((_, k) => `<c:dPt><c:idx val="${k}"/><c:bubble3D val="0"/><c:spPr>${solid(colors[k % colors.length])}<a:ln w="19050"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:ln></c:spPr></c:dPt>`).join(""));
-    else sp = `<c:spPr>${solid(color)}<a:ln><a:noFill/></a:ln></c:spPr>${def.type.startsWith("column") || def.type.startsWith("bar") ? '<c:invertIfNegative val="0"/>' : ""}`;
-    const dl = def.showDataLabels ? `<c:dLbls><c:showLegendKey val="0"/><c:showVal val="${isPie ? 0 : 1}"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="${isPie ? 1 : 0}"/><c:showBubbleSize val="0"/></c:dLbls>` : "";
+    else sp = `<c:spPr>${solid(color)}${sf?.border ? `<a:ln w="${Math.round((sf.lineWidth ?? 0.75) * 12700)}">${solid(sf.border)}</a:ln>` : "<a:ln><a:noFill/></a:ln>"}</c:spPr>${def.type.startsWith("column") || def.type.startsWith("bar") ? '<c:invertIfNegative val="0"/>' : ""}`;
+    const barLike = def.type.startsWith("column") || def.type.startsWith("bar");
+    const dl = def.showDataLabels ? `<c:dLbls>${barLike && def.labelPos ? `<c:dLblPos val="${def.labelPos}"/>` : ""}<c:showLegendKey val="0"/><c:showVal val="${isPie ? 0 : 1}"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="${isPie ? 1 : 0}"/><c:showBubbleSize val="0"/></c:dLbls>` : "";
     const catTag = scatter ? "c:xVal" : "c:cat";
     const valTag = scatter ? "c:yVal" : "c:val";
     const catRef = scatter ? s.xs : refs!.cat;
@@ -100,7 +98,11 @@ export function chartXml(wb: WorkbookModel, def: ChartDef): string {
   const axIds = scatter || !isPie ? '<c:axId val="111111111"/><c:axId val="222222222"/>' : "";
   const typeEl = `<${t.tag}>${t.dir ? `<c:barDir val="${t.dir}"/>` : ""}${t.grouping ? `<c:grouping val="${t.grouping}"/>` : ""}${scatter ? '<c:scatterStyle val="lineMarker"/>' : ""}<c:varyColors val="${isPie ? 1 : 0}"/>${(isPie ? sers.slice(0, 1) : sers).join("")}${t.extra}${axIds}</${t.tag}>`;
   const txPr = '<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900"><a:solidFill><a:srgbClr val="595959"/></a:solidFill></a:defRPr></a:pPr><a:endParaRPr lang="tr-TR"/></a:p></c:txPr>';
-  const grid = def.showGridlines ? '<c:majorGridlines><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr></c:majorGridlines>' : "";
+  const va = def.valAxis ?? {};
+  const grid = (def.showGridlines ? '<c:majorGridlines><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr></c:majorGridlines>' : "") + (va.minorGrid ? '<c:minorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="F2F2F2"/></a:solidFill><a:prstDash val="dash"/></a:ln></c:spPr></c:minorGridlines>' : "");
+  const valScaling = `<c:scaling><c:orientation val="minMax"/>${va.max !== undefined ? `<c:max val="${va.max}"/>` : ""}${va.min !== undefined ? `<c:min val="${va.min}"/>` : ""}</c:scaling>`;
+  const valNumFmt = va.numFmt ? `<c:numFmt formatCode="${esc(va.numFmt)}" sourceLinked="0"/>` : '<c:numFmt formatCode="General" sourceLinked="1"/>';
+  const majorUnit = va.major ? `<c:majorUnit val="${va.major}"/>` : "";
   const axPos = def.type === "bar" || def.type === "barStacked" ? ["l", "b"] : ["b", "l"];
   let axes = "";
   if (!isPie) {
@@ -109,7 +111,7 @@ export function chartXml(wb: WorkbookModel, def: ChartDef): string {
       ? `<c:valAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/>${xTitle}<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>${txPr}<c:crossAx val="222222222"/><c:crosses val="autoZero"/><c:crossBetween val="midCat"/></c:valAx>`
       : `<c:catAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${axPos[0]}"/>${xTitle}<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr>${txPr}<c:crossAx val="222222222"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>`;
     const yTitle = def.yTitle ? `<c:title><c:tx><c:rich><a:bodyPr rot="-5400000" vert="horz"/><a:p><a:r><a:t>${esc(def.yTitle)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>` : "";
-    axes = `${firstAx}<c:valAx><c:axId val="222222222"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${axPos[1]}"/>${grid}${yTitle}<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln><a:noFill/></a:ln></c:spPr>${txPr}<c:crossAx val="111111111"/><c:crosses val="autoZero"/><c:crossBetween val="${scatter ? "midCat" : "between"}"/></c:valAx>`;
+    axes = `${firstAx}<c:valAx><c:axId val="222222222"/>${valScaling}<c:delete val="0"/><c:axPos val="${axPos[1]}"/>${grid}${yTitle}${valNumFmt}<c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln><a:noFill/></a:ln></c:spPr>${txPr}<c:crossAx val="111111111"/><c:crosses val="autoZero"/><c:crossBetween val="${scatter ? "midCat" : "between"}"/>${majorUnit}</c:valAx>`;
   }
   const title = def.showTitle
     ? `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1400" b="0"><a:solidFill><a:srgbClr val="595959"/></a:solidFill></a:defRPr></a:pPr><a:r><a:rPr lang="tr-TR" sz="1400" b="0"/><a:t>${esc(def.title || "Grafik Başlığı")}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/>`
@@ -117,7 +119,7 @@ export function chartXml(wb: WorkbookModel, def: ChartDef): string {
   const legendPos = { right: "r", bottom: "b", top: "t", left: "l" }[def.legendPos];
   const legend = def.showLegend ? `<c:legend><c:legendPos val="${legendPos}"/><c:overlay val="0"/>${txPr}</c:legend>` : "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<c:chartSpace xmlns:c="${NS_C}" xmlns:a="${NS_A}" xmlns:r="${NS_R}"><c:date1904 val="0"/><c:lang val="tr-TR"/><c:roundedCorners val="0"/><c:chart>${title}<c:plotArea><c:layout/>${typeEl}${axes}</c:plotArea>${legend}<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart><c:spPr>${solid("#FFFFFF")}<a:ln w="9525"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr/></a:pPr><a:endParaRPr lang="tr-TR"/></a:p></c:txPr></c:chartSpace>`;
+<c:chartSpace xmlns:c="${NS_C}" xmlns:a="${NS_A}" xmlns:r="${NS_R}"><c:date1904 val="0"/><c:lang val="tr-TR"/><c:roundedCorners val="0"/><c:chart>${title}<c:plotArea><c:layout/>${typeEl}${axes}</c:plotArea>${legend}<c:plotVisOnly val="${def.showHidden ? 0 : 1}"/><c:dispBlanksAs val="gap"/></c:chart><c:spPr>${solid("#FFFFFF")}<a:ln w="9525"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr/></a:pPr><a:endParaRPr lang="tr-TR"/></a:p></c:txPr></c:chartSpace>`;
 }
 
 function anchorXml(sheet: SheetModel, def: ChartDef, rid: string, id: number): string {
@@ -129,56 +131,10 @@ function anchorXml(sheet: SheetModel, def: ChartDef, rid: string, id: number): s
   const r2 = sheet.rows.indexAt(y2);
   const from = `<xdr:from><xdr:col>${def.anchor.col}</xdr:col><xdr:colOff>${Math.round(def.anchor.dx * EMU)}</xdr:colOff><xdr:row>${def.anchor.row}</xdr:row><xdr:rowOff>${Math.round(def.anchor.dy * EMU)}</xdr:rowOff></xdr:from>`;
   const to = `<xdr:to><xdr:col>${c2}</xdr:col><xdr:colOff>${Math.round((x2 - sheet.cols.offset(c2)) * EMU)}</xdr:colOff><xdr:row>${r2}</xdr:row><xdr:rowOff>${Math.round((y2 - sheet.rows.offset(r2)) * EMU)}</xdr:rowOff></xdr:to>`;
-  return `<xdr:twoCellAnchor editAs="oneCell">${from}${to}<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${id}" name="Grafik ${id}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="${NS_C}"><c:chart xmlns:c="${NS_C}" r:id="${rid}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>`;
+  return `<xdr:twoCellAnchor editAs="oneCell">${from}${to}<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${id}" name="${esc(def.name ?? `Grafik ${id - 999}`)}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="${NS_C}"><c:chart xmlns:c="${NS_C}" r:id="${rid}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>`;
 }
 
-/** exceljs çıktısını son işler: boş ama gizli/yüksekliği özel satırlar ve grafikler. */
-export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise<Uint8Array> {
-  const zip = await JSZip.loadAsync(bytes);
-  const paths = await sheetPaths(zip);
-  for (const sheet of wb.sheets) {
-    const sheetPath = paths.get(sheet.name);
-    if (!sheetPath) continue;
-    const rows = new Set<number>([...sheet.rows.customItems().map(([r]) => r), ...sheet.rows.hiddenItems(), ...sheet.rows.levelItems().map(([r]) => r)]);
-    if (!rows.size) continue;
-    let xml = await zip.file(sheetPath)!.async("string");
-    // İçeriğe göre (otomatik) yükseklikteki satırlar customHeight taşımaz
-    xml = xml.replace(/<row r="(\d+)"([^>]*?) customHeight="1"/g, (m0, r: string, rest: string) => (sheet.rows.isManual(Number(r) - 1) ? m0 : `<row r="${r}"${rest}`));
-    const existing = new Set<number>([...xml.matchAll(/<row r="(\d+)"/g)].map((m) => Number(m[1]) - 1));
-    const missing = [...rows].filter((r) => !existing.has(r)).sort((a, b) => a - b);
-    if (!missing.length) {
-      zip.file(sheetPath, xml);
-      continue;
-    }
-    if (/<sheetData\/>/.test(xml)) xml = xml.replace("<sheetData/>", "<sheetData></sheetData>");
-    for (const r of missing) {
-      const attrs = `${sheet.rows.isCustom(r) ? ` ht="${Math.round(((sheet.rows.rawSize(r) * 72) / 96) * 100) / 100}"${sheet.rows.isManual(r) ? ' customHeight="1"' : ""}` : ""}${sheet.rows.isHidden(r) ? ' hidden="1"' : ""}${sheet.rows.level(r) ? ` outlineLevel="${sheet.rows.level(r)}"` : ""}`;
-      const tag = `<row r="${r + 1}"${attrs}/>`;
-      const re = /<row r="(\d+)"/g;
-      let pos = -1;
-      for (let m = re.exec(xml); m; m = re.exec(xml)) {
-        if (Number(m[1]) > r + 1) {
-          pos = m.index;
-          break;
-        }
-      }
-      if (pos < 0) pos = xml.indexOf("</sheetData>");
-      xml = xml.slice(0, pos) + tag + xml.slice(pos);
-    }
-    zip.file(sheetPath, xml);
-  }
-  if (wb.sheets.some((s) => s.charts.length)) await writeChartsInto(zip, wb, paths);
-  if (wb.sheets.some((s) => s.pivots.length)) await writePivotsInto(zip, wb, paths);
-  await writeSparklinesInto(zip, wb);
-  await writePageBreaksInto(zip, wb, paths);
-  await writeDefinedNamesInto(zip, wb);
-  // Çalışma kitabı teması (renk ve yazı tipi şemaları)
-  const themeFile = zip.file("xl/theme/theme1.xml");
-  if (themeFile) zip.file("xl/theme/theme1.xml", patchThemeXml(await themeFile.async("string"), wb.theme));
-  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
-}
-
-async function writeChartsInto(zip: JSZip, wb: WorkbookModel, paths: Map<string, string>): Promise<void> {
+export async function writeChartsInto(zip: JSZip, wb: WorkbookModel, paths: Map<string, string>, parts: PackageParts): Promise<void> {
   let ct = await zip.file("[Content_Types].xml")!.async("string");
   let chartNo = 1;
   while (zip.file(`xl/charts/chart${chartNo}.xml`)) chartNo++;
@@ -190,7 +146,8 @@ async function writeChartsInto(zip: JSZip, wb: WorkbookModel, paths: Map<string,
     if (!sheetPath) continue;
     const sheetRelsPath = relsPathOf(sheetPath);
     let sheetRels = zip.file(sheetRelsPath) ? await zip.file(sheetRelsPath)!.async("string") : `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`;
-    let sheetXml = await zip.file(sheetPath)!.async("string");
+    const sheetPart = await parts.part(sheetPath);
+    if (!sheetPart) continue;
     // Mevcut çizim (resimler) var mı?
     let drawingPath: string | null = null;
     const relMatch = [...sheetRels.matchAll(/<Relationship\b[^>]*>/g)].find((m) => m[0].includes(REL_DRAWING));
@@ -205,11 +162,9 @@ async function writeChartsInto(zip: JSZip, wb: WorkbookModel, paths: Map<string,
       drawingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<xdr:wsDr xmlns:xdr="${NS_XDR}" xmlns:a="${NS_A}"></xdr:wsDr>`;
       const rid = nextRid(sheetRels);
       sheetRels = sheetRels.replace("</Relationships>", `<Relationship Id="${rid}" Type="${REL_DRAWING}" Target="../drawings/${drawingPath.split("/").pop()}"/></Relationships>`);
-      const tag = `<drawing r:id="${rid}"/>`;
-      const before = ["<legacyDrawing", "<legacyDrawingHF", "<picture", "<oleObjects", "<controls", "<webPublishItems", "<tableParts", "<extLst", "</worksheet>"];
-      const pos = before.map((b) => sheetXml.indexOf(b)).filter((i) => i >= 0).sort((a, b) => a - b)[0];
-      sheetXml = sheetXml.slice(0, pos) + tag + sheetXml.slice(pos);
-      if (!/xmlns:r=/.test(sheetXml.slice(0, sheetXml.indexOf(">", sheetXml.indexOf("<worksheet"))))) sheetXml = sheetXml.replace("<worksheet", `<worksheet xmlns:r="${NS_R}"`);
+      // Şema sırasındaki yeri XmlPart belirler (pageSetup/headerFooter/sayfa sonlarından sonra)
+      sheetPart.set("drawing", `<drawing r:id="${rid}"/>`);
+      sheetPart.ensureNamespace("r", NS_R);
       ct = ct.replace("</Types>", `<Override PartName="/${drawingPath}" ContentType="${CT_DRAWING}"/></Types>`);
     }
     if (!/xmlns:r=/.test(drawingXml)) drawingXml = drawingXml.replace("<xdr:wsDr", `<xdr:wsDr xmlns:r="${NS_R}"`);
@@ -229,12 +184,51 @@ async function writeChartsInto(zip: JSZip, wb: WorkbookModel, paths: Map<string,
     zip.file(drawingPath, drawingXml);
     zip.file(drawingRelsPath, drawingRels);
     zip.file(sheetRelsPath, sheetRels);
-    zip.file(sheetPath, sheetXml);
   }
   zip.file("[Content_Types].xml", ct);
 }
 
 /* ------------------------------ Okuma ------------------------------ */
+
+/** Seri renkleri/kenarlıkları, değer ekseni ölçeği ve sayı biçimi, etiket konumu. */
+function readFormatting(cXml: string, def: ChartDef, valAx: string): void {
+  const fmts: ChartDef["seriesFmt"] = [];
+  for (const sm of cXml.matchAll(/<c:ser>([\s\S]*?)<\/c:ser>/g)) {
+    const sp = /<c:spPr>([\s\S]*?)<\/c:spPr>/.exec(sm[1].replace(/<c:dPt>[\s\S]*?<\/c:dPt>|<c:marker>[\s\S]*?<\/c:marker>|<c:dLbls>[\s\S]*?<\/c:dLbls>/g, ""))?.[1] ?? "";
+    const fill = /^\s*<a:solidFill><a:srgbClr val="([0-9A-Fa-f]{6})"/.exec(sp)?.[1];
+    const ln = /<a:ln\b([^>]*)>([\s\S]*?)<\/a:ln>/.exec(sp);
+    const lnColor = ln ? /<a:srgbClr val="([0-9A-Fa-f]{6})"/.exec(ln[2])?.[1] : undefined;
+    const w = ln ? Number(/\bw="(\d+)"/.exec(ln[1])?.[1] ?? NaN) / 12700 : NaN;
+    const isLine = def.type === "line" || def.type === "lineMarkers";
+    const f: { color?: string; border?: string; lineWidth?: number } = {};
+    if (isLine && lnColor) f.color = `#${lnColor.toUpperCase()}`;
+    else if (fill) f.color = `#${fill.toUpperCase()}`;
+    if (!isLine && lnColor) f.border = `#${lnColor.toUpperCase()}`;
+    if (Number.isFinite(w) && (isLine ? Math.abs(w - 2.25) > 0.01 : !!f.border)) f.lineWidth = Math.round(w * 100) / 100;
+    // Paletin kendi rengi özel biçim sayılmaz (palet değişince seri rengi de değişir)
+    const pal = PALETTES[def.palette % PALETTES.length];
+    if (f.color && f.color === pal[fmts.length % pal.length].toUpperCase()) delete f.color;
+    fmts.push(Object.keys(f).length ? f : null);
+  }
+  if (fmts.some(Boolean)) def.seriesFmt = fmts;
+  if (valAx) {
+    const va: NonNullable<ChartDef["valAxis"]> = {};
+    const num = (re: RegExp) => {
+      const m = re.exec(valAx);
+      return m ? Number(m[1]) : undefined;
+    };
+    va.min = num(/<c:min val="(-?[\d.E+-]+)"/);
+    va.max = num(/<c:max val="(-?[\d.E+-]+)"/);
+    va.major = num(/<c:majorUnit val="([\d.E+-]+)"/);
+    const nf = /<c:numFmt formatCode="([^"]*)" sourceLinked="0"/.exec(valAx)?.[1];
+    if (nf) va.numFmt = unescapeXml(nf);
+    if (/<c:minorGridlines/.test(valAx)) va.minorGrid = true;
+    for (const k of Object.keys(va) as (keyof typeof va)[]) if (va[k] === undefined) delete va[k];
+    if (Object.keys(va).length) def.valAxis = va;
+  }
+  const pos = /<c:dLblPos val="(outEnd|inEnd|ctr|inBase)"/.exec(cXml)?.[1];
+  if (pos) def.labelPos = pos as ChartDef["labelPos"];
+}
 
 /** <c:ser> öğelerinden seri başvuruları; okunamayan varsa null (aralık tahminine dönülür). */
 export function readSeries(cXml: string): ChartSeriesDef[] | null {
@@ -370,6 +364,10 @@ export async function readCharts(data: ArrayBuffer, wb: WorkbookModel): Promise<
         width,
         height,
       };
+      if (/<c:plotVisOnly val="(0|false)"\/>/.test(cXml)) def.showHidden = true;
+      readFormatting(cXml, def, valAx);
+      const nm = /<xdr:cNvPr\b[^>]*\bname="([^"]*)"/.exec(a)?.[1];
+      if (nm && !/^(Grafik|Chart) \d+$/.test(unescapeXml(nm))) def.name = unescapeXml(nm);
       if (!def.title && def.showTitle) def.title = "";
       // Seriler dosyadaki başvurularla birebir (aralık tahmini yapılmaz)
       const series = readSeries(cXml);

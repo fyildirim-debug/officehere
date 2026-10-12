@@ -5,7 +5,7 @@
  */
 import { EN_SYNTAX, tokenize, type RefPart, type RefToken } from "./lexer";
 import { MAX_COLS, MAX_ROWS, colToName, nameToCol, quoteSheetName } from "./references";
-import { renameTableInRef, renderStructRef, type StructRef } from "./structref";
+import { renameTableInRef, renderStructRef, resolveStructRect, type StructRef, type TableInfo } from "./structref";
 import type { Node } from "./ast";
 
 /** Yapısal başvuru belirteçlerine işlev uygulayıp formülü yeniden yazar. */
@@ -41,6 +41,43 @@ export function renameTableColumnInFormula(formula: string, table: string, oldCo
     const c2 = r.col2 !== undefined && r.col2.toLocaleUpperCase("tr-TR") === O ? newCol : r.col2;
     return c1 === r.col1 && c2 === r.col2 ? r : { ...r, col1: c1, col2: c2 };
   });
+}
+
+/**
+ * Tablo aralığa dönüştürülünce o tabloya ait yapısal başvurular A1 başvurusuna
+ * çevrilir: sütun/alan başvuruları mutlak ($E$2:$E$9), "bu satır" başvuruları
+ * sütunu sabit, satırı göreli ($E2) olur. Formül başka sayfadaysa sayfa adı eklenir.
+ * pos: formülün bulunduğu hücre (tanımlı adlarda yok).
+ */
+export function structRefsToA1(formula: string, table: TableInfo, pos: { sheet: number; row: number; col: number } | null, sheetName: (id: number) => string | undefined): string {
+  if (!formula.includes("[")) return formula;
+  const T = table.name.toLocaleUpperCase("tr-TR");
+  const inside = !!pos && pos.sheet === table.sheet && pos.row >= table.r1 && pos.row <= table.r2 && pos.col >= table.c1 && pos.col <= table.c2;
+  const hasEq = formula.startsWith("=");
+  const body = hasEq ? formula.slice(1) : formula;
+  let changed = false;
+  const out = tokenize(body, EN_SYNTAX)
+    .map((t) => {
+      if (t.type !== "structref" || !t.sref) return t.text;
+      const r = t.sref;
+      if (r.table ? r.table.toLocaleUpperCase("tr-TR") !== T : !inside) return t.text;
+      changed = true;
+      const rect = resolveStructRect(r, table, pos?.row ?? -1);
+      if ("error" in rect) return "#REF!";
+      const thisRow = r.items.includes("#This Row");
+      const prefix = pos && pos.sheet === table.sheet ? "" : `${quoteSheetName(sheetName(table.sheet) ?? "")}!`;
+      const cell = (row: number, col: number) => `$${colToName(col)}${thisRow ? "" : "$"}${row + 1}`;
+      const a = cell(rect.r1, rect.c1);
+      return prefix + (rect.r1 === rect.r2 && rect.c1 === rect.c2 ? a : `${a}:${cell(rect.r2, rect.c2)}`);
+    })
+    .join("");
+  return changed ? (hasEq ? "=" : "") + out : formula;
+}
+
+/** Formül tablonun içindeyse o tabloya ait başvurulardan tablo adı kaldırılır (gösterim: [@Adet]). */
+export function unqualifyStructRefs(formula: string, tableName: string): string {
+  const T = tableName.toLocaleUpperCase("tr-TR");
+  return mapStructRefs(formula, (r) => (r.table && r.table.toLocaleUpperCase("tr-TR") === T ? { ...r, table: undefined } : r));
 }
 
 /** Tablosuz yapısal başvurulara ([@Adet]) tablo adını ekler (dosyada tablo adı zorunludur). */

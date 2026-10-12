@@ -6,6 +6,7 @@ import { parseRangeLoose } from "../controller";
 import { rectToA1 } from "../model/rect";
 import type { PageSetup } from "../model/types";
 import { Check, OkCancel, Radio, fmtTr, parseTrNumber } from "./common";
+import { colToName, nameToCol } from "@officehere/formula";
 
 type P = { ctl: Controller; onClose: () => void; arg?: unknown };
 
@@ -48,6 +49,11 @@ export function PageSetupDialog({ ctl, onClose, arg }: P) {
   const [area, setArea] = useState(p.printArea ? rectToA1(p.printArea) : "");
   const [grid, setGrid] = useState(p.printGridlines);
   const [heads, setHeads] = useState(p.printHeadings);
+  const [tRows, setTRows] = useState(p.titleRows ? `$${p.titleRows.r1 + 1}:$${p.titleRows.r2 + 1}` : "");
+  const [tCols, setTCols] = useState(p.titleCols ? `$${colToName(p.titleCols.c1)}:$${colToName(p.titleCols.c2)}` : "");
+  const [bw, setBw] = useState(!!p.blackAndWhite);
+  const [draft, setDraft] = useState(!!p.draft);
+  const [order, setOrder] = useState<NonNullable<PageSetup["pageOrder"]>>(p.pageOrder ?? "downThenOver");
   const build = (): Partial<PageSetup> | null => {
     let printArea = undefined;
     if (area.trim()) {
@@ -58,6 +64,17 @@ export function PageSetupDialog({ ctl, onClose, arg }: P) {
       }
       printArea = r;
     }
+    // Yazdırma başlıkları: $1:$2 (satırlar) ve $A:$B (sütunlar); tek satır/sütun da yazılabilir
+    const rowsM = /^\$?(\d+)(?::\$?(\d+))?$/.exec(tRows.trim().replace(/^.*!/, ""));
+    const colsM = /^\$?([A-Za-z]{1,3})(?::\$?([A-Za-z]{1,3}))?$/.exec(tCols.trim().replace(/^.*!/, ""));
+    if ((tRows.trim() && !rowsM) || (tCols.trim() && !colsM)) {
+      ctl.alert("Yazdırma başlığı başvurusu geçerli değil. Satırlar için $1:$2, sütunlar için $A:$B biçimini kullanın.");
+      return null;
+    }
+    const titleRows = rowsM ? { r1: Math.min(+rowsM[1], +(rowsM[2] ?? rowsM[1])) - 1, r2: Math.max(+rowsM[1], +(rowsM[2] ?? rowsM[1])) - 1 } : undefined;
+    const c1 = colsM ? nameToCol(colsM[1].toUpperCase()) : 0;
+    const c2 = colsM ? nameToCol((colsM[2] ?? colsM[1]).toUpperCase()) : 0;
+    const titleCols = colsM ? { c1: Math.min(c1, c2), c2: Math.max(c1, c2) } : undefined;
     return {
       orientation,
       paper,
@@ -76,6 +93,11 @@ export function PageSetupDialog({ ctl, onClose, arg }: P) {
       printArea,
       printGridlines: grid,
       printHeadings: heads,
+      titleRows,
+      titleCols,
+      blackAndWhite: bw || undefined,
+      draft: draft || undefined,
+      pageOrder: order === "overThenDown" ? order : undefined,
     };
   };
   const ok = () => {
@@ -115,7 +137,7 @@ export function PageSetupDialog({ ctl, onClose, arg }: P) {
           { id: "page", label: "Sayfa" },
           { id: "margins", label: "Kenar Boşlukları" },
           { id: "hf", label: "Üst Bilgi/Alt Bilgi" },
-          { id: "sheet", label: "Sayfa Ayarları" },
+          { id: "sheet", label: "Çalışma Sayfası" },
         ]}
         active={tab}
         onChange={setTab}
@@ -193,13 +215,37 @@ export function PageSetupDialog({ ctl, onClose, arg }: P) {
             <Field label="Yazdırma alanı:">
               <input type="text" value={area} onChange={(e) => setArea(e.target.value)} placeholder="Ör. A1:F40" />
             </Field>
+            <FieldSet legend="Yazdırma başlıkları">
+              <Field label="Üstte yinelenecek satırlar:" inline>
+                <input type="text" value={tRows} onChange={(e) => setTRows(e.target.value)} placeholder="$1:$1" aria-label="Üstte yinelenecek satırlar" />
+              </Field>
+              <Field label="Solda yinelenecek sütunlar:" inline>
+                <input type="text" value={tCols} onChange={(e) => setTCols(e.target.value)} placeholder="$A:$A" aria-label="Solda yinelenecek sütunlar" />
+              </Field>
+            </FieldSet>
             <FieldSet legend="Yazdır">
-              <Check checked={grid} onChange={setGrid}>
-                Kılavuz çizgileri
-              </Check>
-              <Check checked={heads} onChange={setHeads}>
-                Satır ve sütun başlıkları
-              </Check>
+              <div className="tb-ps-checks">
+                <Check checked={grid} onChange={setGrid}>
+                  Kılavuz çizgileri
+                </Check>
+                <Check checked={bw} onChange={setBw}>
+                  Siyah beyaz
+                </Check>
+                <Check checked={draft} onChange={setDraft}>
+                  Taslak kalitesi
+                </Check>
+                <Check checked={heads} onChange={setHeads}>
+                  Satır ve sütun başlıkları
+                </Check>
+              </div>
+            </FieldSet>
+            <FieldSet legend="Sayfa sırası">
+              <Radio name="order" value="downThenOver" current={order} onChange={setOrder}>
+                Önce aşağı, sonra yana
+              </Radio>
+              <Radio name="order" value="overThenDown" current={order} onChange={setOrder}>
+                Önce yana, sonra aşağı
+              </Radio>
             </FieldSet>
           </>
         )}

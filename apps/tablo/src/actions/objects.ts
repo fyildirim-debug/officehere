@@ -4,6 +4,7 @@ import type { Controller } from "../controller";
 import { currentRegion } from "../model/selection";
 import type { ChartDef, ChartType, ImageDef, Rect, ShapeDef } from "../model/types";
 import { defaultSeriesInRows } from "../charts/chartData";
+import { STRUCTURE_MESSAGE, structureLocked } from "../model/protection";
 
 function absRange(r: Rect): string {
   return `$${colToName(r.c1)}$${r.r1 + 1}:$${colToName(r.c2)}$${r.r2 + 1}`;
@@ -123,22 +124,35 @@ export const SHAPE_KINDS: { kind: ShapeDef["kind"]; label: string }[] = [
 ];
 
 export function insertShape(ctl: Controller, kind: ShapeDef["kind"]): void {
-  const sheet = ctl.sheet;
+  // Metin kutusu sürükleyerek çizilir (Excel gibi); diğer şekiller etkin hücrenin yanına eklenir
+  if (kind === "textbox") {
+    if (ctl.edit) ctl.commitEdit(null);
+    ctl.drawShape = "textbox";
+    ctl.status = "Metin kutusunu çizmek için sayfada sürükleyin (iptal için Esc)";
+    ctl.emit();
+    return;
+  }
   const { row, col } = ctl.sel.active;
+  insertShapeAt(ctl, kind, { row, col: col + 1, dx: 0, dy: 0 }, kind === "line" ? 160 : 140, kind === "line" ? 2 : 90);
+}
+
+/** Şekli verilen konuma ekler ve seçer; metin kutusunda yerinde yazma başlar. */
+export function insertShapeAt(ctl: Controller, kind: ShapeDef["kind"], anchor: ShapeDef["anchor"], width: number, height: number): void {
+  const sheet = ctl.sheet;
   const s: ShapeDef = {
     id: ctl.wb.newId("shape"),
     kind,
-    text: kind === "textbox" ? "Metin" : "",
-    fill: kind === "textbox" || kind === "line" ? "transparent" : "#156082",
+    text: "",
+    fill: kind === "textbox" ? "#FFFFFF" : kind === "line" ? "transparent" : "#156082",
     stroke: kind === "textbox" ? "#7F7F7F" : kind === "line" ? "#156082" : "#0F4761",
-    anchor: { row, col: col + 1, dx: 0, dy: 0 },
-    width: kind === "line" ? 160 : 140,
-    height: kind === "line" ? 2 : 90,
+    anchor,
+    width,
+    height,
   };
   ctl.ops.sheetOp(sheet, "Şekil Ekle", () => sheet.shapes.push(s));
   ctl.selObj = { kind: "shape", id: s.id };
+  if (kind === "textbox") ctl.shapeEdit = { id: s.id, text: "" };
   ctl.emit();
-  if (kind === "textbox") ctl.openDialog("shapeText", { id: s.id });
 }
 
 export function updateShape(ctl: Controller, id: string, patch: Partial<ShapeDef>, label = "Şekil Biçimi"): void {
@@ -149,19 +163,69 @@ export function updateShape(ctl: Controller, id: string, patch: Partial<ShapeDef
 }
 
 /** Nesneyi öne/arkaya getirir (dizideki sıra çizim sırasıdır). */
+/** Yığın sırası: z verilmemişse kimlikteki oluşturulma numarası. */
+export function objZ(o: { id: string; z?: number }): number {
+  return o.z ?? Number(/(\d+)$/.exec(o.id)?.[1] ?? 0);
+}
+
+/** Sayfadaki tüm yüzen nesneler (arkadan öne). */
+export function stackOf(sheet: Controller["sheet"]): { kind: "chart" | "image" | "shape"; o: { id: string; z?: number } }[] {
+  return [...sheet.images.map((o) => ({ kind: "image" as const, o })), ...sheet.shapes.map((o) => ({ kind: "shape" as const, o })), ...sheet.charts.map((o) => ({ kind: "chart" as const, o }))].sort((a, b) => objZ(a.o) - objZ(b.o));
+}
+
 export function reorderObject(ctl: Controller, kind: "chart" | "image" | "shape", id: string, front: boolean): void {
   const sheet = ctl.sheet;
   ctl.ops.sheetOp(sheet, front ? "Öne Getir" : "Arkaya Gönder", () => {
-    const move = <T extends { id: string }>(list: T[]): T[] => {
-      const o = list.find((x) => x.id === id);
-      if (!o) return list;
-      const rest = list.filter((x) => x.id !== id);
-      return front ? [...rest, o] : [o, ...rest];
-    };
-    if (kind === "chart") sheet.charts = move(sheet.charts);
-    else if (kind === "image") sheet.images = move(sheet.images);
-    else sheet.shapes = move(sheet.shapes);
+    const all = stackOf(sheet);
+    const zs = all.map((x) => objZ(x.o));
+    const target = all.find((x) => x.kind === kind && x.o.id === id);
+    if (target) target.o.z = front ? Math.max(...zs) + 1 : Math.min(...zs) - 1;
   });
+}
+
+/**
+ * F11: seçili veriden grafiği kendi sayfasına ("Grafik1") yerleştirir. Sayfa
+ * yalnız grafiği taşır (kılavuz çizgileri kapalı, grafik pencereyi doldurur).
+ */
+export function chartOnNewSheet(ctl: Controller): void {
+  if (ctl.edit) ctl.commitEdit(null);
+  if (structureLocked(ctl.wb)) return ctl.alert(STRUCTURE_MESSAGE);
+  const src = ctl.sheet;
+  const r = chartSourceRange(ctl);
+  if (!r) {
+    ctl.alert("Grafik oluşturmak için önce veri içeren bir hücre aralığı seçin.");
+    return;
+  }
+  const header = ctl.wb.getValue(src, r.r1, r.c2);
+  ctl.ops.snapshotOp("Grafik Sayfası", () => {
+    const wb = ctl.wb;
+    let n = 1;
+    while (wb.sheetByName(`Grafik${n}`)) n++;
+    const sheet = wb.addSheet(`Grafik${n}`, wb.activeIndex);
+    sheet.showGridlines = false;
+    sheet.showHeadings = false;
+    sheet.charts.push({
+      id: wb.newId("chart"),
+      type: "column",
+      range: `${quoteSheetName(src.name)}!${absRange(r)}`,
+      seriesInRows: defaultSeriesInRows(r),
+      title: r.c2 - r.c1 <= 1 && typeof header === "string" ? header : "Grafik Başlığı",
+      showTitle: true,
+      showLegend: true,
+      legendPos: "bottom",
+      showDataLabels: false,
+      showGridlines: true,
+      palette: 0,
+      style: 1,
+      anchor: { row: 0, col: 0, dx: 8, dy: 8 },
+      width: 900,
+      height: 560,
+    });
+    wb.activeIndex = wb.sheets.indexOf(sheet);
+  });
+  const sheet = ctl.sheet;
+  ctl.selObj = sheet.charts[0] ? { kind: "chart", id: sheet.charts[0].id } : null;
+  ctl.emit();
 }
 
 /** Alt+F1: seçili veriden varsayılan türde (kümelenmiş sütun) hızlı grafik. */

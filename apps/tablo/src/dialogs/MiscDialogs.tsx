@@ -13,6 +13,7 @@ import { displayText } from "../model/display";
 import { Check, OkCancel, Radio, SimpleDialog, fmtTr, parseTrNumber } from "./common";
 import type { PasteOptions } from "../model/clipboard";
 import { getUserName } from "@officehere/ui";
+import { sizeSelection } from "../actions/format";
 
 type P = { ctl: Controller; onClose: () => void; arg?: unknown };
 
@@ -55,12 +56,7 @@ export function SizeDialog({ ctl, onClose, arg }: P & { arg: "rowHeight" | "colW
     if (arg === "defaultWidth") {
       ctl.ops.sheetOp(sheet, "Standart Genişlik", () => sheet.cols.setDefault(widthCharsToPx(n)));
     } else {
-      const items: number[] = [];
-      for (const rr of ctl.sel.ranges) {
-        const [a, b] = isRow ? [rr.r1, Math.min(rr.r2, rr.r1 + 100000)] : [rr.c1, rr.c2];
-        for (let i = a; i <= b; i++) items.push(i);
-      }
-      ctl.ops.setSizes(sheet, isRow ? "row" : "col", items, isRow ? ptToPx(n) : widthCharsToPx(n), title);
+      sizeSelection(ctl, isRow ? "row" : "col", isRow ? ptToPx(n) : widthCharsToPx(n), title);
     }
     onClose();
   };

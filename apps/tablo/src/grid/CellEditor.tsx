@@ -11,7 +11,9 @@ import { fontCss } from "../model/styles";
 import { rect } from "../model/rect";
 import { jumpCell, stepCell } from "../model/selection";
 import type { GridLayout } from "./layout";
-import { analyzeFormula, hintParts, suggestFunctions } from "./formulaAssist";
+import { analyzeFormula, hintParts, suggestColumns, suggestItems, type AssistItem } from "./formulaAssist";
+import { insertNow } from "../actions/edit";
+import { acceptFlashPreview, flashPreviewFor } from "../actions/flashPreview";
 
 export function ColoredText({ text }: { text: string }) {
   if (!text.startsWith("=")) return <>{text + "​"}</>;
@@ -45,7 +47,7 @@ export function pointMove(ctl: Controller, dr: number, dc: number, extend: boole
 }
 
 interface AssistState {
-  items: FnDef[];
+  items: AssistItem[];
   index: number;
   start: number;
   end: number;
@@ -56,28 +58,40 @@ export function useFormulaAssist(ctl: Controller, active: boolean) {
   const e = ctl.edit;
   const [dismissed, setDismissed] = useState<string | null>(null);
   const info = useMemo(() => (e && active ? analyzeFormula(e.text, e.caret) : {}), [e?.text, e?.caret, active]);
-  const items = useMemo(() => (info.prefix ? suggestFunctions(info.prefix.text) : []), [info.prefix?.text]);
+  const items = useMemo(() => {
+    const wb = ctl.wb;
+    const tables = wb.sheets.flatMap((s) => s.tables);
+    if (info.column) {
+      const own = e ? wb.sheetById(e.sheetId)?.tableAt(e.row, e.col) : undefined;
+      const t = info.column.table ? tables.find((x) => x.name.toLocaleUpperCase("tr-TR") === info.column!.table.toLocaleUpperCase("tr-TR")) : own;
+      return suggestColumns(t, info.column.text);
+    }
+    return info.prefix ? suggestItems(info.prefix.text, tables, wb.engine.getNames().map((n) => n.name)) : [];
+  }, [info.prefix?.text, info.column?.table, info.column?.text]); // eslint-disable-line react-hooks/exhaustive-deps
   const [index, setIndex] = useState(0);
-  useEffect(() => setIndex(0), [info.prefix?.text]);
-  const key = `${info.prefix?.start}:${info.prefix?.text}`;
-  const assist: AssistState | null = info.prefix && items.length && dismissed !== key ? { items, index: Math.min(index, items.length - 1), start: info.prefix.start, end: info.prefix.end } : null;
-  const insert = (def: FnDef) => {
+  const range = info.column ?? info.prefix;
+  useEffect(() => setIndex(0), [range?.text]);
+  const key = `${range?.start}:${range?.text}`;
+  const assist: AssistState | null = range && items.length && dismissed !== key ? { items, index: Math.min(index, items.length - 1), start: range.start, end: range.end } : null;
+  const insert = (item: AssistItem) => {
     if (!e || !assist) return;
-    const text = e.text.slice(0, assist.start) + def.tr + "(" + e.text.slice(assist.end);
-    ctl.updateEdit(text, assist.start + def.tr.length + 1);
+    const text = e.text.slice(0, assist.start) + item.insert + e.text.slice(assist.end);
+    ctl.updateEdit(text, assist.start + item.insert.length);
   };
   return { assist, call: info.call, setIndex, insert, dismiss: () => setDismissed(key) };
 }
 
-export function AssistPopup({ assist, x, y, onPick, onHover }: { assist: AssistState; x: number; y: number; onPick: (d: FnDef) => void; onHover: (i: number) => void }) {
+const KIND_ICON: Record<AssistItem["kind"], string> = { fn: "fx", table: "▦", name: "ad", column: "▥", item: "#" };
+
+export function AssistPopup({ assist, x, y, onPick, onHover }: { assist: AssistState; x: number; y: number; onPick: (d: AssistItem) => void; onHover: (i: number) => void }) {
   const cur = assist.items[assist.index];
   return (
     <div className="tb-assist" style={{ left: x, top: y }} onMouseDown={(e) => e.preventDefault()}>
-      <div className="tb-assist-list">
+      <div className="tb-assist-list" role="listbox" aria-label="Otomatik tamamlama">
         {assist.items.map((d, i) => (
-          <div key={d.name} className={`tb-assist-item${i === assist.index ? " is-active" : ""}`} onMouseEnter={() => onHover(i)} onDoubleClick={() => onPick(d)}>
-            <span className="tb-assist-fx">fx</span>
-            {d.tr}
+          <div key={d.key} role="option" aria-selected={i === assist.index} className={`tb-assist-item${i === assist.index ? " is-active" : ""}`} onMouseEnter={() => onHover(i)} onDoubleClick={() => onPick(d)}>
+            <span className="tb-assist-fx">{KIND_ICON[d.kind]}</span>
+            {d.label}
           </div>
         ))}
       </div>
@@ -131,6 +145,15 @@ export function handleEditKey(ctl: Controller, ev: React.KeyboardEvent<HTMLTextA
         requestAnimationFrame(() => ta.setSelectionRange(s + 1, s + 1));
         return true;
       }
+      // Akıllı Doldurma önizlemesi varsa Enter önerileri kabul eder
+      if (!ev.ctrlKey && !ev.shiftKey) {
+        const fp = flashPreviewFor(ctl);
+        if (fp) {
+          acceptFlashPreview(ctl, fp);
+          ctl.focusGrid();
+          return true;
+        }
+      }
       if (ctl.commitEdit(ev.ctrlKey ? null : ev.shiftKey ? "up" : "down", ev.ctrlKey)) ctl.focusGrid();
       return true;
     case "Tab":
@@ -146,6 +169,16 @@ export function handleEditKey(ctl: Controller, ev: React.KeyboardEvent<HTMLTextA
     case "F4":
       ctl.toggleAbsolute();
       return true;
+    case ";":
+    case ":":
+    case "Ş":
+    case "ş":
+      // Ctrl+; tarih, Ctrl+Shift+; saat (imleçteki konuma; "Ctrl+; boşluk Ctrl+Shift+;" birleşik giriş)
+      if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && (ev.code === "Semicolon" || ev.key === ";" || ev.key === ":")) {
+        insertNow(ctl, ev.key === ":" || ev.shiftKey ? "time" : "date");
+        return true;
+      }
+      return false;
     case "ArrowUp":
     case "ArrowDown":
     case "ArrowLeft":
@@ -274,6 +307,11 @@ export function CellEditor({ ctl, layout, inputRef, onGridKey }: Props) {
             if (composing.current) return;
             if (!ctl.edit) {
               const text = ta.value;
+              // Başka bir denetimde basılan Enter'ın satır sonu buraya düşerse düzenleme başlamaz
+              if (/^[\r\n]+$/.test(text)) {
+                ta.value = "";
+                return;
+              }
               ctl.startEdit(text);
               if (ctl.edit) ctl.updateEdit(text, text.length);
               return;

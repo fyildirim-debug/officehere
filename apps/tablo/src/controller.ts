@@ -15,7 +15,12 @@ import { autoCloseParens, parseRangeLoose, validateInputRule, validationList } f
 import { adjustRowHeights, widenForNumber } from "./grid/autofit";
 import type { TraceArrow, Watch } from "./actions/audit";
 import { activateTheme } from "./model/themeRuntime";
-import { afterTableEntry } from "./actions/tableAuto";
+import { afterTableEntry, tableTab } from "./actions/tableAuto";
+import { filtersOf, recomputeFilters } from "./actions/data";
+import { structuredPointRef } from "./model/structPoint";
+import { dataTableAt, refreshDataTables } from "./model/whatIf";
+
+export const DATA_TABLE_MESSAGE = "Veri tablosunun bir bölümü değiştirilemez. Tablonun tamamını seçip silebilirsiniz.";
 
 export type EditMode = "enter" | "edit";
 
@@ -88,6 +93,8 @@ export class Controller {
   listDropdown = false;
   /** Uygulamanın Kaydet eylemi (çökme uyarısından çağrılır). */
   saveHook: (() => Promise<boolean>) | null = null;
+  /** Biçimlendirme bölmesinde seçili grafik öğesi ("area", "plot", "title", "legend", "axis:val", "axis:cat", "series:0", "labels"). */
+  chartElement = "area";
   /** Sağdaki biçimlendirme bölmesi (Grafik Alanını Biçimlendir). */
   formatPane: "chart" | "selection" | null = null;
   /** Son yinelenebilir işlem (F4 / Ctrl+Y: Yinele). */
@@ -96,6 +103,14 @@ export class Controller {
   infoBar: { kind: "info" | "warning" | "error"; text: string } | null = null;
   /** Seçili yüzen nesne (grafik, resim, şekil). */
   selObj: { kind: "chart" | "image" | "shape"; id: string } | null = null;
+  /** Yeni Pencere ile bağlı pencereler (aynı kitap). */
+  windowLink: { doc: string; index: number; peers: Map<string, number> } | null = null;
+  /** Seçili dilimleyici. */
+  selSlicer: string | null = null;
+  /** Çizim kipi: sayfada sürükleyerek çizilecek şekil (Metin Kutusu). */
+  drawShape: "textbox" | null = null;
+  /** Şekil içinde yerinde metin düzenleme (şekil seçiliyken yazınca başlar). */
+  shapeEdit: { id: string; text: string } | null = null;
   /** Biçim Boyacısı: kopyalanan stiller. */
   painter: { sheetId: number; rect: Rect; sticky: boolean } | null = null;
   /** Odak ızgaraya geri verilsin diye çağrılır. */
@@ -122,15 +137,32 @@ export class Controller {
       this.dataVersion++;
       this.dirty = true;
       this.pristine = false;
+      // Veri tabloları (TABLE) bağımlı oldukları değerler değişince yeniden hesaplanır
+      if (wb.sheets.some((s) => s.dataTables.length)) this.scheduleDataTables();
       // Tema geri al/yinele ile değişmiş olabilir
       activateTheme(this.wb.theme);
       // Excel gibi: çalışma sayfası değişince izleme okları kalkar
       if (this.arrows.length) this.arrows = [];
       this.emit();
     };
+    ops.onBlocked = (m) => this.alert(m);
     // Tarayıcıda ölçüm yapılabildiğinde otomatik satır yüksekliği
     if (typeof document !== "undefined") ops.afterCells = (sheet, rects) => adjustRowHeights(wb, sheet, rects);
     return ops;
+  }
+
+  private dtTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Veri tablolarının yeniden hesaplanması (değişiklikten hemen sonra, tek seferde). */
+  scheduleDataTables(): void {
+    if (this.dtTimer) return;
+    this.dtTimer = setTimeout(() => {
+      this.dtTimer = null;
+      if (refreshDataTables(this.wb)) {
+        this.dataVersion++;
+        this.emit();
+      }
+    }, 0);
   }
 
   /** Yeni çalışma kitabı yükler. */
@@ -143,6 +175,10 @@ export class Controller {
     wb.syncTables();
     wb.engine.recalc();
     wb.sheets.forEach((s) => this.ops.syncHiddenRows(s));
+    // Dosyadan gelen filtre ölçütleri (ve Gelişmiş Filtre) yeniden uygulanır: gizli satırlar filtre gizliliği olur
+    wb.sheets.forEach((s) => {
+      if (s.advFilter || filtersOf(s).some((f) => Object.keys(f.columns).length)) recomputeFilters(this, s);
+    });
     this.fileName = fileName;
     this.fileRef = ref;
     this.dirty = false;
@@ -246,6 +282,11 @@ export class Controller {
 
   /** Enter/Tab sonrası seçim içinde ilerleme. */
   advance(dir: "down" | "up" | "right" | "left"): void {
+    // Tablo içinde Tab: satır sonunda sonraki satıra, son hücrede yeni tablo satırına
+    if ((dir === "right" || dir === "left") && this.sheet.tables.length && tableTab(this, dir === "left")) {
+      this.tabStartCol = null;
+      return;
+    }
     const single = this.sel.ranges.length === 1 && rectIsCell(this.sheet, this.range);
     if (single && (dir === "right" || dir === "left")) {
       if (this.tabStartCol === null && dir === "right") this.tabStartCol = this.sel.active.col;
@@ -353,6 +394,10 @@ export class Controller {
       this.alert(PIVOT_EDIT_MESSAGE);
       return false;
     }
+    if (this.sheet.dataTables.length && this.sel.ranges.some((r) => this.sheet.dataTables.some((d) => intersectsRect(d.ref, r) && !(r.r1 <= d.ref.r1 && r.c1 <= d.ref.c1 && r.r2 >= d.ref.r2 && r.c2 >= d.ref.c2)))) {
+      this.alert(DATA_TABLE_MESSAGE);
+      return false;
+    }
     if (!this.sheet.protected) return true;
     for (const r of this.sel.ranges)
       for (let row = r.r1; row <= Math.min(r.r2, r.r1 + 200); row++)
@@ -387,6 +432,10 @@ export class Controller {
     }
     if (this.isLocked(row, col)) {
       this.alert("Değiştirmeye çalıştığınız hücre veya grafik korumalı bir sayfada. Değişiklik yapmak için Gözden Geçir sekmesinde Sayfa Korumasını Kaldır'ı tıklatın.");
+      return;
+    }
+    if (this.sheet.dataTables.length && dataTableAt(this.sheet, row, col)) {
+      this.alert(DATA_TABLE_MESSAGE);
       return;
     }
     const initial = text ?? this.wb.editText(this.sheet, row, col);
@@ -427,8 +476,12 @@ export class Controller {
   pointTo(r: Rect, sheet: SheetModel, anchor?: CellPos, corner?: CellPos): void {
     const e = this.edit;
     if (!e) return;
-    let refText = rectToA1(r.r1 === r.r2 && r.c1 === r.c2 ? r : r);
-    if (sheet.id !== e.sheetId) refText = `${quoteSheetName(sheet.name)}!${refText}`;
+    // Tablo hücreleri yapısal başvuruyla ([@Tutar], Tablo1[Tutar]); diğerleri A1
+    let refText = sheet.tables.length ? structuredPointRef(sheet, r, e) : null;
+    if (!refText) {
+      refText = rectToA1(r);
+      if (sheet.id !== e.sheetId) refText = `${quoteSheetName(sheet.name)}!${refText}`;
+    }
     let start = e.caret;
     let end = e.caret;
     if (e.pointSpan && e.caret === e.pointSpan.end) {
@@ -602,6 +655,7 @@ export class Controller {
   cancelModes(): void {
     this.painter = null;
     this.clip = null;
+    this.drawShape = null;
     this.status = "";
     this.emit();
   }

@@ -8,7 +8,7 @@ import { CUSTOM_LISTS, addDate } from "../model/fill";
 import { displayText } from "../model/display";
 import { csvToInputs, decodeText, parseCsv } from "../io/csv";
 import type { FilterCriteria, Rect, ValidationRule } from "../model/types";
-import { contains } from "../model/rect";
+import { contains, subtractRects } from "../model/rect";
 import { Check, OkCancel, Radio, SimpleDialog, parseTrNumber } from "./common";
 
 type P = { ctl: Controller; onClose: () => void; arg?: unknown };
@@ -310,10 +310,8 @@ export function DataValidationDialog({ ctl, onClose }: P) {
   const save = (clear: boolean) => {
     const ranges = ctl.sel.ranges.map((r) => ({ ...r }));
     ctl.ops.sheetOp(sheet, "Veri Doğrulama", () => {
-      // Seçimle çakışan kuralları seçim dışına kırp (basit: tamamen kapsananları kaldır)
-      sheet.validations = sheet.validations
-        .map((v) => ({ ...v, ranges: v.ranges.filter((r) => !ranges.some((s) => s.r1 <= r.r1 && s.r2 >= r.r2 && s.c1 <= r.c1 && s.c2 >= r.c2)) }))
-        .filter((v) => v.ranges.length);
+      // Seçimle çakışan kurallar seçim dışına kırpılır (hücre başına tek kural)
+      sheet.validations = sheet.validations.map((v) => ({ ...v, ranges: subtractRects(v.ranges, ranges) })).filter((v) => v.ranges.length);
       if (clear || rule.type === "any") {
         if (!clear && (showPrompt && (rule.prompt || rule.promptTitle))) sheet.validations.push({ id: ctl.wb.newId("dv"), ranges, rule: { type: "any", prompt: rule.prompt, promptTitle: rule.promptTitle } });
         return;

@@ -160,7 +160,43 @@ export function seriesRefs(wb: WorkbookModel, def: ChartDef): SeriesRefs | null 
   return out;
 }
 
+/**
+ * Grafik verisi. Excel'deki "Gizli satır ve sütunlardaki verileri göster" kapalıyken
+ * (varsayılan; dosyada plotVisOnly=1) gizli/filtrelenmiş satır ve sütunlardaki noktalar çizilmez.
+ */
 export function extractChartData(wb: WorkbookModel, def: ChartDef): ChartData {
+  const data = rawChartData(wb, def);
+  if (def.showHidden) return data;
+  const hidden = hiddenPoints(wb, def, data.categories.length);
+  if (!hidden.some(Boolean)) return data;
+  const keep = (_: unknown, i: number) => !hidden[i];
+  return {
+    ...data,
+    categories: data.categories.filter(keep),
+    series: data.series.map((s) => ({ ...s, values: s.values.filter(keep), ...(s.xs ? { xs: s.xs.filter(keep) } : {}) })),
+  };
+}
+
+/** Her kategori noktasının kaynak hücresi gizli mi? */
+function hiddenPoints(wb: WorkbookModel, def: ChartDef, n: number): boolean[] {
+  const out: boolean[] = new Array(n).fill(false);
+  const isHid = (sheet: SheetModel, r: number, c: number) => sheet.rows.isHidden(r) || sheet.filterHidden.has(r) || sheet.cols.isHidden(c);
+  if (def.series?.length) {
+    const vals = qualified(wb, def.series[0].values, wb.active);
+    if (!vals) return out;
+    cellsOf(vals.rect).forEach(([r, c], i) => {
+      if (i < n) out[i] = isHid(vals.sheet, r, c);
+    });
+    return out;
+  }
+  const L = chartLayout(wb, def);
+  if (!L) return out;
+  for (let i = 0; i < n; i++) out[i] = def.seriesInRows ? L.sheet.cols.isHidden(L.dataC1 + i) : L.sheet.rows.isHidden(L.dataR1 + i) || L.sheet.filterHidden.has(L.dataR1 + i);
+  return out;
+}
+
+/** Gizli noktalar dahil tüm veri (dosyadaki önbellek için). */
+export function rawChartData(wb: WorkbookModel, def: ChartDef): ChartData {
   if (def.series?.length) return explicitData(wb, def);
   const L = chartLayout(wb, def);
   if (!L) return { categories: [], series: [] };

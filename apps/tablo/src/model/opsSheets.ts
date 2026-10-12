@@ -1,11 +1,23 @@
 /** Sayfa işlemleri: ekle, sil, yeniden adlandır, taşı, kopyala, sekme rengi, gizle. */
 import { OpsCore } from "./opsCore";
+import { STRUCTURE_MESSAGE } from "./protection";
 import type { SheetModel, WorkbookModel } from "./workbook";
 
 export class OpsSheets extends OpsCore {
+  /** Kitap yapısı korunurken engellenen işlem için ileti (denetleyici uyarı gösterir). */
+  onBlocked: ((message: string) => void) | null = null;
+
+  /** Çalışma kitabı yapı koruması: sayfa ekleme/silme/adlandırma/taşıma/gizleme engellenir. */
+  protected blocked(): boolean {
+    if (!this.wb.protection?.structure) return false;
+    this.onBlocked?.(STRUCTURE_MESSAGE);
+    return true;
+  }
+
   /* --------------------------- Sayfalar --------------------------- */
 
   addSheet(index?: number): SheetModel {
+    if (this.blocked()) return this.wb.active;
     let created!: SheetModel;
     this.snapshotOp("Sayfa Ekle", () => {
       created = this.wb.addSheet(undefined, index ?? this.wb.sheets.length);
@@ -15,7 +27,7 @@ export class OpsSheets extends OpsCore {
   }
 
   deleteSheet(index: number): void {
-    if (this.wb.sheets.filter((s) => !s.hidden).length <= 1) return;
+    if (this.blocked() || this.wb.sheets.filter((s) => !s.hidden).length <= 1) return;
     this.snapshotOp("Sayfayı Sil", () => {
       this.wb.removeSheet(index);
       this.wb.activeIndex = Math.min(index, this.wb.sheets.length - 1);
@@ -24,11 +36,12 @@ export class OpsSheets extends OpsCore {
   }
 
   renameSheet(index: number, name: string): void {
+    if (this.blocked()) return;
     this.snapshotOp("Sayfayı Yeniden Adlandır", () => this.wb.renameSheet(index, name.trim()));
   }
 
   moveSheet(from: number, to: number): void {
-    if (from === to) return;
+    if (from === to || this.blocked()) return;
     this.snapshotOp("Sayfayı Taşı", () => {
       const active = this.wb.active;
       this.wb.moveSheet(from, to);
@@ -37,6 +50,7 @@ export class OpsSheets extends OpsCore {
   }
 
   copySheet(from: number, to: number): void {
+    if (this.blocked()) return;
     this.snapshotOp("Sayfayı Kopyala", () => {
       const wb = this.wb;
       const src = wb.sheets[from];
@@ -64,12 +78,14 @@ export class OpsSheets extends OpsCore {
   }
 
   setTabColor(sheet: SheetModel, color: string | undefined): void {
+    if (this.blocked()) return;
     this.sheetOp(sheet, "Sekme Rengi", () => {
       sheet.tabColor = color;
     });
   }
 
   setSheetHidden(index: number, hidden: boolean): void {
+    if (this.blocked()) return;
     const wb = this.wb;
     if (hidden && wb.sheets.filter((s) => !s.hidden).length <= 1) return;
     this.snapshotOp(hidden ? "Sayfayı Gizle" : "Sayfayı Göster", () => {

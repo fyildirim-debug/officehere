@@ -1,22 +1,26 @@
 /**
  * Otomatik Kurtarma: çalışma kitabı değiştikçe (kaydedilmemişken) birkaç
- * saniyelik boşluktan sonra taslak olarak IndexedDB'ye yazılır.
+ * saniyelik boşluktan sonra bu pencerenin taslağı IndexedDB'ye yazılır.
  * Serileştirme boşta kalma süresinde parça parça yapılır; bu sırada kitap
  * değişirse yarıda bırakılıp yeniden planlanır. Kaydedince ya da yeni kitap
- * açılınca taslak silinir. Açılışta kaydedilmemiş taslak varsa ileti
- * çubuğuyla "Kurtarılan çalışma kitabı" önerilir.
+ * açılınca bu pencerenin taslağı silinir. Açılışta sahibi kapanmış
+ * pencerelerin taslakları sırayla "Kurtarılan çalışma kitabı" çubuğuyla
+ * önerilir; geri yüklenen taslak bu pencereye devredilir (ya da pencere
+ * kullanılıyorsa yeni pencerede açılır).
  */
 import { useCallback, useEffect, useState } from "react";
 import { MessageBar } from "@officehere/ui";
 import type { Controller } from "../controller";
 import { serializeDraft, workbookFromDraft, type WorkbookDraft } from "../io/draft";
-import { announceLive, deleteDraft, listDraftMeta, liveSessions, newSessionId, pickDraft, readDraft, writeDraft } from "./draftStore";
+import { SESSION_ID, adoptDraft, announceLive, deleteDraft, orphanDrafts, pruneHeartbeats, readDraft, writeDraft, type DraftMeta, type DraftRecord } from "./draftStore";
 
-export const SESSION_ID = newSessionId();
+export { SESSION_ID };
 /** Son değişiklikten sonra beklenen boşluk. */
 const IDLE_MS = 2500;
 /** Sürekli düzenlemede en geç bu sürede bir yazılır. */
 const MAX_WAIT_MS = 15000;
+/** Yeni pencerede açılacak taslağın adres parametresi. */
+const RESTORE_PARAM = "kurtar";
 
 type IdleDeadline = { timeRemaining: () => number; didTimeout: boolean };
 type IdleWin = Window & { requestIdleCallback?: (cb: (d: IdleDeadline) => void, o?: { timeout: number }) => number; cancelIdleCallback?: (h: number) => void };
@@ -31,30 +35,49 @@ function idle(cb: (d: IdleDeadline) => void): () => void {
   return () => window.clearTimeout(h);
 }
 
-interface Offer {
-  session: string;
-  fileName: string;
-  savedAt: number;
-  sheetCount: number;
+/** Taslağı bu pencereye yükler ve devralır. */
+async function loadInto(ctl: Controller, rec: DraftRecord): Promise<void> {
+  const wb = workbookFromDraft(rec.draft);
+  ctl.load(wb, rec.fileName, rec.path ? { name: rec.fileName, path: rec.path } : null);
+  ctl.dirty = true;
+  ctl.pristine = false;
+  ctl.infoBar = { kind: "info", text: "Kurtarılan çalışma kitabı geri yüklendi. Saklamak için kaydedin." };
+  ctl.emit();
+  await adoptDraft(rec);
 }
 
 export function useAutoRecover(ctl: Controller) {
-  const [offer, setOffer] = useState<Offer | null>(null);
+  const [offers, setOffers] = useState<DraftMeta[]>([]);
 
   useEffect(() => announceLive(SESSION_ID), []);
 
-  // Açılışta kurtarılacak taslak var mı?
+  // Açılışta: yeni pencerede açılması istenen taslak ya da sahipsiz taslaklar
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [metas, live] = await Promise.all([listDraftMeta(), liveSessions()]);
-      const d = pickDraft(metas, live, SESSION_ID);
-      if (alive && d) setOffer(d);
+      const params = new URLSearchParams(window.location.search);
+      const wanted = params.get(RESTORE_PARAM);
+      if (wanted) {
+        params.delete(RESTORE_PARAM);
+        const q = params.toString();
+        window.history.replaceState(null, "", `${window.location.pathname}${q ? `?${q}` : ""}${window.location.hash}`);
+        const rec = await readDraft(wanted);
+        if (rec && alive) {
+          try {
+            await loadInto(ctl, rec);
+          } catch (e) {
+            ctl.alert(`Kurtarılan çalışma kitabı açılamadı: ${(e as Error).message}`);
+          }
+        }
+      }
+      pruneHeartbeats();
+      const list = await orphanDrafts();
+      if (alive) setOffers(list);
     })();
     return () => {
       alive = false;
     };
-  }, []);
+  }, [ctl]);
 
   // Taslak yazıcı
   useEffect(() => {
@@ -62,7 +85,7 @@ export function useAutoRecover(ctl: Controller) {
     let cancelIdle: (() => void) | null = null;
     let firstChange = 0;
     let lastVersion = -1;
-    let hasDraft = false;
+    let wasDirty = ctl.dirty;
     let disposed = false;
     let writing = false;
 
@@ -94,19 +117,16 @@ export function useAutoRecover(ctl: Controller) {
     const save = async (draft: WorkbookDraft, version: number) => {
       writing = true;
       try {
-        const ok = await writeDraft({ session: SESSION_ID, fileName: ctl.fileName, path: ctl.fileRef?.path, savedAt: Date.now(), sheetCount: draft.sheets.length, cellCount: draft.cellCount, draft });
-        hasDraft = hasDraft || ok;
+        await writeDraft({ session: SESSION_ID, fileName: ctl.fileName, path: ctl.fileRef?.path, savedAt: Date.now(), sheetCount: draft.sheets.length, cellCount: draft.cellCount, draft });
         firstChange = 0;
       } catch {
         /* taslak yazılamazsa sessizce geç */
       } finally {
         writing = false;
       }
-      // Yazarken kaydedildiyse taslağı sil; değiştiyse yeniden planla
-      if (!ctl.dirty && hasDraft) {
-        hasDraft = false;
-        void deleteDraft(SESSION_ID);
-      } else if (ctl.version !== version && ctl.dirty) schedule();
+      // Yazarken kaydedildiyse taslak silinir; değiştiyse yeniden planlanır
+      if (!ctl.dirty) void deleteDraft(SESSION_ID);
+      else if (ctl.version !== version) schedule();
     };
 
     const schedule = () => {
@@ -124,12 +144,12 @@ export function useAutoRecover(ctl: Controller) {
         cancelIdle = null;
         firstChange = 0;
         lastVersion = ctl.version;
-        if (hasDraft) {
-          hasDraft = false;
-          void deleteDraft(SESSION_ID);
-        }
+        // Kaydedildi (ya da yeni kitap açıldı): bu pencerenin taslağı her durumda silinir
+        if (wasDirty) void deleteDraft(SESSION_ID);
+        wasDirty = false;
         return;
       }
+      wasDirty = true;
       if (ctl.version === lastVersion) return;
       lastVersion = ctl.version;
       schedule();
@@ -150,50 +170,60 @@ export function useAutoRecover(ctl: Controller) {
     };
   }, [ctl]);
 
+  const offer = offers[0] ?? null;
+  const next = () => setOffers((list) => list.slice(1));
+
   const restore = useCallback(async () => {
     if (!offer) return;
+    next();
+    // Bu pencere kullanılıyorsa taslak yeni pencerede açılır (geçerli kitap ezilmez)
+    if (!ctl.pristine) {
+      const url = new URL(window.location.href);
+      url.searchParams.set(RESTORE_PARAM, offer.session);
+      if (window.open(url.toString(), "_blank")) return;
+      ctl.alert("Kurtarılan çalışma kitabı yeni pencerede açılamadı. Açılır pencerelere izin verip yeniden deneyin.");
+      setOffers((list) => [offer, ...list]);
+      return;
+    }
     const rec = await readDraft(offer.session);
-    setOffer(null);
     if (!rec) {
       ctl.alert("Kurtarılan çalışma kitabı okunamadı.");
       return;
     }
     try {
-      const wb = workbookFromDraft(rec.draft);
-      ctl.load(wb, rec.fileName, rec.path ? { name: rec.fileName, path: rec.path } : null);
-      ctl.dirty = true;
-      ctl.pristine = false;
-      ctl.infoBar = { kind: "info", text: "Kurtarılan çalışma kitabı geri yüklendi. Saklamak için kaydedin." };
-      ctl.emit();
-      void deleteDraft(offer.session);
+      await loadInto(ctl, rec);
     } catch (e) {
       ctl.alert(`Kurtarılan çalışma kitabı açılamadı: ${(e as Error).message}`);
     }
   }, [ctl, offer]);
 
   const discard = useCallback(() => {
-    if (offer) void deleteDraft(offer.session);
-    setOffer(null);
+    if (!offer) return;
+    void deleteDraft(offer.session);
+    next();
   }, [offer]);
 
   const bar = offer ? (
     <MessageBar
       kind="warning"
-      onClose={discard}
+      onClose={() => setOffers([])}
       actions={
-        <>
+        <span className="tb-recover-actions">
           <button type="button" className="oh-btn is-primary" onClick={() => void restore()}>
             Geri Yükle
           </button>
           <button type="button" className="oh-btn" onClick={discard}>
             Sil
           </button>
-        </>
+        </span>
       }
     >
-      <strong>Kurtarılan çalışma kitabı</strong> “{offer.fileName}” için kaydedilmemiş değişiklikler bulundu ({new Date(offer.savedAt).toLocaleString("tr-TR")}, {offer.sheetCount} sayfa).
+      <span className="tb-recover">
+        <strong>Kurtarılan çalışma kitabı</strong> “{offer.fileName}” için kaydedilmemiş değişiklikler bulundu ({new Date(offer.savedAt).toLocaleString("tr-TR")}, {offer.sheetCount} sayfa).
+        {offers.length > 1 && ` Kurtarılmayı bekleyen ${offers.length - 1} çalışma kitabı daha var.`}
+      </span>
     </MessageBar>
   ) : null;
 
-  return { offer, bar, restore, discard };
+  return { offer, offers, bar, restore, discard };
 }

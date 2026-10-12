@@ -4,6 +4,8 @@ import { FUNCTIONS, TR_SYNTAX, argNames, resolveFunctionName, tokenize, type FnD
 export interface AssistInfo {
   /** Tamamlanacak ad öneki ve konumu. */
   prefix?: { start: number; end: number; text: string };
+  /** Tablo1[… içinde: tablo adı ve sütun öneki. */
+  column?: { table: string; start: number; end: number; text: string };
   /** İmlecin içinde bulunduğu fonksiyon ve bağımsız değişken sırası. */
   call?: { def: FnDef; argIndex: number };
 }
@@ -13,6 +15,12 @@ export function analyzeFormula(text: string, caret: number): AssistInfo {
   const body = text.slice(1, caret);
   const toks = tokenize(body, TR_SYNTAX);
   const info: AssistInfo = {};
+  // Tablo1[Tu… : yapısal başvuruda sütun adı tamamlanır
+  const col = /([\p{L}_\\][\p{L}\p{N}_.\\]*)?\[(?:@)?([^[\]]*)$/u.exec(body);
+  if (col) {
+    const textStart = body.length - col[2].length;
+    info.column = { table: col[1] ?? "", start: textStart + 1, end: caret, text: col[2] };
+  }
   // Önek: son belirteç bir ad ve imleçte bitiyor
   const last = toks[toks.length - 1];
   if (last && (last.type === "name" || last.type === "bool" || (last.type === "ref" && /^[A-Za-zÇĞİÖŞÜçğıöşü]+\d*$/.test(last.text))) && last.pos + last.text.length === body.length) {
@@ -43,6 +51,44 @@ export function analyzeFormula(text: string, caret: number): AssistInfo {
     }
   }
   return info;
+}
+
+/** Otomatik tamamlama önerisi: işlev, tablo adı, tanımlı ad ya da tablo sütunu. */
+export interface AssistItem {
+  key: string;
+  kind: "fn" | "table" | "name" | "column" | "item";
+  label: string;
+  /** Eklenecek metin ve imlecin eklenen metne göre konumu. */
+  insert: string;
+  desc: string;
+}
+
+/** Öneke uyan işlevler, tablolar ve tanımlı adlar. */
+export function suggestItems(prefix: string, tables: { name: string; columns: string[] }[], names: string[], limit = 14): AssistItem[] {
+  const p = prefix.toLocaleUpperCase("tr-TR");
+  const out: AssistItem[] = [];
+  for (const t of tables) if (t.name.toLocaleUpperCase("tr-TR").startsWith(p)) out.push({ key: `t:${t.name}`, kind: "table", label: t.name, insert: t.name, desc: "Tablo" });
+  for (const n of names) if (n.toLocaleUpperCase("tr-TR").startsWith(p)) out.push({ key: `n:${n}`, kind: "name", label: n, insert: n, desc: "Tanımlı ad" });
+  for (const d of suggestFunctions(prefix, limit)) out.push({ key: `f:${d.name}`, kind: "fn", label: d.tr, insert: `${d.tr}(`, desc: d.desc });
+  return out.slice(0, limit);
+}
+
+const SPECIAL_ITEMS: [string, string][] = [
+  ["#Tümü", "Tablonun tamamı: başlıklar, veriler ve toplam satırı"],
+  ["#Veri", "Tablonun veri satırları"],
+  ["#Başlıklar", "Sütun başlıkları"],
+  ["#Toplamlar", "Toplam satırı"],
+  ["@", "Bu satır"],
+];
+
+/** Tablo1[… içindeki sütun adları ve özel öğeler. */
+export function suggestColumns(table: { name: string; columns: string[] } | undefined, prefix: string): AssistItem[] {
+  if (!table) return [];
+  const p = prefix.replace(/^\[/, "").toLocaleUpperCase("tr-TR");
+  const out: AssistItem[] = [];
+  for (const c of table.columns) if (c.toLocaleUpperCase("tr-TR").startsWith(p)) out.push({ key: `c:${c}`, kind: "column", label: c, insert: /^[\p{L}\p{N}_.][\p{L}\p{N}_. ]*$/u.test(c) && !c.endsWith(" ") ? `${c}]` : `[${c.replace(/(['[\]#])/g, "'$1")}]]`, desc: `${table.name} tablosunun sütunu` });
+  for (const [it, desc] of SPECIAL_ITEMS) if (it.toLocaleUpperCase("tr-TR").startsWith(p) && it !== "@") out.push({ key: `i:${it}`, kind: "item", label: it, insert: `${it}]`, desc });
+  return out;
 }
 
 /** Öneke uyan Türkçe fonksiyon adları. */

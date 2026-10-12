@@ -135,8 +135,9 @@ function programsFor(example: string, row: string[], limit = 400): Program[] {
   };
   results.push(...rec(0));
   // Basitlik puanı: az sabit metin, az parça; ilk/son n karakter ve dönüşümler daha az tercih edilir
+  // Son sözcük için "sondan" dizin yeğlenir ("Mehmet Can Öz" → soyad "Öz")
   const score = (p: Program) =>
-    p.reduce((n, x) => n + (x.kind === "lit" ? x.text.length * 3 + 1 : 1 + (x.take ? 2 : 0) + (x.transform !== "none" ? 0.5 : 0) + (x.delim !== null ? 0.25 : 0)), 0);
+    p.reduce((n, x) => n + (x.kind === "lit" ? x.text.length * 3 + 1 : 1 + (x.take ? 2 : 0) + (x.transform !== "none" ? 0.5 : 0) + (x.delim !== null ? 0.25 : 0) + (x.delim !== null && x.index > 0 ? 0.01 : 0)), 0);
   return results.filter((p) => p.some((x) => x.kind === "field")).sort((a, b) => score(a) - score(b));
 }
 

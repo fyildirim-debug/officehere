@@ -33,6 +33,7 @@ import { autoFitCols, autoFitRows } from "../grid/autofit";
 import { currentRegion } from "../model/selection";
 import { SigmaGlyph } from "./glyphs";
 import { selectFirstObject } from "../actions/objectClip";
+import { deleteTableCols, deleteTableRows, insertTableCols, insertTableRows } from "../actions/tableEdit";
 
 export function TablePreview({ p, size = 56 }: { p: TableStylePreset; size?: number }) {
   const c = previewColors(p);
@@ -88,7 +89,7 @@ function CellStylePreview({ s, label }: { s: CellStyle; label: string }) {
         color: s.color ?? "#000",
         fontWeight: s.bold ? 700 : 400,
         fontStyle: s.italic ? "italic" : undefined,
-        fontSize: s.size && s.size > 12 ? 13 : 11,
+        fontSize: s.size && s.size > 12 ? 12 : 11,
         borderBottom: s.bBottom ? `${s.bBottom.style === "thick" ? 3 : s.bBottom.style === "double" ? 3 : 1}px ${s.bBottom.style === "double" ? "double" : "solid"} ${s.bBottom.color}` : undefined,
         outline: s.bTop && s.bLeft ? `1px solid ${s.bTop.color}` : undefined,
         outlineOffset: -1,
@@ -103,17 +104,17 @@ function CellStyleGallery({ ctl }: { ctl: Controller }) {
   const close = useMenuClose();
   const groups = [...new Set(CELL_STYLES.map((s) => s.group))];
   return (
-    <div className="oh-menu" style={{ width: 520, padding: "4px 6px" }}>
+    <div className="oh-menu" style={{ width: 690, maxWidth: "calc(100vw - 16px)", padding: "4px 6px" }}>
       {groups.map((g) => (
         <div key={g}>
           <MenuHeader>{g}</MenuHeader>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 82px)", gap: 3, margin: "2px 0 4px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(108px, 1fr))", gap: 3, margin: "2px 0 4px" }}>
             {CELL_STYLES.filter((s) => s.group === g).map((s) => (
               <button
                 key={s.id}
                 type="button"
                 className="oh-gallery-item"
-                style={{ width: 82, height: 26 }}
+                style={{ width: "100%", height: 26 }}
                 title={s.label}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
@@ -265,6 +266,7 @@ function CellStylesGlyph() {
 export function CellsGroup({ ctl }: { ctl: Controller }) {
   const sheet = ctl.sheet;
   const range = ctl.range;
+  const table = sheet.tableAt(ctl.sel.active.row, ctl.sel.active.col);
   const lines = (axis: "row" | "col") => {
     const out: number[] = [];
     const [a, b] = axis === "row" ? [range.r1, Math.min(range.r2, range.r1 + 50000)] : [range.c1, range.c2];
@@ -283,6 +285,13 @@ export function CellsGroup({ ctl }: { ctl: Controller }) {
             <MenuItem label="Hücre Ekle..." onClick={() => ctl.openDialog("insertCells")} />
             <MenuItem icon={<TableInsertRow20Regular />} label="Sayfa Satırları Ekle" onClick={() => E.insertRows(ctl)} />
             <MenuItem icon={<TableInsertColumn20Regular />} label="Sayfa Sütunları Ekle" onClick={() => E.insertCols(ctl)} />
+            {table && (
+              <>
+                <MenuSeparator />
+                <MenuItem label="Tablo Satırları Yukarı Ekle" onClick={() => insertTableRows(ctl, table)} />
+                <MenuItem label="Tablo Sütunları Sola Ekle" onClick={() => insertTableCols(ctl, table)} />
+              </>
+            )}
             <MenuSeparator />
             <MenuItem label="Sayfa Ekle" onClick={() => ctl.ops.addSheet(ctl.wb.activeIndex)} />
           </Menu>
@@ -298,6 +307,13 @@ export function CellsGroup({ ctl }: { ctl: Controller }) {
             <MenuItem label="Hücreleri Sil..." onClick={() => ctl.openDialog("deleteCells")} />
             <MenuItem icon={<TableDeleteRow20Regular />} label="Sayfa Satırlarını Sil" onClick={() => E.deleteRows(ctl)} />
             <MenuItem icon={<TableDeleteColumn20Regular />} label="Sayfa Sütunlarını Sil" onClick={() => E.deleteCols(ctl)} />
+            {table && (
+              <>
+                <MenuSeparator />
+                <MenuItem label="Tablo Satırlarını Sil" onClick={() => deleteTableRows(ctl, table)} />
+                <MenuItem label="Tablo Sütunlarını Sil" onClick={() => deleteTableCols(ctl, table)} />
+              </>
+            )}
             <MenuSeparator />
             <MenuItem label="Sayfayı Sil" onClick={() => requestDeleteSheet(ctl)} />
           </Menu>

@@ -34,15 +34,12 @@ export function sheetPages(wb: WorkbookModel, sheet: SheetModel, area?: Rect | n
   const scale = fitScale(sheet, r);
   const { rows, cols } = computePageBreaks(wb, sheet, r);
   const out: PrintPageRef[] = [];
-  let c1 = r.c1;
-  for (const cEnd of cols) {
-    let r1 = r.r1;
-    for (const rEnd of rows) {
-      if (rEnd - 1 >= r1 && cEnd - 1 >= c1) out.push({ sheet, rect: { r1, c1, r2: rEnd - 1, c2: cEnd - 1 }, scale });
-      r1 = rEnd;
-    }
-    c1 = cEnd;
-  }
+  const rowSpans = rows.map((end, i) => [i ? rows[i - 1] : r.r1, end - 1] as const).filter(([a, b]) => b >= a);
+  const colSpans = cols.map((end, i) => [i ? cols[i - 1] : r.c1, end - 1] as const).filter(([a, b]) => b >= a);
+  // Sayfa sırası: önce aşağı sonra yana (varsayılan) ya da önce yana sonra aşağı
+  if (sheet.page.pageOrder === "overThenDown") {
+    for (const [r1, r2] of rowSpans) for (const [c1, c2] of colSpans) out.push({ sheet, rect: { r1, c1, r2, c2 }, scale });
+  } else for (const [c1, c2] of colSpans) for (const [r1, r2] of rowSpans) out.push({ sheet, rect: { r1, c1, r2, c2 }, scale });
   return out;
 }
 
@@ -57,7 +54,20 @@ export function printPages(wb: WorkbookModel, active: SheetModel, opts: PrintOpt
 /** Tek sayfanın HTML'i (yazdırma ve önizleme). */
 export function pageHtml(wb: WorkbookModel, p: PrintPageRef): string {
   const page = p.sheet.page;
-  return rangeToHtml(wb, p.sheet, p.rect, { gridlines: page.printGridlines, headings: page.printHeadings, objects: true });
+  const { rowList, colList } = titledLists(p.sheet, p.rect);
+  const html = rangeToHtml(wb, p.sheet, p.rect, { gridlines: page.printGridlines && !page.draft, headings: page.printHeadings, objects: !page.draft && !rowList && !colList, rowList, colList });
+  return page.blackAndWhite ? `<div style="filter:grayscale(1)">${html}</div>` : html;
+}
+
+/** Yazdırma başlıkları: sayfa başlık satırlarını/sütunlarını içermiyorsa önüne eklenir. */
+export function titledLists(sheet: SheetModel, r: Rect): { rowList?: number[]; colList?: number[] } {
+  const tr = sheet.page.titleRows;
+  const tc = sheet.page.titleCols;
+  const span = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+  const out: { rowList?: number[]; colList?: number[] } = {};
+  if (tr && r.r1 > tr.r2) out.rowList = [...span(tr.r1, tr.r2), ...span(r.r1, r.r2)];
+  if (tc && r.c1 > tc.c2) out.colList = [...span(tc.c1, tc.c2), ...span(r.c1, r.c2)];
+  return out;
 }
 
 /** Yazdırılacak tüm sayfaların HTML'i (sayfa aralığı ve kopyalar uygulanmış). */

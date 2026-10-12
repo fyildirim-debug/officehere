@@ -4,6 +4,7 @@ import { isDateFormat } from "@officehere/formula";
 import { ACCOUNTING_FORMAT, COMMA_FORMAT, DEFAULT_FONT, DEFAULT_SIZE, type CellStyle } from "../model/styles";
 import type { Rect } from "../model/types";
 import { FONT_SIZES } from "@officehere/core";
+import { applyWiden } from "../grid/autofit";
 
 export function activeStyle(ctl: Controller): CellStyle {
   const { row, col } = ctl.sel.active;
@@ -20,7 +21,10 @@ export function applyStyle(ctl: Controller, patch: Partial<CellStyle> | ((s: Cel
     ctl.alert("Korumalı bir sayfada biçimlendirme yapılamaz. Önce Gözden Geçir sekmesinden sayfa korumasını kaldırın.");
     return;
   }
+  const mark = ctl.ops.history.mark();
   ctl.ops.applyStyle(ctl.sheet, ranges(ctl), patch, label);
+  // Sayı biçimi değişince sığmayan sayı/tarih için sütun genişler (Excel gibi; ##### yerine)
+  if (typeof patch === "function" || "numFmt" in patch) applyWiden(ctl, ranges(ctl), label ?? "Biçimlendirme", mark);
   ctl.recordRepeat(label ?? "Biçimlendirme", () => applyStyle(ctl, patch, label));
 }
 
@@ -202,4 +206,15 @@ export function applyCellStyle(ctl: Controller, style: CellStyle): void {
     },
     "Hücre Stili",
   );
+}
+
+/** Seçili satırların/sütunların boyutu (F4 ile yinelenebilir). */
+export function sizeSelection(ctl: Controller, axis: "row" | "col", px: number, label: string): void {
+  const items: number[] = [];
+  for (const r of ctl.sel.ranges) {
+    const [a, b] = axis === "row" ? [r.r1, Math.min(r.r2, r.r1 + 100000)] : [r.c1, r.c2];
+    for (let i = a; i <= b; i++) items.push(i);
+  }
+  ctl.ops.setSizes(ctl.sheet, axis, items, px, label);
+  ctl.recordRepeat(label, () => sizeSelection(ctl, axis, px, label));
 }

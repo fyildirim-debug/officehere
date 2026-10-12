@@ -38,6 +38,9 @@ import { SelectionPane } from "./charts/SelectionPane";
 import { ErrorBoundary } from "./app/ErrorBoundary";
 import { recoveryHandlers } from "./app/recovery";
 import { useAutoRecover } from "./app/useAutoRecover";
+import { installInputGuard, refocusGridSoon } from "./app/inputGuard";
+import { UndoDropdown } from "./app/UndoDropdown";
+import { installWindowSync, windowTitle } from "./app/windowSync";
 import { copyObject, objectClipMarker, pasteObject } from "./actions/objectClip";
 import { paletteOf } from "./model/theme";
 
@@ -48,6 +51,8 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
   const recovery = useMemo(() => recoveryHandlers(ctl), [ctl]);
   const autoRecover = useAutoRecover(ctl);
   useEffect(() => installTestHook(ctl), [ctl]);
+  useEffect(() => installInputGuard(ctl), [ctl]);
+  useEffect(() => installWindowSync(ctl), [ctl]);
   // Şeritteki onay kutusu değişince odak çalışma sayfasına döner (Ctrl+Z vb. çalışsın)
   useEffect(() => {
     const onChange = (e: Event) => {
@@ -230,7 +235,7 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
       titleBar={
         <TitleBar
           app="tablo"
-          title={baseName(ctl.fileName)}
+          title={windowTitle(ctl, baseName(ctl.fileName))}
           dirty={ctl.dirty}
           onSearch={(q) => {
             if (q.trim()) pushDialog({ id: "find", arg: { query: q } });
@@ -240,7 +245,9 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
             <>
               <QatButton icon={<Save20Regular />} tip="Kaydet" shortcut="Ctrl+S" onClick={() => void files.save()} />
               <QatButton icon={<ArrowUndo20Regular />} tip={ctl.ops.history.undoLabel ? `Geri Al: ${ctl.ops.history.undoLabel}` : "Geri Al"} shortcut="Ctrl+Z" disabled={!ctl.ops.history.canUndo && !ctl.edit} onClick={() => E.undo(ctl)} />
+              <UndoDropdown ctl={ctl} />
               <QatButton icon={<ArrowRedo20Regular />} tip={ctl.ops.history.redoLabel ? `Yinele: ${ctl.ops.history.redoLabel}` : "Yinele"} shortcut="Ctrl+Y" disabled={!ctl.ops.history.canRedo} onClick={() => E.redo(ctl)} />
+              <UndoDropdown ctl={ctl} redo />
             </>
           }
         />
@@ -279,7 +286,7 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
       backstage={
         backstage ? (
           <ErrorBoundary region="Dosya görünümü" recovery={recovery}>
-            <FileView ctl={ctl} files={files} page={backstage} onClose={() => (setBackstage(null), requestAnimationFrame(() => ctl.focusGrid()))} />
+            <FileView ctl={ctl} files={files} page={backstage} onClose={() => (setBackstage(null), refocusGridSoon(ctl))} />
           </ErrorBoundary>
         ) : undefined
       }
@@ -288,7 +295,7 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
         <div className="tb-workarea">
           <ErrorBoundary region="Çalışma sayfası" recovery={recovery}>
             {sheet.viewMode === "pageLayout" ? (
-              <PageLayoutView ctl={ctl} />
+              <PageLayoutView ctl={ctl} onContextMenu={openContext} />
             ) : (
               <Grid ctl={ctl} onContextMenu={openContext} onFilterButton={(row, col, x, y) => setFilterMenu({ row, col, x, y })} />
             )}
@@ -329,8 +336,8 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
         onClose={(key) => {
           setDialogs((st) => {
             const next = st.filter((d) => d.key !== key);
-            // Sayfa adı düzenlenirken açılan uyarı kapanınca odak ad kutusunda kalır
-            if (!next.length) requestAnimationFrame(() => !document.activeElement?.classList.contains("tb-tab-input") && ctl.focusGrid());
+            // Sayfa adı düzenlenirken açılan uyarı kapanınca odak ad kutusunda kalır; kullanıcı başka kutuya geçtiyse çalınmaz
+            if (!next.length) refocusGridSoon(ctl);
             return next;
           });
         }}

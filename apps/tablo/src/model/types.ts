@@ -157,10 +157,22 @@ export interface ChartDef {
   series?: ChartSeriesDef[];
   /** Seçim Bölmesinde gizlenmiş. */
   hidden?: boolean;
+  /** Seçim Bölmesinde verilen ad. */
+  name?: string;
+  /** Nesneler arası yığın sırası (yoksa oluşturulma sırası). */
+  z?: number;
   /** Grafik alanı dolgusu (Grafik Alanını Biçimlendir). */
   fill?: string;
   /** Grafik alanı kenarlığı rengi; "none" kenarlıksız. */
   border?: string;
+  /** Gizli satır ve sütunlardaki verileri göster (dosyada plotVisOnly=0). */
+  showHidden?: boolean;
+  /** Seri biçimleri (seri sırasıyla): dolgu/çizgi rengi, kenarlık rengi, çizgi kalınlığı (pt). */
+  seriesFmt?: ({ color?: string; border?: string; lineWidth?: number } | null)[];
+  /** Değer ekseni: en küçük/en büyük sınır, ana birim, sayı biçimi, ikincil kılavuz çizgileri. */
+  valAxis?: { min?: number; max?: number; major?: number; numFmt?: string; minorGrid?: boolean };
+  /** Veri etiketi konumu (sütun/çubuk). */
+  labelPos?: "outEnd" | "inEnd" | "ctr" | "inBase";
 }
 
 export interface ChartSeriesDef {
@@ -177,6 +189,8 @@ export interface ImageDef {
   id: string;
   name: string;
   hidden?: boolean;
+  /** Nesneler arası yığın sırası (yoksa oluşturulma sırası). */
+  z?: number;
   src: string;
   anchor: Anchor;
   width: number;
@@ -188,6 +202,10 @@ export interface ShapeDef {
   kind: "rect" | "roundRect" | "ellipse" | "triangle" | "arrow" | "line" | "textbox";
   text: string;
   hidden?: boolean;
+  /** Seçim Bölmesinde verilen ad. */
+  name?: string;
+  /** Nesneler arası yığın sırası (yoksa oluşturulma sırası). */
+  z?: number;
   fill: string;
   stroke: string;
   anchor: Anchor;
@@ -211,6 +229,13 @@ export interface PageSetup {
   /** El ile eklenen sayfa sonları: yeni sayfanın ilk satırı / sütunu (0 tabanlı, artan sırada). */
   rowBreaks?: number[];
   colBreaks?: number[];
+  /** Yazdırma başlıkları: her sayfada yinelenecek üst satırlar / sol sütunlar. */
+  titleRows?: { r1: number; r2: number };
+  titleCols?: { c1: number; c2: number };
+  /** Siyah beyaz, taslak kalitesi, sayfa sırası (Sayfa Yapısı > Çalışma Sayfası). */
+  blackAndWhite?: boolean;
+  draft?: boolean;
+  pageOrder?: "downThenOver" | "overThenDown";
 }
 
 export type PivotFn = "sum" | "count" | "average" | "max" | "min" | "product" | "countNums";
@@ -312,4 +337,50 @@ export interface Selection {
   active: CellPos;
   /** Shift ile genişletmenin bağlantı noktası (son aralık için). */
   anchor: CellPos;
+}
+
+/** Senaryo Yöneticisi: değişen hücreler ve senaryodaki değerleri (ECMA-376 §18.3.1.75 scenario). */
+export interface Scenario {
+  name: string;
+  cells: { row: number; col: number; value: string | number | boolean | null }[];
+  comment?: string;
+  /** Koruma: Değişiklikleri engelle / Gizle (sayfa korunurken etkilidir). */
+  locked?: boolean;
+  hidden?: boolean;
+  user?: string;
+}
+
+/** Durum Çözümlemesi > Veri Tablosu: sonuç aralığı ve giriş hücreleri (TABLE işlevi). */
+export interface DataTableDef {
+  id: string;
+  /** Sonuç hücreleri (sol üst köşedeki formül satırı/sütunu hariç). */
+  ref: Rect;
+  /** Satır giriş hücresi (değerler üst satırdan) ve sütun giriş hücresi (değerler sol sütundan). */
+  rowInput?: CellPos;
+  colInput?: CellPos;
+}
+
+/** Çalışma kitabı yapı koruması (Gözden Geçir > Çalışma Kitabını Koru). */
+export interface WorkbookProtection {
+  structure: boolean;
+  windows?: boolean;
+  /** Parola karması (ECMA-376 Bölüm 1 §18.2.29). */
+  hash?: { algorithm: string; value: string; salt: string; spin: number };
+  /** Eski 16 bit parola karması (workbookPassword, onaltılık). */
+  legacy?: string;
+}
+
+/** Dilimleyici: tablo ya da özet tablo alanına bağlı düğmeli filtre. */
+export interface SlicerDef {
+  id: string;
+  name: string;
+  caption: string;
+  source: { kind: "table"; tableId: string; column: string } | { kind: "pivot"; pivotId: string; field: number };
+  /** Seçili öğeler (görünen metin); boşsa tümü. */
+  selected: string[];
+  anchor: { row: number; col: number; dx: number; dy: number };
+  width: number;
+  height: number;
+  columns: number;
+  style: string;
 }

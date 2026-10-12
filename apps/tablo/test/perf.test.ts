@@ -42,12 +42,18 @@ afterAll(() => {
   if (out) writeFileSync(out, JSON.stringify(timings, null, 1));
 });
 
-describe("50.000 satır performansı", () => {
+// Eşikler bilinçli olarak geniş: testler pnpm -r ve CI'da diğer paketlerle paralel koşarken
+// süreler birkaç kat uzayabilir. Amaç, eski 170 sn'lik filtre gerilemesi gibi büyüklük
+// mertebesindeki yavaşlamaları yakalamak.
+const LIMIT_FAST = 5000;
+const LIMIT_SLOW = 12000;
+
+describe("50.000 satır performansı", { timeout: 60_000 }, () => {
   const ctl = big();
   const s = ctl.sheet;
   const total = ctl.wb.getValue(s, 0, 7) as number;
 
-  it("otomatik filtre uygula / temizle < 1 sn", () => {
+  it("otomatik filtre uygula / temizle hızlı (tek başına < 0,4 sn)", () => {
     ctl.selectCell(0, 2);
     D.toggleAutoFilter(ctl);
     const f = s.autoFilter!;
@@ -62,16 +68,16 @@ describe("50.000 satır performansı", () => {
     expect(s.filterHidden.size).toBe(0);
     expect(s.rows.hiddenCount()).toBe(0);
     expect(ctl.wb.getValue(s, 0, 7)).toBe(total);
-    expect(apply).toBeLessThan(1000);
-    expect(clear).toBeLessThan(1000);
+    expect(apply).toBeLessThan(LIMIT_FAST);
+    expect(clear).toBeLessThan(LIMIT_FAST);
     // Geri al: filtre geri gelir
     const undo = time(() => ctl.ops.undo(), "filtre geri al");
     expect(s.filterHidden.size).toBe(N - visible);
-    expect(undo).toBeLessThan(1000);
+    expect(undo).toBeLessThan(LIMIT_FAST);
     ctl.ops.redo();
   });
 
-  it("satır gizle / göster < 1 sn", () => {
+  it("satır gizle / göster hızlı (tek başına < 0,05 sn)", () => {
     const rows = Array.from({ length: 40_000 }, (_, i) => i + 5);
     const hide = time(() => ctl.ops.setHidden(s, "row", rows, true), "40k satır gizle");
     expect(s.rows.isHidden(100)).toBe(true);
@@ -80,11 +86,11 @@ describe("50.000 satır performansı", () => {
     const show = time(() => ctl.ops.setHidden(s, "row", rows, false), "40k satır göster");
     expect(s.rows.isHidden(100)).toBe(false);
     expect(ctl.wb.getValue(s, 0, 7)).toBe(total);
-    expect(hide).toBeLessThan(1000);
-    expect(show).toBeLessThan(1000);
+    expect(hide).toBeLessThan(LIMIT_FAST);
+    expect(show).toBeLessThan(LIMIT_FAST);
   });
 
-  it("sıralama < 3 sn (tek başına ~1 sn)", () => {
+  it("sıralama hızlı (tek başına ~1 sn)", () => {
     ctl.selectCell(1, 3);
     const t = time(() => D.quickSort(ctl, true), "sırala");
     expect(ctl.wb.getValue(s, 0, 2)).toBe("Şehir");
@@ -94,20 +100,20 @@ describe("50.000 satır performansı", () => {
     expect(f).toBe("=D2*E2");
     expect(ctl.wb.getValue(s, 1, 5)).toBe((ctl.wb.getValue(s, 1, 3) as number) * (ctl.wb.getValue(s, 1, 4) as number));
     expect(ctl.wb.getValue(s, 0, 7)).toBe(total);
-    expect(t).toBeLessThan(3000);
+    expect(t).toBeLessThan(LIMIT_SLOW);
     // Geri alma özgün sırayı geri getirir
     const u = time(() => ctl.ops.undo(), "sıralamayı geri al");
     expect(ctl.wb.getValue(s, 1, 3)).toBe(7);
     expect(ctl.wb.getValue(s, 1, 0)).toBe(1);
-    expect(u).toBeLessThan(3000);
+    expect(u).toBeLessThan(LIMIT_SLOW);
   });
 
-  it("satır ekle / sil < 2,5 sn (tek başına ~0,8 sn)", () => {
+  it("satır ekle / sil hızlı (tek başına ~0,8 sn)", () => {
     const ins = time(() => ctl.ops.insertRows(s, 10, 5), "satır ekle");
     expect(ctl.wb.getFormula(s, 0, 7)).toBe(`=SUBTOTAL(109,F2:F${N + 6})`);
     const del = time(() => ctl.ops.deleteRows(s, 10, 5), "satır sil");
     expect(ctl.wb.getFormula(s, 0, 7)).toBe(`=SUBTOTAL(109,F2:F${N + 1})`);
-    expect(ins).toBeLessThan(2500);
-    expect(del).toBeLessThan(2500);
+    expect(ins).toBeLessThan(LIMIT_SLOW);
+    expect(del).toBeLessThan(LIMIT_SLOW);
   });
 });

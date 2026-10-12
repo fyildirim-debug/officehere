@@ -1,5 +1,5 @@
 /** Koşullu biçimlendirme iletişim kutuları: hazır kurallar, Yeni Kural ve Kural Yöneticisi. */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogButton, Field } from "@officehere/ui";
 import { formatRange, fromLocalFormula, parseRangeAddress, toLocalFormula } from "@officehere/formula";
 import type { Controller } from "../controller";
@@ -504,6 +504,11 @@ export function CondManagerDialog({ ctl, onClose }: P) {
     () => (scope === "sheet" ? rules : rules.filter((r) => r.ranges.some((a) => selRanges.some((s) => s.r1 <= a.r2 && a.r1 <= s.r2 && s.c1 <= a.c2 && a.c1 <= s.c2)))),
     [rules, scope, selRanges],
   );
+  // Excel gibi listedeki ilk kural seçili gelir (Kuralı Düzenle hemen kullanılabilir)
+  const current = sel !== null && shown.some((r) => r.id === sel) ? sel : (shown[0]?.id ?? null);
+  useEffect(() => {
+    if (current !== sel) setSel(current);
+  }, [current]); // eslint-disable-line react-hooks/exhaustive-deps
   const move = (d: -1 | 1) => {
     const i = rules.findIndex((r) => r.id === sel);
     const j = i + d;

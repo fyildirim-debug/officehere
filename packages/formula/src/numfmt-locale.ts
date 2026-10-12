@@ -104,10 +104,18 @@ function englishTagged(section: string): boolean {
 export function looksLocalFormat(code: string): boolean {
   if (splitSections(code).every(englishTagged)) return false;
   let letters = "";
-  mapUnquoted(code, (seg) => {
-    letters += seg.replace(/genel|general|am\/pm|a\/p|öö\/ös|ö\/s|e[+-]/gi, "");
-    return seg;
-  });
+  mapUnquoted(
+    code,
+    (seg) => {
+      letters += seg.replace(/genel|general|am\/pm|a\/p|öö\/ös|ö\/s|e[+-]/gi, "");
+      return seg;
+    },
+    (inner) => {
+      // Geçen süre: [h]/[m]/[s] (kanonik) ya da [s]/[d]/[n] (Türkçe: saat/dakika/saniye)
+      if (/^(h+|m+|s+|d+|n+)$/i.test(inner)) letters += inner;
+      return inner;
+    },
+  );
   const l = letters.toLocaleLowerCase("tr-TR");
   if (/[mh]/.test(l)) return false;
   if (/[gan]/.test(l)) return true;

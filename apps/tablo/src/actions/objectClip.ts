@@ -3,6 +3,7 @@ import type { Controller } from "../controller";
 import type { ChartDef, ImageDef, ShapeDef } from "../model/types";
 import { deleteObject } from "../charts/FloatingLayer";
 import { anchorAt } from "../charts/FloatingLayer";
+import { stackOf } from "./objects";
 
 type ObjKind = "chart" | "image" | "shape";
 type AnyObj = ChartDef | ImageDef | ShapeDef;
@@ -118,8 +119,9 @@ export function handleObjectKey(ctl: Controller, ev: KeyboardEvent | React.Keybo
       return true;
     }
     case "Enter":
+    case "F2":
       if (s.kind === "shape") {
-        ctl.openDialog("shapeText", { id: s.obj.id });
+        startShapeEdit(ctl, s.obj.id, "");
         return true;
       }
       if (s.kind === "chart") {
@@ -128,12 +130,21 @@ export function handleObjectKey(ctl: Controller, ev: KeyboardEvent | React.Keybo
       }
       return false;
   }
-  // Şekil seçiliyken yazılan karakter şeklin metnini başlatır
+  // Şekil seçiliyken yazılan karakter şeklin içinde metin düzenlemeyi başlatır (metnin sonuna eklenir)
   if (s.kind === "shape" && !ctrl && !ev.altKey && ev.key.length === 1) {
-    ctl.openDialog("shapeText", { id: s.obj.id, text: ev.key });
+    startShapeEdit(ctl, s.obj.id, ev.key);
     return true;
   }
   return false;
+}
+
+/** Şeklin içinde yerinde metin düzenleme başlar. */
+export function startShapeEdit(ctl: Controller, id: string, typed: string): void {
+  const shape = ctl.sheet.shapes.find((x) => x.id === id);
+  if (!shape) return;
+  ctl.selObj = { kind: "shape", id };
+  ctl.shapeEdit = { id, text: (shape.text ?? "") + typed };
+  ctl.emit();
 }
 
 /** Bul ve Seç > Nesneleri Seç: sayfadaki ilk görünür nesne seçilir (Sekme ile sonrakine geçilir). */
@@ -154,11 +165,36 @@ export interface ObjectEntry {
 /** Sayfadaki nesneler (çizim sırasıyla, en üstteki en sonda). */
 export function objectList(ctl: Controller): ObjectEntry[] {
   const s = ctl.sheet;
+  const order = new Map(stackOf(s).map((x, i) => [x.o.id, i]));
   return [
     ...s.images.map((o, i) => ({ kind: "image" as const, id: o.id, name: o.name || `Resim ${i + 1}`, hidden: !!o.hidden })),
-    ...s.shapes.map((o, i) => ({ kind: "shape" as const, id: o.id, name: o.text ? `${o.text.slice(0, 20)}` : `Şekil ${i + 1}`, hidden: !!o.hidden })),
-    ...s.charts.map((o, i) => ({ kind: "chart" as const, id: o.id, name: o.title ? `Grafik ${i + 1} (${o.title})` : `Grafik ${i + 1}`, hidden: !!o.hidden })),
-  ];
+    ...s.shapes.map((o, i) => ({ kind: "shape" as const, id: o.id, name: o.name || (o.kind === "textbox" ? `Metin Kutusu ${i + 1}` : `Şekil ${i + 1}`), hidden: !!o.hidden })),
+    ...s.charts.map((o, i) => ({ kind: "chart" as const, id: o.id, name: o.name || `Grafik ${i + 1}`, hidden: !!o.hidden })),
+  ].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+}
+
+/** Seçim Bölmesinde yeniden adlandırma. */
+export function renameObject(ctl: Controller, kind: ObjKind, id: string, name: string): void {
+  const n = name.trim();
+  if (!n) return;
+  ctl.ops.sheetOp(ctl.sheet, "Yeniden Adlandır", () => {
+    const o = listOf(ctl, kind).find((x) => x.id === id) as { name?: string } | undefined;
+    if (o) o.name = n;
+  });
+}
+
+/** Seçim Bölmesi ▲▼: nesneyi bir adım öne/arkaya taşır (tüm nesne türleri arasında). */
+export function stepObject(ctl: Controller, kind: ObjKind, id: string, forward: boolean): void {
+  const sheet = ctl.sheet;
+  ctl.ops.sheetOp(sheet, forward ? "Öne Getir" : "Arkaya Gönder", () => {
+    const all = stackOf(sheet);
+    all.forEach((x, i) => (x.o.z = i));
+    const i = all.findIndex((x) => x.kind === kind && x.o.id === id);
+    const j = forward ? i + 1 : i - 1;
+    if (i < 0 || j < 0 || j >= all.length) return;
+    all[i].o.z = j;
+    all[j].o.z = i;
+  });
 }
 
 /** Nesneyi göster/gizle (Seçim Bölmesi). */

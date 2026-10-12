@@ -96,3 +96,22 @@ export function shiftIndex(i: number, at: number, count: number): number | null 
   if (i < at - count) return null;
   return i + count;
 }
+
+/** a'dan b çıkarılınca kalan dikdörtgenler (en çok 4). */
+export function subtractRect(a: Rect, b: Rect): Rect[] {
+  const i = intersection(a, b);
+  if (!i) return [a];
+  const out: Rect[] = [];
+  if (a.r1 < i.r1) out.push({ r1: a.r1, c1: a.c1, r2: i.r1 - 1, c2: a.c2 });
+  if (i.r2 < a.r2) out.push({ r1: i.r2 + 1, c1: a.c1, r2: a.r2, c2: a.c2 });
+  if (a.c1 < i.c1) out.push({ r1: i.r1, c1: a.c1, r2: i.r2, c2: i.c1 - 1 });
+  if (i.c2 < a.c2) out.push({ r1: i.r1, c1: i.c2 + 1, r2: i.r2, c2: a.c2 });
+  return out;
+}
+
+/** Listeden kesilecek dikdörtgenler çıkarılır. */
+export function subtractRects(list: Rect[], cut: Rect[]): Rect[] {
+  let cur = list;
+  for (const b of cut) cur = cur.flatMap((a) => subtractRect(a, b));
+  return cur;
+}

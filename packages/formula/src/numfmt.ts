@@ -20,6 +20,33 @@ export interface FormatResult {
 }
 
 const TR_OPTS: Required<FormatOptions> = { decimal: ",", thousands: ".", lang: "tr" };
+
+const namesCache = new Map<string, { months: string[]; monthsShort: string[]; days: string[]; daysShort: string[] } | null>();
+
+/** tr/en dışındaki yerel ayarlar için ay ve gün adları (Intl; pazar ilk gün). */
+function localeNames(locale: string): { months: string[]; monthsShort: string[]; days: string[]; daysShort: string[] } | null {
+  if (namesCache.has(locale)) return namesCache.get(locale)!;
+  let out: { months: string[]; monthsShort: string[]; days: string[]; daysShort: string[] } | null = null;
+  try {
+    const f = (opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale, { ...opts, timeZone: "UTC" });
+    const ml = f({ month: "long" });
+    const ms = f({ month: "short" });
+    const dl = f({ weekday: "long" });
+    const ds = f({ weekday: "short" });
+    const clean = (x: string) => x.replace(/\.$/, "");
+    out = {
+      months: Array.from({ length: 12 }, (_, i) => ml.format(Date.UTC(2021, i, 1))),
+      monthsShort: Array.from({ length: 12 }, (_, i) => clean(ms.format(Date.UTC(2021, i, 1)))),
+      // 3 Ocak 2021 pazar
+      days: Array.from({ length: 7 }, (_, i) => dl.format(Date.UTC(2021, 0, 3 + i))),
+      daysShort: Array.from({ length: 7 }, (_, i) => clean(ds.format(Date.UTC(2021, 0, 3 + i)))),
+    };
+  } catch {
+    out = null;
+  }
+  namesCache.set(locale, out);
+  return out;
+}
 import { getParsed, type Section, type Tok } from "./numfmt-parse";
 
 export { COLOR_NAMES, isDateFormat, isTimeOnlyFormat, isTextFormat, isPercentFormat } from "./numfmt-parse";
@@ -363,10 +390,11 @@ function formatDateSection(serial: number, sec: Section, o: Required<FormatOptio
   const totalSeconds = s * 86400;
   // Biçimdeki yerel ayar etiketi ([$-en-US], [$-41F]) adların dilini belirler
   const lang = sec.lang ?? o.lang;
-  const months = lang === "tr" ? MONTHS_TR : MONTHS_EN;
-  const monthsShort = lang === "tr" ? MONTHS_TR_SHORT : MONTHS_EN.map((m) => m.slice(0, 3));
-  const days = lang === "tr" ? DAYS_TR : DAYS_EN;
-  const daysShort = lang === "tr" ? DAYS_TR_SHORT : DAYS_EN.map((d) => d.slice(0, 3));
+  const other = sec.locale ? localeNames(sec.locale) : null;
+  const months = other?.months ?? (lang === "tr" ? MONTHS_TR : MONTHS_EN);
+  const monthsShort = other?.monthsShort ?? (lang === "tr" ? MONTHS_TR_SHORT : MONTHS_EN.map((m) => m.slice(0, 3)));
+  const days = other?.days ?? (lang === "tr" ? DAYS_TR : DAYS_EN);
+  const daysShort = other?.daysShort ?? (lang === "tr" ? DAYS_TR_SHORT : DAYS_EN.map((d) => d.slice(0, 3)));
   let out = "";
   for (const t of sec.toks) {
     switch (t.t) {

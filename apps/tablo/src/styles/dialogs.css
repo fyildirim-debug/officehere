@@ -571,3 +571,52 @@
   color: var(--oh-text-muted);
   font-size: 12px;
 }
+.tb-ps-checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+}
+
+/* Senaryo Yöneticisi */
+.tb-scn {
+  display: flex;
+  gap: 10px;
+}
+.tb-scn-list {
+  flex: 1;
+  min-width: 0;
+}
+.tb-scn-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 20px;
+}
+.tb-scn-buttons .oh-btn {
+  min-width: 96px;
+}
+.tb-scn-label {
+  color: var(--oh-text-muted);
+  margin-bottom: 4px;
+}
+.tb-scn-empty {
+  padding: 8px;
+  color: var(--oh-text-muted);
+}
+.tb-scn-info {
+  margin-top: 10px;
+  display: grid;
+  gap: 4px;
+}
+.tb-scn-values {
+  display: grid;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.tb-scn-value {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  align-items: center;
+  gap: 8px;
+}

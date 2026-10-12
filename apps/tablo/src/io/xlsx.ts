@@ -5,14 +5,15 @@
  * veri doğrulama, adlandırılmış aralıklar, tablolar, resimler ve grafikler.
  */
 import { readPageBreaksFromData } from "./xlsxBreaks";
-import { addr, cellKey, colToName, errorFromCode, formatRange, isError, parseRangeAddress, resolveFunctionName, stripFunctionPrefix, type Scalar } from "@officehere/formula";
+import { addr, cellKey, colToName, errorFromCode, formatRange, isError, nameToCol, parseRangeAddress, resolveFunctionName, stripFunctionPrefix, type Scalar } from "@officehere/formula";
 import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import { widthCharsToPx, widthPxToChars, ptToPx, pxToPt } from "../model/axis";
 import type { PageSetup, Rect, ValidationRule } from "../model/types";
 import { WorkbookModel, type SheetModel } from "../model/workbook";
 import { ColorResolver, fromXStyle, toXStyle } from "./xlsxStyles";
-import { readCharts, postProcess } from "./xlsxCharts";
-import { compressCells, readCondRule, readValidation, writeCondRule, writeValidation } from "./xlsxRules";
+import { readCharts } from "./xlsxCharts";
+import { postProcess } from "./xlsxPost";
+import { compressCells, readCondRule, readValidation, writeCondRule } from "./xlsxRules";
 
 import { addXlfnPrefixes, normalizeFileFormula, utcSerial } from "./xlsxFormula";
 
@@ -20,6 +21,9 @@ export { compressCells, addXlfnPrefixes, normalizeFileFormula };
 import { readPivotsFromData } from "./xlsxPivot";
 import { normalizePackage, OPTIONAL_PARTS, readCommentsFromData, readDefinedNamesFromData, stripOptionalParts } from "./xlsxPackage";
 import { readSparklinesFromData } from "./xlsxSpark";
+import { readWhatIfFromData } from "./xlsxWhatIf";
+import { readFiltersFromData } from "./xlsxFilters";
+import { readSlicersFromData } from "./xlsxSlicers";
 import { parseThemeXml } from "../model/theme";
 import { activateTheme } from "../model/themeRuntime";
 
@@ -166,6 +170,17 @@ export async function readXlsx(input: ArrayBuffer): Promise<WorkbookModel> {
   } catch {
     warnings.push("sayfa sonları");
   }
+  try {
+    await readWhatIfFromData(data, wb);
+  } catch {
+    warnings.push("senaryolar ve veri tabloları");
+  }
+  try {
+    await readFiltersFromData(data, wb);
+    await readSlicersFromData(data, wb);
+  } catch {
+    warnings.push("filtre ölçütleri ve dilimleyiciler");
+  }
   wb.loadWarnings = [...new Set(warnings)];
   return wb;
 }
@@ -190,7 +205,7 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
     if (st && Object.keys(st).length) sheet.colStyles.set(c - 1, wb.styles.intern(st));
   }
   const notesCells: { row: number; col: number; text: string; author?: string }[] = [];
-  const validations = new Map<string, { rule: ValidationRule; cells: [number, number][] }>();
+  const validations = new Map<string, { rule: ValidationRule; cells: [number, number][]; rects: Rect[] }>();
   ws.eachRow({ includeEmpty: true }, (row: any, rn: number) => {
     const r = rn - 1;
     if (r >= MAX_ROWS) return;
@@ -217,10 +232,12 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
     const rule = readValidation(dv);
     const k = JSON.stringify(rule);
     let g = validations.get(k);
-    if (!g) validations.set(k, (g = { rule, cells: [] }));
-    for (let i = rr.r1; i <= Math.min(rr.r2, rr.r1 + 5000); i++) for (let j = rr.c1; j <= Math.min(rr.c2, rr.c1 + 200); j++) g.cells.push([i, j]);
+    if (!g) validations.set(k, (g = { rule, cells: [], rects: [] }));
+    // Tek hücreler birleştirilir; aralıklar olduğu gibi (sınırsız boyut) korunur
+    if (rr.r1 === rr.r2 && rr.c1 === rr.c2) g.cells.push([rr.r1, rr.c1]);
+    else g.rects.push(rr);
   }
-  for (const g of validations.values()) sheet.validations.push({ id: wb.newId("dv"), rule: g.rule, ranges: compressCells(g.cells) });
+  for (const g of validations.values()) sheet.validations.push({ id: wb.newId("dv"), rule: g.rule, ranges: [...g.rects, ...(g.cells.length ? compressCells(g.cells) : [])] });
   // Birleştirmeler
   const merges: string[] = ws.model?.merges ?? [];
   for (const m of merges) {
@@ -265,6 +282,14 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
     if (r) sheet.page.printArea = r;
   }
   if (ps.showGridLines) sheet.page.printGridlines = true;
+  if (ps.showRowColHeaders) sheet.page.printHeadings = true;
+  if (ps.blackAndWhite) sheet.page.blackAndWhite = true;
+  if (ps.draft) sheet.page.draft = true;
+  if (ps.pageOrder === "overThenDown") sheet.page.pageOrder = "overThenDown";
+  const tr = /^\$?(\d+):\$?(\d+)$/.exec(String(ps.printTitlesRow ?? "").replace(/^.*!/, ""));
+  if (tr) sheet.page.titleRows = { r1: Number(tr[1]) - 1, r2: Number(tr[2]) - 1 };
+  const tc = /^\$?([A-Z]+):\$?([A-Z]+)$/i.exec(String(ps.printTitlesColumn ?? "").replace(/^.*!/, ""));
+  if (tc) sheet.page.titleCols = { c1: nameToCol(tc[1].toUpperCase()), c2: nameToCol(tc[2].toUpperCase()) };
   if (ps.fitToPage) {
     const fw = ps.fitToWidth ?? 1;
     const fh = ps.fitToHeight ?? 1;
@@ -553,18 +578,7 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
     }
   }
   if (sheet.autoFilter) ws.autoFilter = formatRange(sheet.autoFilter.range);
-  // Veri doğrulama
-  for (const v of sheet.validations) {
-    const dv = writeValidation(v.rule);
-    let count = 0;
-    for (const r of v.ranges) {
-      for (let row = r.r1; row <= Math.min(r.r2, r.r1 + 2000); row++)
-        for (let c = r.c1; c <= Math.min(r.c2, r.c1 + 100); c++) {
-          if (++count > 20000) break;
-          ws.getCell(row + 1, c + 1).dataValidation = dv;
-        }
-    }
-  }
+  // Veri doğrulama: postProcess'te (xlsxExtras) çakışmasız ve sınırsız aralıkla yazılır
   // Koşullu biçimlendirme
   let priority = 1;
   for (const rule of sheet.condFormats) {
@@ -579,6 +593,12 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
     orientation: p.orientation,
     margins: p.margins,
     showGridLines: p.printGridlines,
+    ...(p.printHeadings ? { showRowColHeaders: true } : {}),
+    ...(p.blackAndWhite ? { blackAndWhite: true } : {}),
+    ...(p.draft ? { draft: true } : {}),
+    ...(p.pageOrder === "overThenDown" ? { pageOrder: "overThenDown" } : {}),
+    ...(p.titleRows ? { printTitlesRow: `${p.titleRows.r1 + 1}:${p.titleRows.r2 + 1}` } : {}),
+    ...(p.titleCols ? { printTitlesColumn: `${colToName(p.titleCols.c1)}:${colToName(p.titleCols.c2)}` } : {}),
     ...(p.printArea ? { printArea: formatRange(p.printArea) } : {}),
     ...(p.fitMode === "sheet" ? { fitToPage: true, fitToWidth: 1, fitToHeight: 1 } : p.fitMode === "rows" ? { fitToPage: true, fitToWidth: 0, fitToHeight: 1 } : p.fitMode === "cols" || p.fitToWidth ? { fitToPage: true, fitToWidth: 1, fitToHeight: 0 } : {}),
   };

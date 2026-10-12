@@ -52,6 +52,8 @@ export interface WorkbookDraft {
   activeIndex: number;
   /** Toplam hücre sayısı (bilgi). */
   cellCount: number;
+  /** Çalışma kitabı yapı koruması. */
+  protection?: WorkbookModel["protection"];
 }
 
 function plainAxis(a: AxisSizes): PlainAxis {
@@ -139,7 +141,7 @@ export function* serializeDraft(wb: WorkbookModel, chunk = 20000): Generator<voi
     yield;
   }
   const names = wb.engine.getNames().map((n) => ({ name: n.name, formula: n.formula, sheet: n.sheet !== undefined ? wb.sheets.findIndex((s) => s.id === n.sheet) : undefined }));
-  return { version: 1, sheets, styles: wb.styles.all().map((x) => ({ ...x })), names, theme: structuredClone(wb.theme), props: { ...wb.props }, activeIndex: wb.activeIndex, cellCount };
+  return { version: 1, sheets, styles: wb.styles.all().map((x) => ({ ...x })), names, theme: structuredClone(wb.theme), props: { ...wb.props }, activeIndex: wb.activeIndex, cellCount, protection: structuredClone(wb.protection) };
 }
 
 /** Üreteci sonuna kadar çalıştırır (testler ve sayfa kapanırken). */
@@ -194,6 +196,7 @@ export function workbookFromDraft(d: WorkbookDraft): WorkbookModel {
     }
   }
   if (!wb.sheets.length) wb.addSheet("Sayfa1");
+  wb.protection = d.protection ?? null;
   wb.bumpIds();
   wb.activeIndex = Math.min(Math.max(0, d.activeIndex), wb.sheets.length - 1);
   wb.engine.autoCalc = true;

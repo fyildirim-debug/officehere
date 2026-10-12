@@ -33,9 +33,16 @@ function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, Math.max(1, max - 1)) + "…" : s;
 }
 
+/** Seri rengi: Veri Serisini Biçimlendir'de seçilen renk ya da paletten. */
+export function seriesColor(def: ChartDef, i: number): string {
+  const p = PALETTES[def.palette % PALETTES.length];
+  return def.seriesFmt?.[i]?.color ?? p[i % p.length];
+}
+
 export function ChartView({ def, data, width, height }: { def: ChartDef; data: ChartData; width: number; height: number }) {
   const [hover, setHover] = useState<{ x: number; y: number; text: string } | null>(null);
-  const colors = PALETTES[def.palette % PALETTES.length];
+  const isPieDef = def.type === "pie" || def.type === "doughnut";
+  const colors = isPieDef ? PALETTES[def.palette % PALETTES.length] : Array.from({ length: Math.max(1, data.series.length) }, (_, i) => seriesColor(def, i));
   const isPie = def.type === "pie" || def.type === "doughnut";
   const titleH = def.showTitle ? 30 : 8;
   const legendItems = isPie ? data.categories.map((c, i) => ({ name: c, color: colors[i % colors.length] })) : data.series.map((s, i) => ({ name: s.name, color: colors[i % colors.length] }));
@@ -74,9 +81,9 @@ export function ChartView({ def, data, width, height }: { def: ChartDef; data: C
   return (
     <div className="tb-chart-svgwrap">
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={def.title || "Grafik"} style={{ fontFamily: FONT, display: "block" }}>
-        <rect x={0.5} y={0.5} width={width - 1} height={height - 1} fill={def.fill ?? themeOf(def).bg} stroke={def.border === "none" ? "none" : (def.border ?? themeOf(def).border ?? "none")} />
+        <rect data-el="area" x={0.5} y={0.5} width={width - 1} height={height - 1} fill={def.fill ?? themeOf(def).bg} stroke={def.border === "none" ? "none" : (def.border ?? themeOf(def).border ?? "none")} />
         {def.showTitle && (
-          <text x={width / 2} y={22} textAnchor="middle" fontSize={15} fill={themeOf(def).ink}>
+          <text data-el="title" x={width / 2} y={22} textAnchor="middle" fontSize={15} fill={themeOf(def).ink}>
             {truncate(def.title || "Grafik Başlığı", Math.floor(width / 8))}
           </text>
         )}
@@ -107,7 +114,7 @@ function Legend({ items, def, width, height, plot, legendW, titleH }: { items: {
     const total = items.length * 18;
     let y = Math.max(titleH, plot.y + (plot.h - total) / 2);
     return (
-      <g fontSize={11} fill={themeOf(def).ink}>
+      <g fontSize={11} fill={themeOf(def).ink} data-el="legend">
         {items.map((it, i) => {
           const yy = y + i * 18;
           return (
@@ -127,7 +134,7 @@ function Legend({ items, def, width, height, plot, legendW, titleH }: { items: {
   let x = Math.max(4, (width - total) / 2);
   const y = def.legendPos === "top" ? titleH + 4 : height - 18;
   return (
-    <g fontSize={11} fill={themeOf(def).ink}>
+    <g fontSize={11} fill={themeOf(def).ink} data-el="legend">
       {items.map((it, i) => {
         const xx = x;
         x += widths[i];
@@ -215,10 +222,17 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
       vmax = Math.max(vmax, hi);
     }
   }
-  const sc = niceScale(vmin, vmax, horizontal ? Math.max(3, Math.floor(plot.w / 80)) : Math.max(3, Math.floor(plot.h / 45)));
+  const va = def.valAxis ?? {};
+  const sc = niceScale(va.min ?? vmin, va.max ?? vmax, horizontal ? Math.max(3, Math.floor(plot.w / 80)) : Math.max(3, Math.floor(plot.h / 45)));
+  // Biçim bölmesinde sabitlenen sınırlar ve ana birim
+  if (va.min !== undefined) sc.min = va.min;
+  if (va.max !== undefined) sc.max = va.max;
+  if (va.major !== undefined && va.major > 0 && (sc.max - sc.min) / va.major <= 200) sc.step = va.major;
+  if (sc.max <= sc.min) sc.max = sc.min + (sc.step || 1);
   const ticks: number[] = [];
   for (let t = sc.min; t <= sc.max + sc.step / 1000; t += sc.step) ticks.push(Number(t.toPrecision(12)));
-  const tickLabels = ticks.map((t) => fmt(t, data.numFmt));
+  const axisFmt = va.numFmt ?? data.numFmt;
+  const tickLabels = ticks.map((t) => fmt(t, axisFmt));
   const labelW = Math.max(...tickLabels.map((l) => l.length)) * 6.5 + 8;
   // X ekseni (dağılım için sayısal)
   let xs: { min: number; max: number; step: number } | null = null;
@@ -237,24 +251,35 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
     area.w -= 14;
   }
   if (def.xTitle) area.h -= 16;
-  const vToPos = (v: number) => (horizontal ? area.x + ((v - sc.min) / (sc.max - sc.min)) * area.w : area.y + area.h - ((v - sc.min) / (sc.max - sc.min)) * area.h);
+  const vToPos = (v: number) => {
+    const c = Math.max(sc.min, Math.min(sc.max, v));
+    return horizontal ? area.x + ((c - sc.min) / (sc.max - sc.min)) * area.w : area.y + area.h - ((c - sc.min) / (sc.max - sc.min)) * area.h;
+  };
   const zero = vToPos(Math.max(sc.min, Math.min(sc.max, 0)));
   const band = (horizontal ? area.h : area.w) / Math.max(1, n);
   const els: React.ReactNode[] = [];
+  els.push(<rect key="plotbg" data-el="plot" x={area.x} y={area.y} width={Math.max(0, area.w)} height={Math.max(0, area.h)} fill="transparent" />);
+  // İkincil kılavuz çizgileri (ana birimin beşte biri)
+  if (va.minorGrid)
+    for (let t = sc.min; t < sc.max - sc.step / 1000; t += sc.step)
+      for (let k = 1; k < 5; k++) {
+        const p = vToPos(t + (sc.step * k) / 5);
+        els.push(horizontal ? <line key={`mg${t}-${k}`} x1={p} x2={p} y1={area.y} y2={area.y + area.h} stroke={themeOf(def).grid} strokeWidth={0.5} strokeDasharray="2 2" /> : <line key={`mg${t}-${k}`} x1={area.x} x2={area.x + area.w} y1={p} y2={p} stroke={themeOf(def).grid} strokeWidth={0.5} strokeDasharray="2 2" />);
+      }
   // Izgara ve değer ekseni etiketleri
   ticks.forEach((t, i) => {
     const p = vToPos(t);
     if (horizontal) {
       if (def.showGridlines) els.push(<line key={`g${i}`} x1={p} x2={p} y1={area.y} y2={area.y + area.h} stroke={themeOf(def).grid} strokeWidth={1} />);
       els.push(
-        <text key={`t${i}`} x={p} y={area.y + area.h + 14} textAnchor="middle" fontSize={10.5} fill={themeOf(def).ink}>
+        <text key={`t${i}`} data-el="axis:val" x={p} y={area.y + area.h + 14} textAnchor="middle" fontSize={10.5} fill={themeOf(def).ink}>
           {tickLabels[i]}
         </text>,
       );
     } else {
       if (def.showGridlines) els.push(<line key={`g${i}`} x1={area.x} x2={area.x + area.w} y1={p} y2={p} stroke={themeOf(def).grid} strokeWidth={1} />);
       els.push(
-        <text key={`t${i}`} x={area.x - 6} y={p + 4} textAnchor="end" fontSize={10.5} fill={themeOf(def).ink}>
+        <text key={`t${i}`} data-el="axis:val" x={area.x - 6} y={p + 4} textAnchor="end" fontSize={10.5} fill={themeOf(def).ink}>
           {tickLabels[i]}
         </text>,
       );
@@ -268,13 +293,13 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
       const mid = (horizontal ? area.y : area.x) + band * (i + 0.5);
       if (horizontal)
         els.push(
-          <text key={`c${i}`} x={area.x - 6} y={mid + 4} textAnchor="end" fontSize={10.5} fill={themeOf(def).ink}>
+          <text key={`c${i}`} data-el="axis:cat" x={area.x - 6} y={mid + 4} textAnchor="end" fontSize={10.5} fill={themeOf(def).ink}>
             {truncate(c, 18)}
           </text>,
         );
       else
         els.push(
-          <text key={`c${i}`} x={mid} y={area.y + area.h + 14} textAnchor="middle" fontSize={10.5} fill={themeOf(def).ink}>
+          <text key={`c${i}`} data-el="axis:cat" x={mid} y={area.y + area.h + 14} textAnchor="middle" fontSize={10.5} fill={themeOf(def).ink}>
             {truncate(c, Math.max(3, Math.floor((band * every) / 6.5)))}
           </text>,
         );
@@ -290,8 +315,8 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
     }
   }
   // Eksen çizgisi
-  if (horizontal) els.push(<line key="axis" x1={zero} x2={zero} y1={area.y} y2={area.y + area.h} stroke="#BFBFBF" />);
-  else els.push(<line key="axis" x1={area.x} x2={area.x + area.w} y1={zero} y2={zero} stroke="#BFBFBF" />);
+  if (horizontal) els.push(<line key="axis" data-el="axis:cat" x1={zero} x2={zero} y1={area.y} y2={area.y + area.h} stroke="#BFBFBF" strokeWidth={3} strokeOpacity={0.35} />);
+  else els.push(<line key="axis" data-el="axis:cat" x1={area.x} x2={area.x + area.w} y1={zero} y2={zero} stroke="#BFBFBF" />);
 
   const ns = data.series.length;
   if (def.type.startsWith("column") || def.type.startsWith("bar")) {
@@ -319,15 +344,27 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
         const p2 = vToPos(to);
         const start = (horizontal ? area.y : area.x) + band * i + (band - groupW) / 2 + (stacked ? 0 : barW * si);
         const color = colors[si % colors.length];
+        const sf = def.seriesFmt?.[si];
+        const stroke = sf?.border ? { stroke: sf.border, strokeWidth: ((sf.lineWidth ?? 0.75) * 4) / 3 } : {};
         const tip = `${s.name} — ${data.categories[i]}: ${fmt(v, data.numFmt)}`;
-        if (horizontal) els.push(<rect key={`b${si}-${i}`} className="tb-chart-mark" x={Math.min(p1, p2)} y={start} width={Math.max(0.5, Math.abs(p2 - p1))} height={Math.max(1, barW - 1)} fill={color} {...hoverProps(tip)} />);
-        else els.push(<rect key={`b${si}-${i}`} className="tb-chart-mark" x={start} y={Math.min(p1, p2)} width={Math.max(1, barW - 1)} height={Math.max(0.5, Math.abs(p2 - p1))} fill={color} {...hoverProps(tip)} />);
-        if (def.showDataLabels)
+        if (horizontal) els.push(<rect key={`b${si}-${i}`} data-el={`series:${si}`} className="tb-chart-mark" x={Math.min(p1, p2)} y={start} width={Math.max(0.5, Math.abs(p2 - p1))} height={Math.max(1, barW - 1)} fill={color} {...stroke} {...hoverProps(tip)} />);
+        else els.push(<rect key={`b${si}-${i}`} data-el={`series:${si}`} className="tb-chart-mark" x={start} y={Math.min(p1, p2)} width={Math.max(1, barW - 1)} height={Math.max(0.5, Math.abs(p2 - p1))} fill={color} {...stroke} {...hoverProps(tip)} />);
+        if (def.showDataLabels) {
+          // Konum: dış uç (varsayılan), iç uç, orta, iç taban
+          const pos = def.labelPos ?? (stacked ? "ctr" : "outEnd");
+          const hi = v >= 0 ? Math.max(p1, p2) : Math.min(p1, p2);
+          const lo = v >= 0 ? Math.min(p1, p2) : Math.max(p1, p2);
+          const inside = pos !== "outEnd";
+          const at = horizontal
+            ? pos === "outEnd" ? hi + (v >= 0 ? 4 : -4) : pos === "inEnd" ? hi + (v >= 0 ? -4 : 4) : pos === "ctr" ? (p1 + p2) / 2 : lo + (v >= 0 ? 4 : -4)
+            : pos === "outEnd" ? Math.min(p1, p2) - 3 : pos === "inEnd" ? Math.min(p1, p2) + 12 : pos === "ctr" ? (p1 + p2) / 2 + 4 : Math.max(p1, p2) - 4;
+          const anchor = horizontal ? (pos === "ctr" ? "middle" : (pos === "outEnd" || pos === "inBase") === v >= 0 ? "start" : "end") : "middle";
           els.push(
-            <text key={`l${si}-${i}`} x={horizontal ? Math.max(p1, p2) + 4 : start + barW / 2} y={horizontal ? start + barW / 2 + 4 : Math.min(p1, p2) - 3} textAnchor={horizontal ? "start" : "middle"} fontSize={10} fill={themeOf(def).ink} pointerEvents="none">
+            <text key={`l${si}-${i}`} data-el="labels" x={horizontal ? at : start + barW / 2} y={horizontal ? start + barW / 2 + 4 : at} textAnchor={anchor} fontSize={10} fill={inside ? "#FFFFFF" : themeOf(def).ink} pointerEvents="none">
               {fmt(v, data.numFmt)}
             </text>,
           );
+        }
       });
     });
   } else if (def.type.startsWith("line") || def.type.startsWith("area")) {
@@ -359,12 +396,12 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
           s.values.forEach((_, i) => prev.push([area.x + band * (i + 0.5), vToPos(accPrev[i])]));
           d += prev.reverse().map((p) => `L${p[0]},${p[1]}`).join("") + "Z";
         }
-        layers.unshift(<path key={`a${si}`} d={d} fill={color} fillOpacity={stacked ? 1 : 0.85} className="tb-chart-mark" {...hoverProps(s.name)} />);
+        layers.unshift(<path key={`a${si}`} data-el={`series:${si}`} d={d} fill={color} fillOpacity={stacked ? 1 : 0.85} className="tb-chart-mark" {...hoverProps(s.name)} />);
       } else {
-        layers.push(<path key={`p${si}`} d={path} fill="none" stroke={color} strokeWidth={2.25} strokeLinejoin="round" />);
+        layers.push(<path key={`p${si}`} data-el={`series:${si}`} d={path} fill="none" stroke={color} strokeWidth={((def.seriesFmt?.[si]?.lineWidth ?? 2.25) * 4) / 3} strokeLinejoin="round" />);
         pts.forEach((p, k) => {
           const showMarker = def.type === "lineMarkers";
-          layers.push(<circle key={`m${si}-${k}`} cx={p[0]} cy={p[1]} r={showMarker ? 4 : 6} fill={showMarker ? color : "transparent"} stroke={showMarker ? "#FFFFFF" : "none"} strokeWidth={1} className="tb-chart-mark" {...hoverProps(`${s.name} — ${data.categories[k]}: ${fmt(p[2], data.numFmt)}`)} />);
+          layers.push(<circle key={`m${si}-${k}`} data-el={`series:${si}`} cx={p[0]} cy={p[1]} r={showMarker ? 4 : 6} fill={showMarker ? color : "transparent"} stroke={showMarker ? "#FFFFFF" : "none"} strokeWidth={1} className="tb-chart-mark" {...hoverProps(`${s.name} — ${data.categories[k]}: ${fmt(p[2], data.numFmt)}`)} />);
         });
       }
       if (def.showDataLabels)
@@ -385,7 +422,7 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
         const xv = s.xs?.[i] ?? i + 1;
         if (v === null || xv === null) return;
         const px = area.x + ((xv - sx.min) / (sx.max - sx.min)) * area.w;
-        els.push(<circle key={`s${si}-${i}`} cx={px} cy={vToPos(v)} r={4.5} fill={color} stroke="#FFFFFF" strokeWidth={1} className="tb-chart-mark" {...hoverProps(`${s.name} (${fmt(xv)}; ${fmt(v, data.numFmt)})`)} />);
+        els.push(<circle key={`s${si}-${i}`} data-el={`series:${si}`} cx={px} cy={vToPos(v)} r={4.5} fill={color} stroke="#FFFFFF" strokeWidth={1} className="tb-chart-mark" {...hoverProps(`${s.name} (${fmt(xv)}; ${fmt(v, data.numFmt)})`)} />);
       });
     });
   }

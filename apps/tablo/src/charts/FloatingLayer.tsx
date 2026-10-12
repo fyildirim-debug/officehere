@@ -6,7 +6,8 @@ import type { Anchor, ChartDef, ImageDef, ShapeDef } from "../model/types";
 import type { SheetModel } from "../model/workbook";
 import { ChartView } from "./ChartView";
 import { extractChartData } from "./chartData";
-import { handleObjectKey } from "../actions/objectClip";
+import { handleObjectKey, startShapeEdit } from "../actions/objectClip";
+import { objZ, updateShape } from "../actions/objects";
 
 type Obj = { kind: "chart"; o: ChartDef } | { kind: "image"; o: ImageDef } | { kind: "shape"; o: ShapeDef };
 
@@ -26,9 +27,12 @@ export function FloatingLayer({ ctl, layout }: { ctl: Controller; layout: GridLa
   const sheet = ctl.sheet;
   const [drag, setDrag] = useState<{ id: string; dx: number; dy: number; dw: number; dh: number } | null>(null);
   const start = useRef<{ x: number; y: number; handle: string | null; id: string; kind: Obj["kind"] } | null>(null);
+  const focusedSel = useRef<string | null>(null);
+  if (!ctl.selObj) focusedSel.current = null;
   const version = ctl.wb.engine.version;
   // Seçim Bölmesinde gizlenen nesneler çizilmez
-  const objs: Obj[] = [...sheet.images.map((o) => ({ kind: "image" as const, o })), ...sheet.shapes.map((o) => ({ kind: "shape" as const, o })), ...sheet.charts.map((o) => ({ kind: "chart" as const, o }))].filter((x) => !x.o.hidden);
+  // Yığın sırası (arkadan öne): z ya da oluşturulma sırası; tür fark etmez
+  const objs: Obj[] = ([...sheet.images.map((o) => ({ kind: "image" as const, o })), ...sheet.shapes.map((o) => ({ kind: "shape" as const, o })), ...sheet.charts.map((o) => ({ kind: "chart" as const, o }))] as Obj[]).filter((x) => !x.o.hidden).sort((a, b) => objZ(a.o) - objZ(b.o));
   const chartData = useMemo(() => new Map(sheet.charts.map((c) => [c.id, extractChartData(ctl.wb, c)])), [sheet.charts, version, ctl.version]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!layout || !objs.length) return null;
   const z = layout.z;
@@ -128,10 +132,15 @@ export function FloatingLayer({ ctl, layout }: { ctl: Controller; layout: GridLa
             onPointerDown={(e) => onDown(e, obj, null)}
             onPointerMove={onMove}
             onPointerUp={onUp}
-            onDoubleClick={() => {
-              // Çift tık: grafikte biçimlendirme bölmesi, şekilde metin düzenleme
-              if (obj.kind === "chart") ctl.openDialog("chartFormat");
-              else if (obj.kind === "shape") ctl.openDialog("shapeText", { id: o.id });
+            onDoubleClick={(ev) => {
+              // Çift tık: grafikte tıklanan öğenin biçimlendirme bölmesi, şekilde yerinde metin düzenleme
+              if (obj.kind === "chart") {
+                // İşaretçi yakalandığı için hedef kapsayıcıdır: tıklanan öğe konumdan bulunur
+                const hit = document.elementsFromPoint(ev.clientX, ev.clientY).find((el) => el.hasAttribute("data-el") && ev.currentTarget.contains(el));
+                ctl.chartElement = hit?.getAttribute("data-el") ?? "area";
+                ctl.openDialog("chartFormat");
+              }
+              else if (obj.kind === "shape") startShapeEdit(ctl, o.id, "");
             }}
             onKeyDown={(e) => {
               if (e.key === "Escape") {
@@ -149,7 +158,13 @@ export function FloatingLayer({ ctl, layout }: { ctl: Controller; layout: GridLa
               ctl.openDialog("objectMenu", { x: e.clientX, y: e.clientY, kind: obj.kind, id: o.id });
             }}
             ref={(el) => {
-              if (el && selected && document.activeElement?.closest(".tb-float") !== el && !ctl.edit && !document.activeElement?.closest(".oh-ribbon, .oh-popover, .oh-dialog, input, textarea, select")) el.focus({ preventScroll: true });
+              if (!el || !selected || ctl.shapeEdit?.id === o.id || document.activeElement?.closest(".tb-float") === el || ctl.edit) return;
+              // Yeni seçilen nesne (şeritten eklenen dahil) klavyeyi alır; yazınca metin şekle gider
+              const fresh = focusedSel.current !== o.id;
+              if (fresh || !document.activeElement?.closest(".oh-ribbon, .oh-popover, .oh-dialog, input, textarea, select")) {
+                if (!document.querySelector(".oh-dialog")) el.focus({ preventScroll: true });
+              }
+              focusedSel.current = o.id;
             }}
           >
             {obj.kind === "chart" && (
@@ -158,7 +173,8 @@ export function FloatingLayer({ ctl, layout }: { ctl: Controller; layout: GridLa
               </div>
             )}
             {obj.kind === "image" && <img src={obj.o.src} alt={obj.o.name} draggable={false} />}
-            {obj.kind === "shape" && <ShapeSvg s={obj.o} w={w} h={h} />}
+            {obj.kind === "shape" && <ShapeSvg s={ctl.shapeEdit?.id === o.id ? { ...obj.o, text: "" } : obj.o} w={w} h={h} />}
+            {obj.kind === "shape" && ctl.shapeEdit?.id === o.id && <ShapeTextEditor ctl={ctl} id={o.id} />}
             {selected &&
               HANDLES.map((hd) => (
                 <span key={hd} className={`tb-handle is-${hd}`} onPointerDown={(e) => onDown(e, obj, hd)} onPointerMove={onMove} onPointerUp={onUp} />
@@ -167,6 +183,43 @@ export function FloatingLayer({ ctl, layout }: { ctl: Controller; layout: GridLa
         );
       })}
     </div>
+  );
+}
+
+/** Şeklin içinde yerinde metin düzenleyici: Esc ya da dışarı tıklama metni uygular. */
+function ShapeTextEditor({ ctl, id }: { ctl: Controller; id: string }) {
+  const done = useRef(false);
+  const commit = () => {
+    if (done.current || !ctl.shapeEdit) return;
+    done.current = true;
+    const text = ctl.shapeEdit.text;
+    ctl.shapeEdit = null;
+    const cur = ctl.sheet.shapes.find((x) => x.id === id);
+    if (cur && cur.text !== text) updateShape(ctl, id, { text }, "Şekil Metni");
+    else ctl.emit();
+  };
+  return (
+    <textarea
+      className="tb-shape-edit"
+      aria-label="Şekil metni"
+      autoFocus
+      defaultValue={ctl.shapeEdit?.text ?? ""}
+      onFocus={(e) => e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length)}
+      onChange={(e) => {
+        if (ctl.shapeEdit) ctl.shapeEdit = { ...ctl.shapeEdit, text: e.target.value };
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Escape") {
+          e.preventDefault();
+          commit();
+          (e.currentTarget.closest(".tb-float") as HTMLElement | null)?.focus({ preventScroll: true });
+        }
+      }}
+      onBlur={commit}
+    />
   );
 }
 
@@ -193,7 +246,7 @@ function ShapeSvg({ s, w, h }: { s: ShapeDef; w: number; h: number }) {
       shape = <rect x={sw} y={sw} width={w - 2 * sw} height={h - 2 * sw} />;
   }
   return (
-    <div className="tb-shape">
+    <div className={`tb-shape${s.kind === "textbox" ? " is-textbox" : ""}`}>
       <svg width={w} height={h} fill={s.kind === "line" ? "none" : s.fill} stroke={s.stroke} strokeWidth={sw}>
         {shape}
       </svg>

@@ -9,6 +9,7 @@ import { DEFAULT_TABLE_STYLE, tableCellStyle } from "../model/tablestyles";
 import type { AutoFilter, CondRule, FilterCriteria, Rect, TableDef } from "../model/types";
 import type { CellInput, CellState, SheetModel, WorkbookModel } from "../model/workbook";
 import { cellKey } from "@officehere/formula";
+import { advancedMatches } from "../model/advancedFilter";
 
 /* ------------------------------ Sıralama ------------------------------ */
 
@@ -284,6 +285,12 @@ export function recomputeFilters(ctl: Controller, sheet = ctl.sheet): void {
       if (!visible) sheet.filterHidden.add(row);
     }
   }
+  // Yerinde Gelişmiş Filtre: ölçüte uymayan (ya da yinelenen) satırlar gizlenir
+  if (sheet.advFilter) {
+    const af = sheet.advFilter;
+    const keep = new Set(advancedMatches(wb, sheet, af.range, af.criteria, af.unique));
+    for (let row = af.range.r1 + 1; row <= af.range.r2; row++) if (!keep.has(row)) sheet.filterHidden.add(row);
+  }
   sheet.rows.setHiddenMany(sheet.filterHidden, true);
   ctl.ops.syncHiddenRows(sheet);
 }
@@ -337,6 +344,7 @@ export function setColumnFilter(ctl: Controller, f: AutoFilter, col: number, cri
 export function clearAllFilters(ctl: Controller): void {
   ctl.ops.sheetOp(ctl.sheet, "Filtreyi Temizle", () => {
     for (const f of filtersOf(ctl.sheet)) f.columns = {};
+    ctl.sheet.advFilter = null;
     recomputeFilters(ctl);
   });
   if (ctl.status.endsWith("tanesi bulundu")) {
@@ -582,23 +590,23 @@ function colName(c: number): string {
 
 export function convertTableToRange(ctl: Controller, t: TableDef): void {
   const { wb, sheet } = ctl;
-  ctl.ops.sheetOp(
-    sheet,
-    "Aralığa Dönüştür",
-    () => {
-      // Tablo görünümünü kalıcı biçime çevir
-      for (let row = t.ref.r1; row <= t.ref.r2; row++)
-        for (let c = t.ref.c1; c <= t.ref.c2; c++) {
-          const ts = tableCellStyle(t, row, c);
-          const own = wb.styleAt(sheet, row, c);
-          const merged = { ...ts, ...own, fill: own.fill ?? ts.fill, color: own.color ?? ts.color };
-          wb.setStyleRaw(sheet, row, c, wb.styles.intern(merged));
-        }
-      sheet.tables = sheet.tables.filter((x) => x.id !== t.id);
-      recomputeFilters(ctl);
-    },
-    [t.ref],
-  );
+  // Kitabın her yerindeki formüller değişebilir: tüm kitap anlık görüntüsüyle geri alınır
+  ctl.ops.snapshotOp("Aralığa Dönüştür", () => {
+    // Tablo görünümünü kalıcı biçime çevir
+    for (let row = t.ref.r1; row <= t.ref.r2; row++)
+      for (let c = t.ref.c1; c <= t.ref.c2; c++) {
+        const ts = tableCellStyle(t, row, c);
+        const own = wb.styleAt(sheet, row, c);
+        const merged = { ...ts, ...own, fill: own.fill ?? ts.fill, color: own.color ?? ts.color };
+        wb.setStyleRaw(sheet, row, c, wb.styles.intern(merged));
+      }
+    // Yapısal başvurular (Tablo1[Tutar], [@Adet]) olağan A1 başvurularına çevrilir
+    wb.syncTables();
+    wb.engine.tableRefsToA1(t.name);
+    sheet.tables = sheet.tables.filter((x) => x.id !== t.id);
+    wb.syncTables();
+    recomputeFilters(ctl);
+  });
 }
 
 /* ------------------------- Koşullu Biçimlendirme ------------------------- */

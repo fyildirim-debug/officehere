@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { URL, collectErrors } from "./ortak";
+import { tabloTur4Tests } from "./tablo-tur4";
 
 // OfficeHere Tablo uçtan uca senaryoları. Izgara canvas olduğu için hücre konumları
 // ve değerleri uygulamanın yalnız okunur test arayüzünden (window.__ohTablo) alınır.
@@ -487,9 +488,9 @@ test.describe("OfficeHere Tablo 3. tur", () => {
     await page.getByRole("dialog", { name: "Tablo Oluştur" }).getByRole("button", { name: "Tamam" }).click();
     await enter(page, "D1", "Tutar");
     await enter(page, "D2", "=[@Adet]*[@Fiyat]");
-    expect(await cell(page, "D2")).toMatchObject({ value: 25, edit: "=Tablo1[@Adet]*Tablo1[@Fiyat]" });
+    expect(await cell(page, "D2")).toMatchObject({ value: 25, edit: "=[@Adet]*[@Fiyat]" });
     // Hesaplanan sütun tüm satırlara yayılır
-    expect(await cell(page, "D3")).toMatchObject({ value: 120, edit: "=Tablo1[@Adet]*Tablo1[@Fiyat]" });
+    expect(await cell(page, "D3")).toMatchObject({ value: 120, edit: "=[@Adet]*[@Fiyat]" });
     // Alttaki satıra yazınca tablo genişler, formül yeni satıra gelir
     await enter(page, "A4", "Un");
     await enter(page, "B4", "2");
@@ -517,7 +518,8 @@ test.describe("OfficeHere Tablo 3. tur", () => {
     await page.keyboard.press("Alt+F1");
     expect(await page.evaluate(() => window.__ohTablo!.chartCount())).toBe(1);
     const chart = page.locator(".tb-float.is-chart").first();
-    await chart.dblclick();
+    // Çift tık tıklanan öğenin bölmesini açar: kenar boşluğu grafik alanı, sütun veri serisi
+    await chart.dblclick({ position: { x: 6, y: 40 } });
     await expect(page.getByRole("complementary", { name: "Grafik Alanını Biçimlendir" })).toBeVisible();
     await page.getByRole("complementary", { name: "Grafik Alanını Biçimlendir" }).getByRole("button", { name: "Kapat" }).click();
     const box = (await chart.boundingBox())!;
@@ -574,3 +576,5 @@ test.describe("OfficeHere Tablo 3. tur", () => {
     await expect(page.locator(".tb-pl-page")).toHaveCount(1);
   });
 });
+
+tabloTur4Tests();

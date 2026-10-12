@@ -3,13 +3,13 @@
  * içeriklerini tutar; bu katman stilleri, boyutları, birleştirmeleri,
  * notları ve sayfa düzeyindeki nesneleri yönetir.
  */
-import { FormulaEngine, cellKey, keyCol, keyRow, toLocalFormula, numberToText, isDateFormat, isTimeOnlyFormat, formatValue, isError, localErrorName, parseCellInput, type Scalar, type TableInfo } from "@officehere/formula";
+import { FormulaEngine, addr as addrOf, cellKey, keyCol, keyRow, toLocalFormula, numberToText, isDateFormat, isTimeOnlyFormat, formatValue, isError, localErrorName, parseCellInput, unqualifyStructRefs, type Scalar, type TableInfo } from "@officehere/formula";
 import { AxisSizes } from "./axis";
 import { MAX_COLS, MAX_ROWS, contains, intersects, shiftIndex, shiftRect } from "./rect";
 import { StyleTable, type CellStyle } from "./styles";
 import { renameRangeText, shiftRangeText } from "./rangeRefs";
 import { defaultTheme, type WorkbookTheme } from "./theme";
-import type { AutoFilter, ChartDef, CondRule, ImageDef, Note, PageSetup, PivotDef, Rect, Selection, ShapeDef, SparklineGroup, TableDef, Validation, ViewMode } from "./types";
+import type { AutoFilter, ChartDef, CondRule, DataTableDef, ImageDef, Note, PageSetup, PivotDef, Rect, Scenario, Selection, ShapeDef, SlicerDef, SparklineGroup, TableDef, Validation, ViewMode, WorkbookProtection } from "./types";
 
 export type CellInput = Scalar | { formula: string };
 
@@ -44,6 +44,12 @@ export class SheetModel {
   shapes: ShapeDef[] = [];
   pivots: PivotDef[] = [];
   sparklines: SparklineGroup[] = [];
+  /** Senaryo Yöneticisi senaryoları, veri tabloları ve dilimleyiciler. */
+  scenarios: Scenario[] = [];
+  dataTables: DataTableDef[] = [];
+  slicers: SlicerDef[] = [];
+  /** Yerinde uygulanmış Gelişmiş Filtre (Temizle ile kalkar). */
+  advFilter: { range: Rect; criteria: Rect | null; unique: boolean } | null = null;
   /** Hata Denetimi'nde "Hatayı Yoksay" denen hücreler. */
   ignoredErrors = new Set<number>();
   frozen = { rows: 0, cols: 0 };
@@ -110,6 +116,10 @@ export class SheetModel {
       shapes: structuredClone(this.shapes),
       pivots: structuredClone(this.pivots),
       sparklines: structuredClone(this.sparklines),
+      scenarios: structuredClone(this.scenarios),
+      dataTables: structuredClone(this.dataTables),
+      slicers: structuredClone(this.slicers),
+      advFilter: structuredClone(this.advFilter),
       ignoredErrors: new Set(this.ignoredErrors),
       frozen: { ...this.frozen },
       page: structuredClone(this.page),
@@ -137,6 +147,10 @@ export class SheetModel {
     this.shapes = structuredClone(d.shapes);
     this.pivots = structuredClone(d.pivots);
     this.sparklines = structuredClone(d.sparklines);
+    this.scenarios = structuredClone(d.scenarios ?? []);
+    this.dataTables = structuredClone(d.dataTables ?? []);
+    this.slicers = structuredClone(d.slicers ?? []);
+    this.advFilter = structuredClone(d.advFilter ?? null);
     this.ignoredErrors = new Set(d.ignoredErrors);
     this.frozen = { ...d.frozen };
     this.page = structuredClone(d.page);
@@ -254,6 +268,10 @@ export interface SheetData {
   shapes: ShapeDef[];
   pivots: PivotDef[];
   sparklines: SparklineGroup[];
+  scenarios?: Scenario[];
+  dataTables?: DataTableDef[];
+  slicers?: SlicerDef[];
+  advFilter?: { range: Rect; criteria: Rect | null; unique: boolean } | null;
   ignoredErrors: Set<number>;
   frozen: { rows: number; cols: number };
   page: PageSetup;
@@ -285,6 +303,8 @@ export class WorkbookModel {
   theme: WorkbookTheme = defaultTheme();
   /** İçe aktarmada okunamayıp atlanan öğeler (bilgi çubuğunda gösterilir). */
   loadWarnings: string[] = [];
+  /** Çalışma kitabı yapı koruması. */
+  protection: WorkbookProtection | null = null;
   private nextObjectId = 1;
 
   constructor(empty = false) {
@@ -304,7 +324,7 @@ export class WorkbookModel {
   bumpIds(): void {
     let max = 0;
     for (const s of this.sheets)
-      for (const o of [...s.charts, ...s.images, ...s.shapes, ...s.tables, ...s.pivots, ...s.sparklines, ...s.validations, ...s.condFormats]) {
+      for (const o of [...s.charts, ...s.images, ...s.shapes, ...s.tables, ...s.pivots, ...s.sparklines, ...s.validations, ...s.condFormats, ...s.dataTables, ...s.slicers]) {
         const n = Number(/(\d+)$/.exec(o.id)?.[1] ?? 0);
         if (n > max) max = n;
       }
@@ -419,8 +439,15 @@ export class WorkbookModel {
 
   /** Düzenleyicide gösterilecek metin (Türkçe formül ya da değer). */
   editText(sheet: SheetModel, row: number, col: number): string {
+    // Veri tablosu sonuçları: {=TABLO(satır_giriş;sütun_giriş)}
+    const dt = sheet.dataTables.length ? sheet.dataTables.find((d) => row >= d.ref.r1 && row <= d.ref.r2 && col >= d.ref.c1 && col <= d.ref.c2) : undefined;
+    if (dt) return `{=TABLO(${dt.rowInput ? addrOf(dt.rowInput.row, dt.rowInput.col) : ""};${dt.colInput ? addrOf(dt.colInput.row, dt.colInput.col) : ""})}`;
     const f = this.engine.getFormula(sheet.id, row, col);
-    if (f) return toLocalFormula(f, "tr");
+    if (f) {
+      // Tablonun içindeki formülde kendi tablosuna başvurular adsız gösterilir ([@Adet])
+      const t = f.includes("[") ? sheet.tableAt(row, col) : undefined;
+      return toLocalFormula(t ? unqualifyStructRefs(f, t.name) : f, "tr");
+    }
     if (!this.engine.hasInput(sheet.id, row, col)) return "";
     const v = this.engine.getValue(sheet.id, row, col);
     return valueEditText(v, this.styleAt(sheet, row, col).numFmt);
@@ -541,6 +568,7 @@ export class WorkbookModel {
       sheets: this.sheets.map((s) => ({ id: s.id, name: s.name, data: s.cloneData() })),
       activeIndex: this.activeIndex,
       theme: structuredClone(this.theme),
+      protection: structuredClone(this.protection),
     };
   }
 
@@ -555,6 +583,7 @@ export class WorkbookModel {
     });
     this.activeIndex = Math.min(snap.activeIndex, this.sheets.length - 1);
     this.theme = structuredClone(snap.theme);
+    if (snap.protection !== undefined) this.protection = structuredClone(snap.protection);
     this.syncTables();
     this.engine.recalc();
   }
@@ -577,6 +606,7 @@ export interface WorkbookSnapshot {
   sheets: { id: number; name: string; data: SheetData }[];
   activeIndex: number;
   theme: WorkbookTheme;
+  protection?: WorkbookProtection | null;
 }
 
 /** Değeri düzenleme metnine çevirir (tarihler gg.aa.yyyy, yüzde %, ondalık virgül). */

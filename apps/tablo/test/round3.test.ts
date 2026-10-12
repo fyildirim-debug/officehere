@@ -111,7 +111,8 @@ describe("Yapısal başvurular uygulamada (#4)", () => {
     expect(v(ctl, 12, 2)).toBe(7);
     type(ctl, 1, 5, "=[@Tutar]*2");
     expect(ctl.wb.getFormula(ctl.sheet, 1, 5)).toBe(`=${n}[[#This Row],[Tutar]]*2`);
-    expect(ctl.wb.editText(ctl.sheet, 1, 5)).toBe(`=${n}[@Tutar]*2`);
+    // Tablonun içindeki formülde kendi tablosuna başvurular adsız gösterilir (Excel gibi)
+    expect(ctl.wb.editText(ctl.sheet, 1, 5)).toBe("=[@Tutar]*2");
     expect(v(ctl, 1, 5)).toBe(200);
     type(ctl, 8, 0, "Ek");
     type(ctl, 8, 4, "1000");

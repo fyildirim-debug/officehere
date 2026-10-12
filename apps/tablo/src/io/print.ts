@@ -68,8 +68,13 @@ export function computePageBreaks(wb: WorkbookModel, sheet: SheetModel, range?: 
   // Tek sayfaya sığdırılan eksende el ile sonlar yok sayılır (Excel gibi)
   const mRows = new Set(mode === "sheet" || mode === "rows" ? [] : (sheet.page.rowBreaks ?? []));
   const mCols = new Set(mode === "sheet" || mode === "cols" ? [] : (sheet.page.colBreaks ?? []));
-  const cols = axisBreaks(r.c1, r.c2, (c) => sheet.cols.size(c), inner.w / scale, mCols);
-  const rows = axisBreaks(r.r1, r.r2, (row) => sheet.rows.size(row), inner.h / scale - 0.5, mRows);
+  // Yazdırma başlıkları her sayfada yinelendiği için sayfanın kullanılabilir alanından düşülür
+  const tr = sheet.page.titleRows;
+  const tc = sheet.page.titleCols;
+  const titleH = tr ? sheet.rows.offset(tr.r2 + 1) - sheet.rows.offset(tr.r1) : 0;
+  const titleW = tc ? sheet.cols.offset(tc.c2 + 1) - sheet.cols.offset(tc.c1) : 0;
+  const cols = axisBreaks(r.c1, r.c2, (c) => sheet.cols.size(c), Math.max(40, inner.w / scale - titleW), mCols);
+  const rows = axisBreaks(r.r1, r.r2, (row) => sheet.rows.size(row), Math.max(20, inner.h / scale - 0.5 - titleH), mRows);
   return { rows, cols, manualRows: rows.filter((x) => mRows.has(x)), manualCols: cols.filter((x) => mCols.has(x)), range: r };
 }
 
@@ -94,29 +99,32 @@ function esc(s: string): string {
 }
 
 /** Aralığı HTML tablosuna çevirir (yazdırma, PDF ve HTML dışa aktarma). */
-export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts: { gridlines?: boolean; headings?: boolean; cellAttrs?: boolean; objects?: boolean } = {}): string {
+export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts: { gridlines?: boolean; headings?: boolean; cellAttrs?: boolean; objects?: boolean; rowList?: number[]; colList?: number[] } = {}): string {
   const cf = new CondFormatter(wb);
   const covered = new Set<string>();
   const cols: string[] = [];
+  // Yazdırma başlıkları için satır/sütun listesi verilebilir (aralığın önüne başlık satırları)
+  const rowList = opts.rowList ?? Array.from({ length: r.r2 - r.r1 + 1 }, (_, i) => r.r1 + i);
+  const colList = opts.colList ?? Array.from({ length: r.c2 - r.c1 + 1 }, (_, i) => r.c1 + i);
   if (opts.headings) cols.push(`<col style="width:32px">`);
   // Tablo genişliği açıkça verilir: yoksa table-layout:fixed uygulanmaz ve sütunlar içeriğe göre kayar
   let tableW = opts.headings ? 32 : 0;
-  for (let c = r.c1; c <= r.c2; c++) {
+  for (const c of colList) {
     tableW += sheet.cols.size(c);
     cols.push(`<col style="width:${sheet.cols.size(c)}px">`);
   }
   const rows: string[] = [];
   if (opts.headings) {
     const hs = ["<th></th>"];
-    for (let c = r.c1; c <= r.c2; c++) if (sheet.cols.size(c) > 0) hs.push(`<th>${colToName(c)}</th>`);
+    for (const c of colList) if (sheet.cols.size(c) > 0) hs.push(`<th>${colToName(c)}</th>`);
     rows.push(`<tr class="hdr" style="height:20px">${hs.join("")}</tr>`);
   }
-  for (let row = r.r1; row <= r.r2; row++) {
+  for (const row of rowList) {
     const rh = sheet.rows.size(row);
     if (rh === 0) continue;
     const tds: string[] = [];
     if (opts.headings) tds.push(`<th>${row + 1}</th>`);
-    for (let c = r.c1; c <= r.c2; c++) {
+    for (const c of colList) {
       if (sheet.cols.size(c) === 0) continue;
       if (covered.has(`${row},${c}`)) continue;
       const m = sheet.mergeAt(row, c);

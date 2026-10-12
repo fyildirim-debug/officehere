@@ -13,18 +13,16 @@ import type { CellPos, Rect } from "../model/types";
 import { widthPxToChars, pxToPt, type AxisSizes } from "../model/axis";
 import { CellEditor } from "./CellEditor";
 import { handleGridKey } from "./keys";
+import { GridOverlays } from "./GridOverlays";
+import { sizeSelection } from "../actions/format";
 import { handleOutlineClick } from "../actions/outline";
 import { activeFilterRows } from "./gridUtil";
 import { GridLayout } from "./layout";
 import { measureText, renderGrid, type RenderState } from "./render";
 import { SheetTabs } from "./SheetTabs";
 import { autoFitCols, autoFitRows } from "./autofit";
-import { FloatingLayer } from "../charts/FloatingLayer";
 import { cursorFor, fillTipText, hitTestGrid, openLink, selectedLines, useDarkUi, type Hit } from "./gridUtil";
-import { PivotPlaceholders } from "../pivot/PivotPlaceholder";
 import { pivotButtons } from "../pivot/pivotOps";
-import { AllNotes, ValidationUi } from "./ValidationUi";
-import { ErrorTag } from "./ErrorTag";
 import { computePageBreaks } from "../io/print";
 import { pageBreakCursor, pageBreakDrop, pageBreakHit, pageBreakMove, type PageBreakDrag } from "./pageBreakDrag";
 import { filtersOf } from "../actions/data";
@@ -504,6 +502,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         sheet.cols.assign(d.saved);
         const items = selectedLines(ctl, "col", d.col);
         ctl.ops.setSizes(sheet, "col", items, w, "Sütun Genişliği");
+        ctl.recordRepeat("Sütun Genişliği", () => sizeSelection(ctl, "col", w, "Sütun Genişliği"));
         setTip(null);
         break;
       }
@@ -512,6 +511,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         sheet.rows.assign(d.saved);
         const items = selectedLines(ctl, "row", d.row);
         ctl.ops.setSizes(sheet, "row", items, h, "Satır Yüksekliği");
+        ctl.recordRepeat("Satır Yüksekliği", () => sizeSelection(ctl, "row", h, "Satır Yüksekliği"));
         setTip(null);
         break;
       }
@@ -664,11 +664,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         >
           <canvas ref={canvasRef} className="tb-canvas" />
           <CellEditor ctl={ctl} layout={layout} inputRef={inputRef} onGridKey={gridKey} />
-          <PivotPlaceholders ctl={ctl} layout={layout} />
-          <FloatingLayer ctl={ctl} layout={layout} />
-          {ctl.showAllNotes && <AllNotes ctl={ctl} layout={layout} />}
-          <ValidationUi ctl={ctl} layout={layout} />
-          <ErrorTag ctl={ctl} layout={layout} />
+          <GridOverlays ctl={ctl} layout={layout} />
           {tip && (
             <div className="tb-tip" style={{ left: Math.min(tip.x, size.w - 220), top: tip.y }}>
               {tip.title && <strong>{tip.title}</strong>}

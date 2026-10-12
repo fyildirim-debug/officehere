@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { tipProps } from "@officehere/ui";
 import { contrastText } from "@officehere/core";
 import type { Controller } from "../controller";
+import { STRUCTURE_MESSAGE } from "../model/protection";
 
 export function SheetTabs({ ctl, onContextMenu }: { ctl: Controller; onContextMenu: (e: React.MouseEvent, index: number) => void }) {
   const wb = ctl.wb;
@@ -49,6 +50,10 @@ export function SheetTabs({ ctl, onContextMenu }: { ctl: Controller; onContextMe
   };
 
   const startRename = (i: number) => {
+    if (wb.protection?.structure) {
+      ctl.alert(STRUCTURE_MESSAGE);
+      return;
+    }
     setRenaming(i);
     setName(wb.sheets[i].name);
   };
@@ -121,7 +126,6 @@ export function SheetTabs({ ctl, onContextMenu }: { ctl: Controller; onContextMe
                   className="tb-tab-input"
                   autoFocus
                   value={name}
-                  maxLength={31}
                   onChange={(e) => setName(e.target.value)}
                   onFocus={(e) => {
                     if (!document.querySelector(".oh-dialog")) alerting.current = false;

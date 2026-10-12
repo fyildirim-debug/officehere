@@ -16,6 +16,8 @@ import { ChartDataDialog, ChartTypeDialog, MoveChartDialog } from "./ChartDialog
 import { PageSetupDialog } from "./PageSetupDialog";
 import { ShortcutsDialog, WorkbookStatsDialog } from "./HelpDialogs";
 import { DialogErrorBoundary } from "./common";
+import { DataTableDialog, ScenarioEditDialog, ScenarioManagerDialog, ScenarioSummaryDialog, ScenarioValuesDialog } from "./WhatIfDialogs";
+import { AdvancedFilterDialog, InsertSlicerDialog, ProtectWorkbookDialog } from "./Round4Dialogs";
 import { ErrorCheckDialog, ErrorOptionsDialog, EvaluateFormulaDialog } from "./AuditDialogs";
 import { traceError } from "../actions/audit";
 import { SparklineAxisDialog, SparklineDialog, SparklineHiddenDialog, SparklineItemDialog } from "../sparkline/SparkDialogs";
@@ -115,6 +117,22 @@ function OneDialog({ ctl, state, onClose, files, onBackstage }: { ctl: Controlle
       return <SubtotalDialog {...p} />;
     case "goalSeek":
       return <GoalSeekDialog {...p} />;
+    case "scenarioManager":
+      return <ScenarioManagerDialog {...p} />;
+    case "scenarioEdit":
+      return <ScenarioEditDialog {...p} />;
+    case "scenarioValues":
+      return <ScenarioValuesDialog {...p} />;
+    case "scenarioSummary":
+      return <ScenarioSummaryDialog {...p} />;
+    case "dataTable":
+      return <DataTableDialog {...p} />;
+    case "advancedFilter":
+      return <AdvancedFilterDialog {...p} />;
+    case "protectWorkbook":
+      return <ProtectWorkbookDialog {...p} />;
+    case "insertSlicer":
+      return <InsertSlicerDialog {...p} />;
     case "goalSeekStatus":
       return <GoalSeekStatusDialog {...p} />;
     case "confirm":

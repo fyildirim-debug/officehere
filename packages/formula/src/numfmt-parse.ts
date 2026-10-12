@@ -54,6 +54,31 @@ export interface Section {
   hasAmPm: boolean;
   /** Yerel ayar etiketi ([$-tr-TR], [$-409]…): ay/gün adlarının dili. */
   lang?: "tr" | "en";
+  /** tr/en dışındaki yerel ayar ([$-de-DE], [$-407]): adlar Intl ile üretilir. */
+  locale?: string;
+}
+
+/** Sık kullanılan Windows yerel ayar kimlikleri (onaltılık LCID → BCP 47). */
+const LCID: Record<string, string> = {
+  "407": "de-DE", "807": "de-CH", "c07": "de-AT", "40c": "fr-FR", "80c": "fr-BE", "c0c": "fr-CA", "100c": "fr-CH", "40a": "es-ES", "c0a": "es-ES", "80a": "es-MX",
+  "410": "it-IT", "413": "nl-NL", "813": "nl-BE", "416": "pt-BR", "816": "pt-PT", "419": "ru-RU", "422": "uk-UA", "415": "pl-PL", "405": "cs-CZ", "40e": "hu-HU",
+  "418": "ro-RO", "402": "bg-BG", "41a": "hr-HR", "408": "el-GR", "41d": "sv-SE", "406": "da-DK", "414": "nb-NO", "40b": "fi-FI", "401": "ar-SA", "40d": "he-IL",
+  "429": "fa-IR", "411": "ja-JP", "412": "ko-KR", "804": "zh-CN", "404": "zh-TW", "42c": "az-Latn-AZ", "43f": "kk-KZ", "443": "uz-Latn-UZ",
+};
+
+/** Etiketteki yerel ayarın BCP 47 adı (tr/en dışı; tanınmazsa undefined). */
+export function localeTagName(tag: string): string | undefined {
+  const t = tag.trim();
+  const hex = t.toLowerCase().replace(/^0+/, "");
+  if (/^[0-9a-f]{3,8}$/.test(hex)) return LCID[hex.length > 4 ? hex.slice(-4).replace(/^0+/, "") : hex];
+  if (/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/i.test(t)) {
+    try {
+      return Intl.getCanonicalLocales(t)[0];
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 /** [$sembol-yerel] etiketindeki yerel ayarın dili. */
@@ -144,7 +169,14 @@ export function parseSection(src: string): Section {
         const dash = body.indexOf("-");
         const sym = dash < 0 ? body : body.slice(0, dash);
         if (sym) toks.push({ t: "lit", v: sym });
-        if (dash >= 0) sec.lang = localeTagLang(body.slice(dash + 1)) ?? sec.lang;
+        if (dash >= 0) {
+          const tag = body.slice(dash + 1);
+          const l = localeTagLang(tag);
+          if (l) {
+            sec.lang = l;
+            sec.locale = undefined;
+          } else sec.locale = localeTagName(tag) ?? sec.locale;
+        }
       }
       continue;
     }

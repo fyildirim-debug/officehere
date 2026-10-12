@@ -5,6 +5,7 @@ import {
   DocumentText24Regular,
   Filter24Regular,
   FilterDismiss20Regular,
+  FilterAdd20Regular,
   TextSortAscending20Regular,
   TextSortDescending20Regular,
   ArrowSort24Regular,
@@ -26,6 +27,7 @@ import { flashFill } from "../actions/whatIf";
 import type { Controller } from "../controller";
 import * as D from "../actions/data";
 import { refreshAll } from "../pivot/pivotOps";
+import { subtractRects } from "../model/rect";
 
 export async function importText(ctl: Controller): Promise<void> {
   const f = await openFile([{ name: "Metin dosyaları", extensions: ["csv", "txt", "tsv"] }]);
@@ -53,8 +55,9 @@ export function DataTab({ ctl }: { ctl: Controller }) {
         <RibbonButton size="large" icon={<ArrowSort24Regular />} label="Sırala" description="Verileri birden çok ölçüte göre sıralar." onClick={() => ctl.openDialog("sort")} />
         <RibbonButton size="large" icon={<Filter24Regular />} label="Filtre" shortcut="Ctrl+Shift+L" checked={filterOn} description="Seçili hücreler için filtrelemeyi açar." onClick={() => D.toggleAutoFilter(ctl)} />
         <RibbonStack>
-          <RibbonButton icon={<FilterDismiss20Regular />} label="Temizle" disabled={!anyCriteria} onClick={() => D.clearAllFilters(ctl)} />
-          <RibbonButton icon={<ArrowSync20Regular />} label="Yeniden Uygula" disabled={!filters.length} onClick={() => D.reapplyFilters(ctl)} />
+          <RibbonButton icon={<FilterDismiss20Regular />} label="Temizle" disabled={!anyCriteria && !sheet.advFilter} onClick={() => D.clearAllFilters(ctl)} />
+          <RibbonButton icon={<ArrowSync20Regular />} label="Yeniden Uygula" disabled={!filters.length && !sheet.advFilter} onClick={() => D.reapplyFilters(ctl)} />
+          <RibbonButton icon={<FilterAdd20Regular />} label="Gelişmiş" onClick={() => ctl.openDialog("advancedFilter")} />
         </RibbonStack>
       </RibbonGroup>
       <RibbonGroup label="Veri Araçları" icon={<CheckboxChecked24Regular />}>
@@ -75,7 +78,7 @@ export function DataTab({ ctl }: { ctl: Controller }) {
                 onClick={() =>
                   ctl.ops.sheetOp(sheet, "Veri Doğrulama", () => {
                     const sel = ctl.sel.ranges;
-                    sheet.validations = sheet.validations.filter((v) => !v.ranges.some((r) => sel.some((s) => s.r1 <= r.r2 && r.r1 <= s.r2 && s.c1 <= r.c2 && r.c1 <= s.c2)));
+                    sheet.validations = sheet.validations.map((v) => ({ ...v, ranges: subtractRects(v.ranges, sel) })).filter((v) => v.ranges.length);
                   })
                 }
               />
@@ -91,7 +94,9 @@ export function DataTab({ ctl }: { ctl: Controller }) {
           className="tb-wide"
           menu={
             <Menu width={200}>
+              <MenuItem label="Senaryo Yöneticisi..." onClick={() => ctl.openDialog("scenarioManager")} />
               <MenuItem label="Hedef Ara..." onClick={() => ctl.openDialog("goalSeek")} />
+              <MenuItem label="Veri Tablosu..." onClick={() => ctl.openDialog("dataTable")} />
             </Menu>
           }
         />

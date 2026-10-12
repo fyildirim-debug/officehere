@@ -685,3 +685,14 @@
 .oh-ribbon-body > .oh-ribbon-content {
   padding-right: 24px;
 }
+/* Akıllı Doldurma önizlemesi (yazarken soluk öneri) */
+.tb-flash-preview {
+  position: absolute;
+  padding: 0 3px;
+  font-size: 11pt;
+  color: #8a8a8a;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.6);
+}

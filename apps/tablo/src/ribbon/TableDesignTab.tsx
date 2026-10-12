@@ -1,25 +1,32 @@
 /** Bağlamsal Tablo Tasarımı sekmesi: Özellikler, Araçlar, Tablo Stili Seçenekleri, Tablo Stilleri. */
-import { useEffect, useState } from "react";
-import { TableDismiss20Regular, TableSettings24Regular, ArrowSync20Regular, Table24Regular } from "@fluentui/react-icons";
+import { useEffect, useRef, useState } from "react";
+import { Filter20Regular, TableDismiss20Regular, TableSettings24Regular, ArrowSync20Regular, Table24Regular } from "@fluentui/react-icons";
 import { RibbonButton, RibbonCheckbox, RibbonGallery, RibbonGroup, RibbonLabel, RibbonStack } from "@officehere/ui";
 import type { Controller } from "../controller";
 import * as D from "../actions/data";
 import { TABLE_STYLES } from "../model/tablestyles";
+import { tableNameError } from "../model/tableName";
 import type { TableDef } from "../model/types";
 import { TablePreview } from "./HomeTab2";
 
 export function TableDesignTab({ ctl, table }: { ctl: Controller; table: TableDef }) {
   const [name, setName] = useState(table.name);
   useEffect(() => setName(table.name), [table.id, table.name]);
+  // Enter/Esc ile kapanırken gelen odak kaybı ikinci kez işlemesin
+  const handled = useRef(false);
   const commitName = () => {
     const n = name.trim();
-    if (n === table.name) return;
-    const taken = ctl.wb.sheets.some((s) => s.tables.some((t) => t.id !== table.id && t.name.toLocaleUpperCase("tr-TR") === n.toLocaleUpperCase("tr-TR")));
-    if (!/^[\p{L}_][\p{L}\p{N}_.]*$/u.test(n) || taken || ctl.wb.engine.getNames().some((x) => x.name.toLocaleUpperCase("tr-TR") === n.toLocaleUpperCase("tr-TR"))) {
-      ctl.alert("Girdiğiniz ad geçerli değil ya da zaten kullanılıyor.");
+    if (n === table.name) {
       setName(table.name);
       return;
     }
+    const err = tableNameError(ctl.wb, n, table.id);
+    if (err) {
+      setName(table.name);
+      ctl.alert(err, "Tablo Adı");
+      return;
+    }
+    setName(n);
     D.updateTable(ctl, table, { name: n });
   };
   const opt = (k: "headerRow" | "totalRow" | "bandedRows" | "firstColumn" | "lastColumn" | "bandedCols" | "filterButton", label: string) => (
@@ -34,15 +41,23 @@ export function TableDesignTab({ ctl, table }: { ctl: Controller; table: TableDe
             className="tb-ribbon-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            onBlur={commitName}
+            onFocus={(e) => {
+              handled.current = false;
+              e.currentTarget.select();
+            }}
+            onBlur={() => {
+              if (!handled.current) commitName();
+              handled.current = false;
+            }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                commitName();
-                ctl.focusGrid();
-              } else if (e.key === "Escape") {
-                setName(table.name);
-                ctl.focusGrid();
-              }
+              if (e.key !== "Enter" && e.key !== "Escape") return;
+              // Enter'ın varsayılan eylemi etkin hücreye "yazarak düzenleme" olarak ulaşmasın
+              e.preventDefault();
+              e.stopPropagation();
+              handled.current = true;
+              if (e.key === "Enter") commitName();
+              else setName(table.name);
+              ctl.focusGrid();
             }}
             aria-label="Tablo Adı"
           />
@@ -51,6 +66,7 @@ export function TableDesignTab({ ctl, table }: { ctl: Controller; table: TableDe
       <RibbonGroup label="Araçlar" icon={<TableDismiss20Regular />}>
         <RibbonStack>
           <RibbonButton icon={<TableDismiss20Regular />} label="Yinelenenleri Kaldır" onClick={() => (ctl.selectRange(table.ref), ctl.openDialog("removeDuplicates"))} />
+          <RibbonButton icon={<Filter20Regular />} label="Dilimleyici Ekle" onClick={() => ctl.openDialog("insertSlicer")} />
           <RibbonButton
             icon={<ArrowSync20Regular />}
             label="Aralığa Dönüştür"

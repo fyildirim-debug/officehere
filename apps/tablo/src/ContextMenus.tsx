@@ -9,7 +9,11 @@ import {
   Filter20Regular,
   Link20Regular,
   NoteAdd20Regular,
+  TableDeleteColumn20Regular,
+  TableDeleteRow20Regular,
   TableEdit20Regular,
+  TableInsertColumn20Regular,
+  TableInsertRow20Regular,
 } from "@fluentui/react-icons";
 import { ColorPalette, Menu, MenuHeader, MenuItem, MenuSeparator } from "@officehere/ui";
 import { paletteOf } from "./model/theme";
@@ -18,10 +22,14 @@ import * as E from "./actions/edit";
 import * as D from "./actions/data";
 import { displayText } from "./model/display";
 import { deleteObject } from "./charts/FloatingLayer";
-import { copyObject, hasObjectClip, pasteObject } from "./actions/objectClip";
+import { copyObject, hasObjectClip, pasteObject, startShapeEdit } from "./actions/objectClip";
 import { reorderObject } from "./actions/objects";
 import { requestDeleteSheet } from "./dialogs/MiscDialogs";
 import { openLink } from "./grid/Grid";
+import type { TableDef } from "./model/types";
+import { insertPageBreak, resetPageBreaks } from "./grid/pageBreakDrag";
+import { setPage } from "./dialogs/PageSetupDialog";
+import { deleteTableCols, deleteTableRows, insertTableCols, insertTableRows, selectTablePart, tableSpan } from "./actions/tableEdit";
 
 function copy(ctl: Controller, cut: boolean) {
   const d = E.copySelection(ctl, cut);
@@ -42,20 +50,76 @@ function PasteItems({ ctl }: { ctl: Controller }) {
   );
 }
 
+/** Tablo hücresinde: Ekle / Sil / Seç alt menüleri ve Tablo komutları. */
+function TableItems({ ctl, table }: { ctl: Controller; table: TableDef }) {
+  const span = tableSpan(ctl, table);
+  const lastDataRow = table.ref.r2 - (table.totalRow ? 1 : 0);
+  return (
+    <>
+      <MenuItem
+        label="Ekle"
+        submenu={
+          <Menu width={230}>
+            <MenuItem icon={<TableInsertColumn20Regular />} label="Tablo Sütunları Sola" onClick={() => insertTableCols(ctl, table)} />
+            {span.c2 === table.ref.c2 && <MenuItem label="Tablo Sütunları Sağa" onClick={() => insertTableCols(ctl, table, true)} />}
+            <MenuItem icon={<TableInsertRow20Regular />} label="Tablo Satırları Yukarı" onClick={() => insertTableRows(ctl, table)} />
+            {span.r2 === lastDataRow && <MenuItem label="Tablo Satırları Aşağı" onClick={() => insertTableRows(ctl, table, true)} />}
+          </Menu>
+        }
+      />
+      <MenuItem
+        label="Sil"
+        submenu={
+          <Menu width={200}>
+            <MenuItem icon={<TableDeleteColumn20Regular />} label="Tablo Sütunları" onClick={() => deleteTableCols(ctl, table)} />
+            <MenuItem icon={<TableDeleteRow20Regular />} label="Tablo Satırları" onClick={() => deleteTableRows(ctl, table)} />
+          </Menu>
+        }
+      />
+      <MenuItem
+        label="Seç"
+        submenu={
+          <Menu width={210}>
+            <MenuItem label="Tablo Sütunu Verileri" onClick={() => selectTablePart(ctl, table, "colData")} />
+            <MenuItem label="Tüm Tablo Sütunu" onClick={() => selectTablePart(ctl, table, "col")} />
+            <MenuItem label="Tablo Satırı" onClick={() => selectTablePart(ctl, table, "row")} />
+          </Menu>
+        }
+      />
+      <MenuItem
+        label="Tablo"
+        submenu={
+          <Menu width={210}>
+            <MenuItem label="Toplam Satırı" checked={table.totalRow} onClick={() => D.updateTable(ctl, table, { totalRow: !table.totalRow })} />
+            <MenuItem label="Aralığa Dönüştür" onClick={() => ctl.openDialog("confirm", { message: "Tabloyu normal aralığa dönüştürmek istiyor musunuz?", onOk: () => D.convertTableToRange(ctl, table), okLabel: "Evet" })} />
+          </Menu>
+        }
+      />
+    </>
+  );
+}
+
 export function CellMenu({ ctl }: { ctl: Controller }) {
   const { row, col } = ctl.sel.active;
   const sheet = ctl.sheet;
   const note = sheet.noteAt(row, col);
   const link = sheet.linkAt(row, col);
   const hasFilter = D.filtersOf(sheet).length > 0;
+  const table = sheet.tableAt(row, col);
   return (
     <Menu width={230}>
       <MenuItem icon={<Cut20Regular />} label="Kes" shortcut="Ctrl+X" onClick={() => copy(ctl, true)} />
       <MenuItem icon={<Copy20Regular />} label="Kopyala" shortcut="Ctrl+C" onClick={() => copy(ctl, false)} />
       <PasteItems ctl={ctl} />
       <MenuSeparator />
-      <MenuItem label="Ekle..." onClick={() => E.insertCellsSmart(ctl)} />
-      <MenuItem label="Sil..." onClick={() => E.deleteCellsSmart(ctl)} />
+      {table ? (
+        <TableItems ctl={ctl} table={table} />
+      ) : (
+        <>
+          <MenuItem label="Ekle..." onClick={() => E.insertCellsSmart(ctl)} />
+          <MenuItem label="Sil..." onClick={() => E.deleteCellsSmart(ctl)} />
+        </>
+      )}
       <MenuItem label="İçeriği Temizle" onClick={() => E.clearContents(ctl)} />
       <MenuSeparator />
       <MenuItem
@@ -125,7 +189,27 @@ export function CellMenu({ ctl }: { ctl: Controller }) {
       ) : (
         <MenuItem icon={<Link20Regular />} label="Bağlantı" shortcut="Ctrl+K" onClick={() => ctl.openDialog("hyperlink")} />
       )}
+      {sheet.viewMode === "pageBreak" && <PageBreakItems ctl={ctl} />}
     </Menu>
+  );
+}
+
+/** Sayfa Sonu Önizleme görünümünde sağ tık komutları. */
+function PageBreakItems({ ctl }: { ctl: Controller }) {
+  const p = ctl.sheet.page;
+  const { row, col } = ctl.sel.active;
+  const onBreak = (p.rowBreaks ?? []).includes(row) || (p.colBreaks ?? []).includes(col);
+  const any = !!(p.rowBreaks?.length || p.colBreaks?.length);
+  return (
+    <>
+      <MenuSeparator />
+      <MenuItem label="Sayfa Sonu Ekle" onClick={() => insertPageBreak(ctl, false)} />
+      {onBreak && <MenuItem label="Sayfa Sonunu Kaldır" onClick={() => insertPageBreak(ctl, true)} />}
+      <MenuItem label="Tüm Sayfa Sonlarını Sıfırla" disabled={!any} onClick={() => resetPageBreaks(ctl)} />
+      <MenuItem label="Yazdırma Alanını Belirle" onClick={() => setPage(ctl, { printArea: { ...ctl.range } }, "Yazdırma Alanı")} />
+      <MenuItem label="Yazdırma Alanını Sıfırla" disabled={!p.printArea} onClick={() => setPage(ctl, { printArea: undefined }, "Yazdırma Alanı")} />
+      <MenuItem label="Sayfa Yapısı..." onClick={() => ctl.openDialog("pageSetup")} />
+    </>
   );
 }
 
@@ -160,12 +244,14 @@ export function HeaderMenu({ ctl, axis }: { ctl: Controller; axis: "row" | "col"
 
 export function TabMenu({ ctl, index }: { ctl: Controller; index: number }) {
   const sheet = ctl.wb.sheets[index];
+  // Çalışma kitabı yapısı korunurken yapı komutları devre dışı
+  const locked = !!ctl.wb.protection?.structure;
   return (
     <Menu width={220}>
-      <MenuItem label="Ekle..." onClick={() => ctl.ops.addSheet(index)} />
-      <MenuItem icon={<Delete20Regular />} label="Sil" disabled={ctl.wb.sheets.filter((s) => !s.hidden).length <= 1} onClick={() => requestDeleteSheet(ctl, index)} />
-      <MenuItem label="Yeniden Adlandır" onClick={() => window.dispatchEvent(new CustomEvent("tb-rename-sheet", { detail: index }))} />
-      <MenuItem label="Taşı veya Kopyala..." onClick={() => ctl.openDialog("moveSheet", { index })} />
+      <MenuItem label="Ekle..." disabled={locked} onClick={() => ctl.ops.addSheet(index)} />
+      <MenuItem icon={<Delete20Regular />} label="Sil" disabled={locked || ctl.wb.sheets.filter((s) => !s.hidden).length <= 1} onClick={() => requestDeleteSheet(ctl, index)} />
+      <MenuItem label="Yeniden Adlandır" disabled={locked} onClick={() => window.dispatchEvent(new CustomEvent("tb-rename-sheet", { detail: index }))} />
+      <MenuItem label="Taşı veya Kopyala..." disabled={locked} onClick={() => ctl.openDialog("moveSheet", { index })} />
       <MenuItem label={sheet.protected ? "Sayfa Korumasını Kaldır..." : "Sayfayı Koru..."} onClick={() => ctl.openDialog("protect")} />
       <MenuItem
         label="Sekme Rengi"
@@ -176,8 +262,8 @@ export function TabMenu({ ctl, index }: { ctl: Controller; index: number }) {
         }
       />
       <MenuSeparator />
-      <MenuItem label="Gizle" disabled={ctl.wb.sheets.filter((s) => !s.hidden).length <= 1} onClick={() => ctl.ops.setSheetHidden(index, true)} />
-      <MenuItem label="Göster..." disabled={!ctl.wb.sheets.some((s) => s.hidden)} onClick={() => ctl.openDialog("unhideSheet")} />
+      <MenuItem label="Gizle" disabled={locked || ctl.wb.sheets.filter((s) => !s.hidden).length <= 1} onClick={() => ctl.ops.setSheetHidden(index, true)} />
+      <MenuItem label="Göster..." disabled={locked || !ctl.wb.sheets.some((s) => s.hidden)} onClick={() => ctl.openDialog("unhideSheet")} />
     </Menu>
   );
 }
@@ -202,7 +288,7 @@ export function ObjectMenu({ ctl, kind, id }: { ctl: Controller; kind: "chart" |
           <MenuSeparator />
         </>
       )}
-      {kind === "shape" && <MenuItem label="Metni Düzenle" onClick={() => ctl.openDialog("shapeText", { id })} />}
+      {kind === "shape" && <MenuItem label="Metni Düzenle" onClick={() => startShapeEdit(ctl, id, "")} />}
       <MenuItem label="Öne Getir" onClick={() => reorderObject(ctl, kind, id, true)} />
       <MenuItem label="Arkaya Gönder" onClick={() => reorderObject(ctl, kind, id, false)} />
       <MenuSeparator />

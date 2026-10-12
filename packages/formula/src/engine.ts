@@ -14,7 +14,7 @@ import { shiftFormula } from "./transform";
 import { Errors, FormulaError, type RefValue, type Scalar, type Value } from "./values";
 import { DependencyIndex, analyzeDeps } from "./depindex";
 import type { TableInfo } from "./structref";
-import { findTable, permuteRowsImpl, renameTableColumnImpl, renameTableImpl, replaceHiddenRowsImpl, setRowsHiddenImpl, setTablesImpl } from "./engine-tables";
+import { findTable, permuteRowsImpl, renameTableColumnImpl, renameTableImpl, replaceHiddenRowsImpl, setRowsHiddenImpl, setTablesImpl, tableRefsToA1Impl } from "./engine-tables";
 import { evaluateImpl, forEachValueImpl, getSpillImpl, noteChangeImpl, recomputeExtentImpl } from "./engine-read";
 import { DeferSignal, normalizeResult, sameScalar } from "./engine-util";
 import { applySpillImpl, clearSpillImpl, exportInputsImpl, importInputsImpl, moveRangeImpl, removeSheetImpl, renameSheetImpl, shiftCellsImpl, structuralChange } from "./engine-structure";
@@ -177,6 +177,13 @@ export class FormulaEngine implements EvalHost {
   /** Tablo yeniden adlandırılınca formüllerdeki yapısal başvuruları günceller. */
   renameTable(oldName: string, newName: string): void {
     renameTableImpl(this, oldName, newName);
+    this.reregisterAll();
+    this.markAllDirty();
+  }
+
+  /** Tablo aralığa dönüştürülürken ona ait yapısal başvuruları A1 başvurusuna çevirir. */
+  tableRefsToA1(name: string): void {
+    tableRefsToA1Impl(this, name);
     this.reregisterAll();
     this.markAllDirty();
   }

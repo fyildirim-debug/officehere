@@ -6,7 +6,7 @@ import * as D from "../actions/data";
 import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import { validationList } from "../controller";
 import { pivotAt, refreshAll, refreshPivot } from "../pivot/pivotOps";
-import { quickChart } from "../actions/objects";
+import { chartOnNewSheet, quickChart } from "../actions/objects";
 import { handleObjectKey } from "../actions/objectClip";
 import { groupSelection, ungroupSelection } from "../actions/outline";
 import { flashFill } from "../actions/whatIf";
@@ -148,6 +148,11 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
         ctl.ops.addSheet(ctl.wb.activeIndex);
         return true;
       }
+      // F11: verinin grafiğini ayrı grafik sayfasında oluştur
+      if (!ctrl && !alt) {
+        chartOnNewSheet(ctl);
+        return true;
+      }
       return false;
     case "F7":
       ctl.openDialog("spelling");
@@ -167,6 +172,15 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
   }
 
   if (ctrl) {
+    // Fiziksel tuşa göre (klavye düzeninden bağımsız): Ctrl+Shift+~ Genel, Ctrl+Shift+@ (2) saat biçimi
+    if (shift && !alt && code === "Backquote") {
+      F.setNumFmt(ctl, "General");
+      return true;
+    }
+    if (shift && !alt && code === "Digit2") {
+      F.setNumFmt(ctl, "h:mm AM/PM");
+      return true;
+    }
     const k = code.startsWith("Key") ? code.slice(3) : code.startsWith("Digit") ? code.slice(5) : key.toUpperCase();
     switch (k) {
       case "A":

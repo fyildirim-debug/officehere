@@ -4,14 +4,16 @@
  * sütun harfleri / satır numaraları, üst/alt bilgi alanları. Hücreler burada
  * seçilip doğrudan düzenlenir (tıkla, yaz, çift tıkla, ok tuşları, kısayollar).
  */
-import { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { PAGE_SIZES } from "@officehere/core";
 import type { Controller } from "../controller";
 import { computePageBreaks, expandHeaderFooter, fitScale, printRange, rangeToHtml } from "../io/print";
 import type { Rect } from "../model/types";
 import { handleEditKey, useFormulaAssist } from "./CellEditor";
 import { handleGridKey } from "./keys";
-import { HEAD_H, HEAD_W, Headings, RULER, Ruler } from "./PageLayoutParts";
+import { HEAD_H, HEAD_W, HfEditor, Headings, RULER, Ruler } from "./PageLayoutParts";
+import { setPage } from "../dialogs/PageSetupDialog";
+import { titledLists } from "../io/printPages";
 
 const MAX_PAGES = 60;
 
@@ -20,8 +22,12 @@ interface PlPage extends Rect {
   num: number;
 }
 
-export function PageLayoutView({ ctl }: { ctl: Controller }) {
+type MenuEvent = { clientX: number; clientY: number; preventDefault: () => void };
+
+export function PageLayoutView({ ctl, onContextMenu }: { ctl: Controller; onContextMenu?: (e: MenuEvent, kind: "cell") => void }) {
   useSyncExternalStore(ctl.subscribe, ctl.getVersion);
+  const drag = useRef<{ row: number; col: number } | null>(null);
+  const [hfEdit, setHfEdit] = useState<{ which: "header" | "footer"; num: number } | null>(null);
   const sheet = ctl.sheet;
   const wb = ctl.wb;
   const page = sheet.page;
@@ -43,7 +49,10 @@ export function PageLayoutView({ ctl }: { ctl: Controller }) {
   }, [ctl.dataVersion, sheet]); // eslint-disable-line react-hooks/exhaustive-deps
   // Sayfaların HTML'i yalnız içerik değişince yeniden üretilir (düzenlerken her tuşta değil)
   const htmls = useMemo(
-    () => pages.map((r) => rangeToHtml(wb, sheet, r, { gridlines: page.printGridlines || sheet.showGridlines, headings: false, cellAttrs: true, objects: true })),
+    () => pages.map((r) => {
+      const t = titledLists(sheet, r);
+      return rangeToHtml(wb, sheet, r, { gridlines: page.printGridlines || sheet.showGridlines, headings: false, cellAttrs: true, objects: !t.rowList && !t.colList, ...t });
+    }),
     [pages, sheet.showGridlines, page.printGridlines], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const p = PAGE_SIZES[page.paper] ?? PAGE_SIZES.A4;
@@ -64,6 +73,13 @@ export function PageLayoutView({ ctl }: { ctl: Controller }) {
     ctl.focusGrid = () => taRef.current?.focus({ preventScroll: true });
     ctl.scrollIntoView = () => {
       lastActive.current = "";
+    };
+    // Hücrenin ekran dikdörtgeni (HTML hücrelerinden)
+    ctl.cellClientRect = (row, col) => {
+      const td = rootRef.current?.querySelector<HTMLElement>(`td[data-r="${row}"][data-c="${col}"]`);
+      if (!td) return null;
+      const b = td.getBoundingClientRect();
+      return { x: b.left, y: b.top, w: b.width, h: b.height };
     };
     if (!document.activeElement || document.activeElement === document.body) taRef.current?.focus({ preventScroll: true });
   }, [ctl]);
@@ -115,8 +131,28 @@ export function PageLayoutView({ ctl }: { ctl: Controller }) {
       const a = ctl.sel.anchor;
       ctl.selectRange({ r1: Math.min(a.row, c.row), c1: Math.min(a.col, c.col), r2: Math.max(a.row, c.row), c2: Math.max(a.col, c.col) }, a);
     } else ctl.selectCell(c.row, c.col, false);
+    // Sürükleyerek aralık seçimi
+    drag.current = ev.shiftKey ? ctl.sel.anchor : c;
     taRef.current?.focus({ preventScroll: true });
   };
+  const onPointerMove = (ev: React.PointerEvent) => {
+    const a = drag.current;
+    if (!a || !(ev.buttons & 1)) return;
+    const c = cellOf(document.elementFromPoint(ev.clientX, ev.clientY) ?? ev.target);
+    if (!c) return;
+    const r = { r1: Math.min(a.row, c.row), c1: Math.min(a.col, c.col), r2: Math.max(a.row, c.row), c2: Math.max(a.col, c.col) };
+    const cur = ctl.range;
+    if (cur.r1 !== r.r1 || cur.c1 !== r.c1 || cur.r2 !== r.r2 || cur.c2 !== r.c2) ctl.selectRange(r, a);
+  };
+  const onContext = (ev: React.MouseEvent) => {
+    const c = cellOf(ev.target);
+    if (!c || !onContextMenu) return;
+    ev.preventDefault();
+    if (ctl.edit) ctl.commitEdit(null);
+    if (!ctl.sel.ranges.some((s) => c.row >= s.r1 && c.row <= s.r2 && c.col >= s.c1 && c.col <= s.c2)) ctl.selectCell(c.row, c.col, false);
+    onContextMenu(ev, "cell");
+  };
+  const margins = (patch: Partial<typeof m>) => setPage(ctl, { margins: { ...m, ...patch } }, "Kenar Boşlukları");
   const onDoubleClick = (ev: React.MouseEvent) => {
     const c = cellOf(ev.target);
     if (!c || ctl.edit) return;
@@ -129,7 +165,7 @@ export function PageLayoutView({ ctl }: { ctl: Controller }) {
   };
 
   return (
-    <div ref={rootRef} className="tb-pl oh-scroll" onPointerDown={onPointerDown} onDoubleClick={onDoubleClick}>
+    <div ref={rootRef} className="tb-pl oh-scroll" onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={() => (drag.current = null)} onDoubleClick={onDoubleClick} onContextMenu={onContext}>
       <div className="tb-pl-pages" style={{ gridTemplateColumns: `repeat(${Math.max(1, nCols)}, max-content)` }}>
         {pages.length === 0 && (
           <div className="tb-pl-page" style={{ width: pw * z, height: ph * z }}>
@@ -140,12 +176,12 @@ export function PageLayoutView({ ctl }: { ctl: Controller }) {
           <div key={`${r.r1}:${r.c1}`} className="tb-pl-wrap" style={{ paddingLeft: padL, paddingTop: padT }}>
             {ruler && (
               <div style={{ position: "absolute", left: padL, top: 0 }}>
-                <Ruler length={pw} z={z} start={m.left * 96} end={m.right * 96} />
+                <Ruler length={pw} z={z} start={m.left * 96} end={m.right * 96} onChange={(a, b) => margins({ left: a / 96, right: b / 96 })} />
               </div>
             )}
             {ruler && (
               <div style={{ position: "absolute", left: 0, top: padT }}>
-                <Ruler length={ph} z={z} start={m.top * 96} end={m.bottom * 96} vertical />
+                <Ruler length={ph} z={z} start={m.top * 96} end={m.bottom * 96} vertical onChange={(a, b) => margins({ top: a / 96, bottom: b / 96 })} />
               </div>
             )}
             {heads && (
@@ -159,14 +195,22 @@ export function PageLayoutView({ ctl }: { ctl: Controller }) {
               </div>
             )}
             <div className="tb-pl-page" style={{ width: pw * z, height: ph * z }}>
-              <div className="tb-pl-hf is-top" style={{ top: m.header * 96 * z, fontSize: 11 * z }} onClick={() => ctl.openDialog("pageSetup", { tab: "hf" })}>
-                {hf(page.header, r.num) || <span className="tb-pl-hf-empty">Üst bilgi eklemek için tıklayın</span>}
+              <div className="tb-pl-hf is-top" style={{ top: m.header * 96 * z, fontSize: 11 * z }} onPointerDown={(ev) => ev.stopPropagation()} onClick={() => setHfEdit({ which: "header", num: r.num })}>
+                {hfEdit?.which === "header" && hfEdit.num === r.num ? (
+                  <HfEditor value={page.header ?? ""} onDone={(v) => (setHfEdit(null), v !== null && v !== (page.header ?? "") && setPage(ctl, { header: v || undefined }, "Üst Bilgi"), ctl.focusGrid())} />
+                ) : (
+                  hf(page.header, r.num) || <span className="tb-pl-hf-empty">Üst bilgi eklemek için tıklayın</span>
+                )}
               </div>
               <div className="tb-pl-body" style={{ left: m.left * 96 * z, top: m.top * 96 * z, width: (pw - (m.left + m.right) * 96) * z, height: (ph - (m.top + m.bottom) * 96) * z }}>
                 <div style={{ zoom: k }} dangerouslySetInnerHTML={{ __html: htmls[i] }} />
               </div>
-              <div className="tb-pl-hf is-bottom" style={{ bottom: m.footer * 96 * z, fontSize: 11 * z }} onClick={() => ctl.openDialog("pageSetup", { tab: "hf" })}>
-                {hf(page.footer, r.num) || <span className="tb-pl-hf-empty">Alt bilgi eklemek için tıklayın</span>}
+              <div className="tb-pl-hf is-bottom" style={{ bottom: m.footer * 96 * z, fontSize: 11 * z }} onPointerDown={(ev) => ev.stopPropagation()} onClick={() => setHfEdit({ which: "footer", num: r.num })}>
+                {hfEdit?.which === "footer" && hfEdit.num === r.num ? (
+                  <HfEditor value={page.footer ?? ""} onDone={(v) => (setHfEdit(null), v !== null && v !== (page.footer ?? "") && setPage(ctl, { footer: v || undefined }, "Alt Bilgi"), ctl.focusGrid())} />
+                ) : (
+                  hf(page.footer, r.num) || <span className="tb-pl-hf-empty">Alt bilgi eklemek için tıklayın</span>
+                )}
               </div>
               <div className="tb-pl-num">
                 Sayfa {r.num} / {total}

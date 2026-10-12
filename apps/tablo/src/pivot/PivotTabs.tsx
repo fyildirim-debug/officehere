@@ -1,6 +1,7 @@
 /** Bağlamsal PivotTable sekmeleri: PivotTable Analiz ve Tasarım. */
 import { useEffect, useState } from "react";
 import {
+  Filter24Regular,
   ArrowMove24Regular,
   ArrowSync24Regular,
   DataUsageEdit24Regular,
@@ -102,6 +103,9 @@ export function PivotAnalyzeTab({ ctl, def }: { ctl: Controller; def: PivotDef }
           <RibbonButton size="small" icon={<TextSortAscending20Regular />} tip="A'dan Z'ye Sırala" disabled={!af || (af.kind !== "row" && af.kind !== "col")} onClick={() => sortField(false)} />
           <RibbonButton size="small" icon={<TextSortDescending20Regular />} tip="Z'den A'ya Sırala" disabled={!af || (af.kind !== "row" && af.kind !== "col")} onClick={() => sortField(true)} />
         </RibbonStack>
+      </RibbonGroup>
+      <RibbonGroup label="Filtrele" icon={<Filter24Regular />}>
+        <RibbonButton size="large" icon={<Filter24Regular />} label="Dilimleyici Ekle" description="Özet tablo alanlarını görsel olarak filtrelemek için dilimleyici ekler." onClick={() => ctl.openDialog("insertSlicer")} />
       </RibbonGroup>
       <RibbonGroup label="Veri" icon={<ArrowSync24Regular />}>
         <RibbonSplitButton

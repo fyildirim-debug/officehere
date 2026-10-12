@@ -7,39 +7,35 @@
 import JSZip from "jszip";
 import type { WorkbookModel } from "../model/workbook";
 import { sheetPaths } from "./ooxmlZip";
+import { WORKSHEET_ORDER, XmlPart } from "./xmlPart";
+import type { PackageParts } from "./xlsxPost";
 
-/** CT_Worksheet sırasında sayfa sonlarından sonra gelen öğeler. */
-const AFTER = ["<customProperties", "<cellWatches", "<ignoredErrors", "<smartTags", "<drawing ", "<drawing>", "<legacyDrawing", "<picture", "<oleObjects", "<controls", "<webPublishItems", "<tableParts", "<extLst", "</worksheet>"];
-
-function breaksXml(tag: "rowBreaks" | "colBreaks", list: number[], max: number): string {
-  if (!list.length) return "";
+function breaksXml(tag: "rowBreaks" | "colBreaks", list: number[], max: number): string | null {
+  if (!list.length) return null;
   return `<${tag} count="${list.length}" manualBreakCount="${list.length}">${list.map((i) => `<brk id="${i}" max="${max}" man="1"/>`).join("")}</${tag}>`;
+}
+
+/** Sayfa sonlarını parçaya yerleştirir (varsa eskisinin yerine; yeri şema sırası belirler). */
+export function setBreaks(part: XmlPart, rows: number[], cols: number[]): void {
+  part.set("rowBreaks", breaksXml("rowBreaks", rows, 16383));
+  part.set("colBreaks", breaksXml("colBreaks", cols, 1048575));
 }
 
 /** Sayfa sonlarını çalışma sayfası XML'ine ekler (varsa eskisinin yerine). */
 export function injectBreaks(xml: string, rows: number[], cols: number[]): string {
-  let out = xml.replace(/<(rowBreaks|colBreaks)\b[^>]*\/>|<(rowBreaks|colBreaks)\b[\s\S]*?<\/\2>/g, "");
-  const add = breaksXml("rowBreaks", rows, 16383) + breaksXml("colBreaks", cols, 1048575);
-  if (!add) return out;
-  let pos = -1;
-  for (const t of AFTER) {
-    const i = out.indexOf(t);
-    if (i >= 0 && (pos < 0 || i < pos)) pos = i;
-  }
-  if (pos < 0) return out;
-  out = out.slice(0, pos) + add + out.slice(pos);
-  return out;
+  const part = new XmlPart(xml, WORKSHEET_ORDER);
+  setBreaks(part, rows, cols);
+  return part.toString();
 }
 
-export async function writePageBreaksInto(zip: JSZip, wb: WorkbookModel, paths: Map<string, string>): Promise<void> {
+export async function writePageBreaksInto(wb: WorkbookModel, paths: Map<string, string>, parts: PackageParts): Promise<void> {
   for (const sheet of wb.sheets) {
     const rows = sheet.page.rowBreaks ?? [];
     const cols = sheet.page.colBreaks ?? [];
     if (!rows.length && !cols.length) continue;
     const path = paths.get(sheet.name);
-    const f = path ? zip.file(path) : null;
-    if (!path || !f) continue;
-    zip.file(path, injectBreaks(await f.async("string"), rows, cols));
+    const part = path ? await parts.part(path) : null;
+    if (part) setBreaks(part, rows, cols);
   }
 }
 

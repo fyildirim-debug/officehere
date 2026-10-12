@@ -1,5 +1,5 @@
 /** Gözden Geçir sekmesi: Yazım Denetleme (istatistik), Notlar, Koruma. */
-import { TextProofingTools24Regular, ArrowLeft20Regular, ArrowRight20Regular, CommentNote20Regular, Delete20Regular, LockClosed24Regular, LockOpen24Regular, NoteAdd24Regular, NoteEdit24Regular, TextNumberFormat24Regular } from "@fluentui/react-icons";
+import { ShieldLock24Regular, TextProofingTools24Regular, ArrowLeft20Regular, ArrowRight20Regular, CommentNote20Regular, Delete20Regular, LockClosed24Regular, LockOpen24Regular, NoteAdd24Regular, NoteEdit24Regular, TextNumberFormat24Regular } from "@fluentui/react-icons";
 import { RibbonButton, RibbonGroup, RibbonStack } from "@officehere/ui";
 import type { Controller } from "../controller";
 import { gotoNote } from "../actions/view";
@@ -48,6 +48,14 @@ export function ReviewTab({ ctl }: { ctl: Controller }) {
           label={sheet.protected ? "Sayfa Korumasını Kaldır" : "Sayfayı Koru"}
           description="Kilitli hücrelerde istenmeyen değişiklikleri önler."
           onClick={() => ctl.openDialog("protect")}
+        />
+        <RibbonButton
+          size="large"
+          icon={<ShieldLock24Regular />}
+          label={ctl.wb.protection?.structure ? "Çalışma Kitabı Korumasını Kaldır" : "Çalışma Kitabını Koru"}
+          checked={!!ctl.wb.protection?.structure}
+          description="Sayfaların eklenmesi, silinmesi, taşınması, gizlenmesi ve yeniden adlandırılmasını önler."
+          onClick={() => ctl.openDialog("protectWorkbook")}
         />
       </RibbonGroup>
     </>

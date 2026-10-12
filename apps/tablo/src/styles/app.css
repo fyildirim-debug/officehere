@@ -1,0 +1,59 @@
+/* OfficeHere Tablo — uygulama çerçevesi ekleri: ileti çubukları, kurtarma, Geri Al listesi. */
+
+/* İleti çubuğu açık renkli kalır: koyu temada ikincil düğmeler de okunur olsun */
+:root[data-oh-theme="dark"] .oh-messagebar .oh-btn:not(.is-primary),
+:root[data-oh-theme="black"] .oh-messagebar .oh-btn:not(.is-primary) {
+  background: #ffffff;
+  border-color: #8a8886;
+  color: #242424;
+}
+:root[data-oh-theme="dark"] .oh-messagebar .oh-btn:not(.is-primary):hover,
+:root[data-oh-theme="black"] .oh-messagebar .oh-btn:not(.is-primary):hover {
+  background: #f3f2f1;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-oh-theme="system"] .oh-messagebar .oh-btn:not(.is-primary) {
+    background: #ffffff;
+    border-color: #8a8886;
+    color: #242424;
+  }
+}
+.tb-recover-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+.tb-filter-note {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--oh-text-muted);
+}
+
+/* Geri Al / Yinele açılır listesi */
+.oh-qat-btn.tb-qat-drop {
+  width: 14px;
+  margin-left: -2px;
+}
+.tb-undo-list {
+  width: 220px;
+  padding: 0;
+}
+.tb-undo-items {
+  max-height: 300px;
+  overflow-y: auto;
+}
+.tb-undo-item {
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: default;
+  white-space: nowrap;
+}
+.tb-undo-item.is-on {
+  background: var(--oh-selected, #cce4f7);
+}
+.tb-undo-foot {
+  border-top: 1px solid var(--oh-border);
+  padding: 4px 10px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--oh-text-muted);
+}

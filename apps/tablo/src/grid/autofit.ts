@@ -121,6 +121,40 @@ export function widenForNumber(wb: WorkbookModel, sheet: SheetModel, row: number
   return Math.min(1790, need);
 }
 
+/**
+ * Biçim değişince ya da yapıştırınca sığmayan biçimli sayı/tarih hücreleri için
+ * sütunları genişletir (elle ayarlanmış genişliklere dokunulmaz). Sütun → genişlik.
+ */
+export function widenForRanges(wb: WorkbookModel, sheet: SheetModel, rects: Rect[]): [number, number][] {
+  const used = wb.usedRange(sheet);
+  if (!used) return [];
+  const out = new Map<number, number>();
+  let budget = 20000;
+  for (const r of rects) {
+    const r1 = Math.max(r.r1, used.r1);
+    const r2 = Math.min(r.r2, used.r2);
+    const c1 = Math.max(r.c1, used.c1);
+    const c2 = Math.min(r.c2, used.c2, c1 + 200);
+    for (let c = c1; c <= c2; c++) {
+      if (sheet.cols.isManual(c)) continue;
+      for (let row = r1; row <= r2 && budget > 0; row++, budget--) {
+        const w = widenForNumber(wb, sheet, row, c);
+        if (w !== null && w > (out.get(c) ?? sheet.cols.size(c))) out.set(c, w);
+      }
+    }
+  }
+  return [...out];
+}
+
+/** widenForRanges sonucunu tek geri alma adımı olarak uygular (önceki adımla birleştirilir). */
+export function applyWiden(ctl: Controller, rects: Rect[], label: string, mark: number): void {
+  const sheet = ctl.sheet;
+  const ws = widenForRanges(ctl.wb, sheet, rects);
+  if (!ws.length) return;
+  ctl.ops.sheetOp(sheet, "Sütun Genişliği", () => ws.forEach(([c, w]) => sheet.cols.set(c, w, false)));
+  ctl.ops.history.squash(mark, label);
+}
+
 export function autoFitCols(ctl: Controller, cols: number[]): void {
   const sheet = ctl.sheet;
   ctl.ops.sheetOp(sheet, "Sütun Genişliğini Otomatik Sığdır", () => {

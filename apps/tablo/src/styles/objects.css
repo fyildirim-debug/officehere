@@ -1,0 +1,150 @@
+/* OfficeHere Tablo — kayan nesneler: şekil içi metin, çizim katmanı, Seçim Bölmesi, grafik öğesi seçimi, dilimleyiciler. */
+
+/* Şekil içinde yerinde metin düzenleme */
+.tb-shape-edit {
+  position: absolute;
+  inset: 6px;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+  resize: none;
+  border: 0;
+  outline: 1px dashed rgba(255, 255, 255, 0.8);
+  background: transparent;
+  color: #fff;
+  font: 12px/1.3 var(--oh-font, sans-serif);
+  text-align: center;
+  padding: 4px;
+  z-index: 3;
+}
+.tb-float.is-shape .tb-shape-edit:focus {
+  outline-color: #fff;
+}
+.tb-shape.is-textbox .tb-shape-text {
+  color: #000;
+  place-items: start;
+  text-align: left;
+  white-space: pre-wrap;
+}
+.tb-float.is-shape:has(.tb-shape.is-textbox) .tb-shape-edit,
+.tb-shape-edit.is-dark {
+  color: #000;
+  text-align: left;
+  outline-color: #7f7f7f;
+}
+.tb-draw-overlay {
+  position: absolute;
+  z-index: 20;
+  cursor: crosshair;
+}
+.tb-draw-box {
+  position: absolute;
+  border: 1px solid #7f7f7f;
+  background: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+
+.tb-sel-order {
+  display: inline-flex;
+  margin-left: auto;
+  gap: 2px;
+}
+.tb-sel-rename {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 1px 3px;
+}
+.tb-fmt-elsel {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--oh-border);
+}
+.tb-fmt-elsel select {
+  width: 100%;
+}
+
+/* Dilimleyici */
+.tb-slicer {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #c8c8c8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  color: #262626;
+  outline: none;
+  pointer-events: auto;
+  overflow: hidden;
+}
+.tb-slicer.is-selected {
+  border-color: #217346;
+  box-shadow: 0 0 0 1px #217346;
+}
+.tb-slicer-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 8px;
+  border-bottom: 1px solid #e1e1e1;
+  cursor: move;
+  user-select: none;
+}
+.tb-slicer-title {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tb-slicer-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.tb-slicer-btn:hover:not(:disabled),
+.tb-slicer-btn.is-on {
+  background: #e1dfdd;
+}
+.tb-slicer-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tb-slicer-items {
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 6px;
+  overflow-y: auto;
+}
+.tb-slicer-item {
+  min-height: 22px;
+  padding: 2px 6px;
+  border: 1px solid #d9d9d9;
+  border-radius: 2px;
+  background: #fff;
+  color: #262626;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.tb-slicer-item.is-selected {
+  background: #dce6f1;
+  border-color: #9cb6d3;
+}
+.tb-slicer-item:hover {
+  border-color: #217346;
+}
+.tb-slicer-resize {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+}

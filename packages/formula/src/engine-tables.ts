@@ -1,8 +1,8 @@
 /** Hesap motoru yardımcıları: tablo kaydı (yapısal başvurular) ve satır permütasyonu (sıralama). */
 import type { FormulaEngine } from "./engine";
-import { SHEET_STRIDE, cellKey, keyCol, keyRow, type CellRecord } from "./engine-types";
+import { SHEET_STRIDE, cellKey, keyCol, keyRow, safeParse, type CellRecord } from "./engine-types";
 import type { TableInfo } from "./structref";
-import { renameTableColumnInFormula, renameTableInFormula, shiftAst, shiftFormula } from "./transform";
+import { renameTableColumnInFormula, renameTableInFormula, shiftAst, shiftFormula, structRefsToA1 } from "./transform";
 
 /** Formüllerin metnini dönüştürür (değişenler yeniden kaydedilir). */
 export function rewriteStructRefs(e: FormulaEngine, fn: (text: string) => string): void {
@@ -37,6 +37,29 @@ export function setTablesImpl(e: FormulaEngine, list: TableInfo[]): boolean {
   e.tablesSig = sig;
   e.tables = list.map((t) => ({ ...t, columns: [...t.columns] }));
   return true;
+}
+
+/** Tablo aralığa dönüştürülürken ona ait yapısal başvurular A1 başvurusuna çevrilir (hücreler ve tanımlı adlar). */
+export function tableRefsToA1Impl(e: FormulaEngine, name: string): void {
+  const u = name.toLocaleUpperCase("tr-TR");
+  const t = e.tables.find((x) => x.name.toLocaleUpperCase("tr-TR") === u);
+  if (!t) return;
+  const nameOf = (id: number) => e.getSheetName(id);
+  for (const id of e.order) {
+    const sh = e.sheets.get(id)!;
+    for (const [k, rec] of [...sh.cells]) {
+      if (!rec.formula || !rec.formula.text.includes("[")) continue;
+      const text = structRefsToA1(rec.formula.text, t, { sheet: id, row: keyRow(k), col: keyCol(k) }, nameOf);
+      if (text !== rec.formula.text) e.setFormulaInternal(id, keyRow(k), keyCol(k), text);
+    }
+  }
+  for (const n of e.names.values()) {
+    const text = structRefsToA1(n.text, t, null, nameOf);
+    if (text !== n.text) {
+      n.text = text;
+      n.ast = safeParse(text);
+    }
+  }
 }
 
 export function renameTableColumnImpl(e: FormulaEngine, table: string, oldCol: string, newCol: string): void {

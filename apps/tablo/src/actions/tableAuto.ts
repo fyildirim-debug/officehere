@@ -6,7 +6,7 @@
  * - Yeni satırda hesaplanmış sütun formülleri sürdürülür.
  * - Başlık hücresi değişince sütun adı (ve yapısal başvurular) güncellenir.
  */
-import { qualifyStructRefs, shiftFormula } from "@officehere/formula";
+import { cellKey, qualifyStructRefs, shiftFormula } from "@officehere/formula";
 import type { Controller } from "../controller";
 import { displayText } from "../model/display";
 import type { TableDef } from "../model/types";
@@ -30,6 +30,16 @@ function calculatedFormula(ctl: Controller, sheet: SheetModel, t: TableDef, col:
     if (!prev || shiftFormula(prev, 1, 0) !== f) return null;
   }
   return f;
+}
+
+/**
+ * Tablo bir satır büyüyünce son veri satırına uygulanmış veri doğrulama ve
+ * koşullu biçim aralıkları yeni satırı da kapsar (Excel'deki gibi).
+ */
+export function growRulesDown(sheet: SheetModel, t: TableDef, last: number, newRow: number): void {
+  const grow = (r: { r1: number; c1: number; r2: number; c2: number }) => (r.r2 === last && r.r1 >= t.ref.r1 && r.c1 >= t.ref.c1 && r.c2 <= t.ref.c2 ? { ...r, r2: Math.max(r.r2, newRow) } : r);
+  for (const v of sheet.validations) v.ranges = v.ranges.map(grow);
+  for (const c of sheet.condFormats) c.ranges = c.ranges.map(grow);
 }
 
 /** Yeni bir başlık adı: boşsa "SütunN", aynı ad varsa sonuna sayı eklenir. */
@@ -92,6 +102,7 @@ export function afterTableEntry(ctl: Controller, sheet: SheetModel, row: number,
         const last = cur.ref.r2;
         cur.ref = { ...cur.ref, r2: row };
         syncFilter(cur);
+        growRulesDown(sheet, cur, last, row);
         qualify(cur.name);
         // Hesaplanmış sütunlar yeni satırda sürer
         for (let c = cur.ref.c1; c <= cur.ref.c2; c++) {
@@ -139,4 +150,55 @@ export function afterTableEntry(ctl: Controller, sheet: SheetModel, row: number,
     }
   }
   return changed;
+}
+
+/**
+ * Tablo içinde Tab / Shift+Tab: son sütundan sonraki satırın ilk sütununa
+ * (ya da ilk sütundan önceki satırın son sütununa) geçilir; son veri
+ * satırının son hücresinde Tab tabloya yeni satır ekler (toplam satırı
+ * aşağı kayar, hesaplanmış sütun formülleri yeni satıra sürer).
+ */
+export function tableTab(ctl: Controller, back: boolean): boolean {
+  const { sheet, wb } = ctl;
+  const r0 = ctl.range;
+  if (ctl.sel.ranges.length !== 1 || r0.r1 !== r0.r2 || r0.c1 !== r0.c2) return false;
+  const { row, col } = ctl.sel.active;
+  const t = sheet.tableAt(row, col);
+  if (!t) return false;
+  const [d1, d2] = dataRows(t);
+  if (t.totalRow && row === t.ref.r2) return false;
+  if (back) {
+    if (col !== t.ref.c1 || row <= t.ref.r1) return false;
+    ctl.selectCell(row - 1, t.ref.c2);
+    return true;
+  }
+  if (col !== t.ref.c2) return false;
+  if (row < d2) {
+    ctl.selectCell(row + 1, t.ref.c1);
+    return true;
+  }
+  if (row !== d2 || d2 < d1 - 1) return false;
+  const newRow = d2 + 1;
+  // Yeni satırın yeri dolu ya da toplam satırıysa tablonun sütunları bir satır aşağı kayar
+  let occupied = t.totalRow;
+  for (let c = t.ref.c1; c <= t.ref.c2 && !occupied; c++) if (wb.engine.hasInput(sheet.id, newRow, c)) occupied = true;
+  const blocked = sheet.tables.some((o) => o.id !== t.id && o.ref.r1 <= newRow && newRow <= o.ref.r2 && o.ref.c1 <= t.ref.c2 && t.ref.c1 <= o.ref.c2) || sheet.mergesIn({ r1: newRow, c1: t.ref.c1, r2: newRow, c2: t.ref.c2 }).length > 0;
+  if (blocked) return false;
+  ctl.ops.snapshotOp("Tablo Satırı Ekle", () => {
+    const cur = sheet.tables.find((x) => x.id === t.id)!;
+    if (occupied) ctl.ops.shiftCellsRaw(sheet, { r1: newRow, c1: cur.ref.c1, r2: newRow, c2: cur.ref.c2 }, "down");
+    const last = d2;
+    cur.ref = { ...cur.ref, r2: cur.ref.r2 + 1 };
+    syncFilter(cur);
+    growRulesDown(sheet, cur, last, newRow);
+    for (let c = cur.ref.c1; c <= cur.ref.c2; c++) {
+      const f = last >= d1 ? calculatedFormula(ctl, sheet, { ...cur, ref: { ...cur.ref, r2: last + (cur.totalRow ? 1 : 0) } }, c, last) : null;
+      if (f) wb.setInputRaw(sheet, newRow, c, { formula: shiftFormula(f, 1, 0) });
+    }
+    // Biçim (sayı biçimi vb.) üstteki satırdan devralınır
+    if (last >= d1) for (let c = cur.ref.c1; c <= cur.ref.c2; c++) wb.setStyleRaw(sheet, newRow, c, sheet.styles.get(cellKey(last, c)));
+  });
+  wb.syncTables();
+  ctl.selectCell(newRow, t.ref.c1);
+  return true;
 }

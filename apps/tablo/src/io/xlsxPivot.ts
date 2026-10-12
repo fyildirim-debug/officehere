@@ -7,6 +7,7 @@
  * bilinmeyen uygulamaların yok saydığı bir extLst ögesinde de saklanır.
  */
 import JSZip from "jszip";
+import type { PackageParts } from "./xlsxPost";
 import { formatRange, isError, parseRangeAddress, type Scalar } from "@officehere/formula";
 import type { PivotDef, PivotFn } from "../model/types";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
@@ -176,11 +177,10 @@ function captionOf(fn: PivotFn): string {
 }
 
 /** PivotTable parçalarını pakete ekler (postProcess içinden). */
-export async function writePivotsInto(zip: JSZip, wb: WorkbookModel, paths: Map<string, string>): Promise<void> {
+export async function writePivotsInto(zip: JSZip, wb: WorkbookModel, paths: Map<string, string>, parts: PackageParts): Promise<void> {
   const all = wb.sheets.flatMap((s) => s.pivots.filter((p) => p.output && p.rows.length + p.cols.length + p.values.length > 0).map((p) => ({ s, p })));
   if (!all.length) return;
   let ct = await zip.file("[Content_Types].xml")!.async("string");
-  let wbXml = await zip.file("xl/workbook.xml")!.async("string");
   let wbRels = await zip.file("xl/_rels/workbook.xml.rels")!.async("string");
   const caches: string[] = [];
   let n = 0;
@@ -211,12 +211,11 @@ export async function writePivotsInto(zip: JSZip, wb: WorkbookModel, paths: Map<
     zip.file(sheetRelsPath, sheetRels);
   }
   if (!caches.length) return;
-  const tag = `<pivotCaches>${caches.join("")}</pivotCaches>`;
-  const after = ["<smartTagPr", "<smartTagTypes", "<webPublishing", "<fileRecoveryPr", "<webPublishObjects", "<extLst", "</workbook>"];
-  const pos = after.map((b) => wbXml.indexOf(b)).filter((i) => i >= 0).sort((a, b) => a - b)[0];
-  wbXml = wbXml.slice(0, pos) + tag + wbXml.slice(pos);
-  if (!/xmlns:r=/.test(wbXml.slice(0, wbXml.indexOf(">", wbXml.indexOf("<workbook"))))) wbXml = wbXml.replace("<workbook", `<workbook xmlns:r="${NS_R}"`);
-  zip.file("xl/workbook.xml", wbXml);
+  const wbPart = await parts.workbook();
+  if (wbPart) {
+    wbPart.set("pivotCaches", `<pivotCaches>${caches.join("")}</pivotCaches>`);
+    wbPart.ensureNamespace("r", NS_R);
+  }
   zip.file("xl/_rels/workbook.xml.rels", wbRels);
   zip.file("[Content_Types].xml", ct);
 }

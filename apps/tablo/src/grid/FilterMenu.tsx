@@ -7,6 +7,9 @@ import * as D from "../actions/data";
 import { displayText } from "../model/display";
 import type { FilterCriteria } from "../model/types";
 
+/** Listede en çok bu kadar öğe gösterilir (Excel gibi; büyük sütunlarda menü hızlı açılır). */
+const MAX_ITEMS = 10000;
+
 export function FilterMenu({ ctl, row, col, x, y, onClose }: { ctl: Controller; row: number; col: number; x: number; y: number; onClose: () => void }) {
   const sheet = ctl.sheet;
   const f = D.filterAt(sheet, row, col);
@@ -100,7 +103,7 @@ export function FilterMenu({ ctl, row, col, x, y, onClose }: { ctl: Controller; 
             />
             {q ? "(Tüm Arama Sonuçlarını Seç)" : "(Tümünü Seç)"}
           </label>
-          {shown.map((v) => (
+          {shown.slice(0, MAX_ITEMS).map((v) => (
             <label key={v}>
               <input
                 type="checkbox"
@@ -131,6 +134,7 @@ export function FilterMenu({ ctl, row, col, x, y, onClose }: { ctl: Controller; 
             </label>
           )}
         </div>
+        {shown.length > MAX_ITEMS && <div className="tb-filter-note">Tüm öğeler gösterilmiyor ({MAX_ITEMS.toLocaleString("tr-TR")} / {shown.length.toLocaleString("tr-TR")}). Aramayla daraltın.</div>}
         <div className="tb-filter-footer">
           <DialogButton primary onClick={apply}>
             Tamam

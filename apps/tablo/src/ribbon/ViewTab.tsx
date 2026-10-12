@@ -1,9 +1,10 @@
 /** Görünüm sekmesi: Çalışma Kitabı Görünümleri, Göster, Yakınlaştır, Pencere. */
-import { DocumentPageBreak24Regular, Grid20Regular, PageFit24Regular, ZoomFit24Regular, ZoomIn24Regular, TableFreezeColumnAndRow20Regular, TableFreezeRow20Regular, TableFreezeColumn20Regular, TableFreezeColumnAndRowDismiss20Regular, Window24Regular, Eye24Regular } from "@fluentui/react-icons";
+import { DocumentPageBreak24Regular, Grid20Regular, PageFit24Regular, ZoomFit24Regular, ZoomIn24Regular, TableFreezeColumnAndRow20Regular, TableFreezeRow20Regular, TableFreezeColumn20Regular, TableFreezeColumnAndRowDismiss20Regular, Window24Regular, WindowNew24Regular, Eye24Regular } from "@fluentui/react-icons";
 import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonStack } from "@officehere/ui";
 import type { Controller } from "../controller";
 import { freeze, isFrozen, setViewMode, setZoom, zoomToSelection } from "../actions/view";
 import { FreezeGlyph } from "./glyphs";
+import { openNewWindow } from "../app/windowSync";
 
 export function ViewTab({ ctl }: { ctl: Controller }) {
   const sheet = ctl.sheet;
@@ -35,6 +36,7 @@ export function ViewTab({ ctl }: { ctl: Controller }) {
         <RibbonButton size="large" icon={<ZoomFit24Regular />} label="Seçime Yakınlaştır" description="Seçili hücre aralığı pencereyi dolduracak şekilde yakınlaştırır." onClick={() => zoomToSelection(ctl)} />
       </RibbonGroup>
       <RibbonGroup label="Pencere" icon={<TableFreezeColumnAndRow20Regular />}>
+        <RibbonButton size="large" icon={<WindowNew24Regular />} label="Yeni Pencere" description="Çalışma kitabınızı ikinci bir pencerede açar; iki penceredeki değişiklikler eşzamanlı yansır." onClick={() => openNewWindow(ctl)} />
         <RibbonMenuButton
           size="large"
           icon={<FreezeGlyph />}

@@ -5,6 +5,7 @@ import type { Controller } from "../controller";
 import { buildClipboard, clipIdFromHtml, getInternalClipboard, pastePayload, pasteText, type PasteOptions } from "../model/clipboard";
 import { MAX_COLS, MAX_ROWS, isFullCols, isFullRows, rect, rectCols, rectRows } from "../model/rect";
 import { currentRegion, guessSumRange } from "../model/selection";
+import { applyWiden } from "../grid/autofit";
 
 /* ------------------------------ Pano ------------------------------ */
 
@@ -42,6 +43,7 @@ export function pasteData(ctl: Controller, text: string, html: string | undefine
   const id = html ? clipIdFromHtml(html) : null;
   const useInternal = internal && ((id && id === internal.id) || (!text && !html) || (!id && !html && text.replace(/\r\n$/, "") === internalTsv(internal)));
   const target = ctl.range;
+  const mark = ctl.ops.history.mark();
   let dst = null;
   if (useInternal) {
     const cut = !!ctl.clip?.cut;
@@ -51,6 +53,8 @@ export function pasteData(ctl: Controller, text: string, html: string | undefine
     dst = pasteText(ctl.ops, ctl.sheet, target, text, html);
   }
   if (dst) {
+    // Yapıştırılan biçimli sayı/tarih sığmıyorsa sütun genişler
+    applyWiden(ctl, [dst], "Yapıştır", mark);
     ctl.selectRange(dst, ctl.sel.active.row >= dst.r1 && ctl.sel.active.row <= dst.r2 ? ctl.sel.active : undefined);
   }
   if (!ctl.clip) ctl.status = "";
@@ -90,7 +94,13 @@ export async function pasteFromButton(ctl: Controller, opts?: PasteOptions): Pro
 
 export function clearContents(ctl: Controller): void {
   if (!ctl.guardSelection()) return;
-  ctl.ops.clear(ctl.sheet, ctl.sel.ranges, "contents");
+  const sheet = ctl.sheet;
+  // Sonuç aralığının tamamı temizlenen veri tabloları kaldırılır
+  const gone = sheet.dataTables.filter((d) => ctl.sel.ranges.some((r) => r.r1 <= d.ref.r1 && r.c1 <= d.ref.c1 && r.r2 >= d.ref.r2 && r.c2 >= d.ref.c2));
+  const mark = ctl.ops.history.mark();
+  if (gone.length) ctl.ops.sheetOp(sheet, "İçeriği Temizle", () => (sheet.dataTables = sheet.dataTables.filter((d) => !gone.includes(d))));
+  ctl.ops.clear(sheet, ctl.sel.ranges, "contents");
+  if (gone.length) ctl.ops.history.squash(mark, "İçeriği Temizle");
   ctl.recordRepeat("İçeriği Temizle", () => clearContents(ctl));
 }
 

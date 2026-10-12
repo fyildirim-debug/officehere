@@ -1,5 +1,6 @@
 /** Ekle sekmesi: Tablolar, Çizimler, Grafikler, Mini Grafikler, Bağlantılar, Metin, Simgeler. */
 import {
+  Filter24Regular,
   DataBarVertical24Regular,
   DataLine24Regular,
   DataPie24Regular,
@@ -91,6 +92,9 @@ export function InsertTab({ ctl }: { ctl: Controller }) {
         <RibbonButton size="large" icon={<SparkGlyph kind="line" />} label="Çizgi" description="Tek hücreye çizgi mini grafik ekler." onClick={() => ctl.openDialog("sparkline", { type: "line" })} />
         <RibbonButton size="large" icon={<SparkGlyph kind="column" />} label="Sütun" description="Tek hücreye sütun mini grafik ekler." onClick={() => ctl.openDialog("sparkline", { type: "column" })} />
         <RibbonButton size="large" icon={<SparkGlyph kind="winLoss" />} label="Kazanç/Kayıp" description="Tek hücreye kazanç/kayıp mini grafiği ekler." onClick={() => ctl.openDialog("sparkline", { type: "winLoss" })} />
+      </RibbonGroup>
+      <RibbonGroup label="Filtreler" icon={<Filter24Regular />}>
+        <RibbonButton size="large" icon={<Filter24Regular />} label="Dilimleyici" description="Tablo ya da özet tablo verilerini görsel olarak filtrelemek için düğmeli filtre ekler." onClick={() => ctl.openDialog("insertSlicer")} />
       </RibbonGroup>
       <RibbonGroup label="Bağlantılar" icon={<Link24Regular />}>
         <RibbonButton size="large" icon={<Link24Regular />} label="Bağlantı" shortcut="Ctrl+K" description="Web sayfasına ya da bu belgedeki bir yere bağlantı ekler." onClick={() => ctl.openDialog("hyperlink")} />

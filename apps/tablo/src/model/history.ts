@@ -87,6 +87,11 @@ export class UndoManager {
     return this.past.slice(-n).reverse().map((e) => e.label);
   }
 
+  /** Yinelenebilir son girdiler (Yinele açılır menüsü). */
+  recentRedo(n = 10): string[] {
+    return this.future.slice(-n).reverse().map((e) => e.label);
+  }
+
   clear(): void {
     this.past = [];
     this.future = [];
