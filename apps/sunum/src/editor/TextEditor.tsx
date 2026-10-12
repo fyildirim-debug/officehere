@@ -66,6 +66,10 @@ export interface TextEditorProps {
   onCopyRich: (paras: Paragraph[]) => void;
   getRichClipboard: () => Paragraph[] | null;
   spellcheck: boolean;
+  /** Yazım denetimi dili. */
+  lang?: string;
+  /** En yüksek liste düzeyi (yer tutucuda 4 = 5 düzey, diğerlerinde 8). */
+  maxLevel?: number;
 }
 
 const RICH_MIME = "application/x-officehere-sunum-text";
@@ -331,7 +335,8 @@ export function TextEditor(props: TextEditorProps) {
     const changeLevel = (delta: number) => {
       sync();
       const [a, z] = orderSel(selRef.current);
-      const nb = applyParaProps(bodyRef.current, a.p, z.p, (p) => ({ ...p, level: Math.max(0, Math.min(8, p.level + delta)) }));
+      const max = propsRef.current.maxLevel ?? 8;
+      const nb = applyParaProps(bodyRef.current, a.p, z.p, (p) => ({ ...p, level: Math.max(0, Math.min(max, p.level + delta)) }));
       commit(nb, selRef.current);
     };
     const handle: TextEditorHandle = {
@@ -442,7 +447,8 @@ export function TextEditor(props: TextEditorProps) {
       const atStart = a.o === 0 && cmpPos(a, z) === 0;
       const multi = a.p !== z.p;
       if (e.shiftKey || atStart || multi || (a.o === 0 && z.o === paraLen(p))) {
-        const nb = applyParaProps(b, a.p, z.p, (pp) => ({ ...pp, level: Math.max(0, Math.min(8, pp.level + (e.shiftKey ? -1 : 1))) }));
+        const max = props.maxLevel ?? 8;
+        const nb = applyParaProps(b, a.p, z.p, (pp) => ({ ...pp, level: Math.max(0, Math.min(max, pp.level + (e.shiftKey ? -1 : 1))) }));
         commit(nb, sel);
       } else {
         const r = insertText(b, sel, "\t", pendingRef.current ?? propsAt(b, a));
@@ -463,7 +469,7 @@ export function TextEditor(props: TextEditorProps) {
       contentEditable
       suppressContentEditableWarning
       spellCheck={props.spellcheck}
-      lang="tr"
+      lang={props.lang ?? "tr-TR"}
       onKeyDown={onKeyDown}
       onPointerDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}

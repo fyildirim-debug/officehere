@@ -312,25 +312,71 @@ function SpBody({ shape, w, h, ctx, flipH, flipV, deco }: { shape: SpShape; w: n
   );
 }
 
+export type PlaceholderAction = "table" | "chart" | "icons" | "picture" | "video";
+
+const PH_ICON_LABELS: Record<PlaceholderAction, string> = {
+  table: "Tablo Ekle",
+  chart: "Grafik Ekle",
+  icons: "Simge Ekle",
+  picture: "Resimler",
+  video: "Video Ekle",
+};
+
+function PhIconSvg({ it }: { it: PlaceholderAction }) {
+  const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.3 } as const;
+  switch (it) {
+    case "table":
+      return (
+        <svg viewBox="0 0 24 24" width="70%" height="70%">
+          <rect x="3" y="4" width="18" height="16" rx="1.5" {...p} strokeWidth={1.4} />
+          <path d="M3 9h18M3 14.5h18M9 4v16M15 4v16" stroke="currentColor" strokeWidth="1.2" />
+        </svg>
+      );
+    case "chart":
+      return (
+        <svg viewBox="0 0 24 24" width="70%" height="70%">
+          <path d="M3 20.5h18" {...p} />
+          <rect x="5" y="11" width="3.2" height="9" {...p} />
+          <rect x="10.4" y="6" width="3.2" height="14" {...p} />
+          <rect x="15.8" y="13.5" width="3.2" height="6.5" {...p} />
+        </svg>
+      );
+    case "icons":
+      return (
+        <svg viewBox="0 0 24 24" width="70%" height="70%">
+          <circle cx="8" cy="8" r="4" {...p} />
+          <path d="M16 4l4.5 8h-9z" {...p} />
+          <rect x="4" y="14" width="7" height="7" {...p} />
+          <path d="M16.5 14.5c-1.3-1.3-3.5.2-2 2.3L16.5 19l2-2.2c1.5-2.1-.7-3.6-2-2.3z" {...p} />
+        </svg>
+      );
+    case "video":
+      return (
+        <svg viewBox="0 0 24 24" width="70%" height="70%">
+          <rect x="3" y="5" width="13" height="14" rx="1.5" {...p} strokeWidth={1.4} />
+          <path d="M16 10l5-3v10l-5-3z" {...p} />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 24 24" width="70%" height="70%">
+          <rect x="3" y="5" width="18" height="14" rx="1.5" {...p} strokeWidth={1.4} />
+          <circle cx="9" cy="10" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M4 17l5-5 4 4 3-3 4 4" {...p} />
+        </svg>
+      );
+  }
+}
+
 function PlaceholderIcons({ type, w, h }: { type: string; w: number; h: number }) {
-  const size = Math.max(28, Math.min(56, Math.min(w, h) / 5));
-  const items = type === "pic" ? ["picture"] : type === "tbl" ? ["table"] : ["table", "picture"];
+  // İçerik yer tutucusu: iki satırda Tablo, Grafik, Simge / Resim, Video.
+  const items: PlaceholderAction[] = type === "pic" ? ["picture"] : type === "tbl" ? ["table"] : ["table", "chart", "icons", "picture", "video"];
+  const size = Math.max(26, Math.min(items.length > 1 ? 44 : 56, Math.min(w, h) / (items.length > 1 ? 6 : 5)));
   return (
-    <div className="ph-icons" style={{ gap: size / 3 }}>
+    <div className={`ph-icons${items.length > 1 ? " is-grid" : ""}`} style={{ gap: size / 4, gridTemplateColumns: items.length > 1 ? `repeat(3, ${size}px)` : undefined }}>
       {items.map((it) => (
-        <span key={it} role="button" className="ph-icon" data-ph-action={it} title={it === "table" ? "Tablo Ekle" : "Resimler"} aria-label={it === "table" ? "Tablo Ekle" : "Resimler"} style={{ width: size, height: size }}>
-          {it === "table" ? (
-            <svg viewBox="0 0 24 24" width="70%" height="70%">
-              <rect x="3" y="4" width="18" height="16" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
-              <path d="M3 9h18M3 14.5h18M9 4v16M15 4v16" stroke="currentColor" strokeWidth="1.2" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" width="70%" height="70%">
-              <rect x="3" y="5" width="18" height="14" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
-              <circle cx="9" cy="10" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.2" />
-              <path d="M4 17l5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" strokeWidth="1.3" />
-            </svg>
-          )}
+        <span key={it} role="button" className="ph-icon" data-ph-action={it} title={PH_ICON_LABELS[it]} aria-label={PH_ICON_LABELS[it]} style={{ width: size, height: size }}>
+          <PhIconSvg it={it} />
         </span>
       ))}
     </div>
@@ -344,9 +390,17 @@ function SpText({ shape, geo, ctx }: { shape: SpShape; geo: GeomResult; ctx: Ren
   const lvl = useMemo(() => levelResolver(shape, tctx), [shape, ctx.master, ctx.layout]); // eslint-disable-line react-hooks/exhaustive-deps
   const editing = ctx.editing?.shapeId === shape.id && !ctx.editing.cell;
   const prompt = ctx.mode === "edit" && shape.ph ? promptText(shape, tctx) : undefined;
+  // Resim yer tutucusunun istem metni gövde boyutunda ve ortalı (simgenin üstünde) gösterilir.
+  const picPrompt = !!prompt && shape.ph?.type === "pic" && isTextEmpty(body) && !editing;
+  const lvlEff = picPrompt
+    ? (n: number) => {
+        const st = lvl(n);
+        return { para: { ...st.para, align: "ctr" as const, marL: 0, indent: 0 }, run: { ...st.run, size: Math.min(st.run.size ?? 18, 18) } };
+      }
+    : lvl;
   const trc: TextRenderCtx = {
     theme: ctx.theme,
-    lvl,
+    lvl: lvlEff,
     fontScale: bp.autofit === "shrink" ? body.fontScale : undefined,
     lnReduction: bp.autofit === "shrink" ? body.lnSpcReduction : undefined,
     slideNumber: ctx.slideNumber,
@@ -361,9 +415,10 @@ function SpText({ shape, geo, ctx }: { shape: SpShape; geo: GeomResult; ctx: Ren
     top: r.y + ins.t,
     width: Math.max(0, r.w - ins.l - ins.r),
     height: Math.max(0, r.h - ins.t - ins.b),
-    justifyContent: bp.anchor === "ctr" ? "center" : bp.anchor === "b" ? "flex-end" : "flex-start",
+    justifyContent: bp.anchor === "ctr" || picPrompt ? "center" : bp.anchor === "b" ? "flex-end" : "flex-start",
     whiteSpace: bp.wrap ? "pre-wrap" : "pre",
   };
+  if (picPrompt) style.paddingBottom = 72;
   if (vertical) {
     style.writingMode = "vertical-rl";
     if (bp.vert === "vert270") style.transform = "rotate(180deg)";

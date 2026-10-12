@@ -2,7 +2,6 @@
  * Metin biçimi komutları: düzenleme modundaysa seçime, değilse seçili
  * şekillerin (ve tablo hücrelerinin) tüm metnine uygulanır.
  */
-import { FONT_SIZES } from "@officehere/core";
 import { applyParaProps, applyRunPropsAll, changeCase, transformText, endPos, type CaseMode } from "../model/text";
 import { effectiveBodyProps, effectivePara, effectiveRun, levelResolver, type TextContext } from "../model/textStyle";
 import type { BulletDef, LevelStyle, Paragraph, ParaProps, RunProps, Shape, SpShape, TableShape, TextBody } from "../model/types";
@@ -125,7 +124,12 @@ export function changeLevel(a: Actions, delta: number) {
     h.applyPara((p) => p, delta);
     return;
   }
-  applyPara(a, (p) => ({ ...p, level: Math.max(0, Math.min(8, p.level + delta)) }));
+  // Yer tutucularda 5 düzey (0–4), diğer metinlerde 9 düzey.
+  const ctx = ctxOf(a);
+  a.updateShapes((s) => {
+    const max = s.kind === "sp" && s.ph ? 4 : 8;
+    return mapBodies(s, ctx, (b) => applyParaProps(b, 0, b.paragraphs.length - 1, (p) => ({ ...p, level: Math.max(0, Math.min(max, p.level + delta)) })), s.kind === "table" ? a.s.cellSel : null);
+  });
 }
 
 export function setBodyProps(a: Actions, patch: Partial<TextBody>) {
@@ -146,13 +150,17 @@ export function applyCase(a: Actions, mode: CaseMode) {
   a.updateShapes((s) => mapBodies(s, ctx, (b) => transformText(b, { p: 0, o: 0 }, endPos(b), (t, c) => changeCase(t, mode, c.paraStart))));
 }
 
+/** Sunu yazı tipi boyutu listesi (Yazı Tipi Boyutu kutusu ve Ctrl+Shift+> / < adımları). */
+export const SLIDE_FONT_SIZES = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 44, 48, 54, 60, 66, 72, 80, 88, 96];
+const MAX_LISTED = SLIDE_FONT_SIZES[SLIDE_FONT_SIZES.length - 1];
+
 export function stepFontSize(size: number, dir: 1 | -1): number {
   if (dir > 0) {
-    const next = FONT_SIZES.find((v) => v > size + 0.01);
-    return next ?? Math.ceil((size + 10) / 10) * 10;
+    const next = SLIDE_FONT_SIZES.find((v) => v > size + 0.01);
+    return next ?? (Math.floor(size / 10) + 1) * 10;
   }
-  const prev = [...FONT_SIZES].reverse().find((v) => v < size - 0.01);
-  if (size > 72) return Math.max(72, Math.floor((size - 10) / 10) * 10);
+  if (size > MAX_LISTED) return Math.max(MAX_LISTED, Math.floor((size - 1) / 10) * 10);
+  const prev = [...SLIDE_FONT_SIZES].reverse().find((v) => v < size - 0.01);
   return prev ?? Math.max(1, size - 1);
 }
 

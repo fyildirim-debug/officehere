@@ -305,7 +305,10 @@ export interface GroupShape extends ShapeBase {
   children: Shape[];
 }
 
-export type ChartType = "col" | "bar" | "line" | "pie" | "doughnut" | "area";
+export type ChartType = "col" | "bar" | "line" | "pie" | "doughnut" | "area" | "scatter" | "radar";
+
+/** Sütun/çubuk/çizgi/alan gruplandırması (c:grouping). */
+export type ChartGrouping = "clustered" | "stacked" | "percentStacked";
 
 export interface ChartSeries {
   name: string;
@@ -322,6 +325,20 @@ export interface ChartData {
   series: ChartSeries[];
   legend: "b" | "t" | "l" | "r" | "none";
   dataLabels?: boolean;
+  /** Yoksa kümelenmiş (çizgi/alan için standart). */
+  grouping?: ChartGrouping;
+  /** Grafik stili (1–8; c:style). */
+  style?: number;
+  /** Renkleri Değiştir: renk paleti dizini (0 = Renkli Palet 1). */
+  palette?: number;
+  /** Eksen başlıkları. */
+  axisTitles?: { cat?: string; val?: string };
+  /** Birincil ana yatay kılavuz çizgileri (varsayılan açık). */
+  gridMajor?: boolean;
+  gridMinor?: boolean;
+  /** Grafik alanı dolgusu ve anahattı (Biçim sekmesi). */
+  fill?: Color;
+  line?: Color;
 }
 
 export interface ChartShape extends ShapeBase {
@@ -464,6 +481,13 @@ export interface DocProps {
   modified?: string;
 }
 
+/** Özel slayt gösterisi (p:custShow): adlandırılmış slayt listesi. */
+export interface CustomShow {
+  id: string;
+  name: string;
+  slideIds: string[];
+}
+
 export interface Presentation {
   width: number;
   height: number;
@@ -475,4 +499,6 @@ export interface Presentation {
   props: DocProps;
   /** Asıl slayt/düzenler elle düzenlendi (slayt boyutu değişince yeniden üretilmez). */
   masterEdited?: boolean;
+  /** Özel slayt gösterileri. */
+  customShows?: CustomShow[];
 }

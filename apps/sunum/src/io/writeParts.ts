@@ -153,10 +153,25 @@ export function presentationXml(pres: Presentation, masterRid: string, notesRid:
     (sldIds ? `<p:sldIdLst>${sldIds}</p:sldIdLst>` : "") +
     `<p:sldSz cx="${Math.round(pres.width * 9525)}" cy="${Math.round(pres.height * 9525)}"${type}/>` +
     `<p:notesSz cx="${NOTES_W}" cy="${NOTES_H}"/>` +
+    customShowsXml(pres, slideRids) +
     defaultTextStyleXml(pres.master.textStyles, ctx) +
     sectionsXml(pres) +
     "</p:presentation>"
   );
+}
+
+/** Özel slayt gösterileri (p:custShowLst; slaytlar sunu ilişki kimlikleriyle). */
+function customShowsXml(pres: Presentation, slideRids: string[]): string {
+  const list = pres.customShows ?? [];
+  if (!list.length) return "";
+  const rid = new Map(pres.slides.map((s, i) => [s.id, slideRids[i]]));
+  const body = list
+    .map((c, i) => {
+      const sl = c.slideIds.map((id) => rid.get(id)).filter((r): r is string => !!r).map((r) => `<p:sld r:id="${r}"/>`).join("");
+      return `<p:custShow name="${esc(c.name)}" id="${i}"><p:sldLst>${sl}</p:sldLst></p:custShow>`;
+    })
+    .join("");
+  return `<p:custShowLst>${body}</p:custShowLst>`;
 }
 
 /** Dizgeden kararlı GUID ("{8-4-4-4-12}"). */

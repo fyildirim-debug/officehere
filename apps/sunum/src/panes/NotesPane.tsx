@@ -14,7 +14,7 @@ export function NotesPane({ state, actions, height, spellcheck }: { state: AppSt
         value={text}
         placeholder="Notlar eklemek için tıklayın"
         spellCheck={spellcheck}
-        lang="tr"
+        lang={state.proofLang}
         disabled={!slide}
         onFocus={() => actions.store.set({ focus: "notes", editing: null })}
         onChange={(e) => {

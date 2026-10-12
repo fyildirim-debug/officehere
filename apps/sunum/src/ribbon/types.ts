@@ -2,6 +2,7 @@ import type { Actions } from "../state/actions";
 import type { AppState, PaneKind, ViewMode } from "../state/store";
 import type { TextInfo } from "../state/textActions";
 import type { ShapeCatalogItem } from "../render/geometry";
+import type { ShowSettings } from "../show/settings";
 
 export type DialogKind =
   | "font"
@@ -58,6 +59,18 @@ export interface AppCommands {
   renameSection: (id: string) => void;
   /** Asıl görünümde seçili düzeni yeniden adlandırır. */
   renameLayout: () => void;
+  /** Slayt Gösterisi > Zamanlama Provası. */
+  rehearseTimings: () => void;
+  /** Özel slayt gösterisini başlatır. */
+  startCustomShow: (id: string) => void;
+  /** "Özel Gösteriler" iletişim kutusu. */
+  customShows: () => void;
+  /** Bul iletişim kutusu (isteğe bağlı aranacak metinle). */
+  find: (q?: string) => void;
+  /** Slayt boyutunu değiştirir (ölçeklendirme sorusuyla). */
+  setSlideSize: (w: number, h: number) => void;
+  /** Slaytları Yeniden Kullan bölmesi. */
+  reuseSlides: () => void;
 }
 
 export interface RibbonCtx {
@@ -66,4 +79,6 @@ export interface RibbonCtx {
   text: TextInfo | null;
   openDialog: (d: DialogKind) => void;
   cmd: AppCommands;
+  /** Gösteriyi Ayarla değerleri (Slayt Gösterisi sekmesi). */
+  show?: { settings: ShowSettings; set: (s: ShowSettings) => void };
 }

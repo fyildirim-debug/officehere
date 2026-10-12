@@ -86,8 +86,14 @@ export function SlideSizeDialog({ open, onClose, actions: a }: { open: boolean; 
   );
 }
 
-export function FindDialog({ open, onClose, actions: a, replaceMode }: { open: boolean; onClose: () => void; actions: Actions; replaceMode: boolean }) {
+export function FindDialog({ open, onClose, actions: a, replaceMode, initialQuery }: { open: boolean; onClose: () => void; actions: Actions; replaceMode: boolean; initialQuery?: string }) {
   const [q, setQ] = useState("");
+  const [wasOpen, setWasOpen] = useState(false);
+  // Komut aramasından "Bul" ile açılınca aranan metin hazır gelir.
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open && initialQuery) setQ(initialQuery);
+  }
   const [r, setR] = useState("");
   const [matchCase, setMatchCase] = useState(false);
   const [whole, setWhole] = useState(false);
@@ -305,44 +311,6 @@ export function SizePosDialog({ open, onClose, actions: a }: { open: boolean; on
           </fieldset>
         </>
       )}
-    </Dialog>
-  );
-}
-
-export interface ShowSettings {
-  loop: boolean;
-  noAnimations: boolean;
-  presenter: boolean;
-}
-
-export function ShowSetupDialog({ open, onClose, value, onChange }: { open: boolean; onClose: () => void; value: ShowSettings; onChange: (v: ShowSettings) => void }) {
-  const [v, setV] = useState(value);
-  const [lastOpen, setLastOpen] = useState(false);
-  if (open !== lastOpen) {
-    setLastOpen(open);
-    if (open) setV(value);
-  }
-  const ok = () => {
-    onChange(v);
-    onClose();
-  };
-  return (
-    <Dialog open={open} title="Gösteriyi Ayarla" onClose={onClose} onSubmit={ok} width={400} footer={<><DialogButton primary onClick={ok}>Tamam</DialogButton><DialogButton onClick={onClose}>İptal</DialogButton></>}>
-      <fieldset className="oh-fieldset">
-        <legend>Gösteri seçenekleri</legend>
-        <label className="fp-radio" style={{ marginLeft: 0 }}>
-          <input type="checkbox" checked={v.loop} onChange={(e) => setV({ ...v, loop: e.target.checked })} /> 'Esc' tuşuna basılana kadar sürekli döngü
-        </label>
-        <label className="fp-radio" style={{ marginLeft: 0 }}>
-          <input type="checkbox" checked={v.noAnimations} onChange={(e) => setV({ ...v, noAnimations: e.target.checked })} /> Animasyonsuz göster
-        </label>
-      </fieldset>
-      <fieldset className="oh-fieldset">
-        <legend>Birden çok monitör</legend>
-        <label className="fp-radio" style={{ marginLeft: 0 }}>
-          <input type="checkbox" checked={v.presenter} onChange={(e) => setV({ ...v, presenter: e.target.checked })} /> Sunucu Görünümünü Kullan
-        </label>
-      </fieldset>
     </Dialog>
   );
 }

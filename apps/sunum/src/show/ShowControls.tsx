@@ -30,9 +30,9 @@ export interface ShowTools {
   allInk: () => Record<string, ShowStroke[]>;
 }
 
-export function useShowTools(slideId: string | undefined): ShowTools {
+export function useShowTools(slideId: string | undefined, initialPen?: string): ShowTools {
   const [tool, setTool] = useState<ShowTool>("pointer");
-  const [penColor, setPenColor] = useState(SHOW_INK_COLORS[0].hex);
+  const [penColor, setPenColor] = useState(initialPen ?? SHOW_INK_COLORS[0].hex);
   const [hlColor, setHlColor] = useState(SHOW_INK_COLORS[5].hex);
   const color = tool === "highlighter" ? hlColor : penColor;
   const [visible, setVisible] = useState(true);

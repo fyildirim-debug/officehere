@@ -2,18 +2,18 @@
 import { makeChart } from "../model/chart";
 import { uid } from "../model/factory";
 import { updateSlideShapes } from "../model/ops";
-import type { ChartData, ChartShape, ChartType, MediaInfo, PicShape } from "../model/types";
+import type { ChartData, ChartGrouping, ChartShape, ChartType, MediaInfo, PicShape } from "../model/types";
 import { SPEAKER_POSTER } from "../render/MediaBody";
 import type { Actions } from "./actions";
 
 /** Grafik ekler (boş içerik yer tutucusu varsa onun yerine). Eklenen grafiğin kimliğini döndürür. */
-export function insertChart(a: Actions, type: ChartType): string | null {
+export function insertChart(a: Actions, type: ChartType, grouping?: ChartGrouping): string | null {
   if (!a.slide()) a.newSlide();
   const p = a.pres;
   const target = a.placeholderTarget(["obj"]);
   const w = target ? target.w : p.width * 0.6;
   const h = target ? target.h : p.height * 0.6;
-  const ch = makeChart(type, target ? target.x : (p.width - w) / 2, target ? target.y : (p.height - h) / 2, w, h, `Grafik ${a.nextShapeNumber()}`);
+  const ch = makeChart(type, target ? target.x : (p.width - w) / 2, target ? target.y : (p.height - h) / 2, w, h, `Grafik ${a.nextShapeNumber()}`, grouping);
   const i = a.s.slideIdx;
   a.store.commit((pp) => updateSlideShapes(pp, i, (list) => (target ? list.map((s) => (s.id === target.id ? ch : s)) : [...list, ch])), { sel: [ch.id], editing: null });
   return ch.id;

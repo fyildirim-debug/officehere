@@ -9,8 +9,8 @@ const TYPES: Record<string, ChartType> = {
   lineChart: "line",
   line3DChart: "line",
   stockChart: "line",
-  radarChart: "line",
-  scatterChart: "line",
+  radarChart: "radar",
+  scatterChart: "scatter",
   areaChart: "area",
   area3DChart: "area",
   pieChart: "pie",
@@ -75,6 +75,19 @@ export function readChartXml(xml: string, ctx: ReadCtx): ChartData | null {
   // CT_LegendPos varsayılanı "r" (sağ); öğe yoksa da sağ kabul edilir.
   const legend: ChartData["legend"] = !legendEl ? "none" : pos === "t" || pos === "l" || pos === "b" ? pos : "r";
   const dl = descendants(typeEl, "dLbls").some((d) => attr(kid(d, "showVal"), "val") === "1");
+  const g = attr(kid(typeEl, "grouping"), "val");
+  const grouping: ChartData["grouping"] = g === "stacked" || g === "percentStacked" ? g : undefined;
+  // Eksenler: kategori ekseni (dağılımda ilk değer ekseni) ve değer ekseni.
+  const valAxes = kids(plot, "valAx");
+  const catAx = kid(plot, "catAx") ?? kid(plot, "dateAx") ?? (type === "scatter" ? valAxes[0] : undefined);
+  const valAx = type === "scatter" ? valAxes[1] : valAxes[0];
+  const catT = catAx ? richText(kid(kid(catAx, "title"), "tx")) : "";
+  const valT = valAx ? richText(kid(kid(valAx, "title"), "tx")) : "";
+  const axisTitles = catT || valT ? { cat: catT || undefined, val: valT || undefined } : undefined;
+  const styleVal = numAttr(kid(doc, "style"), "val");
+  const space = readFill(kid(doc, "spPr"), ctx);
+  const spLn = kid(kid(doc, "spPr"), "ln");
+  const spLnFill = spLn ? readFill(spLn, ctx) : undefined;
   return {
     type,
     title: titleEl ? richText(kid(titleEl, "tx")) || undefined : undefined,
@@ -83,5 +96,12 @@ export function readChartXml(xml: string, ctx: ReadCtx): ChartData | null {
     series: series.length ? series : [{ name: "Seri 1", values: categories.map(() => null) }],
     legend,
     dataLabels: dl || undefined,
+    grouping,
+    axisTitles,
+    gridMajor: valAx && !kid(valAx, "majorGridlines") ? false : undefined,
+    gridMinor: valAx && kid(valAx, "minorGridlines") ? true : undefined,
+    style: styleVal && styleVal >= 1 && styleVal <= 8 ? styleVal : undefined,
+    fill: space?.type === "solid" ? space.color : undefined,
+    line: spLnFill?.type === "solid" ? spLnFill.color : undefined,
   };
 }

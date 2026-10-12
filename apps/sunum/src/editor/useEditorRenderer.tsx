@@ -21,6 +21,8 @@ export function useEditorRenderer(actions: Actions, getState: () => AppState) {
           ctx={trc}
           initial={{ selectAll: ed.selectAll, replaceWith: ed.replaceWith, point: ed.point, range: ed.range }}
           spellcheck={st.spellcheck}
+          lang={st.proofLang}
+          maxLevel={shape.kind === "sp" && shape.ph ? 4 : 8}
           onChange={(nb, merge) => {
             const i = actions.s.slideIdx;
             actions.store.commit(

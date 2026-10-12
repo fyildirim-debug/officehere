@@ -1,17 +1,24 @@
 /**
- * Slayt gösterisi motoru: tam ekran gösteri, Okuma Görünümü (pencerede) ve
- * Sunucu Görünümü. Geçişler ve animasyon adımları Web Animations API ile
- * oynatılır; gizli slaytlar atlanır.
+ * Slayt gösterisi motoru: tam ekran gösteri, Okuma Görünümü (pencerede),
+ * Sunucu Görünümü (izleyici ayrı pencerede) ve Zamanlama Provası. Geçişler
+ * ve animasyon adımları Web Animations API ile oynatılır; gizli slaytlar ve
+ * ayarlanmış aralık/özel gösteri dışındaki slaytlar atlanır.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Menu, MenuItem, MenuSeparator, useContextMenu } from "@officehere/ui";
 import type { Presentation, Shape, Slide } from "../model/types";
 import { findShape } from "../model/ops";
 import { linkSlideIndex } from "../model/links";
-import { ScaledSlide, SlideView } from "../render/SlideView";
+import { SlideView } from "../render/SlideView";
 import { animationKeyframes, buildSteps, initiallyHidden, transitionPlan, type StepEffect } from "./effects";
 import { InkOverlay, type ShowStroke } from "./ShowInk";
 import { ShowSlideGrid, ShowToolbar, useShowTools } from "./ShowControls";
+import { showOrder, stepInOrder, type ShowRunOptions } from "./settings";
+import { handleShowKey } from "./showKeys";
+import { PresenterLayout } from "./PresenterLayout";
+import { RehearsalBar, useRehearsal, type RehearsalResult } from "./Rehearsal";
+import type { PresenterLink, RemoteCmd, SyncState } from "./showSync";
+import { WindowBar } from "./WindowBar";
 
 export type ShowMode = "full" | "window" | "presenter";
 
@@ -19,16 +26,22 @@ export interface SlideShowProps {
   pres: Presentation;
   startIndex: number;
   mode: ShowMode;
-  /** Gösteri bittiğinde; gösteride çizilen mürekkep (slayt kimliğine göre) ile. */
-  onExit: (lastIndex: number, ink?: Record<string, ShowStroke[]>) => void;
-  loop?: boolean;
-  noAnimations?: boolean;
+  /** Gösteri bittiğinde; gösteride çizilen mürekkep (slayt kimliğine göre) ve prova süreleriyle. */
+  onExit: (lastIndex: number, ink?: Record<string, ShowStroke[]>, rehearsal?: RehearsalResult) => void;
+  /** Gösteriyi Ayarla seçenekleri (döngü, animasyonsuz, aralık, renkler…). */
+  opts?: ShowRunOptions;
   /** Pencere modunda alt çubuk için görünüm değiştirme. */
   onViewChange?: (v: "normal" | "sorter") => void;
   /** Şeritten önizleme: geçişi ya da animasyonları oynatıp kapanır. */
   preview?: "transition" | "animations";
   /** Önizlemenin çizileceği alan (kapsayıcıya göre px); verilmezse tüm kapsayıcı. */
   frame?: { x: number; y: number; w: number; h: number };
+  /** Sunucu tarafı: durumu izleyici penceresine yayınlar. */
+  link?: PresenterLink | null;
+  /** İzleyici tarafı: sunucudan gelen durum izlenir. */
+  follow?: SyncState | null;
+  /** İzleyici tarafı: gezinme komutları sunucuya gönderilir. */
+  onRemote?: (cmd: RemoteCmd) => void;
 }
 
 interface Layer {
@@ -40,25 +53,13 @@ interface Layer {
 
 let layerSeq = 0;
 
-function nextVisible(pres: Presentation, from: number, dir: 1 | -1): number {
-  let i = from + dir;
-  while (i >= 0 && i < pres.slides.length && pres.slides[i].hidden) i += dir;
-  return i;
-}
-
-function formatTime(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const ss = s % 60;
-  return `${h > 0 ? `${h}:` : ""}${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
-}
-
-export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, onViewChange, preview, frame }: SlideShowProps) {
+export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewChange, preview, frame, link, follow, onRemote }: SlideShowProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
   const layerEls = useRef(new Map<string, HTMLDivElement>());
   const running = useRef<globalThis.Animation[]>([]);
+  const noAnimations = !!opts.noAnimations;
+  const order = useMemo(() => opts.order ?? showOrder(pres, { kind: "all" }), [opts.order, pres]);
   const [layers, setLayers] = useState<Layer[]>(() => {
     const idx = Math.max(0, Math.min(pres.slides.length - 1, startIndex));
     // Geçiş önizlemesi önceki slayttan başlar.
@@ -71,10 +72,9 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
   const [screen, setScreen] = useState<"none" | "black" | "white">("none");
   const [area, setArea] = useState({ w: window.innerWidth, h: window.innerHeight });
   const [numBuf, setNumBuf] = useState("");
-  const [startTime] = useState(() => Date.now());
-  const [now, setNow] = useState(() => Date.now());
   const [cursorHidden, setCursorHidden] = useState(false);
-  const [notesZoom, setNotesZoom] = useState(1);
+  const [laser, setLaser] = useState<[number, number] | null>(null);
+  const [audience, setAudience] = useState<"none" | "waiting" | "connected">(link ? (link.connected ? "connected" : "waiting") : "none");
   const ctx = useContextMenu();
   const wasFullscreen = useRef(false);
   const autoTimer = useRef<number | undefined>(undefined);
@@ -83,13 +83,16 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
   const index = current.index;
   const slide: Slide | undefined = pres.slides[index];
   const steps = useMemo(() => (slide && !noAnimations ? buildSteps(slide) : { auto: [], clicks: [] }), [slide, noAnimations]);
-  const tools = useShowTools(slide?.id);
+  const tools = useShowTools(slide?.id, opts.penColor);
+  const rehearsal = useRehearsal(!!opts.rehearse, slide?.id);
   const [grid, setGrid] = useState(false);
-  const exitRef = useRef((i: number) => onExit(i, tools.allInk()));
-  exitRef.current = (i: number) => onExit(i, tools.allInk());
-  const exit = (i: number) => exitRef.current(i);
+  const exitRef = useRef((i: number) => onExit(i, tools.allInk(), opts.rehearse ? rehearsal.result() : undefined));
+  exitRef.current = (i: number) => onExit(i, tools.allInk(), opts.rehearse ? rehearsal.result() : undefined);
+  const exit = (i: number) => (onRemote ? onRemote("end") : exitRef.current(i));
   const stateRef = useRef({ index, step, ended, steps, layers });
   stateRef.current = { index, step, ended, steps, layers };
+  const followRef = useRef(follow);
+  followRef.current = follow;
 
   // Alan boyutu.
   useLayoutEffect(() => {
@@ -121,16 +124,10 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Önizleme odağı almaz (şerit kısayolları çalışmaya devam etsin).
   useEffect(() => {
-    rootRef.current?.focus();
-  }, []);
-
-  // Sunucu görünümü süre sayacı.
-  useEffect(() => {
-    if (mode !== "presenter") return;
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(t);
-  }, [mode]);
+    if (!preview) rootRef.current?.focus();
+  }, [preview]);
 
   // İmleç gizleme.
   useEffect(() => {
@@ -211,12 +208,25 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
     if (!sl) return;
     window.clearTimeout(autoTimer.current);
     const st = noAnimations ? { auto: [], clicks: [] as StepEffect[][] } : buildSteps(sl);
-    if (top.fromEnd) {
-      applyState(top.key, sl, st.clicks.length);
-      setStep(st.clicks.length);
-    } else setStep(0);
+    let startStep = top.fromEnd ? st.clicks.length : 0;
+    // İzleyici: sunucunun adımına getir.
+    const f = followRef.current;
+    if (f && f.index === top.index && f.step !== startStep) startStep = Math.min(f.step, st.clicks.length);
+    if (startStep > 0) applyState(top.key, sl, startStep);
+    setStep(startStep);
+    const layerEl = layerEls.current.get(top.key);
+    // Anlatımsız: kendiliğinden başlayan sesler çalınmaz; sunucu penceresi (izleyici bağlıyken) sessizdir.
+    if (layerEl && (opts.noNarration || link)) {
+      layerEl.querySelectorAll<HTMLMediaElement>("audio, video").forEach((m) => {
+        if (link) m.muted = true;
+        if (opts.noNarration && m.tagName === "AUDIO") {
+          m.autoplay = false;
+          m.pause();
+        }
+      });
+    }
     const plan = layers.length > 1 ? transitionPlan(sl.transition) : null;
-    const inEl = layerEls.current.get(top.key);
+    const inEl = layerEl;
     const outLayer = layers.length > 1 ? layers[layers.length - 2] : undefined;
     const outEl = outLayer ? layerEls.current.get(outLayer.key) : undefined;
     const dur = Math.max(0.05, sl.transition?.duration ?? 1) * 1000;
@@ -236,12 +246,11 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
         })();
         return;
       }
-      if (!top.fromEnd) {
+      if (startStep === 0) {
         void runEffects(top.key, st.auto, false).then(() => {
           const adv = sl.transition?.advanceAfter;
-          if (adv !== undefined && mode !== "presenter") {
-            autoTimer.current = window.setTimeout(() => advance(true), adv * 1000);
-          }
+          const auto = adv !== undefined && !opts.manual && !opts.rehearse && !followRef.current;
+          if (auto) autoTimer.current = window.setTimeout(() => advance(true), adv * 1000);
         });
       }
     };
@@ -262,21 +271,18 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layers]);
 
-  const goTo = useCallback(
-    (i: number, fromEnd = false, withTransition = true) => {
-      window.clearTimeout(autoTimer.current);
-      finishRunning();
-      setEnded(false);
-      setLayers((ls) => {
-        const top = ls[ls.length - 1];
-        const nl: Layer = { key: `l${++layerSeq}`, index: i, fromEnd };
-        return withTransition ? [top, nl] : [nl];
-      });
-    },
-    [],
-  );
+  const goTo = useCallback((i: number, fromEnd = false, withTransition = true) => {
+    window.clearTimeout(autoTimer.current);
+    finishRunning();
+    setEnded(false);
+    setLayers((ls) => {
+      const top = ls[ls.length - 1];
+      const nl: Layer = { key: `l${++layerSeq}`, index: i, fromEnd };
+      return withTransition ? [top, nl] : [nl];
+    });
+  }, []);
 
-  const advance = useCallback(
+  const advanceLocal = useCallback(
     (auto = false) => {
       const st = stateRef.current;
       if (st.ended) {
@@ -288,16 +294,13 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
       if (st.step < st.steps.clicks.length) {
         const k = st.step;
         setStep(k + 1);
-        void runEffects(top.key, st.steps.clicks[k], false).then(() => {
-          // Son adımdan sonra otomatik ilerleme süresi yeniden başlamaz.
-        });
+        void runEffects(top.key, st.steps.clicks[k], false);
         return;
       }
-      const ni = nextVisible(pres, st.index, 1);
-      if (ni >= pres.slides.length) {
-        if (loop) {
-          const first = nextVisible(pres, -1, 1);
-          if (first < pres.slides.length) goTo(first);
+      const ni = stepInOrder(order, st.index, 1);
+      if (ni === null) {
+        if (opts.loop && order.length) {
+          goTo(order[0]);
           return;
         }
         setEnded(true);
@@ -305,10 +308,10 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
       }
       goTo(ni);
     },
-    [pres, goTo, runEffects, loop],
+    [order, goTo, runEffects, opts.loop],
   );
 
-  const back = useCallback(() => {
+  const backLocal = useCallback(() => {
     const st = stateRef.current;
     window.clearTimeout(autoTimer.current);
     if (st.ended) {
@@ -323,87 +326,98 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
       setStep(st.step - 1);
       return;
     }
-    const pi = nextVisible(pres, st.index, -1);
-    if (pi < 0) return;
+    const pi = stepInOrder(order, st.index, -1);
+    if (pi === null) return;
     goTo(pi, true, false);
-  }, [pres, goTo, applyState]);
+  }, [pres, order, goTo, applyState]);
+
+  // İzleyici penceresinde gezinme sunucuya iletilir.
+  const advance = useCallback(
+    (auto = false) => {
+      if (!onRemote) advanceLocal(auto);
+      else if (!auto) onRemote("next");
+    },
+    [onRemote, advanceLocal],
+  );
+  const back = useCallback(() => {
+    if (onRemote) onRemote("prev");
+    else backLocal();
+  }, [onRemote, backLocal]);
+
+  // Sunucu: izleyiciden gelen komutlar.
+  useEffect(() => {
+    if (!link) return;
+    link.onConnect = () => setAudience("connected");
+    const off = link.onCommand((c) => {
+      if (c === "next") advanceLocal();
+      else if (c === "prev") backLocal();
+      else exitRef.current(stateRef.current.index);
+    });
+    return () => {
+      off();
+      link.onConnect = null;
+    };
+  }, [link, advanceLocal, backLocal]);
+
+  // Sunucu: durum değişince yayınla.
+  useEffect(() => {
+    link?.publish({ index, step, ended, screen, ink: tools.visible ? tools.strokes : [], laser: tools.tool === "laser" ? laser : null, laserColor: opts.laserColor });
+  }, [link, index, step, ended, screen, tools.strokes, tools.visible, tools.tool, laser, opts.laserColor]);
+
+  // İzleyici: sunucunun durumuna uy.
+  useEffect(() => {
+    if (!follow) return;
+    const st = stateRef.current;
+    setScreen(follow.screen);
+    if (follow.index !== st.index) {
+      const forward = stepInOrder(order, st.index, 1) === follow.index;
+      if (follow.step === 0) goTo(follow.index, false, forward);
+      else goTo(follow.index, true, false);
+      if (follow.ended) setEnded(true);
+      return;
+    }
+    if (follow.ended !== st.ended) setEnded(follow.ended);
+    if (follow.step === st.step + 1) advanceLocal();
+    else if (follow.step !== st.step) {
+      const top = st.layers[st.layers.length - 1];
+      const sl = pres.slides[top.index];
+      if (sl) applyState(top.key, sl, follow.step);
+      setStep(follow.step);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [follow?.seq]);
+
+  const gotoIndex = (i: number) => {
+    if (onRemote) return;
+    if (i >= 0 && i < pres.slides.length) goTo(i, false, false);
+  };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    const k = e.key;
     e.stopPropagation();
-    if (!preview && tools.handleKey(e)) return;
-    if (grid && k === "Escape") {
-      setGrid(false);
-      return;
-    }
-    if (/^[0-9]$/.test(k)) {
-      setNumBuf((b) => (b + k).slice(-4));
-      return;
-    }
-    if (k === "Enter" && numBuf) {
-      e.preventDefault();
-      const n = parseInt(numBuf, 10) - 1;
-      setNumBuf("");
-      if (n >= 0 && n < pres.slides.length) goTo(n, false, false);
-      return;
-    }
-    setNumBuf("");
-    if (screen !== "none" && k !== "Escape") {
-      setScreen("none");
-      if (k === "b" || k === "B" || k === "w" || k === "W" || k === "." || k === ",") return;
-    }
-    switch (k) {
-      case "ArrowRight":
-      case "ArrowDown":
-      case " ":
-      case "PageDown":
-      case "Enter":
-      case "n":
-      case "N":
-        e.preventDefault();
-        advance();
-        break;
-      case "ArrowLeft":
-      case "ArrowUp":
-      case "PageUp":
-      case "Backspace":
-      case "p":
-      case "P":
-        e.preventDefault();
-        back();
-        break;
-      case "Home":
-        goTo(nextVisible(pres, -1, 1), false, false);
-        break;
-      case "End":
-        goTo(nextVisible(pres, pres.slides.length, -1), false, false);
-        break;
-      case "b":
-      case "B":
-      case ".":
-        setScreen("black");
-        break;
-      case "w":
-      case "W":
-      case ",":
-        setScreen("white");
-        break;
-      case "Escape":
-      case "-":
-        e.preventDefault();
-        if (screen !== "none") setScreen("none");
-        else exit(index);
-        break;
-      default:
-        break;
-    }
+    if (!preview && !follow && tools.handleKey(e)) return;
+    handleShowKey(e, {
+      advance: () => advance(),
+      back,
+      first: () => order.length && gotoIndex(order[0]),
+      last: () => order.length && gotoIndex(order[order.length - 1]),
+      gotoNumber: (n) => gotoIndex(n - 1),
+      screen,
+      setScreen,
+      exit: () => exit(index),
+      grid,
+      setGrid,
+      numBuf,
+      setNumBuf,
+      kiosk: !!opts.kiosk,
+      preview: !!preview || !!follow,
+    });
   };
 
   /** Gösteride köprüye tıklanınca: dış adres yeni sekmede, sunu içi hedef slayta gidilir. */
-  const followShowLink = (link: string) => {
-    const i = linkSlideIndex(link, pres, index);
+  const followShowLink = (lnk: string) => {
+    const i = linkSlideIndex(lnk, pres, index);
     if (i === null) {
-      window.open(link, "_blank", "noopener,noreferrer");
+      window.open(lnk, "_blank", "noopener,noreferrer");
       return;
     }
     if (i >= 0 && i < pres.slides.length) goTo(i);
@@ -411,10 +425,10 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
 
   const onClick = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    if ((e.target as Element).closest("button, .show-bar, .presenter-side, .show-toolbar, .show-grid, video, audio, [data-media]")) return;
+    if ((e.target as Element).closest("button, .show-bar, .presenter-side, .show-toolbar, .show-grid, .rehearse-bar, video, audio, [data-media]")) return;
     if (tools.tool === "pen" || tools.tool === "highlighter" || tools.tool === "eraser") return;
     const linkEl = (e.target as Element).closest("[data-link]") as HTMLElement | null;
-    if (linkEl?.dataset.link && screen === "none") {
+    if (linkEl?.dataset.link && screen === "none" && !onRemote) {
       followShowLink(linkEl.dataset.link);
       return;
     }
@@ -422,48 +436,53 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
       setScreen("none");
       return;
     }
+    // Bilgi noktasında tıklama ilerletmez.
+    if (opts.kiosk && !ended) return;
     advance();
   };
 
-  const openMenu = (e: React.MouseEvent) => ctx.open(e, mainMenu());
+  const openMenu = (e: React.MouseEvent) => {
+    if (opts.kiosk) return;
+    ctx.open(e, mainMenu());
+  };
 
   const mainMenu = () => (
-      <Menu>
-        <MenuItem label="Sonraki" onClick={() => advance()} />
-        <MenuItem label="Önceki" onClick={() => back()} />
-        <MenuSeparator />
-        <MenuItem
-          label="Slayta Git"
-          submenu={
-            <Menu>
-              {pres.slides.map((s, i) => (
-                <MenuItem key={s.id} label={`${i + 1}. ${slideTitle(s) || "Slayt"}${s.hidden ? " (gizli)" : ""}`} checked={i === index} onClick={() => goTo(i, false, false)} />
-              ))}
-            </Menu>
-          }
-        />
-        {!preview && tools.pointerMenu()}
-        <MenuItem
-          label="Ekran"
-          submenu={
-            <Menu>
-              <MenuItem label="Siyah Ekran" shortcut="B" onClick={() => setScreen("black")} />
-              <MenuItem label="Beyaz Ekran" shortcut="W" onClick={() => setScreen("white")} />
-            </Menu>
-          }
-        />
-        <MenuSeparator />
-        <MenuItem label="Gösteriyi Bitir" shortcut="Esc" onClick={() => exit(index)} />
-      </Menu>
+    <Menu>
+      <MenuItem label="Sonraki" onClick={() => advance()} />
+      <MenuItem label="Önceki" onClick={() => back()} />
+      <MenuSeparator />
+      <MenuItem
+        label="Slayta Git"
+        disabled={!!onRemote}
+        submenu={
+          <Menu>
+            {pres.slides.map((s, i) => (
+              <MenuItem key={s.id} label={`${i + 1}. ${slideTitle(s) || "Slayt"}${s.hidden ? " (gizli)" : ""}`} checked={i === index} onClick={() => gotoIndex(i)} />
+            ))}
+          </Menu>
+        }
+      />
+      {!preview && !follow && <MenuItem label="Tüm Slaytları Gör" shortcut="G" onClick={() => setGrid(true)} />}
+      {!preview && !follow && tools.pointerMenu()}
+      <MenuItem
+        label="Ekran"
+        submenu={
+          <Menu>
+            <MenuItem label="Siyah Ekran" shortcut="B" onClick={() => setScreen("black")} />
+            <MenuItem label="Beyaz Ekran" shortcut="W" onClick={() => setScreen("white")} />
+          </Menu>
+        }
+      />
+      <MenuSeparator />
+      <MenuItem label="Gösteriyi Bitir" shortcut="Esc" onClick={() => exit(index)} />
+    </Menu>
   );
 
-  const hiddenSets = useMemo(() => new Map(layers.map((l) => [l.key, noAnimations ? new Set<string>() : initiallyHidden(pres.slides[l.index] ?? { animations: [] } as unknown as Slide)])), [layers, pres, noAnimations]);
+  const hiddenSets = useMemo(() => new Map(layers.map((l) => [l.key, noAnimations ? new Set<string>() : initiallyHidden(pres.slides[l.index] ?? ({ animations: [] } as unknown as Slide))])), [layers, pres, noAnimations]);
 
+  const remoteInk = follow ? follow.ink : null;
   const stage = (
-    <div
-      className="show-stage"
-      style={{ width: pres.width * scale, height: pres.height * scale, background: layers.length > 1 && transitionPlan(slide?.transition)?.thruBlack ? "#000" : undefined }}
-    >
+    <div className="show-stage" style={{ width: pres.width * scale, height: pres.height * scale, background: layers.length > 1 && transitionPlan(slide?.transition)?.thruBlack ? "#000" : undefined }}>
       <div className="show-scale" style={{ width: pres.width, height: pres.height, transform: `scale(${scale})` }}>
         {layers.map((l) => {
           const sl = pres.slides[l.index];
@@ -482,7 +501,10 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
             </div>
           );
         })}
-        {!preview && <InkOverlay width={pres.width} height={pres.height} tool={tools.tool} color={tools.color} strokes={tools.strokes} visible={tools.visible} onAdd={tools.add} onErase={tools.erase} />}
+        {!preview && !follow && (
+          <InkOverlay width={pres.width} height={pres.height} tool={tools.tool} color={tools.color} strokes={tools.strokes} visible={tools.visible} onAdd={tools.add} onErase={tools.erase} onLaser={link ? setLaser : undefined} laserColor={opts.laserColor} />
+        )}
+        {remoteInk && <InkOverlay width={pres.width} height={pres.height} tool="pointer" color="#000" strokes={remoteInk} visible onAdd={() => undefined} onErase={() => undefined} remoteLaser={follow?.laser ?? null} laserColor={follow?.laserColor} />}
       </div>
       {ended && (
         <div className="show-end" onClick={() => exit(index)}>
@@ -493,73 +515,58 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
     </div>
   );
 
+  const gridEl = grid && (
+    <ShowSlideGrid
+      pres={pres}
+      current={index}
+      onPick={(i) => {
+        setGrid(false);
+        gotoIndex(i);
+      }}
+      onClose={() => setGrid(false)}
+    />
+  );
+
   if (mode === "presenter") {
-    const ni = nextVisible(pres, index, 1);
-    const nextSlide = step < steps.clicks.length ? slide : pres.slides[ni];
+    const ni = stepInOrder(order, index, 1);
+    const nextSlide = step < steps.clicks.length ? slide : ni !== null ? pres.slides[ni] : undefined;
     return (
-      <div ref={rootRef} className="show-root presenter" tabIndex={0} onKeyDown={onKeyDown} onContextMenu={(e) => e.preventDefault()}>
-        <div className="presenter-top">
-          <span className="presenter-timer">{formatTime(now - startTime)}</span>
-          <span>{new Intl.DateTimeFormat("tr-TR", { hour: "2-digit", minute: "2-digit" }).format(now)}</span>
-          <button type="button" className="presenter-btn" onClick={() => exit(index)}>
-            Gösteriyi Bitir
-          </button>
-        </div>
-        <div className="presenter-main">
-          <div className="presenter-current" ref={areaRef} onClick={onClick} onContextMenu={openMenu}>
-            {stage}
-          </div>
-          <div className="presenter-side">
-            <div className="presenter-label">Sonraki slayt</div>
-            {nextSlide ? (
-              <ScaledSlide pres={pres} slide={nextSlide} slideNumber={(nextSlide === slide ? index : ni) + 1} width={340} mode="show" />
-            ) : (
-              <div className="presenter-endbox">Slayt gösterisinin sonu</div>
-            )}
-            <div className="presenter-label">
-              Notlar
-              <span>
-                <button type="button" className="presenter-btn" onClick={() => setNotesZoom((z) => Math.min(2.5, z + 0.2))} title="Metni büyüt">
-                  A+
-                </button>
-                <button type="button" className="presenter-btn" onClick={() => setNotesZoom((z) => Math.max(0.6, z - 0.2))} title="Metni küçült">
-                  A−
-                </button>
-              </span>
-            </div>
-            <div className="presenter-notes" style={{ fontSize: 16 * notesZoom }}>
-              {slide?.notes || <em>Bu slayt için not yok.</em>}
-            </div>
-          </div>
-        </div>
-        <div className="presenter-bottom">
-          <button type="button" className="presenter-btn" onClick={() => back()} title="Önceki">
-            ◀
-          </button>
-          <span>
-            Slayt {index + 1} / {pres.slides.length}
-          </span>
-          <button type="button" className="presenter-btn" onClick={() => advance()} title="Sonraki">
-            ▶
-          </button>
-          <button type="button" className={`presenter-btn${tools.tool !== "pointer" ? " is-on" : ""}`} onClick={(e) => ctx.open(e, tools.toolMenu())}>
-            Kalem ve Lazer İşaretçisi
-          </button>
-          <button type="button" className="presenter-btn" onClick={() => setScreen((s) => (s === "black" ? "none" : "black"))}>
-            Siyah Ekran
-          </button>
-        </div>
-        {ctx.element}
-      </div>
+      <PresenterLayout
+        pres={pres}
+        index={index}
+        slide={slide}
+        nextSlide={nextSlide}
+        nextNumber={(nextSlide === slide ? index : (ni ?? index)) + 1}
+        stage={stage}
+        areaRef={areaRef}
+        rootRef={rootRef}
+        onKeyDown={onKeyDown}
+        onClick={onClick}
+        onMenu={openMenu}
+        onOpenMenu={(e, m) => ctx.open(e, m)}
+        onExit={() => exit(index)}
+        onBack={back}
+        onNext={() => advance()}
+        onGrid={() => setGrid(true)}
+        onBlack={() => setScreen((s) => (s === "black" ? "none" : "black"))}
+        tools={tools}
+        audience={audience}
+        overlay={
+          <>
+            {gridEl}
+            {ctx.element}
+          </>
+        }
+      />
     );
   }
 
   return (
     <div
       ref={rootRef}
-      className={`show-root${mode === "window" ? " is-window" : ""}${cursorHidden ? " no-cursor" : ""}`}
+      className={`show-root${mode === "window" ? " is-window" : ""}${cursorHidden ? " no-cursor" : ""}${preview ? " is-preview" : ""}`}
       style={frame ? { inset: "auto", left: frame.x, top: frame.y, width: frame.w, height: frame.h, background: "transparent" } : undefined}
-      tabIndex={0}
+      tabIndex={preview ? -1 : 0}
       onKeyDown={onKeyDown}
       onClick={onClick}
       onContextMenu={(e) => {
@@ -570,46 +577,10 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
       <div className="show-area" ref={areaRef}>
         {stage}
       </div>
-      {mode === "full" && !grid && <ShowToolbar tools={tools} onPrev={back} onNext={() => advance()} onOpenMenu={(e, m) => ctx.open(e, m)} onAllSlides={() => setGrid(true)} moreMenu={mainMenu} />}
-      {grid && (
-        <ShowSlideGrid
-          pres={pres}
-          current={index}
-          onPick={(i) => {
-            setGrid(false);
-            goTo(i, false, false);
-          }}
-          onClose={() => setGrid(false)}
-        />
-      )}
-      {mode === "window" && !preview && (
-        <div className="show-bar" onClick={(e) => e.stopPropagation()}>
-          <span className="show-bar-title">{`Slayt ${index + 1} / ${pres.slides.length}`}</span>
-          <span className="grow" />
-          <button type="button" className="show-bar-btn" onClick={() => back()} title="Önceki">
-            ◀
-          </button>
-          <button type="button" className="show-bar-btn" onClick={openMenu} title="Menü">
-            ☰
-          </button>
-          <button type="button" className="show-bar-btn" onClick={() => advance()} title="Sonraki">
-            ▶
-          </button>
-          {onViewChange && (
-            <>
-              <button type="button" className="show-bar-btn" onClick={() => onViewChange("normal")} title="Normal">
-                Normal
-              </button>
-              <button type="button" className="show-bar-btn" onClick={() => onViewChange("sorter")} title="Slayt Sıralayıcısı">
-                Sıralayıcı
-              </button>
-            </>
-          )}
-          <button type="button" className="show-bar-btn" onClick={() => exit(index)} title="Okuma Görünümünü Kapat">
-            ✕
-          </button>
-        </div>
-      )}
+      {opts.rehearse && <RehearsalBar r={rehearsal} onNext={() => advance()} />}
+      {mode === "full" && !grid && !opts.kiosk && !follow && <ShowToolbar tools={tools} onPrev={back} onNext={() => advance()} onOpenMenu={(e, m) => ctx.open(e, m)} onAllSlides={() => setGrid(true)} moreMenu={mainMenu} />}
+      {gridEl}
+      {mode === "window" && !preview && <WindowBar index={index} count={pres.slides.length} onBack={back} onNext={() => advance()} onMenu={openMenu} onViewChange={onViewChange} onExit={() => exit(index)} />}
       {ctx.element}
     </div>
   );

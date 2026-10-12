@@ -20,7 +20,7 @@ export interface EditTarget {
 }
 
 export type ViewMode = "normal" | "outline" | "sorter" | "notes" | "reading" | "master";
-export type PaneKind = "background" | "shape" | "animation" | "selection" | "comments" | null;
+export type PaneKind = "background" | "shape" | "animation" | "selection" | "comments" | "spelling" | "reuse" | null;
 
 export interface InsertMode {
   kind: "shape" | "textbox" | "table";
@@ -79,6 +79,10 @@ export interface AppState {
   /** Asıl Slayt Görünümü açıkken: girişteki sunu ve slayt dizini. */
   masterBase: { pres: Presentation; slideIdx: number; dirty: boolean; tab: string } | null;
   message: { text: string; kind: "info" | "warning" | "error" | "success" } | null;
+  /** Görünüm > Renk/Gri Tonlama (yalnız düzenleme görünümünü etkiler). */
+  colorMode: "color" | "gray" | "bw";
+  /** Yazım denetimi dili (BCP 47, ör. "tr-TR"). */
+  proofLang: string;
 }
 
 interface Snapshot {

@@ -1,0 +1,444 @@
+/* 3. tur eklemeleri: hata sınırı, komut araması, gösteri ayarları, prova, gri tonlama, görev bölmeleri. */
+
+/* ---------- Hata sınırı ---------- */
+.crash-box {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  background: var(--oh-surface);
+  color: var(--oh-text);
+  border: 1px solid var(--oh-border);
+  font-size: 13px;
+}
+
+.crash-box.is-root,
+.show-root + .crash-box,
+body > .crash-box {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  align-items: center;
+  text-align: center;
+}
+
+.crash-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.crash-text {
+  color: var(--oh-text-muted);
+  max-width: 520px;
+}
+
+.crash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.crash-details {
+  color: var(--oh-text-muted);
+  font-size: 12px;
+  max-width: 100%;
+}
+
+.crash-details code {
+  display: block;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---------- Komut araması ---------- */
+.cmd-search {
+  position: relative;
+}
+
+.cmd-search-pop {
+  min-width: 360px;
+  max-width: min(520px, 96vw);
+}
+
+.cmd-search-list {
+  padding: 4px 0;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.cmd-search-head {
+  padding: 6px 12px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--oh-text-muted);
+}
+
+.cmd-search-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.cmd-search-item.is-active {
+  background: var(--oh-hover);
+}
+
+.cmd-search-title {
+  font-size: 13px;
+  color: var(--oh-text);
+}
+
+.cmd-search-path {
+  font-size: 11px;
+  color: var(--oh-text-muted);
+}
+
+.cmd-search-empty {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--oh-text-muted);
+}
+
+.cmd-index {
+  position: fixed;
+  left: -20000px;
+  top: 0;
+  width: 1600px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ---------- İletişim kutusu yardımcıları ---------- */
+.dlg-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 5px 0;
+  font-size: 13px;
+}
+
+.dlg-row.is-disabled {
+  opacity: 0.55;
+}
+
+.dlg-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 680px) {
+  .dlg-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dlg-note {
+  font-size: 11.5px;
+  color: var(--oh-text-muted);
+  margin-top: 4px;
+}
+
+/* Özel gösteriler */
+.cs-cols {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.cs-cols.is-main {
+  grid-template-columns: 1fr auto;
+}
+
+.cs-head {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.cs-list {
+  height: 220px;
+  overflow: auto;
+  border: 1px solid var(--oh-border);
+  background: var(--oh-surface);
+  padding: 2px;
+}
+
+.cs-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  font-size: 12.5px;
+  cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cs-item.is-sel {
+  background: var(--oh-checked, #cde3f7);
+  outline: 1px solid var(--oh-checked-border, #90c0e8);
+}
+
+.cs-mid {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.cs-empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--oh-text-muted);
+}
+
+/* Ölçekleme sorusu */
+.scale-choice {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.scale-choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--oh-border);
+  border-radius: var(--oh-radius);
+  background: var(--oh-surface);
+  color: var(--oh-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.scale-choice-btn:hover {
+  border-color: var(--oh-accent);
+  background: var(--oh-hover);
+}
+
+.scale-choice-pic {
+  width: 96px;
+  height: 64px;
+  border: 1px solid var(--oh-border-strong, #999);
+  position: relative;
+  background: #fff;
+}
+
+.scale-choice-pic::after {
+  content: "";
+  position: absolute;
+  background: var(--oh-accent);
+  opacity: 0.6;
+}
+
+.scale-choice-pic.is-max::after {
+  inset: -6px 8px;
+}
+
+.scale-choice-pic.is-fit::after {
+  inset: 12px 20px;
+}
+
+/* ---------- Zamanlama Provası ---------- */
+.rehearse-bar {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #f3f3f3;
+  color: #222;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  font: 13px var(--oh-font-ui, system-ui, sans-serif);
+  cursor: default;
+}
+
+.rehearse-title {
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.rehearse-btn {
+  min-width: 28px;
+  height: 26px;
+  border: 1px solid #c8c8c8;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.rehearse-btn:hover {
+  background: #e8e8e8;
+}
+
+.rehearse-time,
+.rehearse-total {
+  min-width: 64px;
+  padding: 2px 6px;
+  border: 1px solid #c8c8c8;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.rehearse-total {
+  border: 0;
+  background: transparent;
+}
+
+/* ---------- İzleyici penceresi ---------- */
+.audience-wait {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  color: #ddd;
+  font: 16px system-ui, sans-serif;
+}
+
+.presenter-audience {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.presenter-audience.is-connected {
+  background: rgba(46, 160, 67, 0.35);
+}
+
+/* ---------- Gri tonlama / siyah beyaz görünüm ---------- */
+.app-main.is-gray .stage-slide,
+.app-main.is-gray .thumb-pane .sv-scaled {
+  filter: grayscale(1);
+}
+
+.app-main.is-bw .stage-slide,
+.app-main.is-bw .thumb-pane .sv-scaled {
+  filter: grayscale(1) contrast(6) brightness(1.15);
+}
+
+/* ---------- Görev bölmeleri ---------- */
+.spell-pane,
+.reuse-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.spell-note {
+  margin: 0;
+  color: var(--oh-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.spell-wavy {
+  text-decoration: underline wavy #d13438;
+  text-decoration-skip-ink: none;
+}
+
+.spell-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.spell-count {
+  font-size: 12px;
+  color: var(--oh-text-muted);
+}
+
+.reuse-src {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reuse-err {
+  color: #c42b1c;
+  font-size: 12px;
+}
+
+.reuse-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reuse-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--oh-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.reuse-item:hover {
+  border-color: var(--oh-accent);
+  background: var(--oh-hover);
+}
+
+.reuse-item .sv-scaled {
+  box-shadow: 0 0 0 1px var(--oh-border);
+}
+
+/* ---------- Grafik ---------- */
+.chart-dlg-subs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.chart-dlg-sub {
+  padding: 2px;
+  border: 1px solid var(--oh-border);
+  border-radius: 2px;
+  background: var(--oh-surface);
+  cursor: pointer;
+}
+
+.chart-dlg-sub.is-selected {
+  border-color: var(--oh-accent);
+  box-shadow: 0 0 0 1px var(--oh-accent);
+}
+
+.rb-note {
+  font-size: 12px;
+  padding: 2px 6px;
+  color: var(--oh-text-muted);
+}
+
+/* ---------- Tema galerisi bağlam menüsü ---------- */
+.theme-ctx-host {
+  display: contents;
+}

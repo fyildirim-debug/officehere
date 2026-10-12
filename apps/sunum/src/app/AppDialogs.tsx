@@ -10,7 +10,10 @@ import { applyLink, type LinkContext } from "../state/linkActions";
 import { insertChart, updateChart } from "../state/mediaActions";
 import { FontDialog, ParagraphDialog } from "../dialogs/TextDialogs";
 import { DateTimeDialog, HeaderFooterDialog, IconsDialog, InsertTableDialog, SymbolDialog } from "../dialogs/InsertDialogs";
-import { AboutDialog, FindDialog, ReplaceFontsDialog, ShortcutsDialog, ShowSetupDialog, SizePosDialog, SlideSizeDialog, ZoomDialog, type ShowSettings } from "../dialogs/MiscDialogs";
+import { AboutDialog, FindDialog, ReplaceFontsDialog, ShortcutsDialog, SizePosDialog, SlideSizeDialog, ZoomDialog } from "../dialogs/MiscDialogs";
+import { CustomShowsDialog, RehearsalDialog, ScaleChoiceDialog, ShowSetupDialog } from "../dialogs/ShowDialogs";
+import type { ShowSettings } from "../show/settings";
+import type { RehearsalResult } from "../show/Rehearsal";
 import { LinkDialog } from "../dialogs/LinkDialog";
 import { RenameDialog, type RenameRequest } from "../dialogs/RenameDialog";
 import { ChartDataDialog, InsertChartDialog } from "../dialogs/ChartDialogs";
@@ -22,7 +25,10 @@ export type ExtraDialog =
   | { kind: "ink"; ink: Record<string, ShowStroke[]> }
   | { kind: "chartType"; changeId?: string; current?: ChartData }
   | { kind: "chartData"; id: string; chart: ChartData }
-  | { kind: "media"; shape: PicShape };
+  | { kind: "media"; shape: PicShape }
+  | { kind: "customShows" }
+  | { kind: "rehearsal"; result: RehearsalResult }
+  | { kind: "scaleChoice"; w: number; h: number };
 
 export interface AppDialogsProps {
   a: Actions;
@@ -35,9 +41,11 @@ export interface AppDialogsProps {
   setExtra: (d: ExtraDialog | null) => void;
   showSettings: ShowSettings;
   setShowSettings: (s: ShowSettings) => void;
+  /** Komut aramasından gelen "Bul" metni. */
+  findQuery?: string;
 }
 
-export function AppDialogs({ a, state, info, cmd, dialog, closeDialog, extra, setExtra, showSettings, setShowSettings }: AppDialogsProps) {
+export function AppDialogs({ a, state, info, cmd, dialog, closeDialog, extra, setExtra, showSettings, setShowSettings, findQuery }: AppDialogsProps) {
   const closeExtra = () => setExtra(null);
   const insertText = (t: string) => {
     if (a.s.editing && a.textHandle) a.textHandle.insert(t);
@@ -53,11 +61,14 @@ export function AppDialogs({ a, state, info, cmd, dialog, closeDialog, extra, se
       <DateTimeDialog open={dialog === "dateTime"} onClose={closeDialog} onInsert={insertText} />
       <IconsDialog open={dialog === "icons"} onClose={closeDialog} actions={a} />
       <SlideSizeDialog open={dialog === "slideSize"} onClose={closeDialog} actions={a} />
-      <FindDialog open={dialog === "find" || dialog === "replace"} replaceMode={dialog === "replace"} onClose={closeDialog} actions={a} />
+      <FindDialog open={dialog === "find" || dialog === "replace"} replaceMode={dialog === "replace"} onClose={closeDialog} actions={a} initialQuery={dialog === "find" ? findQuery : undefined} />
       <ReplaceFontsDialog open={dialog === "replaceFonts"} onClose={closeDialog} actions={a} />
       <ZoomDialog open={dialog === "zoom"} onClose={closeDialog} zoom={state.zoom} onZoom={cmd.zoomTo} />
       <SizePosDialog open={dialog === "sizePos"} onClose={closeDialog} actions={a} />
-      <ShowSetupDialog open={dialog === "showSetup"} onClose={closeDialog} value={showSettings} onChange={setShowSettings} />
+      <ShowSetupDialog open={dialog === "showSetup"} onClose={closeDialog} value={showSettings} onChange={setShowSettings} pres={state.pres} />
+      <CustomShowsDialog open={extra?.kind === "customShows"} onClose={closeExtra} actions={a} onShow={cmd.startCustomShow} />
+      <RehearsalDialog result={extra?.kind === "rehearsal" ? extra.result : null} onClose={closeExtra} actions={a} />
+      <ScaleChoiceDialog req={extra?.kind === "scaleChoice" ? { w: extra.w, h: extra.h } : null} onClose={closeExtra} actions={a} />
       <ShortcutsDialog open={dialog === "shortcuts"} onClose={closeDialog} />
       <AboutDialog open={dialog === "about"} onClose={closeDialog} />
       <Dialog
@@ -89,14 +100,14 @@ export function AppDialogs({ a, state, info, cmd, dialog, closeDialog, extra, se
         current={extra?.kind === "chartType" ? extra.current : undefined}
         theme={state.pres.theme}
         onClose={closeExtra}
-        onPick={(t) => {
+        onPick={(t, g) => {
           if (extra?.kind !== "chartType") return;
           if (extra.changeId) {
-            updateChart(a, extra.changeId, (c) => ({ ...c, type: t }));
+            updateChart(a, extra.changeId, (c) => ({ ...c, type: t, grouping: g && g !== "clustered" ? g : undefined }));
             closeExtra();
             return;
           }
-          const id = insertChart(a, t);
+          const id = insertChart(a, t, g);
           const sh = id ? a.selectedShapes()[0] : undefined;
           // PowerPoint gibi: ekledikten sonra veri tablosu açılır.
           if (id && sh?.kind === "chart") setExtra({ kind: "chartData", id, chart: sh.chart });

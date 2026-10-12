@@ -9,7 +9,7 @@ import { mapSlideLinks } from "../model/links";
 import { normalizeSections } from "../model/sections";
 import { DEFAULT_HF } from "../model/presentation";
 import { findPlaceholder, placeholderKind } from "../model/textStyle";
-import type { ChartData, Fill, Layout, LayoutType, LevelStyle, Master, Placeholder, Presentation, SchemeColorName, Shape, Slide, SpShape, TextStyles, Theme } from "../model/types";
+import type { ChartData, CustomShow, Fill, Layout, LayoutType, LevelStyle, Master, Placeholder, Presentation, SchemeColorName, Shape, Slide, SpShape, TextStyles, Theme } from "../model/types";
 import { buildTextStyles, LAYOUT_NAMES } from "../themes/build";
 import { getThemeDef } from "../themes/themes";
 import { EXT_MIME, MEDIA_MIME } from "./pptxWriter";
@@ -400,6 +400,19 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
     slides[k] = mapSlideLinks(slides[k], (l) => (l.startsWith("#sldpath:") ? (idByPath.has(l.slice(9)) ? `#slide:${idByPath.get(l.slice(9))}` : undefined) : l));
   }
 
+  // Özel slayt gösterileri
+  const customShows: CustomShow[] = [];
+  for (const cs of kids(kid(presDoc, "custShowLst"), "custShow")) {
+    const ids = kids(kid(cs, "sldLst"), "sld")
+      .map((e) => {
+        const rid = relId(e);
+        const sp = rid ? presRels.get(rid)?.target : undefined;
+        return sp ? slideByPath.get(sp)?.id : undefined;
+      })
+      .filter((x): x is string => !!x);
+    customShows.push({ id: uid("cs"), name: attr(cs, "name") ?? `Özel Gösteri ${customShows.length + 1}`, slideIds: ids });
+  }
+
   // Belge özellikleri
   const props: Presentation["props"] = {};
   const coreRel = [...rootRels.values()].find((r) => r.type === REL.coreProps);
@@ -424,5 +437,5 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
     footerText: ftr?.text ? ftr.text.paragraphs.map((p) => p.runs.map((r) => r.text).join("")).join(" ") : "",
   };
 
-  return { width, height, theme, master, layouts, slides, headerFooter, props, masterEdited };
+  return { width, height, theme, master, layouts, slides, headerFooter, props, masterEdited, ...(customShows.length ? { customShows } : {}) };
 }

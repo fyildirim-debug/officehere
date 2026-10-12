@@ -84,7 +84,8 @@
   display: flex;
   flex-direction: column;
   overflow: visible;
-  overflow-wrap: break-word;
+  /* Boşluksuz uzun sözcük kutu genişliğinde kırılır (PowerPoint davranışı). */
+  overflow-wrap: anywhere;
   word-wrap: break-word;
   tab-size: 96px;
   cursor: text;
@@ -146,6 +147,12 @@
   margin-top: 30px;
 }
 
+.ph-icons.is-grid {
+  display: grid;
+  justify-content: center;
+  margin-top: 0;
+}
+
 .ph-icon {
   display: flex;
   align-items: center;
@@ -192,7 +199,7 @@
 
 .tbl td {
   white-space: pre-wrap;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   cursor: text;
 }
 

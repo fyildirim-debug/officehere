@@ -54,6 +54,8 @@ export function useKeyboard(actions: Actions, h: KeyHandlers) {
         if (k === "O") return run(() => hd.open());
         if (k === "N") return run(() => hd.newDoc());
         if (k === "P") return run(() => hd.print());
+        // Not bölmesinde de Ctrl+M yeni slayt ekler.
+        if (k === "M" && !e.shiftKey && (e.target as HTMLElement | null)?.closest?.(".notes-pane")) return run(() => actions.newSlide());
         if (inField) return;
         if (k === "Z") return run(() => (e.shiftKey ? actions.store.redo() : actions.store.undo()));
         if (k === "Y") return run(() => actions.store.redo());

@@ -8,7 +8,7 @@ import { aabb, findShape, unionBox, type Box } from "../model/ops";
 import { layoutOf, type TextContext } from "../model/textStyle";
 import type { Shape, SpShape } from "../model/types";
 import { isLineGeom } from "../render/geometry";
-import { SlideView, type GeomOverride } from "../render/SlideView";
+import { SlideView, type GeomOverride, type PlaceholderAction } from "../render/SlideView";
 import type { Actions } from "../state/actions";
 import type { AppState } from "../state/store";
 import { applyFormatPainter } from "../state/painter";
@@ -19,14 +19,15 @@ import { SelectionOverlay } from "./SelectionOverlay";
 import { snapMove, snapValue, type GuideLine } from "./snap";
 import { animationLabels, cellSelRects, childOfGroupContaining, cropGhostOf, GridOverlay, InkPreview, inkIdsAt, MARGIN, topLevelOf, type Drag, type Pt } from "./canvasUtils";
 import { useAutofit } from "./useAutofit";
+import { contextKind, type CanvasMenuKind } from "./contextKind";
 import { useViewportZoom } from "./useViewportZoom";
 import { useEditorRenderer } from "./useEditorRenderer";
 
 export interface CanvasProps {
   state: AppState;
   actions: Actions;
-  onContextMenu: (e: React.MouseEvent, kind: "shape" | "slide") => void;
-  onPlaceholderAction: (action: "table" | "picture", shapeId: string) => void;
+  onContextMenu: (e: React.MouseEvent, kind: CanvasMenuKind) => void;
+  onPlaceholderAction: (action: PlaceholderAction, shapeId: string) => void;
   onShapeDoubleClick: (s: Shape) => void;
   showAnimBadges: boolean;
   guides: { h: number[]; v: number[] };
@@ -71,7 +72,7 @@ export function Canvas(props: CanvasProps) {
 
   const tctx: TextContext = useMemo(() => ({ master: pres.master, layout: layoutOf(pres, slide) }), [pres, slide]);
 
-  useAutofit({ slide, slideIdx: state.slideIdx, measuring: !overrides, tctx, slideRef, actions });
+  useAutofit({ slide, slideIdx: state.slideIdx, measuring: !overrides, tctx, theme: pres.theme, slideRef, actions });
 
   /* ------------------------- Metin düzenleyici ------------------------- */
   const editing = state.editing;
@@ -198,7 +199,7 @@ export function Canvas(props: CanvasProps) {
     const phAct = target.closest("[data-ph-action]") as HTMLElement | null;
     if (phAct) {
       const sid = (phAct.closest("[data-shape-id]") as HTMLElement | null)?.dataset.shapeId;
-      if (sid) propsRef.current.onPlaceholderAction(phAct.dataset.phAction as "table" | "picture", sid);
+      if (sid) propsRef.current.onPlaceholderAction(phAct.dataset.phAction as PlaceholderAction, sid);
       return;
     }
 
@@ -611,11 +612,10 @@ export function Canvas(props: CanvasProps) {
   };
 
   const onContextMenu = (e: React.MouseEvent) => {
-    const t = e.target as Element;
-    if (t.closest(".tb-edit")) return;
+    // Shift + sağ tık: düzenleyicide tarayıcının menüsü (yazım önerileri).
+    if (e.shiftKey && (e.target as Element).closest(".tb-edit")) return;
     e.preventDefault();
-    const onShape = !!t.closest("[data-shape-id]") && !!slideRef.current?.contains(t);
-    props.onContextMenu(e, onShape ? "shape" : "slide");
+    props.onContextMenu(e, contextKind(e.target as Element, propsRef.current.state, slideRef.current, actions));
   };
 
   /* ------------------------- Çizim ------------------------- */

@@ -66,13 +66,23 @@ export interface InkOverlayProps {
   visible: boolean;
   onAdd: (s: ShowStroke) => void;
   onErase: (indices: number[]) => void;
+  /** Lazer konumu değişince (izleyici penceresine iletmek için). */
+  onLaser?: (p: [number, number] | null) => void;
+  /** Dışarıdan gelen lazer konumu (izleyici penceresi). */
+  remoteLaser?: [number, number] | null;
+  laserColor?: string;
 }
 
 /** Slaytın üstündeki çizim katmanı (slayt koordinatlarında SVG). */
-export function InkOverlay({ width, height, tool, color, strokes, visible, onAdd, onErase }: InkOverlayProps) {
+export function InkOverlay({ width, height, tool, color, strokes, visible, onAdd, onErase, onLaser, remoteLaser, laserColor = "#ff1a1a" }: InkOverlayProps) {
   const ref = useRef<SVGSVGElement>(null);
   const [live, setLive] = useState<[number, number][] | null>(null);
-  const [laser, setLaser] = useState<[number, number] | null>(null);
+  const [laserLocal, setLaserLocal] = useState<[number, number] | null>(null);
+  const setLaser = (p: [number, number] | null) => {
+    setLaserLocal(p);
+    onLaser?.(p);
+  };
+  const laser = remoteLaser !== undefined ? remoteLaser : laserLocal;
   const drawing = useRef(false);
   const active = tool !== "pointer";
 
@@ -142,10 +152,10 @@ export function InkOverlay({ width, height, tool, color, strokes, visible, onAdd
     >
       {visible && strokes.map((s, i) => strokeEl(s, i))}
       {live && strokeEl({ tool, color, width: tool === "pen" ? PEN_WIDTH : HIGHLIGHTER_WIDTH, pts: live }, "live")}
-      {tool === "laser" && laser && (
+      {(tool === "laser" || remoteLaser) && laser && (
         <g className="show-laser" pointerEvents="none">
-          <circle cx={laser[0]} cy={laser[1]} r={14} fill="rgba(255,0,0,0.25)" />
-          <circle cx={laser[0]} cy={laser[1]} r={7} fill="#ff1a1a" stroke="#fff" strokeOpacity={0.6} strokeWidth={1.5} />
+          <circle cx={laser[0]} cy={laser[1]} r={14} fill={laserColor} fillOpacity={0.25} />
+          <circle cx={laser[0]} cy={laser[1]} r={7} fill={laserColor} stroke="#fff" strokeOpacity={0.6} strokeWidth={1.5} />
         </g>
       )}
     </svg>

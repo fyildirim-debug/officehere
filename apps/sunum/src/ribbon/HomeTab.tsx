@@ -47,12 +47,12 @@ import {
   TextParagraph24Regular,
   SlideMultiple20Regular,
 } from "@fluentui/react-icons";
-import { FONT_LIST, FONT_SIZES, fontStack } from "@officehere/core";
+import { FONT_LIST, fontStack } from "@officehere/core";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonCombo, RibbonGroup, RibbonMenuButton, RibbonRow, RibbonSplitButton, RibbonStack, useMenuClose } from "@officehere/ui";
 import { resolveFont } from "../model/textStyle";
 import type { BulletDef, Color } from "../model/types";
 import { captureFormat } from "../state/painter";
-import { applyCase, applyRun, changeLevel, common, growFont, setBodyProps, setListStyle, setParaProps } from "../state/textActions";
+import { applyCase, applyRun, changeLevel, common, growFont, setBodyProps, setListStyle, setParaProps, SLIDE_FONT_SIZES } from "../state/textActions";
 import { autoNumber } from "../render/textHtml";
 import { InlineShapeGallery, LayoutGallery, ThemeColorSplit } from "./common";
 import { BULLET_PRESETS, NUMBER_PRESETS, SPACING_PRESETS } from "./presets";
@@ -61,7 +61,7 @@ import type { RibbonCtx } from "./types";
 import { sectionMenu } from "../app/menus";
 import { currentSection } from "../state/sectionActions";
 
-function BulletGrid({ onPick, kind }: { onPick: (b: BulletDef) => void; kind: "bullet" | "number" }) {
+export function BulletGrid({ onPick, kind }: { onPick: (b: BulletDef) => void; kind: "bullet" | "number" }) {
   const close = useMenuClose();
   const tiles =
     kind === "bullet"
@@ -201,7 +201,7 @@ export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
             <RibbonCombo
               value={size !== undefined ? String(Math.round(size * 10) / 10).replace(".", ",") : ""}
               width={52}
-              options={FONT_SIZES.map((v) => String(v).replace(".", ","))}
+              options={SLIDE_FONT_SIZES.map((v) => String(v).replace(".", ","))}
               onCommit={(v) => {
                 const n = parseFloat(v.replace(",", "."));
                 if (n > 0 && n < 4000) applyRun(a, (p) => ({ ...p, size: n }));

@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { DataArea24Regular, DataBarHorizontal24Regular, DataBarVertical24Regular, DataLine24Regular, DataPie24Regular, Add20Regular, Subtract20Regular } from "@fluentui/react-icons";
 import { Dialog, DialogButton } from "@officehere/ui";
-import { CHART_TYPES, chartFromGrid, chartToGrid, defaultChartData } from "../model/chart";
-import type { ChartData, ChartType, Theme } from "../model/types";
+import { CHART_TYPES, chartFromGrid, chartSubtypes, chartToGrid, defaultChartData } from "../model/chart";
+import type { ChartData, ChartGrouping, ChartType, Theme } from "../model/types";
 import { ChartSvg } from "../render/ChartSvg";
 
 const ICONS: Record<ChartType, React.ReactNode> = {
@@ -17,20 +17,41 @@ const ICONS: Record<ChartType, React.ReactNode> = {
     </svg>
   ),
   area: <DataArea24Regular />,
+  scatter: (
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+      <path d="M3 3v18h18" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      {[[7, 15], [10, 9], [13, 13], [16, 6], [19, 10]].map(([x, y]) => (
+        <circle key={`${x}-${y}`} cx={x} cy={y} r="1.6" fill="currentColor" />
+      ))}
+    </svg>
+  ),
+  radar: (
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+      <path d="M12 2.5l9 6.5-3.5 11h-11L3 9z" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M12 7l5 4-2 6H9l-2-6z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  ),
 };
 
 /** Grafik türü seçimi. `current` verilirse "Grafik Türünü Değiştir" kipidir. */
-export function InsertChartDialog({ open, current, theme, onClose, onPick }: { open: boolean; current?: ChartData; theme: Theme; onClose: () => void; onPick: (t: ChartType) => void }) {
+export function InsertChartDialog({ open, current, theme, onClose, onPick }: { open: boolean; current?: ChartData; theme: Theme; onClose: () => void; onPick: (t: ChartType, g?: ChartGrouping) => void }) {
   const [type, setType] = useState<ChartType>(current?.type ?? "col");
+  const [grouping, setGrouping] = useState<ChartGrouping>(current?.grouping ?? "clustered");
   const [last, setLast] = useState(false);
   if (open !== last) {
     setLast(open);
-    if (open) setType(current?.type ?? "col");
+    if (open) {
+      setType(current?.type ?? "col");
+      setGrouping(current?.grouping ?? "clustered");
+    }
   }
   if (!open) return null;
-  const preview: ChartData = current ? { ...current, type } : defaultChartData(type);
+  const subs = chartSubtypes(type);
+  const g = subs.length ? grouping : undefined;
+  const preview: ChartData = current ? { ...current, type, grouping: g === "clustered" ? undefined : g } : defaultChartData(type, g);
+  const subLabel = subs.find((x) => x.grouping === g)?.label;
   // Seçim sonrası kapatma/sonraki adım çağırana aittir (ekleme sonrası veri tablosu açılır).
-  const ok = () => onPick(type);
+  const ok = () => onPick(type, g);
   return (
     <Dialog
       open
@@ -57,7 +78,16 @@ export function InsertChartDialog({ open, current, theme, onClose, onPick }: { o
           ))}
         </div>
         <div className="chart-dlg-preview">
-          <div className="chart-dlg-cap">{CHART_TYPES.find((c) => c.type === type)?.label}</div>
+          {subs.length > 0 && (
+            <div className="chart-dlg-subs" role="radiogroup" aria-label="Alt tür">
+              {subs.map((x) => (
+                <button key={x.grouping} type="button" role="radio" aria-checked={g === x.grouping} className={`chart-dlg-sub${g === x.grouping ? " is-selected" : ""}`} title={x.label} onClick={() => setGrouping(x.grouping)}>
+                  <ChartSvg chart={{ ...defaultChartData(type, x.grouping), showTitle: false, legend: "none" }} w={64} h={44} theme={theme} />
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="chart-dlg-cap">{subLabel ?? CHART_TYPES.find((c) => c.type === type)?.label}</div>
           <div className="chart-dlg-box">
             <ChartSvg chart={preview} w={400} h={250} theme={theme} />
           </div>

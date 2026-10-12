@@ -27,8 +27,14 @@ import {
   SlideMultiple24Regular,
   TextBulletListTree24Regular,
   SlideLayout24Regular,
+  SlideMultipleArrowRight24Regular,
+  Timer24Regular,
+  Color24Regular,
+  DarkTheme24Regular,
+  CircleHalfFill24Regular,
 } from "@fluentui/react-icons";
-import { RibbonButton, RibbonCheckbox, RibbonGroup, RibbonStack } from "@officehere/ui";
+import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonStack } from "@officehere/ui";
+import type { ShowSettings } from "../show/settings";
 import { getUserName } from "@officehere/ui";
 import { updateSlide } from "../model/ops";
 import type { RibbonCtx } from "./types";
@@ -37,16 +43,49 @@ export function SlideShowTab({ ctx }: { ctx: RibbonCtx }) {
   const { state, actions: a, cmd } = ctx;
   const slide = state.pres.slides[state.slideIdx];
   const none = state.pres.slides.length === 0;
+  const settings = ctx.show?.settings;
+  const setSettings = (p: Partial<ShowSettings>) => settings && ctx.show?.set({ ...settings, ...p });
+  const shows = state.pres.customShows ?? [];
   return (
     <>
       <RibbonGroup label="Slayt Gösterisini Başlat" icon={<Play24Regular />}>
-        <RibbonButton size="large" icon={<Play24Regular />} label="Baştan Başla" shortcut="F5" disabled={none} description="Slayt gösterisini ilk slayttan başlatın." onClick={() => cmd.startShow("start")} />
+        <RibbonButton size="large" icon={<Play24Regular />} label="Baştan" shortcut="F5" disabled={none} description="Slayt gösterisini ilk slayttan başlatın." onClick={() => cmd.startShow("start")} />
         <RibbonButton size="large" icon={<SlidePlay24Regular />} label="Geçerli Slayttan" shortcut="Shift+F5" disabled={none} description="Slayt gösterisini bu slayttan başlatın." onClick={() => cmd.startShow("current")} />
-        <RibbonButton size="large" icon={<Presenter24Regular />} label="Sunucu Görünümü" disabled={none} description="Notlarınızı, sonraki slaydı ve süreyi görerek sunun." onClick={cmd.presenterView} />
+        <RibbonMenuButton
+          size="large"
+          icon={<SlideMultipleArrowRight24Regular />}
+          label="Özel Slayt Gösterisi"
+          disabled={none}
+          description="Sunudaki slaytların yalnız bir bölümünü, istediğiniz sırayla gösterin."
+          menu={
+            <Menu>
+              {shows.map((c) => (
+                <MenuItem key={c.id} label={c.name} disabled={!c.slideIds.length} onClick={() => cmd.startCustomShow(c.id)} />
+              ))}
+              {shows.length > 0 && <MenuSeparator />}
+              <MenuItem label="Özel Gösteriler..." onClick={cmd.customShows} />
+            </Menu>
+          }
+        />
       </RibbonGroup>
       <RibbonGroup label="Ayarla" icon={<Settings24Regular />}>
-        <RibbonButton size="large" icon={<SlideSettings24Regular />} label="Gösteriyi Ayarla" tip="Slayt Gösterisini Ayarla" description="Döngü, anlatım ve animasyon seçenekleri gibi gelişmiş ayarlar." onClick={() => ctx.openDialog("showSetup")} />
+        <RibbonButton size="large" icon={<SlideSettings24Regular />} label="Slayt Gösterisini Ayarla" tip="Slayt Gösterisini Ayarla" description="Gösteri türü, slayt aralığı, döngü, kalem rengi ve ilerletme gibi gelişmiş ayarlar." onClick={() => ctx.openDialog("showSetup")} />
         <RibbonButton size="large" icon={<SlideHide24Regular />} label="Slaytı Gizle" checked={!!slide?.hidden} disabled={!slide} description="Seçili slaydı slayt gösterisi sırasında gizleyin." onClick={() => a.toggleHideSlides()} />
+        <RibbonButton size="large" icon={<Timer24Regular />} label="Zamanlama Provası" disabled={none} description="Gösteriyi tam ekranda prova edin; her slaytta geçen süre kaydedilir." onClick={cmd.rehearseTimings} />
+        {settings && (
+          <RibbonStack>
+            <RibbonCheckbox label="Anlatımları Yürüt" checked={!settings.noNarration} onChange={(v) => setSettings({ noNarration: !v })} />
+            <RibbonCheckbox label="Zamanlamaları Kullan" checked={settings.advance === "timings"} onChange={(v) => setSettings({ advance: v ? "timings" : "manual" })} />
+          </RibbonStack>
+        )}
+      </RibbonGroup>
+      <RibbonGroup label="Monitörler" icon={<Presenter24Regular />}>
+        <RibbonButton size="large" icon={<Presenter24Regular />} label="Sunucu Görünümü" disabled={none} description="İzleyici gösterisi ikinci pencerede açılır; bu pencerede notlarınızı, sonraki slaydı ve süreyi görürsünüz." onClick={cmd.presenterView} />
+        {settings && (
+          <RibbonStack>
+            <RibbonCheckbox label="Sunucu Görünümünü Kullan" checked={settings.presenter} onChange={(v) => setSettings({ presenter: v, type: v ? "speaker" : settings.type })} />
+          </RibbonStack>
+        )}
       </RibbonGroup>
     </>
   );
@@ -70,7 +109,7 @@ export function ReviewTab({ ctx }: { ctx: RibbonCtx }) {
   return (
     <>
       <RibbonGroup label="Yazım Denetleme" icon={<TextProofingTools24Regular />}>
-        <RibbonButton size="large" icon={<TextProofingTools24Regular />} label="Yazım Denetimi" checked={state.spellcheck} description="Yazım hatalarını kırmızı dalgalı çizgiyle işaretler (tarayıcı sözlüğü)." onClick={cmd.spelling} />
+        <RibbonButton size="large" icon={<TextProofingTools24Regular />} label="Yazım Denetimi" shortcut="F7" checked={state.pane === "spelling"} description="Yazım Denetimi bölmesini açar: denetim dili, açma/kapama ve metin kutularında sırayla gezinme." onClick={cmd.spelling} />
       </RibbonGroup>
       <RibbonGroup label="Açıklamalar" icon={<Comment24Regular />}>
         <RibbonButton
@@ -105,6 +144,11 @@ export function ViewTab({ ctx }: { ctx: RibbonCtx }) {
       <RibbonGroup label="Asıl Görünümler" icon={<SlideLayout24Regular />}>
         <RibbonButton size="large" icon={<SlideLayout24Regular />} label="Asıl Slayt" checked={state.view === "master"} description="Asıl slaydı ve düzenlerini düzenleyin: yer tutucu konumları, yazı tipleri ve arka plan tüm slaytlara yansır." disabled={!state.pres.layouts.length} onClick={() => cmd.setView(state.view === "master" ? "normal" : "master")} />
       </RibbonGroup>
+      <RibbonGroup label="Renk/Gri Tonlama" icon={<Color24Regular />}>
+        <RibbonButton size="large" icon={<Color24Regular />} label="Renkli" checked={state.colorMode === "color"} onClick={() => a.store.set({ colorMode: "color" })} />
+        <RibbonButton size="large" icon={<DarkTheme24Regular />} label="Gri Tonlama" checked={state.colorMode === "gray"} description="Sunuyu gri tonlamalı olarak görüntüleyin (ör. siyah beyaz yazdırma öncesi)." onClick={() => a.store.set({ colorMode: "gray", ribbonTab: "grayscale" })} />
+        <RibbonButton size="large" icon={<CircleHalfFill24Regular />} label="Siyah Beyaz" checked={state.colorMode === "bw"} description="Sunuyu yalnız siyah ve beyazla görüntüleyin." onClick={() => a.store.set({ colorMode: "bw", ribbonTab: "grayscale" })} />
+      </RibbonGroup>
       <RibbonGroup label="Göster" icon={<Eye24Regular />}>
         <RibbonStack>
           <RibbonCheckbox label="Cetvel" checked={state.showRuler} onChange={(v) => a.store.set({ showRuler: v })} />
@@ -116,6 +160,22 @@ export function ViewTab({ ctx }: { ctx: RibbonCtx }) {
       <RibbonGroup label="Yakınlaştır" icon={<ZoomIn24Regular />}>
         <RibbonButton size="large" icon={<ZoomIn24Regular />} label="Yakınlaştır" onClick={() => ctx.openDialog("zoom")} />
         <RibbonButton size="large" icon={<ZoomFit24Regular />} label="Pencereye Sığdır" description="Sunuyu yakınlaştırarak slaytın pencereyi doldurmasını sağlayın." onClick={() => cmd.zoomTo(state.zoom, true)} />
+      </RibbonGroup>
+    </>
+  );
+}
+
+/** Gri Tonlama / Siyah Beyaz görünümünün bağlamsal sekmesi. */
+export function GrayscaleTab({ ctx }: { ctx: RibbonCtx }) {
+  const { state, actions: a } = ctx;
+  return (
+    <>
+      <RibbonGroup label="Görünüm" icon={<DarkTheme24Regular />}>
+        <RibbonButton size="large" icon={<DarkTheme24Regular />} label="Gri Tonlama" checked={state.colorMode === "gray"} onClick={() => a.store.set({ colorMode: "gray" })} />
+        <RibbonButton size="large" icon={<CircleHalfFill24Regular />} label="Siyah Beyaz" checked={state.colorMode === "bw"} onClick={() => a.store.set({ colorMode: "bw" })} />
+      </RibbonGroup>
+      <RibbonGroup label="Kapat" icon={<Color24Regular />}>
+        <RibbonButton size="large" icon={<Color24Regular />} label="Renkli Görünüme Dön" onClick={() => a.store.set({ colorMode: "color", ribbonTab: "view" })} />
       </RibbonGroup>
     </>
   );
