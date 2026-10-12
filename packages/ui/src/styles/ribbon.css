@@ -21,6 +21,13 @@
   gap: 2px;
 }
 
+/* Yalnız sekmeleri saran sekme listesi (Dosya ve sağdaki düğmeler dışında); yerleşimi değiştirmez. */
+.oh-ribbon-tablist {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+}
+
 .oh-ribbon-tab {
   position: relative;
   border: 0;
@@ -738,5 +745,76 @@
   :root[data-oh-theme="system"] .oh-ribbon-tab.is-contextual {
     background: color-mix(in srgb, var(--oh-accent) 28%, transparent);
     color: #ffffff;
+  }
+}
+
+/* Klavye odağı: sekmeler, şerit düğmeleri, galeri ve açılan kutu listesinde net vurgu halkası */
+
+.oh-ribbon-tab:focus-visible {
+  background: var(--oh-hover);
+  outline: 2px solid var(--oh-focus-ring);
+  outline-offset: -2px;
+}
+
+.oh-rbtn:focus-visible,
+.oh-split-main:focus-visible,
+.oh-split-arrow:focus-visible,
+.oh-ribbon-launcher:focus-visible,
+.oh-ribbon-pin:focus-visible,
+.oh-gallery-scroll button:focus-visible {
+  outline: 2px solid var(--oh-focus-ring);
+  outline-offset: -2px;
+}
+
+.oh-gallery-item:focus-visible {
+  position: relative;
+  border-color: var(--oh-focus-ring);
+  outline: 2px solid var(--oh-focus-ring);
+  outline-offset: -2px;
+}
+
+/* Liste açıkken ↑/↓ ile gezilen seçenek (odak kutuda kalır). */
+.oh-combo-option.is-active {
+  background: var(--oh-hover);
+  outline: 2px solid var(--oh-focus-ring);
+  outline-offset: -2px;
+}
+
+.oh-combo-option.is-selected.is-active {
+  background: var(--oh-checked);
+}
+
+/* Klavyeyle gezilirken imlecin altında kalan öğe vurgulanmaz (bkz. controls.css). */
+[data-oh-kbd] .oh-combo-option:hover:not(.is-active):not(.is-selected) {
+  background: transparent;
+}
+
+[data-oh-kbd] .oh-gallery-item:hover:not(:focus-visible):not(.is-selected) {
+  border-color: transparent;
+  background: transparent;
+}
+
+@media (forced-colors: active) {
+  .oh-ribbon-tab.is-active {
+    outline: 1px solid CanvasText;
+    outline-offset: -3px;
+  }
+
+  .oh-rbtn.is-checked,
+  .oh-split.is-checked .oh-split-main,
+  .oh-gallery-item.is-selected,
+  .oh-combo-option.is-selected {
+    outline: 1px dashed CanvasText;
+    outline-offset: -2px;
+  }
+
+  .oh-ribbon-tab:focus-visible,
+  .oh-rbtn:focus-visible,
+  .oh-split-main:focus-visible,
+  .oh-split-arrow:focus-visible,
+  .oh-gallery-item:focus-visible,
+  .oh-combo-option.is-active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
   }
 }

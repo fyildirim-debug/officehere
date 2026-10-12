@@ -45,8 +45,24 @@ odağı editörden çalmaz.
 
 - `Menu`, `MenuItem` (`icon`, `label`, `shortcut`, `checked`, `submenu`, `keepOpen`), `MenuSeparator`, `MenuHeader`, `MenuSection`.
 - `useContextMenu()` → `{ open(event, content), element }`; `element` bileşende bir kez çizilir.
-- `Popover` herhangi bir öğeye ya da noktaya bağlı açılır katmandır.
+- `Popover` herhangi bir öğeye ya da noktaya bağlı açılır katmandır. `onClose(reason)` kapanma
+  nedenini (`"escape"`, `"outside"`, `"blur"`, `"arrow"`, `"tab"`) verir; `focusOnOpen` açılış odağını seçer.
 - İpucu için öğeye `tipProps(başlık, kısayol, açıklama)` yaymak yeterlidir.
+
+## Klavye
+
+- Şerit sekmeleri: Tab etkin sekmeye gelir; ←/→ sekme değiştirir (uçlarda döner), Home/End; ↓ ya da Tab
+  gövdedeki ilk denetime iner. Gövdede denetimler normal Tab sırasındadır.
+- Menü düğmeleri, bölünmüş düğme oku ve daraltılmış grup: Enter/Space/↓ açar ve ilk öğeye odaklanır;
+  kapanınca odak düğmeye döner. Fareyle açılan menüde odak menü kabındadır, öğe vurgulanmaz.
+- Menü içeriği (`Menu` ya da düz `.oh-menu` kabı fark etmez, `Popover` sağlar): ↑/↓ (devre dışı ve
+  ayraçlar atlanır, uçlarda döner; renk paleti ve galeri ızgarasında konuma göre), Home/End, harfle atlama
+  (Türkçe), Enter/Space çalıştırır, → alt menüyü açar, ← ya da Esc alt menüyü kapatır, Esc en dış menüyü
+  kapatıp odağı geri verir, Tab menüyü kapatır. Yazı alanı içeren katmanlarda Tab içeride döner.
+- `RibbonCombo`: Alt+↓ ya da ↓ listeyi açar, ↑/↓ etkin seçeneği taşır (`aria-activedescendant`), Enter seçer,
+  Esc kapatıp önceki değeri korur.
+- `RibbonGallery`: tek Tab durağı; ←/→/↑/↓, Home/End, Alt+↓ galeriyi genişletir.
+- Saf yardımcılar (`menuNav.ts`: sonraki etkin öğe, harfle eşleşme, ızgara yönü) birim testlidir.
 
 ## Dosya görünümü
 
