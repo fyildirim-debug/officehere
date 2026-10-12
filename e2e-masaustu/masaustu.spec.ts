@@ -143,6 +143,8 @@ test("kaydedilmemiş belge kapatılırken onay sorulur", async () => {
   const original = readFileSync(file);
   const { app, win } = await launch([file]);
   await win.waitForSelector(".ProseMirror");
+  // Otomatik kaydetme kapalı: belge kirli kalsın ve dosya değişmesin.
+  await win.evaluate(() => localStorage.setItem("officehere.autoSave", "0"));
   await win.locator(".ProseMirror").first().click();
   await win.keyboard.type("kaydedilmeyecek");
   await expect(win.locator(".oh-titlebar-dirty")).toBeVisible();

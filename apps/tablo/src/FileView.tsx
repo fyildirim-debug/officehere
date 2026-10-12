@@ -1,7 +1,7 @@
 /** Dosya görünümü (Backstage) ve dosya eylemleri: Yeni, Aç, Kaydet, Farklı Kaydet, Yazdır, Dışarı Aktar. */
 import { useMemo } from "react";
 import { DocumentPdf24Regular, DocumentTable24Regular, Globe24Regular, ArrowDownload24Regular } from "@fluentui/react-icons";
-import { OfficeBackstage, type BackstageTemplate } from "@officehere/ui";
+import { OfficeBackstage, isDirectSave, trackSave, type BackstageTemplate } from "@officehere/ui";
 import { addRecentFile, baseName, downloadBlob, extensionOf, getNative, openFile, readPath, saveFile, saveFileAs, type FileFilter, type RecentFile } from "@officehere/core";
 import type { Controller } from "./controller";
 import { readXlsx, writeXlsx } from "./io/xlsx";
@@ -72,8 +72,8 @@ export function useFileActions(ctl: Controller): FileActions {
         if (ctl.edit && !ctl.commitEdit(null)) return false;
         const name = ctl.fileName.includes(".") ? ctl.fileName : `${ctl.fileName}.xlsx`;
         const isCsv = extensionOf(name) === "csv";
-        const data = isCsv ? writeCsv(ctl.wb, ctl.sheet) : await writeXlsx(ctl.wb);
-        const ref = await saveFile(ctl.fileRef, name, isCsv ? [CSV_FILTER] : [XLSX_FILTER], data);
+        const target = ctl.fileRef;
+        const ref = await trackSave(isDirectSave(target), async () => saveFile(target, name, isCsv ? [CSV_FILTER] : [XLSX_FILTER], isCsv ? writeCsv(ctl.wb, ctl.sheet) : await writeXlsx(ctl.wb)));
         if (!ref) return false;
         ctl.fileRef = ref;
         ctl.fileName = ref.name;
@@ -85,8 +85,7 @@ export function useFileActions(ctl: Controller): FileActions {
       async saveAs() {
         if (ctl.edit && !ctl.commitEdit(null)) return false;
         const name = `${baseName(ctl.fileName)}.xlsx`;
-        const data = await writeXlsx(ctl.wb);
-        const ref = await saveFileAs(name, [XLSX_FILTER], data);
+        const ref = await trackSave(false, async () => saveFileAs(name, [XLSX_FILTER], await writeXlsx(ctl.wb)));
         if (!ref) return false;
         ctl.fileRef = ref;
         ctl.fileName = ref.name;

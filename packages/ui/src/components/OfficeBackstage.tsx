@@ -31,6 +31,7 @@ import {
 import { APP_NAMES } from "./AppShell";
 import { UI_THEMES, useUiTheme } from "../hooks/useUiTheme";
 import { UpdateSection } from "./Updates";
+import { useAutoSavePref } from "../hooks/useAutoSave";
 
 export interface BackstageTemplate {
   id: string;
@@ -202,6 +203,7 @@ export function OfficeBackstage(props: OfficeBackstageProps) {
               </select>
             </label>
             <UserNameField />
+            {isDesktop() && <AutoSaveField />}
             {extraOptions}
           </div>
         </>
@@ -252,6 +254,22 @@ export function getUserName(): string {
   } catch {
     return "Kullanıcı";
   }
+}
+
+/** Otomatik kaydet (yalnız masaüstü; tarayıcıda dosyaya doğrudan yazılamaz). */
+function AutoSaveField() {
+  const [on, setOn] = useAutoSavePref();
+  return (
+    <label className="oh-field is-inline oh-option-check">
+      <span className="oh-option-text">
+        <span className="oh-field-label">Otomatik kaydet</span>
+        <span className="oh-option-desc" id="oh-autosave-desc">
+          Bilgisayarınızdaki belgeler değiştikçe kendiliğinden kaydedilir.
+        </span>
+      </span>
+      <input type="checkbox" aria-label="Otomatik kaydet" aria-describedby="oh-autosave-desc" checked={on} onChange={(e) => setOn(e.target.checked)} />
+    </label>
+  );
 }
 
 function UserNameField() {

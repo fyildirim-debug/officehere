@@ -1,5 +1,6 @@
 /** Dosya işlemleri: Yeni, Aç, Kaydet, Farklı Kaydet, son kullanılanlar. */
 import { addRecentFile, baseName, getNative, openFile, readPath, saveFile, saveFileAs, type FileFilter, type FileRef, type RecentFile } from "@officehere/core";
+import { isDirectSave, saveStatus, trackSave } from "@officehere/ui";
 import type { Presentation } from "../model/types";
 import { readPptx } from "../io/pptxReader";
 import { writePptx } from "../io/pptxWriter";
@@ -40,6 +41,7 @@ export function loadPresentation(a: Actions, pres: Presentation, fileName: strin
     masterBase: null,
   });
   a.store.resetHistory();
+  saveStatus.reset();
 }
 
 export function isPristine(a: Actions): boolean {
@@ -88,14 +90,22 @@ export async function openRecent(a: Actions, file: RecentFile): Promise<void> {
   await openDialog(a);
 }
 
+/** Sunuyu .pptx baytlarına yazar (asıl görünümdeyken de belgenin kendisi). */
+export async function presentationBytes(a: Actions): Promise<Uint8Array> {
+  const doc = documentPres(a);
+  return writePptx({ ...doc, props: { ...doc.props, title: doc.props.title || a.s.fileName } });
+}
+
 export async function save(a: Actions, forceAs = false): Promise<boolean> {
   const s = a.s;
   a.stopEditing();
   try {
-    const doc = documentPres(a);
-    const bytes = await writePptx({ ...doc, props: { ...doc.props, title: doc.props.title || s.fileName } });
     const name = `${s.fileName}.pptx`;
-    const ref = forceAs || !s.fileRef ? await saveFileAs(name, PPTX_FILTERS, bytes) : await saveFile(s.fileRef, name, PPTX_FILTERS, bytes);
+    const target = forceAs ? null : s.fileRef;
+    const ref = await trackSave(isDirectSave(target), async () => {
+      const bytes = await presentationBytes(a);
+      return target ? saveFile(target, name, PPTX_FILTERS, bytes) : saveFileAs(name, PPTX_FILTERS, bytes);
+    });
     if (!ref) return false;
     a.store.set({ fileRef: ref.path || ref.handle ? ref : null, fileName: baseName(ref.name), dirty: false });
     void addRecentFile({ path: ref.path ?? ref.name, name: ref.name, app: "sunum", openedAt: Date.now() });

@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getNative, type AppKind } from "@officehere/core";
 import { TooltipLayer, tipProps } from "./Tooltip";
 import { UpdatePill } from "./Updates";
+import { SaveBadge } from "./SaveBadge";
 import { useUiTheme } from "../hooks/useUiTheme";
+import { resolveSaveState, useSaveStatus, type SaveState } from "../hooks/saveStatus";
 
 export const APP_NAMES: Record<AppKind | "baslangic", string> = {
   belge: "OfficeHere Belge",
@@ -47,6 +49,13 @@ export interface TitleBarProps {
   /** Belge adı (ör. "Belge1"). */
   title: string;
   dirty?: boolean;
+  /**
+   * Kayıt durumu rozeti. Verilmezse `dirty` ve kaydetme akışlarının bildirdiği
+   * durumdan (saveStatus: otomatik kaydetme, elle Kaydet) çıkarılır.
+   */
+  saveState?: SaveState;
+  /** Son başarılı kaydetme zamanı (ms; "Kaydedildi 14:02"). */
+  savedAt?: number;
   /** Hızlı Erişim Araç Çubuğu düğmeleri. */
   quickAccess?: ReactNode;
   onSearch?: (query: string) => void;
@@ -55,8 +64,10 @@ export interface TitleBarProps {
   right?: ReactNode;
 }
 
-export function TitleBar({ app, title, dirty, quickAccess, onSearch, searchPlaceholder = "Ara (Alt+Q)", right }: TitleBarProps) {
+export function TitleBar({ app, title, dirty, saveState, savedAt, quickAccess, onSearch, searchPlaceholder = "Ara (Alt+Q)", right }: TitleBarProps) {
   const [q, setQ] = useState("");
+  const status = useSaveStatus();
+  const badge = saveState ?? resolveSaveState(!!dirty, status);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -108,8 +119,8 @@ export function TitleBar({ app, title, dirty, quickAccess, onSearch, searchPlace
         <span className="oh-titlebar-title" title={title}>
           {title}
           <span className="oh-titlebar-app"> - {APP_NAMES[app]}</span>
-          {dirty && <span className="oh-titlebar-dirty" {...tipProps("Kaydedilmemiş değişiklikler var")}> • Kaydedilmedi</span>}
         </span>
+        {badge && <SaveBadge state={badge} savedAt={savedAt ?? status.savedAt} />}
       </div>
       <div className="oh-titlebar-search">
         {onSearch && (

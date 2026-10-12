@@ -38,6 +38,7 @@ import { SelectionPane } from "./charts/SelectionPane";
 import { ErrorBoundary } from "./app/ErrorBoundary";
 import { recoveryHandlers } from "./app/recovery";
 import { useAutoRecover } from "./app/useAutoRecover";
+import { useFileAutoSave } from "./app/useFileAutoSave";
 import { installInputGuard, refocusGridSoon } from "./app/inputGuard";
 import { UndoDropdown } from "./app/UndoDropdown";
 import { TabloSearch } from "./app/TabloSearch";
@@ -101,11 +102,13 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
   const lifecycle = useDocumentLifecycle({
     title: baseName(ctl.fileName),
     dirty: ctl.dirty,
+    path: ctl.fileRef?.path,
     onOpenPath: (p) => void files.openPath(p),
     onSave: () => files.save(),
   });
   files.confirmDiscard = lifecycle.confirmDiscard;
   ctl.saveHook = () => files.save();
+  useFileAutoSave(ctl, files);
 
   useEffect(() => {
     ctl.openDialog = (id, arg) => {

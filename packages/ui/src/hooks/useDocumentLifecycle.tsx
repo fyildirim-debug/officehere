@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { getNative } from "@officehere/core";
+import { getNative, type DocumentState } from "@officehere/core";
 import { SaveChangesDialog, type ConfirmChoice } from "../components/Dialog";
 
 export interface DocumentLifecycleOptions {
   /** Pencere başlığında görünen belge adı. */
   title: string;
   dirty: boolean;
+  /** Belgenin diskteki tam yolu (varsa); masaüstü kabuğu oturum ve pencere eşlemesi için kullanır. */
+  path?: string;
   /**
    * Masaüstünden bir dosya yolu açılmak istendiğinde (başlangıçta `?file=`
    * parametresi, dosya ilişkilendirme, son kullanılanlar).
@@ -29,7 +31,7 @@ export interface DocumentLifecycle {
  * Masaüstü kabuğuyla belge yaşam döngüsünü bağlar: başlık/kirli durumu,
  * kapatmadan önce sorma, dosya açma istekleri; tarayıcıda sayfadan ayrılma uyarısı.
  */
-export function useDocumentLifecycle({ title, dirty, onOpenPath, onSave }: DocumentLifecycleOptions): DocumentLifecycle {
+export function useDocumentLifecycle({ title, dirty, path, onOpenPath, onSave }: DocumentLifecycleOptions): DocumentLifecycle {
   const [asking, setAsking] = useState(false);
   const resolver = useRef<((c: ConfirmChoice) => void) | null>(null);
   const dirtyRef = useRef(dirty);
@@ -57,8 +59,9 @@ export function useDocumentLifecycle({ title, dirty, onOpenPath, onSave }: Docum
   }, [ask]);
 
   useEffect(() => {
-    getNative()?.setDocumentState({ title, dirty });
-  }, [title, dirty]);
+    const state: DocumentState = { title, dirty, path };
+    getNative()?.setDocumentState(state);
+  }, [title, dirty, path]);
 
   useEffect(() => {
     const native = getNative();

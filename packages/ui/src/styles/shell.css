@@ -118,12 +118,16 @@
   flex: 0 1000 auto;
   min-width: 0;
   overflow: hidden;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 0 12px;
 }
 
 .oh-titlebar-title {
   display: block;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -134,9 +138,101 @@
   opacity: 0.85;
 }
 
-.oh-titlebar-dirty {
-  opacity: 0.75;
+/* Kayıt durumu rozeti: başlık çubuğu renginde, ölçülü. */
+.oh-savebadge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: color-mix(in srgb, var(--oh-titlebar-fg) 84%, var(--oh-titlebar-bg));
+  font: inherit;
   font-size: 11.5px;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  animation: oh-fade-in 0.2s ease-out;
+  /* İpucu masaüstünde de görünsün (sürükleme bölgesi fare olaylarını yutar). */
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* Durumlar arasında genişlik sabit kalsın: başlık her kayıtta kaymasın. */
+.oh-savebadge:not(.is-error) {
+  min-width: 11em;
+}
+
+.oh-savebadge svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.oh-savebadge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.oh-savebadge-spin {
+  animation: oh-savebadge-spin 0.9s linear infinite;
+}
+
+@keyframes oh-savebadge-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+/* "Kaydedildi" birkaç saniye sonra geri çekilir ama okunur kalır. */
+.oh-savebadge.is-saved {
+  animation:
+    oh-fade-in 0.2s ease-out,
+    oh-savebadge-settle 0.8s ease 2.5s forwards;
+}
+
+@keyframes oh-savebadge-settle {
+  to {
+    color: color-mix(in srgb, var(--oh-titlebar-fg) 72%, var(--oh-titlebar-bg));
+  }
+}
+
+.oh-savebadge.is-error {
+  background: color-mix(in srgb, var(--oh-titlebar-fg) 16%, transparent);
+  color: var(--oh-titlebar-fg);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.oh-savebadge.is-error:hover {
+  background: color-mix(in srgb, var(--oh-titlebar-fg) 26%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oh-savebadge-spin {
+    animation: none;
+  }
+
+  .oh-savebadge.is-saved {
+    animation: oh-savebadge-settle 0.01s linear 2.5s forwards;
+  }
+}
+
+/* Dar pencerede rozet yalnız simgeye iner. */
+@media (max-width: 760px) {
+  .oh-savebadge,
+  .oh-savebadge:not(.is-error) {
+    min-width: 0;
+    font-size: 0;
+    gap: 0;
+    padding: 0 4px;
+  }
 }
 
 .oh-titlebar-search {
@@ -225,4 +321,28 @@
 /* macOS: trafik ışıkları için solda boşluk */
 :root.oh-platform-darwin .oh-titlebar {
   padding-left: 78px;
+}
+
+/* Seçenekler: açıklamalı onay kutusu (ör. Otomatik kaydet) */
+.oh-option-check {
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.oh-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.oh-option-desc {
+  color: var(--oh-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.oh-option-check input[type="checkbox"] {
+  margin-top: 2px;
+  flex: none;
 }

@@ -16,3 +16,7 @@ export * from "./hooks/useUiTheme";
 export * from "./hooks/useDocumentLifecycle";
 export * from "./components/CommandSearch";
 export * from "./components/commandIndex";
+export * from "./components/SaveBadge";
+export * from "./hooks/saveStatus";
+export * from "./hooks/autoSaveCore";
+export * from "./hooks/useAutoSave";
