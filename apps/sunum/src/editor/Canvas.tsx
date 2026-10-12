@@ -19,10 +19,10 @@ import { SelectionOverlay } from "./SelectionOverlay";
 import { snapMove, snapValue, type GuideLine } from "./snap";
 import { cellSelRects, childOfGroupContaining, cropGhostOf, InkPreview, inkIdsAt, MARGIN, topLevelOf, type Drag, type Pt } from "./canvasUtils";
 import { useAutofit } from "./useAutofit";
-import { contextKind, isInEditedShape, type CanvasMenuKind } from "./contextKind";
+import { contextKind, isInEditedShape, useAnimBadges, type CanvasMenuKind } from "./contextKind";
 import { StageGuides } from "./MotionPathOverlay";
 import { PointEditor } from "./PointEditor";
-import { useAnimBadges } from "./contextKind";
+import { SunumMiniToolbar } from "./MiniToolbar";
 import { useViewportZoom } from "./useViewportZoom";
 import { useEditorRenderer } from "./useEditorRenderer";
 
@@ -692,6 +692,7 @@ export function Canvas(props: CanvasProps) {
           </div>
         </div>
       </div>
+      <SunumMiniToolbar state={state} actions={actions} slideRef={slideRef} />
     </div>
   );
 }

@@ -431,45 +431,7 @@
   text-decoration: none;
 }
 
-/* Mini araç çubuğu */
-.bl-minibar {
-  position: fixed;
-  z-index: 950;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 5px 6px;
-  background: var(--oh-surface, #fff);
-  border: 1px solid transparent;
-  border-radius: 12px;
-  /* Seçimden doğan yüzey: altında vurgu renginde yumuşak bir hale. */
-  box-shadow: 0 12px 28px -10px var(--oh-aura), var(--oh-float-shadow);
-  animation: bl-minibar-in 0.2s var(--oh-ease-out);
-}
-
-.bl-minibar-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-/* Seçimin üstünde, metinden yukarı doğru belirir. */
-@keyframes bl-minibar-in {
-  from {
-    opacity: 0;
-    translate: 0 6px;
-    scale: 0.98;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bl-minibar {
-    animation: oh-fade-in 0.12s ease-out;
-  }
-}
-
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .bl-minibar,
   .bl-linktip {
     background: var(--oh-glass-bg);
     -webkit-backdrop-filter: var(--oh-glass-filter);
