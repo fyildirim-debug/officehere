@@ -8,6 +8,7 @@ import { parsePPr, parseRPr, stripUndef, type ParaProps, type RunProps } from ".
 import { tableStyleFromId } from "./styleXml";
 import type { ListSig } from "./numbering";
 import type { DocxReader } from "./reader";
+import { readDrawing, readPict } from "./readerDrawing";
 
 export type Mark = { type: string; attrs?: Record<string, unknown> };
 
@@ -37,8 +38,8 @@ export class PartReader {
   watermark: DocSettings["watermark"] = null;
 
   constructor(
-    private r: DocxReader,
-    private rels: Map<string, Rel>,
+    readonly r: DocxReader,
+    readonly rels: Map<string, Rel>,
   ) {}
 
   /** Not metni okunuyor: not stilinin (Dipnot Metni) biçimi doğrudan biçime çevrilmez. */
@@ -199,7 +200,7 @@ export class PartReader {
   }
 
   /** Geçerli paragrafa bağlı metin kutuları. */
-  private boxes: JSONContent[] = [];
+  boxes: JSONContent[] = [];
 
   /** Satır içi öğeleri dolaşır; sayfa sonu yeni bir parça başlatır. */
   private inline(el: Element, base: RunProps, marks: Mark[], segs: JSONContent[][], extra: JSONContent[]) {
@@ -355,18 +356,18 @@ export class PartReader {
           break;
         }
         case "drawing":
-          if (!suppress) this.drawing(c, push, extra);
+          if (!suppress) readDrawing(this, c, push, extra);
           break;
         case "pict":
-          if (!suppress) this.pict(c, push, extra);
+          if (!suppress) readPict(this, c, push, extra);
           break;
         case "AlternateContent": {
           const ch = kid(c, "Choice") ?? kid(c, "Fallback");
           const dr = ch ? descendants(ch, "drawing")[0] : null;
-          if (dr) this.drawing(dr, push, extra);
+          if (dr) readDrawing(this, dr, push, extra);
           else if (ch) {
             const pc = descendants(ch, "pict")[0];
-            if (pc) this.pict(pc, push, extra);
+            if (pc) readPict(this, pc, push, extra);
           }
           break;
         }
@@ -383,149 +384,6 @@ export class PartReader {
     const old = runMarks(props);
     if (oldChar) old.push({ type: "charStyle", attrs: { styleId: oldChar } });
     return { type: "formatChange", attrs: { author: attr(change, "author") ?? "", date: attr(change, "date") ?? "", old: JSON.stringify(old) } };
-  }
-
-  private drawing(d: Element, push: (n: JSONContent) => void, extra: JSONContent[]) {
-    const blip = descendants(d, "blip")[0];
-    const txbx = descendants(d, "txbxContent")[0];
-    if (txbx && !blip) {
-      this.boxes.push(this.textBoxFromDrawing(d, txbx));
-      void extra;
-      return;
-    }
-    if (!blip) return;
-    const rid = blip.getAttributeNS(NS.r, "embed") ?? attr(blip, "embed");
-    const rel = rid ? this.rels.get(rid) : undefined;
-    const src = rel ? this.r.media.get(rel.target) : undefined;
-    if (!src) return;
-    const ext = descendants(d, "extent")[0];
-    const cx = attrNum(ext, "cx") ?? 1905000;
-    const cy = attrNum(ext, "cy") ?? 1428750;
-    const docPr = descendants(d, "docPr")[0];
-    const xfrm = descendants(d, "xfrm")[0];
-    const rot = Math.round((attrNum(xfrm, "rot") ?? 0) / 60000);
-    push({
-      type: "image",
-      attrs: {
-        src,
-        alt: docPr?.getAttribute("descr") || null,
-        width: Math.round(cx / 9525),
-        height: Math.round(cy / 9525),
-        rotate: rot || 0,
-        flipH: xfrm?.getAttribute("flipH") === "1",
-        flipV: xfrm?.getAttribute("flipV") === "1",
-      },
-    });
-  }
-
-  private pict(pc: Element, push: (n: JSONContent) => void, _extra: JSONContent[]) {
-    const tp = descendants(pc, "textpath").find((x) => x.hasAttribute("string"));
-    if (tp) {
-      const shape = tp.parentElement;
-      const style = shape?.getAttribute("style") ?? "";
-      const fill = shape?.getAttribute("fillcolor") ?? "#C0C0C0";
-      const fontM = /font-family:\s*&?quot;?"?([^";&]+)/.exec(tp.getAttribute("style") ?? "");
-      const opacity = descendants(shape ?? pc, "fill")[0]?.getAttribute("opacity");
-      this.watermark = {
-        text: tp.getAttribute("string") ?? "",
-        color: fill.startsWith("#") ? fill.toUpperCase() : fill === "silver" ? "#C0C0C0" : fill === "gray" ? "#808080" : "#C0C0C0",
-        layout: /rotation:\s*(315|-45)/.test(style) ? "diagonal" : "horizontal",
-        font: fontM?.[1]?.trim() || "Aptos",
-        semitransparent: !!opacity && parseFloat(opacity) < 1,
-      };
-      return;
-    }
-    const img = descendants(pc, "imagedata")[0];
-    if (img) {
-      const rid = img.getAttributeNS(NS.r, "id") ?? attr(img, "id");
-      const rel = rid ? this.rels.get(rid) : undefined;
-      const src = rel ? this.r.media.get(rel.target) : undefined;
-      if (!src) return;
-      const style = img.parentElement?.getAttribute("style") ?? "";
-      const w = /width:\s*([\d.]+)pt/.exec(style);
-      const h = /height:\s*([\d.]+)pt/.exec(style);
-      push({ type: "image", attrs: { src, width: w ? Math.round(parseFloat(w[1]) * 1.333) : 200, height: h ? Math.round(parseFloat(h[1]) * 1.333) : 150 } });
-      return;
-    }
-    const txbx = descendants(pc, "txbxContent")[0];
-    if (txbx) {
-      const shape = descendants(pc, "shape")[0] ?? descendants(pc, "rect")[0];
-      const st = shape?.getAttribute("style") ?? "";
-      const ptv = (k: string, d: number) => {
-        const m = new RegExp(`(?:^|;)\\s*${k}:\\s*(-?[\\d.]+)(pt|px|in)?`).exec(st);
-        if (!m) return d;
-        const v = parseFloat(m[1]);
-        return m[2] === "px" ? v : m[2] === "in" ? v * 96 : v / 0.75;
-      };
-      const color = (v: string | null | undefined) => (v && /^#?[0-9a-f]{6}$/i.test(v) ? `#${v.replace("#", "").toUpperCase()}` : null);
-      const filled = shape?.getAttribute("filled");
-      const stroked = shape?.getAttribute("stroked");
-      this.boxes.push({
-        type: "textBox",
-        attrs: {
-          x: Math.round(ptv("margin-left", 0)),
-          y: Math.round(ptv("margin-top", 0)),
-          w: Math.round(ptv("width", 240)),
-          h: Math.round(ptv("height", 120)),
-          fill: filled === "f" || filled === "false" ? null : (color(shape?.getAttribute("fillcolor")) ?? "#FFFFFF"),
-          border: stroked === "f" || stroked === "false" ? null : (color(shape?.getAttribute("strokecolor")) ?? "#000000"),
-          borderWidth: parseFloat(shape?.getAttribute("strokeweight") ?? "0.75") || 0.75,
-        },
-        content: this.textBoxBlocks(txbx),
-      });
-    }
-  }
-
-  /** Metin kutusu içeriği (yalnız paragraf ve listeler; tablolar paragraflara dönüşür). */
-  private textBoxBlocks(txbx: Element): JSONContent[] {
-    const out: JSONContent[] = [];
-    const flat = (b: JSONContent) => {
-      if (b.type === "paragraph" || b.type === "heading" || b.type === "bulletList" || b.type === "orderedList") out.push(b);
-      else if (b.type === "textBox") (b.content ?? []).forEach(flat);
-      else if (b.type === "table") for (const row of b.content ?? []) for (const cell of row.content ?? []) (cell.content ?? []).forEach(flat);
-    };
-    const saved = this.boxes;
-    this.boxes = [];
-    this.blocks(txbx).forEach(flat);
-    this.boxes = saved;
-    return out.length ? out : [{ type: "paragraph" }];
-  }
-
-  /** DrawingML (wp:anchor / wp:inline + wps:wsp) metin kutusu. */
-  private textBoxFromDrawing(d: Element, txbx: Element): JSONContent {
-    const EMU = 9525;
-    const ext = descendants(d, "extent")[0];
-    const posH = descendants(d, "positionH")[0];
-    const posV = descendants(d, "positionV")[0];
-    const off = (el: Element | undefined) => {
-      const o = el ? descendants(el, "posOffset")[0] : undefined;
-      return o ? Math.round(parseInt(o.textContent ?? "0", 10) / EMU) : 0;
-    };
-    let x = off(posH);
-    let y = off(posV);
-    // Sayfaya göre konumlar kenar boşluğuna göre yaklaşıklanır.
-    if (posH && attr(posH, "relativeFrom") === "page") x = Math.max(0, x - 94);
-    if (posV && attr(posV, "relativeFrom") === "page") y = Math.max(0, y - 94);
-    const spPr = descendants(d, "spPr")[0];
-    const ln = spPr ? kid(spPr, "ln") : null;
-    const lnColor = ln ? attr(descendants(ln, "srgbClr")[0], "val") : null;
-    const noLine = !!ln && !!kid(ln, "noFill");
-    const fillEl = spPr ? kid(spPr, "solidFill") : null;
-    const fillColor = fillEl ? attr(descendants(fillEl, "srgbClr")[0], "val") : null;
-    const noFill = !!spPr && !!kid(spPr, "noFill");
-    return {
-      type: "textBox",
-      attrs: {
-        x,
-        y,
-        w: Math.round((attrNum(ext, "cx") ?? 2286000) / EMU),
-        h: Math.round((attrNum(ext, "cy") ?? 1143000) / EMU),
-        border: noLine ? null : lnColor ? `#${lnColor.toUpperCase()}` : "#000000",
-        borderWidth: ln && attrNum(ln, "w") ? +((attrNum(ln, "w") ?? 9525) / 12700).toFixed(2) : 0.75,
-        fill: noFill ? null : fillColor ? `#${fillColor.toUpperCase()}` : "#FFFFFF",
-      },
-      content: this.textBoxBlocks(txbx),
-    };
   }
 
   private table(tbl: Element): JSONContent {
