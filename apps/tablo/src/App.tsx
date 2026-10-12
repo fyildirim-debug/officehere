@@ -38,6 +38,7 @@ import { SelectionPane } from "./charts/SelectionPane";
 import { ErrorBoundary } from "./app/ErrorBoundary";
 import { recoveryHandlers } from "./app/recovery";
 import { useAutoRecover } from "./app/useAutoRecover";
+import { forgetOwnDraft } from "./app/draftStore";
 import { useFileAutoSave } from "./app/useFileAutoSave";
 import { installInputGuard, refocusGridSoon } from "./app/inputGuard";
 import { UndoDropdown } from "./app/UndoDropdown";
@@ -105,6 +106,7 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
     path: ctl.fileRef?.path,
     onOpenPath: (p) => void files.openPath(p),
     onSave: () => files.save(),
+    onClose: forgetOwnDraft,
   });
   files.confirmDiscard = lifecycle.confirmDiscard;
   ctl.saveHook = () => files.save();

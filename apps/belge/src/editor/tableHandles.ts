@@ -1,9 +1,9 @@
 // Tablo tutamaçları (Word'deki gibi): sol üstte taşıma tutamacı (✥; tıklayınca tabloyu seçer, sürükleyince
 // tabloyu taşır) ve sağ altta boyutlandırma tutamacı (sütun genişliklerini orantılı ölçekler).
 import { Extension } from "@tiptap/core";
-import type { Node as PMNode } from "@tiptap/pm/model";
+import { closeHistory } from "@tiptap/pm/history";
 import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
-import { CellSelection, TableMap } from "@tiptap/pm/tables";
+import { CellSelection, TableMap, columnResizingPluginKey } from "@tiptap/pm/tables";
 import type { EditorView } from "@tiptap/pm/view";
 
 /** Tabloyu (tüm hücreleriyle) seçer. */
@@ -35,22 +35,85 @@ export function moveTable(view: EditorView, tablePos: number, target: number): b
   return true;
 }
 
+/** Tablonun yakınlaştırma ölçeği (ekran pikseli / CSS pikseli). */
+function zoomOf(el: HTMLElement): number {
+  const r = el.getBoundingClientRect().width;
+  return el.offsetWidth ? r / el.offsetWidth : 1;
+}
+
+/**
+ * Sütun genişlikleri (CSS px). Hücrenin colwidth özniteliği varsa o; yoksa ekrandaki
+ * tek sütunluk hücrenin genişliği (yakınlaştırma düzeltilmiş). Birleştirilmiş hücreler
+ * yalnız boş kalan sütunlara bölüştürülür.
+ */
+export function measureColumns(view: EditorView, tablePos: number): number[] {
+  const table = view.state.doc.nodeAt(tablePos);
+  if (!table || table.type.name !== "table") return [];
+  const map = TableMap.get(table);
+  const widths: (number | null)[] = Array.from({ length: map.width }, () => null);
+  const cells = Array.from(new Set(map.map));
+  for (const off of cells) {
+    const cw = table.nodeAt(off)?.attrs.colwidth as number[] | null | undefined;
+    const rect = map.findCell(off);
+    for (let c = rect.left; c < rect.right; c++) if (cw?.[c - rect.left] && widths[c] == null) widths[c] = cw[c - rect.left];
+  }
+  const dom = view.nodeDOM(tablePos) as HTMLElement | null;
+  const zoom = dom ? zoomOf(dom) || 1 : 1;
+  const cellWidth = (off: number) => (view.nodeDOM(tablePos + 1 + off) as HTMLElement | null)?.getBoundingClientRect().width ?? 0;
+  // Önce tek sütunlu hücreler; birleştirilmiş hücreler ikinci turda kalanı bölüştürür.
+  for (const off of cells) {
+    const rect = map.findCell(off);
+    if (rect.right - rect.left !== 1 || widths[rect.left] != null) continue;
+    const w = cellWidth(off) / zoom;
+    if (w) widths[rect.left] = w;
+  }
+  for (const off of cells) {
+    const rect = map.findCell(off);
+    const missing = Array.from({ length: rect.right - rect.left }, (_, i) => rect.left + i).filter((c) => widths[c] == null);
+    if (!missing.length) continue;
+    const known = Array.from({ length: rect.right - rect.left }, (_, i) => widths[rect.left + i] ?? 0).reduce((x, y) => x + y, 0);
+    const w = cellWidth(off) / zoom;
+    for (const c of missing) widths[c] = Math.max(20, (w - known) / missing.length);
+  }
+  return widths.map((w) => Math.max(20, Math.round(w ?? 100)));
+}
+
+/** Her hücrenin colwidth özniteliğini verilen sütun genişliklerine göre yazar. */
+export function columnWidthsTr(view: EditorView, tablePos: number, widths: number[]) {
+  const table = view.state.doc.nodeAt(tablePos);
+  const tr = view.state.tr;
+  if (!table) return tr;
+  const map = TableMap.get(table);
+  for (const off of new Set(map.map)) {
+    const cell = table.nodeAt(off);
+    if (!cell) continue;
+    const rect = map.findCell(off);
+    const colwidth = widths.slice(rect.left, rect.right).map((w) => Math.max(20, Math.round(w)));
+    const cur = cell.attrs.colwidth as number[] | null;
+    if (cur && cur.length === colwidth.length && cur.every((w, i) => w === colwidth[i])) continue;
+    tr.setNodeMarkup(tablePos + 1 + off, undefined, { ...cell.attrs, colwidth });
+  }
+  return tr;
+}
+
+/**
+ * Boyutlandırmadan önce genişliği tanımsız sütunları ekrandaki genişlikleriyle sabitler
+ * (geri al geçmişine girmez). Esnek sütunlar sürüklerken kendiliğinden yeniden dağıldığı
+ * için tablo zıplıyordu; sabit sütunlarla yalnız sürüklenen kenar hareket eder.
+ */
+export function freezeColumns(view: EditorView, tablePos: number): number[] {
+  const widths = measureColumns(view, tablePos);
+  const tr = columnWidthsTr(view, tablePos, widths);
+  if (tr.docChanged) view.dispatch(tr.setMeta("addToHistory", false));
+  return widths;
+}
+
 /** Sütun genişliklerini orantılı ölçekler. */
 export function scaleTable(view: EditorView, tablePos: number, factor: number) {
-  const table = view.state.doc.nodeAt(tablePos);
-  if (!table || !Number.isFinite(factor) || factor <= 0) return;
-  const tr = view.state.tr;
-  const domTable = (view.nodeDOM(tablePos) as HTMLElement | null)?.querySelector("table");
-  const widths = Array.from(domTable?.querySelectorAll("tr:first-child > *") ?? []).map((c) => (c as HTMLElement).getBoundingClientRect().width);
-  table.descendants((cell: PMNode, off: number) => {
-    if (cell.type.name !== "tableCell" && cell.type.name !== "tableHeader") return true;
-    const cw = (cell.attrs.colwidth as number[] | null) ?? null;
-    const span = (cell.attrs.colspan as number) || 1;
-    const base = cw && cw.every((w) => w > 0) ? cw : Array.from({ length: span }, () => (widths[0] ?? 100) / Math.max(1, span));
-    tr.setNodeMarkup(tablePos + 1 + off, undefined, { ...cell.attrs, colwidth: base.map((w) => Math.max(20, Math.round(w * factor))) });
-    return false;
-  });
-  view.dispatch(tr);
+  if (!Number.isFinite(factor) || factor <= 0) return;
+  const widths = measureColumns(view, tablePos);
+  if (!widths.length) return;
+  view.dispatch(closeHistory(columnWidthsTr(view, tablePos, widths.map((w) => w * factor))));
 }
 
 class HandlesView {
@@ -76,6 +139,8 @@ class HandlesView {
     }
     view.dom.addEventListener("mousemove", this.onMove);
     view.dom.addEventListener("mouseleave", this.onLeave);
+    // Yakalama evresinde: tablo eklentisinin sürükleme başlangıcından önce çalışır.
+    view.dom.addEventListener("mousedown", this.onBorderDown, true);
     document.addEventListener("scroll", this.reposition, true);
     this.move.addEventListener("mousedown", this.onMoveDown);
     this.resize.addEventListener("mousedown", this.onResizeDown);
@@ -158,22 +223,109 @@ class HandlesView {
 
   private onResizeDown = (e: MouseEvent) => {
     e.preventDefault();
-    const t = this.tableEl;
     const pos = this.tablePos;
-    if (!t || pos < 0) return;
-    const startW = t.getBoundingClientRect().width;
+    if (!this.tableEl || pos < 0) return;
+    // Sürükleme başlayınca sütunlar sabitlenir; böylece yalnız orantılı ölçek değişir.
+    const start = measureColumns(this.view, pos);
+    let frozen = false;
+    const t = (this.view.nodeDOM(pos) as HTMLElement | null)?.querySelector("table") ?? null;
+    if (!t || !start.length) return;
+    this.tableEl = t;
+    const cols = Array.from(t.querySelectorAll<HTMLElement>(":scope > colgroup > col"));
+    const total = start.reduce((x, y) => x + y, 0);
+    const zoom = zoomOf(t) || 1;
     const sx = e.clientX;
-    const scale = startW / (t.offsetWidth || startW);
-    const onMove = (ev: MouseEvent) => {
-      t.style.width = `${Math.max(60, (startW + ev.clientX - sx) / scale)}px`;
+    const factorAt = (x: number) => Math.max(60, total + (x - sx) / zoom) / total;
+    const show = (f: number) => {
+      start.forEach((w, i) => {
+        if (cols[i]) cols[i].style.width = `${Math.max(20, Math.round(w * f))}px`;
+      });
+      t.style.width = `${cols.length ? start.reduce((sum, w) => sum + Math.max(20, Math.round(w * f)), 0) : Math.round(total * f)}px`;
+      t.style.minWidth = "";
       this.reposition();
+    };
+    const onMove = (ev: MouseEvent) => {
+      if (!frozen) {
+        if (Math.abs(ev.clientX - sx) < 2) return;
+        frozen = true;
+        freezeColumns(this.view, pos);
+      }
+      show(factorAt(ev.clientX));
     };
     const onUp = (ev: MouseEvent) => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
-      const factor = Math.max(60, startW + ev.clientX - sx) / startW;
-      if (Math.abs(factor - 1) > 0.01) scaleTable(this.view, pos, factor);
-      else t.style.width = "";
+      if (!frozen) return;
+      const f = factorAt(ev.clientX);
+      if (Math.abs(f - 1) > 0.005) this.view.dispatch(closeHistory(columnWidthsTr(this.view, pos, start.map((w) => w * f))));
+      else show(1);
+      this.reposition();
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  /**
+   * Sütun kenarı sürükleme (Word'deki gibi): kenarın iki yanındaki sütunlar birlikte değişir,
+   * tablo genişliği korunur; son sütunun sağ kenarı tabloyu genişletir. Tablo eklentisinin
+   * kendi sürüklemesi esnek sütunları en küçük genişliğe çöktürdüğü için olay burada alınır.
+   */
+  private onBorderDown = (e: MouseEvent) => {
+    if (e.button !== 0 || !this.view.editable || !this.view.dom.classList.contains("resize-cursor")) return;
+    const handle = columnResizingPluginKey.getState(this.view.state)?.activeHandle ?? -1;
+    if (handle < 0) return;
+    const $cell = this.view.state.doc.resolve(handle);
+    const table = $cell.node(-1);
+    if (!table || table.type.name !== "table") return;
+    const tablePos = $cell.before(-1);
+    const col = TableMap.get(table).findCell(handle - $cell.start(-1)).right - 1;
+    e.preventDefault();
+    e.stopPropagation();
+    const start = measureColumns(this.view, tablePos);
+    let frozen = false;
+    const t = (this.view.nodeDOM(tablePos) as HTMLElement | null)?.querySelector("table");
+    if (!t || col < 0 || col >= start.length) return;
+    const cols = Array.from(t.querySelectorAll<HTMLElement>(":scope > colgroup > col"));
+    const zoom = zoomOf(t) || 1;
+    const sx = e.clientX;
+    let widths = start;
+    const widthsAt = (x: number) => {
+      const dx = (x - sx) / zoom;
+      const next = start.slice();
+      if (col < start.length - 1) {
+        const pair = start[col] + start[col + 1];
+        next[col] = Math.max(20, Math.min(pair - 20, start[col] + dx));
+        next[col + 1] = pair - next[col];
+      } else next[col] = Math.max(20, start[col] + dx);
+      return next.map((w) => Math.round(w));
+    };
+    const show = (ws: number[]) => {
+      ws.forEach((w, i) => {
+        if (cols[i]) cols[i].style.width = `${w}px`;
+      });
+      t.style.width = `${ws.reduce((x, y) => x + y, 0)}px`;
+      t.style.minWidth = "";
+      this.reposition();
+    };
+    document.body.classList.add("bl-col-resizing");
+    const onMove = (ev: MouseEvent) => {
+      // Sütunlar ancak gerçekten sürüklenince sabitlenir; tıklayıp bırakmak belgeyi değiştirmez.
+      if (!frozen) {
+        if (Math.abs(ev.clientX - sx) < 2) return;
+        frozen = true;
+        freezeColumns(this.view, tablePos);
+      }
+      widths = widthsAt(ev.clientX);
+      show(widths);
+    };
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.classList.remove("bl-col-resizing");
+      if (!frozen) return;
+      widths = widthsAt(ev.clientX);
+      if (widths.some((w, i) => w !== start[i])) this.view.dispatch(closeHistory(columnWidthsTr(this.view, tablePos, widths)));
+      else show(start);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -186,6 +338,7 @@ class HandlesView {
   destroy() {
     this.view.dom.removeEventListener("mousemove", this.onMove);
     this.view.dom.removeEventListener("mouseleave", this.onLeave);
+    this.view.dom.removeEventListener("mousedown", this.onBorderDown, true);
     document.removeEventListener("scroll", this.reposition, true);
     this.move.remove();
     this.resize.remove();

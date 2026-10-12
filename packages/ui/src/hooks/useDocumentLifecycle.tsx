@@ -15,6 +15,12 @@ export interface DocumentLifecycleOptions {
   onOpenPath: (path: string) => void;
   /** "Kaydet" seçilince çağrılır; kayıt başarılıysa true dönmeli. */
   onSave: () => Promise<boolean>;
+  /**
+   * Masaüstünde pencere kullanıcı isteğiyle kapanırken (kaydedildikten ya da
+   * "Kaydetme" seçildikten sonra) çağrılır; kurtarma taslağını silmek için.
+   * Pencere bu işin bitmesini bekler.
+   */
+  onClose?: () => void | Promise<void>;
 }
 
 export interface DocumentLifecycle {
@@ -31,12 +37,14 @@ export interface DocumentLifecycle {
  * Masaüstü kabuğuyla belge yaşam döngüsünü bağlar: başlık/kirli durumu,
  * kapatmadan önce sorma, dosya açma istekleri; tarayıcıda sayfadan ayrılma uyarısı.
  */
-export function useDocumentLifecycle({ title, dirty, path, onOpenPath, onSave }: DocumentLifecycleOptions): DocumentLifecycle {
+export function useDocumentLifecycle({ title, dirty, path, onOpenPath, onSave, onClose }: DocumentLifecycleOptions): DocumentLifecycle {
   const [asking, setAsking] = useState(false);
   const resolver = useRef<((c: ConfirmChoice) => void) | null>(null);
   const dirtyRef = useRef(dirty);
   const openRef = useRef(onOpenPath);
   const saveRef = useRef(onSave);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   dirtyRef.current = dirty;
   openRef.current = onOpenPath;
   saveRef.current = onSave;
@@ -67,7 +75,17 @@ export function useDocumentLifecycle({ title, dirty, path, onOpenPath, onSave }:
     const native = getNative();
     if (!native) return;
     const offOpen = native.onOpenPath((p) => openRef.current(p));
-    const offClose = native.onBeforeClose(() => confirmDiscard());
+    const offClose = native.onBeforeClose(async () => {
+      const ok = await confirmDiscard();
+      if (ok) {
+        try {
+          await closeRef.current?.();
+        } catch {
+          // taslak silinemese de pencere kapanır
+        }
+      }
+      return ok;
+    });
     return () => {
       offOpen();
       offClose();

@@ -86,9 +86,23 @@ function run<T>(d: IDBDatabase, mode: IDBTransactionMode, fn: (s: IDBObjectStore
   });
 }
 
+/** Pencere kullanıcı isteğiyle kapanıyor: artık taslak yazılmaz. */
+let closing = false;
+
+/**
+ * Pencere kullanıcı isteğiyle kapanıyor (kaydedildi ya da "Kaydetme" seçildi):
+ * bu pencerenin taslağı silinir ve kapanırken yeniden yazılmaz. Yalnız çökme
+ * sonrası kalan taslaklar bir sonraki açılışta önerilir.
+ */
+export async function forgetOwnDraft(): Promise<void> {
+  closing = true;
+  await deleteDraft(SESSION_ID);
+}
+
 export async function writeDraft(rec: DraftRecord): Promise<boolean> {
+  if (closing) return false;
   const d = await db();
-  if (!d) return false;
+  if (!d || closing) return false;
   const ok = (await run(d, "readwrite", (s) => s.put(rec))) !== null;
   if (ok) {
     const metas = await listDraftMeta();

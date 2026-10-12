@@ -98,8 +98,13 @@ function lsDrafts(): Draft[] {
   return out;
 }
 
+/** Pencere kullanıcı isteğiyle kapanıyor: artık taslak yazılmaz. */
+let closing = false;
+
 export async function writeDraft(d: Draft): Promise<boolean> {
+  if (closing) return false;
   const db = await openDb();
+  if (closing) return false;
   if (db) {
     const ok = await tx(db, "readwrite", (s) => s.put(d));
     if (ok !== null) {
@@ -122,6 +127,16 @@ export async function listDrafts(): Promise<Draft[]> {
   const db = await openDb();
   const fromDb = db ? ((await tx(db, "readonly", (s) => s.getAll() as IDBRequest<Draft[]>)) ?? []) : [];
   return [...fromDb, ...lsDrafts()];
+}
+
+/**
+ * Pencere kullanıcı isteğiyle kapanıyor (kaydedildi ya da "Kaydetme" seçildi):
+ * taslak silinir ve kapanırken yeniden yazılmaz. Yalnız çökme sonrası kalan
+ * taslaklar bir sonraki açılışta önerilir.
+ */
+export async function forgetDraft(session: string): Promise<void> {
+  closing = true;
+  await deleteDraft(session);
 }
 
 export async function deleteDraft(session: string): Promise<void> {

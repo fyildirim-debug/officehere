@@ -433,20 +433,20 @@
   padding: 4px 8px 4px 12px;
   border-bottom: 1px solid var(--oh-border);
   font-size: 12px;
-  background: #fff4ce;
-  color: #242424;
+  background: var(--oh-msg-warning-bg);
+  color: var(--oh-text);
 }
 
 .oh-messagebar.is-info {
-  background: #ebf3fc;
+  background: var(--oh-msg-info-bg);
 }
 
 .oh-messagebar.is-error {
-  background: #fde7e9;
+  background: var(--oh-msg-error-bg);
 }
 
 .oh-messagebar.is-success {
-  background: #dff6dd;
+  background: var(--oh-msg-success-bg);
 }
 
 .oh-messagebar-text {
@@ -458,6 +458,12 @@
   min-width: 0;
 }
 
+/* İkincil düğme her temada okunur: yüzey zemini, tema metni. */
+.oh-messagebar .oh-btn:not(.is-primary) {
+  background: var(--oh-surface);
+  color: var(--oh-text);
+}
+
 .oh-messagebar-close {
   width: 24px;
   height: 24px;
@@ -467,8 +473,12 @@
   border-radius: var(--oh-radius);
 }
 
+.oh-messagebar-close {
+  color: inherit;
+}
+
 .oh-messagebar-close:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: color-mix(in srgb, var(--oh-text) 10%, transparent);
 }
 
 /* Klavye odağı (menüler, renk paleti) */

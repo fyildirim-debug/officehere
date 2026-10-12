@@ -8,11 +8,14 @@ import { useCallback, useEffect, useState } from "react";
 import { MessageBar } from "@officehere/ui";
 import type { Actions } from "../state/actions";
 import { documentPres } from "../state/masterActions";
-import { announceLive, deleteDraft, listDrafts, liveSessions, newSessionId, pickDraft, writeDraft, type Draft } from "./draftStore";
+import { announceLive, deleteDraft, forgetDraft, listDrafts, liveSessions, newSessionId, pickDraft, writeDraft, type Draft } from "./draftStore";
 import { loadPresentation } from "./fileOps";
 
 /** Bu pencerenin oturum kimliği. */
 export const SESSION_ID = newSessionId();
+
+/** Pencere kullanıcı isteğiyle kapanırken bu pencerenin taslağını siler. */
+export const forgetOwnDraft = () => forgetDraft(SESSION_ID);
 /** Son değişiklikten sonra beklenen boşluk (ms). */
 const IDLE_MS = 2000;
 /** Sürekli düzenlemede en geç bu kadar sürede bir yazılır (ms). */

@@ -60,8 +60,12 @@ function parse(key: string, raw: string | null): StoredDraft | null {
   }
 }
 
+/** Pencere kullanıcı isteğiyle kapanıyor: artık taslak yazılmaz. */
+let closing = false;
+
 /** Bu pencerenin taslağını yazar. */
 export function writeDraft(d: Draft): boolean {
+  if (closing) return false;
   const s = storage();
   if (!s) return false;
   try {
@@ -97,6 +101,16 @@ export function removeDraft(key: string) {
 
 export function clearOwnDraft() {
   removeDraft(draftKey());
+}
+
+/**
+ * Pencere kullanıcı isteğiyle kapanıyor (kaydedildi ya da "Kaydetme" seçildi):
+ * bu pencerenin taslağı silinir ve kapanırken yeniden yazılmaz. Yalnız çökme
+ * sonrası kalan taslaklar bir sonraki açılışta önerilir.
+ */
+export function forgetOwnDraft() {
+  closing = true;
+  clearOwnDraft();
 }
 
 /** Depodaki tüm taslaklar (en yeni önce). */

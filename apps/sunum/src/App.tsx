@@ -35,7 +35,7 @@ import { appSession, recoveryHandlers, type ShowState } from "./app/appState";
 import { useAppCommands } from "./app/useAppCommands";
 import { buildRibbonTabs } from "./app/ribbonTabs";
 import { ErrorBoundary } from "./app/ErrorBoundary";
-import { useAutoRecover } from "./app/useAutoRecover";
+import { forgetOwnDraft, useAutoRecover } from "./app/useAutoRecover";
 import { useFileAutoSave } from "./app/useFileAutoSave";
 import { extraCommands } from "./app/extraCommands";
 import "./styles/slide.css";
@@ -72,6 +72,7 @@ export function App() {
     path: state.fileRef?.path,
     onOpenPath: (p) => void openFromPath(a, p),
     onSave: () => save(a),
+    onClose: forgetOwnDraft,
   });
 
   // Eylemlerin istediği iletişim kutusu (ör. eylem düğmesi çizilince Eylem Ayarları).

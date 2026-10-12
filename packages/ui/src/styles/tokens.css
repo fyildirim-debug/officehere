@@ -45,6 +45,12 @@
   --oh-statusbar-bg: #f3f3f3;
   --oh-statusbar-fg: #424242;
 
+  /* İleti çubuğu zeminleri (metin her temada --oh-text). */
+  --oh-msg-warning-bg: #fff4ce;
+  --oh-msg-info-bg: #ebf3fc;
+  --oh-msg-error-bg: #fde7e9;
+  --oh-msg-success-bg: #dff6dd;
+
   --oh-radius: 4px;
   --oh-titlebar-h: 32px;
   --oh-tabs-h: 30px;
@@ -125,6 +131,10 @@
   --oh-menu-bg: #2d2d2d;
   --oh-statusbar-bg: #2b2b2b;
   --oh-statusbar-fg: #d0d0d0;
+  --oh-msg-warning-bg: #433519;
+  --oh-msg-info-bg: #1f2b3a;
+  --oh-msg-error-bg: #442726;
+  --oh-msg-success-bg: #263a23;
   color-scheme: dark;
 }
 
@@ -164,6 +174,10 @@
     --oh-menu-bg: #2d2d2d;
     --oh-statusbar-bg: #2b2b2b;
     --oh-statusbar-fg: #d0d0d0;
+    --oh-msg-warning-bg: #433519;
+    --oh-msg-info-bg: #1f2b3a;
+    --oh-msg-error-bg: #442726;
+    --oh-msg-success-bg: #263a23;
     color-scheme: dark;
   }
 }

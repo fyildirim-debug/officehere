@@ -609,3 +609,10 @@
   border-top: 2px dashed #185abd;
   pointer-events: none;
 }
+
+/* Sütun kenarı sürüklenirken imleç her yerde sütun boyutlandırma imleci kalır. */
+body.bl-col-resizing,
+body.bl-col-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}

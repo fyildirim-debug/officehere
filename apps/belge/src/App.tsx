@@ -18,6 +18,7 @@ import { annotateNotesHtml } from "./editor/notes";
 import { BelgeContext, type BelgeCtx, type DialogKind, type DialogState, type ViewOptions } from "./state/context";
 import { useFileOps } from "./state/useFileOps";
 import { useDraftRecovery } from "./state/useDraftRecovery";
+import { forgetOwnDraft } from "./state/drafts";
 import { guardSettings, useProtection } from "./state/useProtection";
 import { ProtectionBar } from "./dialogs/ProtectDialog";
 import { DocumentView } from "./views/DocumentView";
@@ -238,6 +239,7 @@ export function App() {
     path: files.fileRef?.path,
     onOpenPath: (p) => void files.openPath(p),
     onSave: files.save,
+    onClose: forgetOwnDraft,
   });
   confirmRef.current = confirmDiscard;
 
