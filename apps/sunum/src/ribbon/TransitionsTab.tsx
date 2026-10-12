@@ -2,7 +2,9 @@
 import { Play24Regular, SlideTransition24Regular, ArrowRepeatAll20Regular,
   Timer24Regular,
 } from "@fluentui/react-icons";
-import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonRow, RibbonSpinner, RibbonStack } from "@officehere/ui";
+import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonRow, RibbonStack } from "@officehere/ui";
+import { STOP_SOUND, TRANSITION_SOUNDS, playTransitionSound } from "../show/sounds";
+import { GroupedGallery, TimeSpinner } from "./GroupedGallery";
 import type { TransitionType } from "../model/types";
 import { TRANSITIONS, transitionDef } from "../show/catalog";
 import type { RibbonCtx } from "./types";
@@ -128,13 +130,13 @@ export function TransitionsTab({ ctx }: { ctx: RibbonCtx }) {
         <RibbonButton size="large" icon={<Play24Regular />} label="Önizleme" disabled={disabled || type === "none"} description="Bu slaydın geçişini oynatın." onClick={cmd.previewTransition} />
       </RibbonGroup>
       <RibbonGroup label="Bu Slayda Geçiş" icon={<SlideTransition24Regular />}>
-        <RibbonGallery
+        <GroupedGallery
           columns={8}
           itemWidth={64}
           itemHeight={58}
-          expandedColumns={6}
+          expandedColumns={7}
           selectedId={type}
-          items={TRANSITIONS.map((d) => ({ id: d.type, label: d.label, preview: <Tile type={d.type} label={d.label} /> }))}
+          items={TRANSITIONS.map((d) => ({ id: d.type, label: d.label, group: d.group ?? "Hafif", preview: <Tile type={d.type} label={d.label} /> }))}
           onSelect={(id) => {
             const d = transitionDef(id as TransitionType);
             a.setTransition({ type: d.type, option: d.defaultOption, duration: t?.duration && t.type !== "none" ? t.duration : d.type === "cut" ? 0.1 : 1 });
@@ -165,7 +167,29 @@ export function TransitionsTab({ ctx }: { ctx: RibbonCtx }) {
       </RibbonGroup>
       <RibbonGroup label="Zamanlama" icon={<Timer24Regular />}>
         <RibbonStack>
-          <RibbonSpinner label="Süre:" value={t?.duration ?? 1} min={0.01} max={59} step={0.25} decimals={2} width={70} tip="Süre (saniye)" onChange={(v) => a.setTransition({ duration: v })} />
+          <RibbonRow>
+            <span className="oh-spinner-label">Ses:</span>
+            <select
+              className="rb-select"
+              aria-label="Ses"
+              value={t?.sound ?? ""}
+              disabled={disabled}
+              onChange={(e) => {
+                const v = e.target.value || undefined;
+                a.setTransition({ sound: v });
+                if (v) playTransitionSound(v);
+              }}
+            >
+              <option value="">[Ses Yok]</option>
+              <option value={STOP_SOUND}>[Önceki Sesi Durdur]</option>
+              {TRANSITION_SOUNDS.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.label}
+                </option>
+              ))}
+            </select>
+          </RibbonRow>
+          <TimeSpinner label="Süre:" value={t?.duration ?? 1} step={0.25} max={59} tip="Süre (saniye)" disabled={disabled} onChange={(v) => a.setTransition({ duration: Math.max(0.01, v) })} />
           <RibbonButton icon={<ArrowRepeatAll20Regular />} label="Tümüne Uygula" disabled={disabled} onClick={() => a.applyTransitionToAll()} />
         </RibbonStack>
         <RibbonStack>
@@ -175,7 +199,7 @@ export function TransitionsTab({ ctx }: { ctx: RibbonCtx }) {
           <RibbonCheckbox label="Fare Tıklatıldığında" checked={t?.advanceOnClick ?? true} onChange={(v) => a.setTransition({ advanceOnClick: v })} />
           <RibbonRow>
             <RibbonCheckbox label="Sonra:" checked={t?.advanceAfter !== undefined} onChange={(v) => a.setTransition({ advanceAfter: v ? (t?.advanceAfter ?? 5) : undefined })} />
-            <RibbonSpinner value={t?.advanceAfter ?? 0} min={0} max={3600} step={1} decimals={2} width={70} tip="Bu süre sonra otomatik ilerle (saniye)" onChange={(v) => a.setTransition({ advanceAfter: v })} />
+            <TimeSpinner minutes value={t?.advanceAfter ?? 0} step={1} max={3600} width={84} tip="Bu süre sonra otomatik ilerle (dakika:saniye)" onChange={(v) => a.setTransition({ advanceAfter: v })} />
           </RibbonRow>
         </RibbonStack>
       </RibbonGroup>

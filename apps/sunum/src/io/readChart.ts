@@ -47,7 +47,13 @@ export function readChartXml(xml: string, ctx: ReadCtx): ChartData | null {
   if (!typeEl) return null;
   let type = TYPES[typeEl.localName];
   if (type === "col" && attr(kid(typeEl, "barDir"), "val") === "bar") type = "bar";
-  const serEls = kids(typeEl, "ser");
+  let serEls = kids(typeEl, "ser");
+  // Sütun + çizgi aynı eksenlerde: Birleşik grafik.
+  const lineEl = typeEl.localName === "barChart" ? kid(plot, "lineChart") : undefined;
+  if (lineEl && type === "col") {
+    type = "combo";
+    serEls = [...serEls, ...kids(lineEl, "ser")];
+  }
   let categories: string[] = [];
   const series: ChartSeries[] = [];
   for (const [j, ser] of serEls.entries()) {
@@ -64,7 +70,8 @@ export function readChartXml(xml: string, ctx: ReadCtx): ChartData | null {
     const fill = readFill(kid(ser, "spPr"), ctx);
     const ln = kid(kid(ser, "spPr"), "ln");
     const lnFill = ln ? readFill(ln, ctx) : undefined;
-    const color = type === "line" ? (lnFill?.type === "solid" ? lnFill.color : undefined) : fill?.type === "solid" ? fill.color : undefined;
+    const lineLike = type === "line" || type === "radar" || (type === "combo" && j === serEls.length - 1);
+    const color = lineLike ? (lnFill?.type === "solid" ? lnFill.color : undefined) : fill?.type === "solid" ? fill.color : undefined;
     series.push({ name: richText(kid(ser, "tx")) || `Seri ${j + 1}`, values, color: type === "pie" || type === "doughnut" ? undefined : color });
   }
   const titleEl = kid(chart, "title");

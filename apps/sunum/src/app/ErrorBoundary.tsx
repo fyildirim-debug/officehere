@@ -36,7 +36,10 @@ interface State {
 function CrashProbe({ region }: { region: string }) {
   const w = window as unknown as { __ohSunumCrash?: string };
   if (w.__ohSunumCrash === region) {
-    w.__ohSunumCrash = undefined;
+    // React hatalı çizimi bir kez yeniden dener; işaret bu geçişten sonra temizlenir.
+    window.setTimeout(() => {
+      if (w.__ohSunumCrash === region) w.__ohSunumCrash = undefined;
+    }, 0);
     throw new Error(`Tanılama amaçlı çökme: ${region}`);
   }
   return null;

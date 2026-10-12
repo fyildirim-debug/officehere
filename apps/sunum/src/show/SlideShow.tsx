@@ -19,6 +19,7 @@ import { PresenterLayout } from "./PresenterLayout";
 import { RehearsalBar, useRehearsal, type RehearsalResult } from "./Rehearsal";
 import type { PresenterLink, RemoteCmd, SyncState } from "./showSync";
 import { WindowBar } from "./WindowBar";
+import { playTransitionSound } from "./sounds";
 
 export type ShowMode = "full" | "window" | "presenter";
 
@@ -124,9 +125,24 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Önizleme odağı almaz (şerit kısayolları çalışmaya devam etsin).
+  // Önizleme odağı almaz (şerit kısayolları çalışmaya devam etsin); ızgara kapanınca odak geri döner.
   useEffect(() => {
-    if (!preview) rootRef.current?.focus();
+    if (!preview && !grid) rootRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview, grid]);
+
+  // Odak gösterinin dışına düşerse (ör. kapanan menü/ızgara) tuşlar yine gösteriye gider.
+  const keyRef = useRef<(e: React.KeyboardEvent) => void>(() => undefined);
+  useEffect(() => {
+    if (preview) return;
+    const onKey = (e: KeyboardEvent) => {
+      const root = rootRef.current;
+      const t = e.target as Element | null;
+      if (e.defaultPrevented || !root || (t && (root.contains(t) || t.closest?.("[data-oh-popover], input, textarea, select")))) return;
+      keyRef.current(e as unknown as React.KeyboardEvent);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [preview]);
 
   // İmleç gizleme.
@@ -225,6 +241,8 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
         }
       });
     }
+    // Geçiş sesi (izleyici penceresine bağlı sunucu penceresi sessizdir).
+    if (!top.fromEnd && !link && sl.transition?.sound && (layers.length > 1 || preview !== "animations")) playTransitionSound(sl.transition.sound);
     const plan = layers.length > 1 ? transitionPlan(sl.transition) : null;
     const inEl = layerEl;
     const outLayer = layers.length > 1 ? layers[layers.length - 2] : undefined;
@@ -413,6 +431,8 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
     });
   };
 
+  keyRef.current = onKeyDown;
+
   /** Gösteride köprüye tıklanınca: dış adres yeni sekmede, sunu içi hedef slayta gidilir. */
   const followShowLink = (lnk: string) => {
     const i = linkSlideIndex(lnk, pres, index);
@@ -564,7 +584,7 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
   return (
     <div
       ref={rootRef}
-      className={`show-root${mode === "window" ? " is-window" : ""}${cursorHidden ? " no-cursor" : ""}${preview ? " is-preview" : ""}`}
+      className={`show-root${mode === "window" ? " is-window" : ""}${mode === "window" && !preview && !onViewChange ? " is-browsed" : ""}${cursorHidden ? " no-cursor" : ""}${preview ? " is-preview" : ""}`}
       style={frame ? { inset: "auto", left: frame.x, top: frame.y, width: frame.w, height: frame.h, background: "transparent" } : undefined}
       tabIndex={preview ? -1 : 0}
       onKeyDown={onKeyDown}

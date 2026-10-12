@@ -340,12 +340,17 @@ const SHORTCUTS: [string, string][] = [
   ["Ctrl+Boşluk", "Karakter biçimlendirmesini temizle"],
   ["Ctrl+Shift+C / Ctrl+Shift+V", "Biçimi kopyala / yapıştır"],
   ["Ctrl+F / Ctrl+H", "Bul / Değiştir"],
+  ["Alt+Q", "Komut ara (şerit komutlarını bul ve çalıştır)"],
+  ["F7", "Yazım Denetimi bölmesi"],
+  ["Shift + sağ tık (metinde)", "Tarayıcının yazım önerileri menüsü"],
   ["Ctrl+fare tekerleği", "Yakınlaştır / uzaklaştır"],
   ["F5 / Shift+F5", "Gösteriyi baştan / geçerli slayttan başlat"],
   ["Gösteride: N, →, ↓, Boşluk, Enter", "Sonraki animasyon veya slayt"],
   ["Gösteride: P, ←, ↑, Geri", "Önceki animasyon veya slayt"],
   ["Gösteride: sayı + Enter", "O slayta git"],
   ["Gösteride: B / W", "Siyah / beyaz ekran"],
+  ["Gösteride: G ya da -", "Tüm slaytları gör"],
+  ["Gösteride: Ctrl+P / Ctrl+L / E", "Kalem / lazer işaretçisi / mürekkebi sil"],
   ["Gösteride: Esc", "Gösteriyi bitir"],
 ];
 

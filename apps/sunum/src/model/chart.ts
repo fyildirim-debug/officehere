@@ -36,6 +36,7 @@ export const CHART_TYPES: { type: ChartType; label: string }[] = [
   { type: "area", label: "Alan" },
   { type: "scatter", label: "X Y (Dağılım)" },
   { type: "radar", label: "Radar" },
+  { type: "combo", label: "Birleşik" },
   { type: "doughnut", label: "Halka" },
 ];
 

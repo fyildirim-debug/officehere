@@ -83,6 +83,8 @@ export interface AppState {
   colorMode: "color" | "gray" | "bw";
   /** Yazım denetimi dili (BCP 47, ör. "tr-TR"). */
   proofLang: string;
+  /** Noktaları Düzenle kipindeki şekil. */
+  pointEdit: string | null;
 }
 
 interface Snapshot {

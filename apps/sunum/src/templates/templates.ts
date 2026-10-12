@@ -1,6 +1,6 @@
 /** Dosya > Yeni şablonları: boş sunu ve temalardan üretilmiş hazır sunular (Türkçe içerik). */
 import { makeSp, makeTable, textBody, uid } from "../model/factory";
-import { newPresentation, newSlide } from "../model/presentation";
+import { blankPresentation, newPresentation, newSlide } from "../model/presentation";
 import type { Animation, LayoutType, Presentation, Shape, Slide, SpShape, TableShape } from "../model/types";
 
 export interface TemplateDef {
@@ -184,7 +184,7 @@ function companyDeck(): Presentation {
 }
 
 export const TEMPLATES: TemplateDef[] = [
-  { id: "blank", label: "Boş sunu", build: () => newPresentation("varsayilan", 0) },
+  { id: "blank", label: "Boş sunu", build: () => blankPresentation() },
   { id: "project", label: "Proje Sunumu", build: projectDeck },
   { id: "training", label: "Eğitim", build: trainingDeck },
   { id: "product", label: "Ürün Tanıtımı", build: productDeck },

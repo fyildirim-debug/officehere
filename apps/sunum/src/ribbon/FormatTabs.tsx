@@ -35,6 +35,10 @@ import { cm, fromCm, InlineShapeGallery, ShapeGalleryMenu, ThemeColorSplit } fro
 import { QUICK_STYLES, WORDART_PRESETS } from "./presets";
 import { AlignItems, applyQuickStyle, QuickStylePreview, RotateItems, ShapeEffectsMenu, ShapeFillButton, ShapeOutlineButton } from "./shapeMenus";
 import type { RibbonCtx } from "./types";
+import { toCustomShape } from "../model/editPoints";
+import { mergeSelection } from "../editor/mergeShapes";
+import { ShapeExclude20Regular, ShapeIntersect20Regular, ShapeSubtract20Regular, ShapeUnion20Regular, ShapeUnion24Regular } from "@fluentui/react-icons";
+import { isLineGeom } from "../render/geometry";
 
 function ArrangeGroup({ ctx }: { ctx: RibbonCtx }) {
   const { actions: a, cmd } = ctx;
@@ -164,14 +168,40 @@ export function ShapeFormatTab({ ctx }: { ctx: RibbonCtx }) {
                       onPick={(it) => {
                         if (it.geom === "textbox") return;
                         a.updateShapes((s) => (s.kind === "sp" ? { ...s, geom: it.geom, adj: undefined, paths: undefined } : s));
+                        a.store.set({ pointEdit: null });
                       }}
                     />
                   }
+                />
+                <MenuItem
+                  label="Noktaları Düzenle"
+                  disabled={!sp || sp.kind !== "sp" || isLineGeom(sp.geom) || !!sp.ink}
+                  checked={!!sp && state.pointEdit === sp.id}
+                  onClick={() => {
+                    if (!sp || sp.kind !== "sp") return;
+                    if (state.pointEdit === sp.id) return a.store.set({ pointEdit: null });
+                    a.updateShapes((s) => (s.kind === "sp" ? toCustomShape(s) : s), [sp.id]);
+                    a.store.set({ pointEdit: sp.id, editing: null });
+                  }}
                 />
               </Menu>
             }
           />
           <RibbonButton icon={<Textbox24Regular />} label="Metin Kutusu" onClick={() => a.store.set({ insert: { kind: "textbox" } })} />
+          <RibbonMenuButton
+            icon={<ShapeUnion24Regular />}
+            label="Şekilleri Birleştir"
+            description="Seçili şekilleri tek bir yeni şekilde birleştirin (en az iki şekil seçin)."
+            disabled={a.selectedShapes().filter((s) => s.kind === "sp").length < 2}
+            menu={
+              <Menu>
+                <MenuItem icon={<ShapeUnion20Regular />} label="Birleşim" onClick={() => mergeSelection(a, "union")} />
+                <MenuItem icon={<ShapeExclude20Regular />} label="Birleştir" onClick={() => mergeSelection(a, "combine")} />
+                <MenuItem icon={<ShapeIntersect20Regular />} label="Kesişim" onClick={() => mergeSelection(a, "intersect")} />
+                <MenuItem icon={<ShapeSubtract20Regular />} label="Çıkar" onClick={() => mergeSelection(a, "subtract")} />
+              </Menu>
+            }
+          />
         </RibbonStack>
       </RibbonGroup>
       <RibbonGroup label="Şekil Stilleri" icon={<PaintBucket24Regular />} onLauncher={() => cmd.togglePane("shape")} launcherTip="Şekli Biçimlendir">

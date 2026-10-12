@@ -107,13 +107,13 @@ export function ShowSetupDialog({ open, onClose, value, onChange, pres }: { open
           <FieldSet legend="Slaytları göster">
             <Radio label="Tümü" checked={v.range.kind === "all"} onChange={() => set({ range: { kind: "all" } })} />
             <label className="dlg-row">
-              <input type="radio" checked={v.range.kind === "range"} onChange={() => set({ range: { kind: "range", from, to } })} /> Başlangıç:
+              <input type="radio" aria-label="Slayt aralığı" checked={v.range.kind === "range"} onChange={() => set({ range: { kind: "range", from, to } })} /> Başlangıç:
               <input type="number" aria-label="Başlangıç" min={1} max={n} value={from} style={{ width: 52 }} onChange={(e) => set({ range: { kind: "range", from: Number(e.target.value) || 1, to } })} />
               Bitiş:
               <input type="number" aria-label="Bitiş" min={1} max={n} value={to} style={{ width: 52 }} onChange={(e) => set({ range: { kind: "range", from, to: Number(e.target.value) || n } })} />
             </label>
             <label className={`dlg-row${shows.length ? "" : " is-disabled"}`}>
-              <input type="radio" disabled={!shows.length} checked={v.range.kind === "custom"} onChange={() => shows[0] && set({ range: { kind: "custom", id: shows[0].id } })} /> Özel gösteri:
+              <input type="radio" aria-label="Özel gösteri seç" disabled={!shows.length} checked={v.range.kind === "custom"} onChange={() => shows[0] && set({ range: { kind: "custom", id: shows[0].id } })} /> Özel gösteri:
               <select aria-label="Özel gösteri" disabled={!shows.length} value={v.range.kind === "custom" ? v.range.id : (shows[0]?.id ?? "")} onChange={(e) => set({ range: { kind: "custom", id: e.target.value } })}>
                 {shows.map((c) => (
                   <option key={c.id} value={c.id}>

@@ -68,7 +68,7 @@ export function objKey(o: object | undefined | null): number {
 export class CommitGuard {
   private log = new Map<string, number[]>();
   constructor(
-    private readonly max = 6,
+    private readonly max = 12,
     private readonly windowMs = 1000,
   ) {}
 

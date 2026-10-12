@@ -226,7 +226,8 @@ export class Actions {
   /* ------------------------------ Seçim ------------------------------ */
 
   select(ids: string[]) {
-    this.store.set({ sel: ids, editing: null, cellSel: null, focus: "canvas" });
+    const pe = this.s.pointEdit;
+    this.store.set({ sel: ids, editing: null, cellSel: null, focus: "canvas", pointEdit: pe && ids.includes(pe) ? pe : null });
   }
 
   selectAll() {

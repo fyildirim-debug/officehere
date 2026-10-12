@@ -17,9 +17,11 @@ import { angleFromCenter, constrainLine, geomFromEnds, geomOf, HANDLES, lineEnds
 import { Rulers } from "./Rulers";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { snapMove, snapValue, type GuideLine } from "./snap";
-import { animationLabels, cellSelRects, childOfGroupContaining, cropGhostOf, GridOverlay, InkPreview, inkIdsAt, MARGIN, topLevelOf, type Drag, type Pt } from "./canvasUtils";
+import { cellSelRects, childOfGroupContaining, cropGhostOf, GridOverlay, InkPreview, inkIdsAt, MARGIN, topLevelOf, type Drag, type Pt } from "./canvasUtils";
 import { useAutofit } from "./useAutofit";
 import { contextKind, type CanvasMenuKind } from "./contextKind";
+import { PointEditor } from "./PointEditor";
+import { useAnimBadges } from "./contextKind";
 import { useViewportZoom } from "./useViewportZoom";
 import { useEditorRenderer } from "./useEditorRenderer";
 
@@ -622,17 +624,7 @@ export function Canvas(props: CanvasProps) {
 
   const selShapes = slide ? state.sel.map((id) => findShape(slide.shapes, id)).filter((x): x is Shape => !!x) : [];
   const parentGroup = slide && selShapes.length ? slide.shapes.find((s) => s.kind === "group" && selShapes.some((x) => x.id !== s.id && findShape(s.children, x.id))) : null;
-  const badges = useMemo(() => {
-    if (!props.showAnimBadges || !slide) return undefined;
-    const labels = animationLabels(slide);
-    const out: { shape: Shape; labels: string[] }[] = [];
-    for (const [id, l] of labels) {
-      const s = findShape(slide.shapes, id);
-      if (s) out.push({ shape: s, labels: l });
-    }
-    return out;
-  }, [props.showAnimBadges, slide]);
-
+  const badges = useAnimBadges(props.showAnimBadges, slide);
   const cellRects = useMemo(
     () => (state.cellSel && selShapes.length === 1 && selShapes[0].kind === "table" ? cellSelRects(selShapes[0], state.cellSel) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -681,6 +673,7 @@ export function Canvas(props: CanvasProps) {
               </>
             )}
             {inkPts && state.ink && <InkPreview pts={inkPts} ink={state.ink} z={z} w={pres.width} h={pres.height} />}
+            {state.pointEdit && selShapes.length === 1 && selShapes[0].id === state.pointEdit && selShapes[0].kind === "sp" && <PointEditor shape={selShapes[0]} zoom={z} actions={actions} />}
             <SelectionOverlay
               shapes={selShapes}
               overrides={overrides}

@@ -91,6 +91,17 @@ export function BulletGrid({ onPick, kind }: { onPick: (b: BulletDef) => void; k
   );
 }
 
+/** Yeni Slayt menüsünün alt bölümü (Çoğalt, Anahattan Slaytlar, Slaytları Yeniden Kullan). */
+export function NewSlideExtras({ ctx }: { ctx: RibbonCtx }) {
+  return (
+    <div className="oh-menu" style={{ marginTop: -4, borderTop: 0, borderRadius: "0 0 6px 6px" }}>
+      <MenuItem label="Seçili Slaytları Çoğalt" onClick={() => ctx.actions.duplicateSlides()} />
+      <MenuItem label="Anahattan Slaytlar..." onClick={ctx.cmd.slidesFromOutline} />
+      <MenuItem label="Slaytları Yeniden Kullan..." onClick={ctx.cmd.reuseSlides} />
+    </div>
+  );
+}
+
 export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
   const { state, actions: a, text, cmd } = ctx;
   const theme = state.pres.theme;
@@ -172,10 +183,8 @@ export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
           disabled={state.view === "master"}
           menu={
             <>
-              <LayoutGallery pres={state.pres} header="Tema" onPick={(id) => a.newSlide(id)} />
-              <div className="oh-menu" style={{ marginTop: -4, borderTop: 0, borderRadius: "0 0 6px 6px" }}>
-                <MenuItem label="Seçili Slaytları Çoğalt" onClick={() => a.duplicateSlides()} />
-              </div>
+              <LayoutGallery pres={state.pres} header={state.pres.theme.name || "Tema"} onPick={(id) => a.newSlide(id)} />
+              <NewSlideExtras ctx={ctx} />
             </>
           }
         />

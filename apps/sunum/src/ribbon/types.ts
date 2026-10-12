@@ -71,6 +71,8 @@ export interface AppCommands {
   setSlideSize: (w: number, h: number) => void;
   /** Slaytları Yeniden Kullan bölmesi. */
   reuseSlides: () => void;
+  /** Anahattan Slaytlar (.txt/.md/.docx). */
+  slidesFromOutline: () => void;
 }
 
 export interface RibbonCtx {

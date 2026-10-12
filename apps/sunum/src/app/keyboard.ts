@@ -15,6 +15,8 @@ export interface KeyHandlers {
   find: () => void;
   replace: () => void;
   link: () => void;
+  /** F7: Yazım Denetimi bölmesi. */
+  spelling?: () => void;
   isBlocked: () => boolean;
 }
 
@@ -49,6 +51,7 @@ export function useKeyboard(actions: Actions, h: KeyHandlers) {
       // Her yerde geçerli kısayollar.
       if (key === "F5") return run(() => (e.shiftKey ? hd.showFromCurrent() : hd.showFromStart()));
       if (key === "F12") return run(() => hd.saveAs());
+      if (key === "F7" && hd.spelling) return run(() => hd.spelling!());
       if (mod && !e.altKey) {
         if (k === "S") return run(() => (e.shiftKey ? hd.saveAs() : hd.save()));
         if (k === "O") return run(() => hd.open());
@@ -105,6 +108,7 @@ export function useKeyboard(actions: Actions, h: KeyHandlers) {
       if (mod && k === "D") return run(() => (hasSel ? actions.duplicateSelection() : actions.duplicateSlides()));
       if (mod && k === "G") return run(() => (e.shiftKey ? actions.ungroupSelection() : actions.groupSelection()));
       if (key === "Escape") {
+        if (s.pointEdit) return run(() => actions.store.set({ pointEdit: null }));
         if (s.insert) return run(() => actions.store.set({ insert: null }));
         if (s.cropId) return run(() => actions.store.set({ cropId: null }));
         if (s.ink) return run(() => actions.store.set({ ink: null }));

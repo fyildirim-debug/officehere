@@ -53,11 +53,13 @@ export function readTransition(sld: Element): Transition | undefined {
     if (type && TRANSITIONS.some((x) => x.type === type)) {
       base.type = type;
       base.option = attr(mine, "option") || undefined;
+      base.sound = attr(mine, "snd") || undefined;
       const d = numAttr(mine, "dur");
       if (d !== undefined) base.duration = d / 1000;
       return base;
     }
   }
+  if (kid(kid(t, "sndAc"), "endSnd")) base.sound = "stop";
   const child = kids(t).find((k) => k.localName !== "sndAc" && k.localName !== "extLst");
   if (!child) return base;
   const dir = attr(child, "dir");

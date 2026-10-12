@@ -4,9 +4,9 @@ import { PaintBucket20Regular, SlideSize24Regular,
   Color24Regular,
   PaintBrush24Regular,
 } from "@fluentui/react-icons";
-import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, useMenuClose } from "@officehere/ui";
+import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, useContextMenu, useMenuClose } from "@officehere/ui";
 import { makeSp, textBody } from "../model/factory";
-import { applyTheme, applyVariant, newPresentation, SLIDE_16_9, SLIDE_4_3 } from "../model/presentation";
+import { applyTheme, applyVariant, defaultThemeId, newPresentation, setDefaultThemeId, SLIDE_16_9, SLIDE_4_3 } from "../model/presentation";
 import type { Color, Fill, Presentation, Theme } from "../model/types";
 import { fillToCss } from "../render/style";
 import { ScaledSlide } from "../render/SlideView";
@@ -112,9 +112,29 @@ export function DesignTab({ ctx }: { ctx: RibbonCtx }) {
   const ratio = pres.width / pres.height;
   const curDef = getThemeDef(pres.theme.id);
   const setTheme = (t: Partial<Theme>) => a.store.commit((p) => ({ ...p, theme: { ...p.theme, ...t } }));
+  const themeMenu = useContextMenu();
+  // Tema galerisinde sağ tık: Tüm Slaytlara Uygula / Varsayılan Tema Olarak Ayarla.
+  const onThemeMenu = (e: React.MouseEvent) => {
+    const item = (e.target as Element).closest(".oh-gallery-item");
+    const t = item ? THEMES.find((x) => x.name === item.getAttribute("aria-label")) : undefined;
+    if (!t) return;
+    e.preventDefault();
+    const isDefault = defaultThemeId() === t.id;
+    themeMenu.open(
+      e,
+      <Menu>
+        <MenuItem label="Tüm Slaytlara Uygula" onClick={() => a.store.commit((p) => applyTheme(p, t.id, 0), { sel: [], editing: null })} />
+        <MenuItem label="Varsayılan Tema Olarak Ayarla" checked={isDefault} onClick={() => {
+          setDefaultThemeId(t.id);
+          a.message(`"${t.name}" yeni boş sunular için varsayılan tema olarak ayarlandı.`, "success");
+        }} />
+      </Menu>,
+    );
+  };
   return (
     <>
       <RibbonGroup label="Temalar" icon={<PaintBrush24Regular />}>
+        <div className="theme-ctx-host" onContextMenu={onThemeMenu}>
         <RibbonGallery
           columns={6}
           itemWidth={78}
@@ -126,10 +146,12 @@ export function DesignTab({ ctx }: { ctx: RibbonCtx }) {
           footer={
             <>
               <MenuSeparator />
-              <MenuItem label="Temaları Sıfırla (Varsayılan Tema)" onClick={() => a.store.commit((p) => applyTheme(p, "varsayilan", 0))} />
+              <MenuItem label="Temaları Sıfırla (Varsayılan Tema)" onClick={() => a.store.commit((p) => applyTheme(p, defaultThemeId(), 0))} />
             </>
           }
         />
+        </div>
+        {themeMenu.element}
       </RibbonGroup>
       <RibbonGroup label="Çeşitlemeler" icon={<Color24Regular />}>
         <RibbonGallery

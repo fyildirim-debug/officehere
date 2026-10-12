@@ -54,7 +54,13 @@ export function ChartDesignTab({ ctx }: { ctx: RibbonCtx }) {
       CHART_STYLES.map((_, i) => ({
         id: String(i + 1),
         label: `Stil ${i + 1}`,
-        preview: c ? <ChartSvg chart={{ ...c, style: i + 1, showTitle: false, legend: "none", axisTitles: undefined }} w={70} h={46} theme={theme} /> : <span />,
+        preview: c ? (
+          <span className="chart-thumb" style={{ width: 70, height: 46 }}>
+            <ChartSvg chart={{ ...c, style: i + 1, showTitle: false, legend: "none", axisTitles: undefined }} w={70} h={46} theme={theme} />
+          </span>
+        ) : (
+          <span />
+        ),
       })),
     [c, theme],
   );
@@ -146,7 +152,11 @@ export function ChartDesignTab({ ctx }: { ctx: RibbonCtx }) {
               <div className="preset-grid" style={{ gridTemplateColumns: "repeat(4, 76px)" }}>
                 {QUICK_LAYOUTS.map((q) => (
                   <button key={q.name} type="button" className="preset-btn" title={q.name} aria-label={q.name} onMouseDown={(e) => e.preventDefault()} onClick={() => c && set(q.patch(c))} style={{ width: 76, height: 56 }}>
-                    {c && <ChartSvg chart={{ ...c, ...q.patch(c) }} w={72} h={52} theme={theme} />}
+                    {c && (
+                      <span className="chart-thumb" style={{ width: 72, height: 52 }}>
+                        <ChartSvg chart={{ ...c, ...q.patch(c) }} w={72} h={52} theme={theme} />
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>

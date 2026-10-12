@@ -17,6 +17,7 @@ import type { PaneKind, ViewMode } from "../state/store";
 import type { ExtraDialog } from "./AppDialogs";
 import { stageFrame, type ShowState } from "./appState";
 import { insertImageFiles, pasteFromRibbon } from "./clipboard";
+import { importOutline } from "./outlineFile";
 
 export interface CommandDeps {
   a: Actions;
@@ -205,6 +206,7 @@ export function useAppCommands(d: CommandDeps): AppCommands {
       },
       setSlideSize: (w, h) => setExtra({ kind: "scaleChoice", w, h }),
       reuseSlides: () => a.store.set({ pane: "reuse" }),
+      slidesFromOutline: () => void importOutline(a),
     };
     return c;
   }, [a, showSettings, setDialog, setExtra, setShow, setBackstage, setPrinting, setFindQuery]);

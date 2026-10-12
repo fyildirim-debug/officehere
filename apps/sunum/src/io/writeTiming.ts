@@ -56,14 +56,16 @@ function transitionChild(t: Transition): string {
 
 export function transitionXml(t: Transition | undefined): string {
   if (!t) return "";
-  if (t.type === "none" && t.advanceOnClick && t.advanceAfter === undefined) return "";
+  if (t.type === "none" && t.advanceOnClick && t.advanceAfter === undefined && !t.sound) return "";
   const a = attrs({
     spd: t.type === "none" ? undefined : speed(t.duration),
     advClick: t.advanceOnClick ? undefined : "0",
     advTm: t.advanceAfter !== undefined ? Math.round(t.advanceAfter * 1000) : undefined,
   });
-  const ext = `<p:extLst><p:ext uri="${OH_EXT_URI}"><oh:transition xmlns:oh="${NS.oh}"${attrs({ type: t.type, option: t.option, dur: Math.round(t.duration * 1000) })}/></p:ext></p:extLst>`;
-  return `<p:transition${a}>${transitionChild(t)}${ext}</p:transition>`;
+  const ext = `<p:extLst><p:ext uri="${OH_EXT_URI}"><oh:transition xmlns:oh="${NS.oh}"${attrs({ type: t.type, option: t.option, dur: Math.round(t.duration * 1000), snd: t.sound })}/></p:ext></p:extLst>`;
+  // Önceki sesi durdur standart öğesi (sentezlenen sesler yalnız uzantıda saklanır).
+  const snd = t.sound === "stop" ? "<p:sndAc><p:endSnd/></p:sndAc>" : "";
+  return `<p:transition${a}>${transitionChild(t)}${snd}${ext}</p:transition>`;
 }
 
 const FLY_SUB: Record<string, number> = { t: 1, r: 2, b: 4, l: 8, tr: 3, br: 6, bl: 12, tl: 9 };

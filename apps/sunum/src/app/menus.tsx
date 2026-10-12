@@ -33,6 +33,8 @@ import { currentLink } from "../state/linkActions";
 import { sectionsOf } from "../model/sections";
 import { MASTER_SLIDE_ID } from "../model/masterView";
 import { collapseAllSections, moveSectionCmd, removeAllSectionsCmd, removeSectionCmd } from "../state/sectionActions";
+import { toCustomShape } from "../model/editPoints";
+import { isLineGeom } from "../render/geometry";
 
 
 export function shapeMenu(a: Actions, cmd: AppCommands, openDialog: (d: "sizePos") => void) {
@@ -47,6 +49,16 @@ export function shapeMenu(a: Actions, cmd: AppCommands, openDialog: (d: "sizePos
       <MenuItem icon={<ClipboardPaste20Regular />} label="Yapıştır" shortcut="Ctrl+V" onClick={() => cmd.paste()} />
       <MenuSeparator />
       {sp && <MenuItem icon={<Edit20Regular />} label="Metni Düzenle" onClick={() => a.startEditing({ shapeId: sp.id, selectAll: true })} />}
+      {sp && !sp.ink && !isLineGeom(sp.geom) && (
+        <MenuItem
+          label="Noktaları Düzenle"
+          checked={a.s.pointEdit === sp.id}
+          onClick={() => {
+            a.updateShapes((s) => (s.kind === "sp" ? toCustomShape(s) : s), [sp.id]);
+            a.store.set({ pointEdit: sp.id, editing: null });
+          }}
+        />
+      )}
       {shapes.length === 1 && shapes[0].kind === "chart" && (
         <>
           <MenuItem label="Verileri Düzenle..." onClick={cmd.editChartData} />

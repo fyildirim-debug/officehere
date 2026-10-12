@@ -87,8 +87,9 @@ export function CommandSearch({ ctx, tabs, collapsed, onExpand }: { ctx: RibbonC
         inputRef.current?.select();
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Yakalama aşamasında: görev bölmeleri tuş olaylarını durdursa da Alt+Q çalışsın.
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
   // Dizin: gizli kapta çizilen sekmelerden çıkarılır.

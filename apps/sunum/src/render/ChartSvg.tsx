@@ -277,13 +277,17 @@ function axisParts(chart: ChartData, plot: Box, paint: ChartPaint, labels: boole
         {formatChartNumber(v)}
       </text>,
     );
-  if (chart.type === "col" || chart.type === "bar") {
+  // Birleşik: son seri çizgi, diğerleri kümelenmiş sütun.
+  const combo = chart.type === "combo";
+  const barCount = combo ? Math.max(1, ns - 1) : ns;
+  if (chart.type === "col" || chart.type === "bar" || combo) {
     const g = gap / 100;
     // Kümelenmişte seriler yan yana (çakışma -%27), yığılmışta üst üste.
-    const barW = stacked ? band / (1 + g) : band / (ns + (ns - 1) * 0.27 + g);
+    const barW = stacked ? band / (1 + g) : band / (barCount + (barCount - 1) * 0.27 + g);
     const step = stacked ? 0 : barW * 1.27;
     const start = (barW * g) / 2;
     chart.series.forEach((s, j) => {
+      if (combo && j >= barCount && ns > 1) return;
       const col = paint.color(j);
       s.values.forEach((v, i) => {
         if (v === null || v === undefined || !Number.isFinite(v)) return;
@@ -305,12 +309,13 @@ function axisParts(chart: ChartData, plot: Box, paint: ChartPaint, labels: boole
         }
       });
     });
-  } else {
-    // Çizgi, alan ve dağılım: noktalar kategori ortalarında (dağılımda X değerinde).
+  }
+  if (chart.type !== "col" && chart.type !== "bar" && !(combo && ns < 2)) {
+    // Çizgi, alan, dağılım ve birleşik grafiğin çizgisi: noktalar kategori ortalarında (dağılımda X değerinde).
     const yOf = (v: number) => area.y + area.h - vpos(Math.max(sc.min, Math.min(sc.max, v))) * area.h;
     const xOf = (i: number) => (scatter ? xpos(xs[i]) : area.x + (i + 0.5) * band);
     const baseY = area.y + area.h - zero * area.h;
-    const order = chart.type === "area" && stacked ? chart.series.map((_, j) => j).reverse() : chart.series.map((_, j) => j);
+    const order = combo ? [ns - 1] : chart.type === "area" && stacked ? chart.series.map((_, j) => j).reverse() : chart.series.map((_, j) => j);
     for (const j of order) {
       const s = chart.series[j];
       const col = paint.color(j);

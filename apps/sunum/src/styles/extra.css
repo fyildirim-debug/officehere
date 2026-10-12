@@ -442,3 +442,66 @@ body > .crash-box {
 .theme-ctx-host {
   display: contents;
 }
+
+/* Geçişler: Ses kutusu */
+.rb-select {
+  height: 22px;
+  min-width: 128px;
+  max-width: 150px;
+  font: inherit;
+  font-size: 12px;
+  border: 1px solid var(--oh-border-strong, #b3b3b3);
+  border-radius: 2px;
+  background: var(--oh-surface);
+  color: var(--oh-text);
+}
+
+.gallery-group + .gallery-group {
+  margin-top: 4px;
+}
+
+/* Noktaları Düzenle */
+.point-editor {
+  position: absolute;
+  transform-origin: center center;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.point-editor-path {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.point-editor-path line {
+  stroke: #c42b1c;
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+}
+
+.point-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #000;
+  border: 1px solid #fff;
+  box-sizing: border-box;
+  pointer-events: auto;
+  cursor: move;
+}
+
+/* Galeri/menü önizlemelerindeki grafikler kendi kutusunda kalır. */
+.chart-thumb {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Birey tarafından göz atılan gösteri: uygulama penceresini kaplar. */
+.show-root.is-window.is-browsed {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+}

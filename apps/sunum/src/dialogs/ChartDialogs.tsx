@@ -25,6 +25,14 @@ const ICONS: Record<ChartType, React.ReactNode> = {
       ))}
     </svg>
   ),
+  combo: (
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+      <rect x="4" y="12" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="10.2" y="8" width="3.5" height="12" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="16.4" y="14" width="3.5" height="6" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M3 9l6-4 6 3 6-5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  ),
   radar: (
     <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
       <path d="M12 2.5l9 6.5-3.5 11h-11L3 9z" fill="none" stroke="currentColor" strokeWidth="1.2" />
@@ -81,8 +89,10 @@ export function InsertChartDialog({ open, current, theme, onClose, onPick }: { o
           {subs.length > 0 && (
             <div className="chart-dlg-subs" role="radiogroup" aria-label="Alt tür">
               {subs.map((x) => (
-                <button key={x.grouping} type="button" role="radio" aria-checked={g === x.grouping} className={`chart-dlg-sub${g === x.grouping ? " is-selected" : ""}`} title={x.label} onClick={() => setGrouping(x.grouping)}>
-                  <ChartSvg chart={{ ...defaultChartData(type, x.grouping), showTitle: false, legend: "none" }} w={64} h={44} theme={theme} />
+                <button key={x.grouping} type="button" role="radio" aria-checked={g === x.grouping} className={`chart-dlg-sub${g === x.grouping ? " is-selected" : ""}`} title={x.label} aria-label={x.label} onClick={() => setGrouping(x.grouping)}>
+                  <span className="chart-thumb" style={{ width: 64, height: 44 }}>
+                    <ChartSvg chart={{ ...defaultChartData(type, x.grouping), showTitle: false, legend: "none" }} w={64} h={44} theme={theme} />
+                  </span>
                 </button>
               ))}
             </div>

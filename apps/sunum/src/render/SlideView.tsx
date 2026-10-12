@@ -255,7 +255,8 @@ function arrowMarker(id: string, type: string, color: string) {
 export function shapeGeometry(shape: SpShape, w: number, h: number): GeomResult {
   if (shape.geom === "custom" && shape.paths?.length) {
     return {
-      paths: shape.paths.map((p) => ({ d: customPathD(p, w, h), fill: p.fill === false ? "none" : "norm", stroke: p.stroke !== false })),
+      // Özel yolların alt yolları tek-çift kuralıyla doldurulur (delikler ve "Birleştir" sonucu).
+      paths: shape.paths.map((p) => ({ d: customPathD(p, w, h), fill: p.fill === false ? "none" : "norm", stroke: p.stroke !== false, evenodd: true })),
       text: { x: 0, y: 0, w, h },
       // Dolgusuz ve kapanmayan yollar (serbest çizim, mürekkep) açık çizgi gibi davranır.
       open: shape.paths.length === 1 && shape.paths[0].fill === false && !shape.paths[0].cmds.some((c) => c.c === "Z") ? true : undefined,
@@ -371,7 +372,7 @@ function PhIconSvg({ it }: { it: PlaceholderAction }) {
 function PlaceholderIcons({ type, w, h }: { type: string; w: number; h: number }) {
   // İçerik yer tutucusu: iki satırda Tablo, Grafik, Simge / Resim, Video.
   const items: PlaceholderAction[] = type === "pic" ? ["picture"] : type === "tbl" ? ["table"] : ["table", "chart", "icons", "picture", "video"];
-  const size = Math.max(26, Math.min(items.length > 1 ? 44 : 56, Math.min(w, h) / (items.length > 1 ? 6 : 5)));
+  const size = Math.max(30, Math.min(items.length > 1 ? 46 : 56, Math.min(w, h) / 5));
   return (
     <div className={`ph-icons${items.length > 1 ? " is-grid" : ""}`} style={{ gap: size / 4, gridTemplateColumns: items.length > 1 ? `repeat(3, ${size}px)` : undefined }}>
       {items.map((it) => (

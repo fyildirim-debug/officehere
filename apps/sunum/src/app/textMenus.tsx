@@ -71,7 +71,7 @@ function formatItems(a: Actions, openDialog: (d: DialogKind) => void) {
   const marL = info?.para?.marL;
   return (
     <>
-      <MenuItem icon={<TextFont20Regular />} label="Yazı Tipi..." shortcut="Ctrl+Shift+F" onClick={() => openDialog("font")} />
+      <MenuItem icon={<TextFont20Regular />} label="Yazı Tipi..." onClick={() => openDialog("font")} />
       <MenuItem icon={<TextParagraph20Regular />} label="Paragraf..." onClick={() => openDialog("paragraph")} />
       <MenuItem icon={<TextBulletListLtr20Regular />} label="Madde İşaretleri" submenu={<BulletGrid kind="bullet" onPick={(b) => setListStyle(a, b, !marL)} />} />
       <MenuItem icon={<TextNumberListLtr20Regular />} label="Numaralandırma" submenu={<BulletGrid kind="number" onPick={(b) => setListStyle(a, b)} />} />

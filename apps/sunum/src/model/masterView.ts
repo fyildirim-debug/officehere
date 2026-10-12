@@ -85,9 +85,20 @@ export function syncMasterView(mv: Presentation): Presentation {
   const ms = mv.slides.find((s) => s.id === MASTER_SLIDE_ID);
   if (!ms) return mv;
   const bg = ms.background ?? mv.master.background;
-  if (ms.shapes === mv.master.shapes && bg === mv.master.background) return mv;
-  return { ...mv, master: { ...mv.master, shapes: ms.shapes, background: bg } };
+  if (syncedFrom.get(mv.master.shapes) === ms.shapes && bg === mv.master.background) return mv;
+  // Asıl slayttaki örnek metne verilen biçimler (ör. kalın başlık) düzey stillerine katlanır;
+  // böylece düzenler ve onların küçük resimleri değişikliği anında yansıtır.
+  const shapes = ms.shapes.map((s) => {
+    if (s.kind !== "sp" || !s.ph || !s.text) return s;
+    const f = fold(s, true);
+    return f.kind === "sp" && f.text ? { ...s, text: { ...s.text, levels: f.text.levels } } : s;
+  });
+  syncedFrom.set(shapes, ms.shapes);
+  return { ...mv, master: { ...mv.master, shapes, background: bg } };
 }
+
+/** Eşitlenmiş asıl şekil dizisi → kaynağı olan asıl slayt şekilleri. */
+const syncedFrom = new WeakMap<Shape[], Shape[]>();
 
 export function isLayoutSlide(mv: Presentation, slideId: string | undefined): boolean {
   return !!slideId && slideId !== MASTER_SLIDE_ID && mv.layouts.some((l) => l.id === `${PL}${slideId}`);

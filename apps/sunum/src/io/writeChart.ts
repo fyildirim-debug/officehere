@@ -55,8 +55,9 @@ export function chartXml(c: ChartData, embedRid?: string): string {
   const series = pie ? c.series.slice(0, 1) : c.series;
   const ctx = { slideContent: true };
   const pal = c.palette;
-  const sers = series
-    .map((s, j) => {
+  // Birleşik: son seri çizgi, diğerleri kümelenmiş sütun.
+  const isLineSer = (j: number) => c.type === "line" || (c.type === "combo" && j === series.length - 1);
+  const serList = series.map((s, j) => {
       const col = colName(j + 1);
       const color = seriesColor(j, s.color, pal);
       const tx = `<c:tx><c:strRef><c:f>${SHEET}!$${col}$1</c:f>${strCache([s.name])}</c:strRef></c:tx>`;
@@ -78,15 +79,15 @@ export function chartXml(c: ChartData, embedRid?: string): string {
         const sp = `<c:spPr><a:ln w="28575" cap="rnd"><a:solidFill>${colorXml(color, ctx)}</a:solidFill><a:round/></a:ln></c:spPr><c:marker><c:symbol val="none"/></c:marker>`;
         return `<c:ser>${head}${sp}${dLblsXml(c.dataLabels)}${cat}${val}</c:ser>`;
       }
-      if (c.type === "line") {
+      if (isLineSer(j)) {
         const sp = `<c:spPr><a:ln w="28575" cap="rnd"><a:solidFill>${colorXml(color, ctx)}</a:solidFill><a:round/></a:ln></c:spPr><c:marker><c:symbol val="none"/></c:marker>`;
         return `<c:ser>${head}${sp}${dLblsXml(c.dataLabels, "t")}${cat}${val}<c:smooth val="0"/></c:ser>`;
       }
       const sp = `<c:spPr><a:solidFill>${colorXml(color, ctx)}</a:solidFill><a:ln><a:noFill/></a:ln></c:spPr>`;
       if (c.type === "area") return `<c:ser>${head}${sp}${dLblsXml(c.dataLabels)}${cat}${val}</c:ser>`;
       return `<c:ser>${head}${sp}<c:invertIfNegative val="0"/>${dLblsXml(c.dataLabels, "outEnd")}${cat}${val}</c:ser>`;
-    })
-    .join("");
+  });
+  const sers = serList.join("");
 
   const AX1 = 500000001;
   const AX2 = 500000002;
@@ -111,6 +112,11 @@ export function chartXml(c: ChartData, embedRid?: string): string {
       break;
     case "radar":
       plot = `<c:radarChart><c:radarStyle val="marker"/><c:varyColors val="0"/>${sers}${axIds}</c:radarChart>`;
+      break;
+    case "combo":
+      plot =
+        `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${serList.slice(0, -1).join("")}<c:gapWidth val="219"/><c:overlap val="-27"/>${axIds}</c:barChart>` +
+        `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${serList.slice(-1).join("")}<c:marker val="1"/>${axIds}</c:lineChart>`;
       break;
     case "pie":
       plot = `<c:pieChart><c:varyColors val="1"/>${sers}<c:firstSliceAng val="0"/></c:pieChart>`;

@@ -91,7 +91,10 @@ describe("asıl slayt görünümü", () => {
       ),
     };
     mv = syncMasterView(mv);
-    expect(mv.master.shapes).toBe(mv.slides[0].shapes);
+    // Asıl görünüm açıkken de düzenler biçimi miras alsın diye örnek metin biçimi düzey stiline katlanır.
+    const live = mv.master.shapes.find((s) => s.kind === "sp" && s.ph?.type === "title") as SpShape;
+    expect(live.text?.levels?.[0]?.run?.bold).toBe(true);
+    expect(syncMasterView(mv)).toBe(mv);
     const out = fromMasterView(p, mv);
     const mt = out.master.shapes.find((s) => s.kind === "sp" && s.ph?.type === "title") as SpShape;
     expect(mt.text?.levels?.[0]?.run?.bold).toBe(true);

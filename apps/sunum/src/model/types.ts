@@ -305,7 +305,7 @@ export interface GroupShape extends ShapeBase {
   children: Shape[];
 }
 
-export type ChartType = "col" | "bar" | "line" | "pie" | "doughnut" | "area" | "scatter" | "radar";
+export type ChartType = "col" | "bar" | "line" | "pie" | "doughnut" | "area" | "scatter" | "radar" | "combo";
 
 /** Sütun/çubuk/çizgi/alan gruplandırması (c:grouping). */
 export type ChartGrouping = "clustered" | "stacked" | "percentStacked";
@@ -377,6 +377,8 @@ export interface Transition {
   advanceOnClick: boolean;
   /** saniye; tanımlıysa otomatik ilerler */
   advanceAfter?: number;
+  /** Geçiş sesi (show/sounds kimliği; "stop" önceki sesi durdurur). */
+  sound?: string;
 }
 
 export type AnimClass = "entr" | "exit" | "emph";

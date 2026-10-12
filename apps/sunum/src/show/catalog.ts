@@ -13,21 +13,32 @@ export interface Option {
 export interface TransitionDef {
   type: TransitionType;
   label: string;
+  /** Galeri kategorisi. */
+  group?: "Hafif" | "Heyecan Verici" | "Dinamik İçerik";
   options?: Option[];
   defaultOption?: string;
 }
 
+/** Sil/Aç/Kapla yön sırası: Sağdan, Üstten, Soldan, Alttan. */
 const DIR4: Option[] = [
-  { id: "u", label: "Alttan" },
   { id: "l", label: "Sağdan" },
   { id: "d", label: "Üstten" },
   { id: "r", label: "Soldan" },
+  { id: "u", label: "Alttan" },
+];
+
+/** İt yön sırası: Alttan, Soldan, Sağdan, Üstten. */
+const PUSH_DIRS: Option[] = [
+  { id: "u", label: "Alttan" },
+  { id: "r", label: "Soldan" },
+  { id: "l", label: "Sağdan" },
+  { id: "d", label: "Üstten" },
 ];
 
 export const TRANSITIONS: TransitionDef[] = [
   { type: "none", label: "Yok" },
   { type: "fade", label: "Soluklaştır", options: [{ id: "smooth", label: "Düzgün" }, { id: "black", label: "Siyahtan" }], defaultOption: "smooth" },
-  { type: "push", label: "İt", options: DIR4, defaultOption: "u" },
+  { type: "push", label: "İt", options: PUSH_DIRS, defaultOption: "u" },
   { type: "wipe", label: "Sil", options: DIR4, defaultOption: "l" },
   {
     type: "split",
@@ -63,6 +74,9 @@ export const TRANSITIONS: TransitionDef[] = [
   { type: "wedge", label: "Kama" },
   { type: "newsflash", label: "Haber Flaşı" },
 ];
+
+const EXCITING = new Set<TransitionType>(["zoom", "dissolve", "checker", "blinds", "wheel", "wedge", "newsflash"]);
+for (const d of TRANSITIONS) d.group = EXCITING.has(d.type) ? "Heyecan Verici" : "Hafif";
 
 export function transitionDef(t: TransitionType): TransitionDef {
   return TRANSITIONS.find((x) => x.type === t) ?? TRANSITIONS[0];

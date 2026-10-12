@@ -29,6 +29,7 @@ import { cssColor } from "../model/color";
 import { LayoutGallery, ShapeGalleryMenu } from "./common";
 import { WORDART_PRESETS } from "./presets";
 import type { RibbonCtx } from "./types";
+import { NewSlideExtras } from "./HomeTab";
 
 function WordArtGrid({ ctx }: { ctx: RibbonCtx }) {
   const close = useMenuClose();
@@ -72,7 +73,7 @@ export function InsertTab({ ctx }: { ctx: RibbonCtx }) {
   return (
     <>
       <RibbonGroup label="Slaytlar" icon={<SlideAdd24Regular />}>
-        <RibbonSplitButton size="large" icon={<SlideAdd32Regular />} label="Yeni Slayt" shortcut="Ctrl+M" onClick={() => a.newSlide()} menu={<LayoutGallery pres={state.pres} header="Tema" onPick={(id) => a.newSlide(id)} />} />
+        <RibbonSplitButton size="large" icon={<SlideAdd32Regular />} label="Yeni Slayt" shortcut="Ctrl+M" onClick={() => a.newSlide()} menu={<><LayoutGallery pres={state.pres} header={state.pres.theme.name || "Tema"} onPick={(id) => a.newSlide(id)} /><NewSlideExtras ctx={ctx} /></>} />
       </RibbonGroup>
       <RibbonGroup label="Tablolar" icon={<Table24Regular />}>
         <RibbonMenuButton

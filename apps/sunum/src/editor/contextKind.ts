@@ -1,5 +1,9 @@
 /** Slayt alanında sağ tıklanan yere göre hangi bağlam menüsünün açılacağı. */
+import { useMemo } from "react";
+import { findShape } from "../model/ops";
+import type { Shape, Slide } from "../model/types";
 import type { Actions } from "../state/actions";
+import { animationLabels } from "./canvasUtils";
 import type { AppState } from "../state/store";
 
 export type CanvasMenuKind = "shape" | "slide" | "text" | "cell";
@@ -18,4 +22,18 @@ export function contextKind(t: Element, st: AppState, slideEl: HTMLElement | nul
   }
   const onShape = !!t.closest("[data-shape-id]") && !!slideEl?.contains(t);
   return onShape ? "shape" : "slide";
+}
+
+/** Animasyon sekmesinde şekillerin yanında gösterilen sıra numaraları. */
+export function useAnimBadges(show: boolean, slide: Slide | undefined) {
+  return useMemo(() => {
+    if (!show || !slide) return undefined;
+    const labels = animationLabels(slide);
+    const out: { shape: Shape; labels: string[] }[] = [];
+    for (const [id, l] of labels) {
+      const s = findShape(slide.shapes, id);
+      if (s) out.push({ shape: s, labels: l });
+    }
+    return out;
+  }, [show, slide]);
 }

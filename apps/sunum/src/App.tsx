@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRedo20Regular, ArrowUndo20Regular, Save20Regular, SlidePlay20Regular } from "@fluentui/react-icons";
 import { AppShell, MessageBar, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle } from "@officehere/ui";
 import { downloadBlob } from "@officehere/core";
-import { newPresentation } from "./model/presentation";
+import { blankPresentation } from "./model/presentation";
 import { Canvas } from "./editor/Canvas";
 import { ThumbnailPane } from "./panes/ThumbnailPane";
 import { NotesPane, Splitter } from "./panes/NotesPane";
@@ -93,6 +93,7 @@ export function App() {
     find: () => cmd.find(),
     replace: () => setDialog("replace"),
     link: () => cmd.insertLink(),
+    spelling: () => cmd.spelling(),
     isBlocked: () => blockedRef.current,
   });
   useClipboard(a, useCallback(() => blockedRef.current, []));
@@ -365,7 +366,7 @@ export function App() {
               }}
               onClose={async () => {
                 if (!(await lifecycle.confirmDiscard())) return;
-                loadPresentation(a, newPresentation("varsayilan", 0), "Sunu1", null);
+                loadPresentation(a, blankPresentation(), "Sunu1", null);
                 setBackstage(false);
               }}
             />

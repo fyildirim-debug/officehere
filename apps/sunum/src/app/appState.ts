@@ -1,6 +1,6 @@
 /** Uygulamanın başlangıç durumu, oturum deposu ve önizleme alanı yardımcıları. */
 import { downloadBlob } from "@officehere/core";
-import { newPresentation } from "../model/presentation";
+import { blankPresentation } from "../model/presentation";
 import { writePptx } from "../io/pptxWriter";
 import { Actions } from "../state/actions";
 import { documentPres } from "../state/masterActions";
@@ -12,7 +12,7 @@ import type { RecoveryHandlers } from "./ErrorBoundary";
 import { save } from "./fileOps";
 
 export function initialState(): AppState {
-  const pres = newPresentation("varsayilan", 0);
+  const pres = blankPresentation();
   return {
     pres,
     slideIdx: 0,
@@ -46,6 +46,7 @@ export function initialState(): AppState {
     message: null,
     colorMode: "color",
     proofLang: "tr-TR",
+    pointEdit: null,
   };
 }
 

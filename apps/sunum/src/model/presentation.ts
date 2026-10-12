@@ -23,6 +23,31 @@ export function themeFromDef(id: string, variant = 0): Theme {
   return { name: def.name, id: def.id, variant, colors: { ...v.colors }, fonts: { ...def.fonts } };
 }
 
+const DEFAULT_THEME_KEY = "officehere.sunum.defaultTheme";
+
+/** "Varsayılan Tema Olarak Ayarla" ile seçilen tema (boş sunular bununla başlar). */
+export function defaultThemeId(): string {
+  try {
+    const v = typeof localStorage !== "undefined" ? localStorage.getItem(DEFAULT_THEME_KEY) : null;
+    return v && getThemeDef(v) ? v : "varsayilan";
+  } catch {
+    return "varsayilan";
+  }
+}
+
+export function setDefaultThemeId(id: string) {
+  try {
+    localStorage.setItem(DEFAULT_THEME_KEY, id);
+  } catch {
+    /* depo yok */
+  }
+}
+
+/** Varsayılan temayla boş sunu. */
+export function blankPresentation(): Presentation {
+  return newPresentation(defaultThemeId(), 0);
+}
+
 export function newPresentation(themeId = "varsayilan", variant = 0, size = SLIDE_16_9): Presentation {
   const def = getThemeDef(themeId) ?? THEMES[0];
   const { master, layouts } = buildMasterAndLayouts(size.width, size.height, def.style);
