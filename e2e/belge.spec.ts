@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { URL, collectErrors } from "./ortak";
+import { belgeTur4Tests } from "./belge-tur4";
 
 // OfficeHere Belge: gerçek bir kullanıcı gibi uçtan uca senaryolar (derlenmiş uygulama, yalnız arayüz).
 
@@ -590,3 +591,6 @@ test.describe("OfficeHere Belge senaryoları", () => {
     await expect(page.getByLabel("Yazar")).toHaveValue("Ayşe Yılmaz");
   });
 });
+
+// 4. tur: kabul testi düzeltmeleri ve yeni özellikler.
+belgeTur4Tests();

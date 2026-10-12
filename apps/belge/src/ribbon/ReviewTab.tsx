@@ -14,6 +14,8 @@ import {
   TextWordCount20Regular,
   TextEditStyle20Regular,
   Eye20Regular,
+  BranchCompare24Regular,
+  DocumentLock32Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack } from "@officehere/ui";
 import { useBelge } from "../state/context";
@@ -147,7 +149,7 @@ export function ReviewTab({ lang, setLang, deleteComment, deleteAllComments }: {
           size="large"
           icon={<CheckmarkCircle32Regular />}
           label="Kabul Et"
-          disabled={!changes.length}
+          disabled={!changes.length || !!ctx.settings.protection?.enforced}
           onClick={() => resolve(true, false)}
           menu={
             <Menu>
@@ -161,7 +163,7 @@ export function ReviewTab({ lang, setLang, deleteComment, deleteAllComments }: {
           size="large"
           icon={<DismissCircle32Regular />}
           label="Reddet"
-          disabled={!changes.length}
+          disabled={!changes.length || !!ctx.settings.protection?.enforced}
           onClick={() => resolve(false, false)}
           menu={
             <Menu>
@@ -175,6 +177,21 @@ export function ReviewTab({ lang, setLang, deleteComment, deleteAllComments }: {
           <RibbonButton icon={<ArrowPrevious20Regular />} label="Önceki" disabled={!changes.length} onClick={() => gotoChange(-1)} />
           <RibbonButton icon={<ArrowNext20Regular />} label="Sonraki" disabled={!changes.length} onClick={() => gotoChange(1)} />
         </RibbonStack>
+      </RibbonGroup>
+      <RibbonGroup label="Karşılaştır" icon={<BranchCompare24Regular />}>
+        <RibbonMenuButton
+          size="large"
+          icon={<BranchCompare24Regular />}
+          label="Karşılaştır"
+          menu={
+            <Menu width={300}>
+              <MenuItem icon={<BranchCompare24Regular />} label="Karşılaştır..." description="Bir belgenin iki sürümünü karşılaştırın (yasal karşılaştırma)." onClick={() => ctx.openDialog("compare")} />
+            </Menu>
+          }
+        />
+      </RibbonGroup>
+      <RibbonGroup label="Koru" icon={<DocumentLock32Regular />}>
+        <RibbonButton size="large" icon={<DocumentLock32Regular />} label="Düzenlemeyi Kısıtla" checked={!!ctx.settings.protection?.enforced} onClick={() => ctx.openDialog("protect")} />
       </RibbonGroup>
     </>
   );

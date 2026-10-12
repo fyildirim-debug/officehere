@@ -10,8 +10,11 @@ import {
   RotateLeft20Regular,
   FlipHorizontal20Regular,
   FlipVertical20Regular,
+  Crop20Regular,
+  Crop32Regular,
 } from "@fluentui/react-icons";
-import { ColorPalette, Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonStack } from "@officehere/ui";
+import { ColorPalette, Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonSplitButton, RibbonStack } from "@officehere/ui";
+import { applyCrop, cropMode, setCropMode } from "../views/CropOverlay";
 import { useBelge } from "../state/context";
 import { IMAGE_STYLES } from "../editor/image";
 import { ArrangeGroup } from "./ArrangeGroup";
@@ -99,6 +102,23 @@ export function PictureTab() {
         }
       />
       <RibbonGroup label="Boyut" onLauncher={() => ctx.openDialog("imageSize")}>
+        <RibbonSplitButton
+          size="large"
+          icon={<Crop32Regular />}
+          label="Kırp"
+          tip="Resmin istenmeyen bölümlerini kaldırmak için kırpın"
+          disabled={!ctx.inBody}
+          checked={cropMode() === pos}
+          onClick={() => setCropMode(cropMode() === pos ? null : pos)}
+          menu={
+            <Menu width={220}>
+              <MenuItem icon={<Crop20Regular />} label="Kırp" onClick={() => setCropMode(pos)} />
+              <MenuItem label="Kırpma Seçenekleri..." onClick={() => ctx.openDialog("crop")} />
+              <MenuSeparator />
+              <MenuItem label="Kırpmayı Sıfırla" disabled={!a.crop} onClick={() => applyCrop(editor, pos, null)} />
+            </Menu>
+          }
+        />
         <RibbonStack>
           <RibbonSpinner label="Yükseklik:" value={h / CM} step={0.1} min={0.1} max={60} unit="cm" decimals={2} width={78} onChange={(v) => update({ height: Math.round(v * CM), width: Math.round((v * CM * w) / h) })} />
           <RibbonSpinner label="Genişlik:" value={w / CM} step={0.1} min={0.1} max={60} unit="cm" decimals={2} width={78} onChange={(v) => update({ width: Math.round(v * CM), height: Math.round((v * CM * h) / w) })} />

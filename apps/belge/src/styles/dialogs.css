@@ -56,6 +56,14 @@
   box-sizing: border-box;
 }
 
+/* Seçenek düğmeleri ve onay kutuları etiketin hemen solunda (tam genişliğe yayılmaz). */
+.bl-dlg-grid input[type="radio"],
+.bl-dlg-grid input[type="checkbox"] {
+  width: auto;
+  flex: none;
+  margin-left: 0;
+}
+
 .bl-dlg-checks {
   display: grid;
   grid-template-columns: 1fr 1fr;

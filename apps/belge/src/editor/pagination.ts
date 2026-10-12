@@ -57,6 +57,17 @@ export class PaginationController {
   view: EditorView | null = null;
   private listeners = new Set<(i: LayoutInfo) => void>();
   measureNow: (() => void) | null = null;
+  /** Son Yazdırma Düzeni sayfalaması (Taslak/Anahat görünümünde durum çubuğu için; düzenlemelerle eşlenir). */
+  lastPaged: { starts: number[]; count: number } | null = null;
+
+  /** Taslak/Anahat görünümünde konumun sayfası ve sayfa sayısı (son sayfalamaya göre). */
+  pagedPosition(pos: number): { page: number; count: number } {
+    const lp = this.lastPaged;
+    if (!lp) return { page: 0, count: 1 };
+    let page = 0;
+    for (let i = 0; i < lp.starts.length; i++) if (lp.starts[i] <= pos) page = i;
+    return { page, count: lp.count };
+  }
 
   setGeometry(g: Partial<PageGeometry>) {
     const next = { ...this.geometry, ...g };
@@ -341,6 +352,7 @@ class PaginationView {
       body?.classList.remove("bl-measuring-body");
     }
     if (info) this.markTileRows(breaks, info, g.tiles, slot + g.gap);
+    if (info) this.ctrl.lastPaged = { starts: info.pageStarts.slice(), count: info.pageCount };
     this.slow = performance.now() - t0 > 12;
     if (!sameBreaks(breaks, old.breaks) || !sameStyles(styles, old.styles)) this.apply(breaks, styles);
     if (info) this.ctrl.publish(info);
@@ -595,10 +607,15 @@ export const Pagination = Extension.create<{ controller: PaginationController }>
               return { breaks: meta.breaks, styles, deco: buildDeco(newState.doc, meta.breaks, styles), remeasure: value.remeasure };
             }
             let next = value;
+            // Sayfasız görünümde son sayfalamanın sayfa başları düzenlemeyle kayar.
+            if (tr.docChanged && !ctrl.geometry.enabled && ctrl.lastPaged) ctrl.lastPaged = { ...ctrl.lastPaged, starts: ctrl.lastPaged.starts.map((p) => tr.mapping.map(p, -1)) };
             if (tr.docChanged) {
               const breaks = value.breaks.map((b) => ({ ...b, pos: tr.mapping.map(b.pos, -1) }));
               const styles = value.styles.map((s) => ({ ...s, pos: tr.mapping.map(s.pos, 1) }));
-              next = { ...value, breaks, styles, deco: value.deco.map(tr.mapping, tr.doc) };
+              let deco = value.deco.map(tr.mapping, tr.doc);
+              // Kapsayıcı düğümün özniteliği değişince (ör. bölüm) sınırdaki parçacıklar düşebilir: yeniden kurulur.
+              if (deco.find().length !== value.deco.find().length) deco = buildDeco(tr.doc, breaks, styles);
+              next = { ...value, breaks, styles, deco };
             }
             if (meta?.remeasure) next = { ...next, remeasure: next.remeasure + 1 };
             return next;

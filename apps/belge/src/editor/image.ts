@@ -42,6 +42,30 @@ function keepImageSelectedPlugin() {
   });
 }
 
+/** Resim kırpma oranları (0–1, kenarlardan). */
+export interface ImageCrop {
+  l: number;
+  t: number;
+  r: number;
+  b: number;
+}
+
+/** Kırpmanın CSS karşılığı (object-view-box). */
+export function cropCss(c: ImageCrop | null | undefined): string | null {
+  if (!c || (!c.l && !c.t && !c.r && !c.b)) return null;
+  const p = (v: number) => `${+(Math.max(0, Math.min(0.99, v)) * 100).toFixed(3)}%`;
+  return `inset(${p(c.t)} ${p(c.r)} ${p(c.b)} ${p(c.l)})`;
+}
+
+/** Kırpma değişince görüntülenen boyut (ölçek korunur, Word gibi). */
+export function croppedSize(w: number, h: number, from: ImageCrop | null, to: ImageCrop | null): { width: number; height: number } {
+  const f = from ?? { l: 0, t: 0, r: 0, b: 0 };
+  const t = to ?? { l: 0, t: 0, r: 0, b: 0 };
+  const fullW = w / Math.max(0.01, 1 - f.l - f.r);
+  const fullH = h / Math.max(0.01, 1 - f.t - f.b);
+  return { width: Math.max(4, Math.round(fullW * (1 - t.l - t.r))), height: Math.max(4, Math.round(fullH * (1 - t.t - t.b))) };
+}
+
 export const IMAGE_STYLES: { id: string; label: string }[] = [
   { id: "none", label: "Stil Yok" },
   { id: "frame", label: "Basit Çerçeve, Beyaz" },
@@ -72,6 +96,18 @@ export const BelgeImage = Image.extend({
         renderHTML: (a) => (a.rotate ? { "data-rotate": String(a.rotate) } : {}),
       },
       flipH: { default: false, parseHTML: (el) => el.hasAttribute("data-flip-h"), renderHTML: (a) => (a.flipH ? { "data-flip-h": "" } : {}) },
+      // Kırpma: kenarlardan kesilen oranlar (0–1); görüntülenen boyut kırpılmış bölgenindir.
+      crop: {
+        default: null,
+        parseHTML: (el) => {
+          try {
+            return JSON.parse(el.getAttribute("data-crop") ?? "null") as ImageCrop | null;
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: (a) => (a.crop ? { "data-crop": JSON.stringify(a.crop) } : {}),
+      },
       ...wrapAttributes,
       flipV: {
         default: false,
@@ -86,6 +122,8 @@ export const BelgeImage = Image.extend({
           const style: string[] = [];
           if (t.length) style.push(`transform:${t.join(" ")}`);
           if (a.border) style.push(`outline:${a.border}`);
+          const cv = cropCss(a.crop as ImageCrop | null);
+          if (cv) style.push(`object-view-box:${cv}`);
           // Metni kaydırma (dışa aktarma ve okuma modu; düzenleyicide kapsayıcıya uygulanır).
           const ws = wrapStyle(a as Partial<WrapAttrs>);
           for (const [k, v] of Object.entries(ws)) if (v) style.push(`${k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}:${v}`);
@@ -104,7 +142,11 @@ export const BelgeImage = Image.extend({
     return (props) => {
       const nv = parent(props) as { dom: HTMLElement; update?: (...a: unknown[]) => boolean };
       const img = nv.dom.querySelector("img") as HTMLElement | null;
-      const sync = (n: PMNode) => img && applyWrap(nv.dom, img, n.attrs as Partial<WrapAttrs>);
+      const sync = (n: PMNode) => {
+        if (!img) return;
+        applyWrap(nv.dom, img, n.attrs as Partial<WrapAttrs>);
+        img.style.setProperty("object-view-box", cropCss(n.attrs.crop as ImageCrop | null) ?? "");
+      };
       sync(props.node);
       enableFloatingDrag(nv.dom, props.view, props.getPos as () => number | undefined);
       const orig = nv.update?.bind(nv);

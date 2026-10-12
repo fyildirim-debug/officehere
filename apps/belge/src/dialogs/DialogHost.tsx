@@ -12,6 +12,7 @@ import { ParagraphDialog } from "./ParagraphDialog";
 import { FindReplaceDialog } from "./FindReplaceDialog";
 import { ColumnsDialog, PageSetupDialog } from "./PageSetupDialog";
 import { BookmarkDialog, DateTimeDialog, InsertTableDialog, LinkDialog, SymbolDialog } from "./InsertDialogs";
+import { ExtraDialogs } from "./ExtraDialogs";
 import { AltTextDialog, ImageSizeDialog, PageBordersDialog, ShortcutsDialog, SplitCellsDialog, TablePropsDialog, WatermarkDialog, WordCountDialog, ZoomDialog, type ZoomTarget } from "./MiscDialogs";
 
 interface Props {
@@ -95,6 +96,6 @@ export function DialogHost({ dialog, onClose, zoom, onZoom, pages }: Props) {
     case "style":
       return <StyleDialog styleId={dialog.arg} onClose={onClose} />;
     default:
-      return null;
+      return <ExtraDialogs dialog={dialog} onClose={onClose} />;
   }
 }

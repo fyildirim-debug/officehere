@@ -23,6 +23,9 @@ import { setOutline } from "../editor/outline";
 import type { TabStop } from "../editor/tabStops";
 import { resolveChanges } from "../editor/trackChanges";
 import { evenTileRows, tileCell } from "../editor/tileRows";
+import { HF_KEYS, hfContent, hfLinked, sectionIds, withHfContent } from "../editor/sectionHf";
+import { LineNumbers } from "./LineNumbers";
+import { CropOverlay } from "./CropOverlay";
 
 /** Belgede izlenen değişiklik var mı. */
 function hasRevisions(editor: Editor): boolean {
@@ -245,13 +248,21 @@ export function DocumentView(props: Props) {
     else if (local > pg.h - pg.mb + 2) setHfEditing("footer", page);
   };
 
+  // Bölümlerin etkin üst/alt bilgileri (Öncekine Bağla: bağlı bölüm öncekinin içeriğini gösterir).
+  const ids = useMemo(() => sectionIds(doc), [doc]);
+  const idsKey = ids.join("|");
+  const hfTable = useMemo(
+    () => ({ content: ids.map((_, si) => HF_KEYS.map((k) => hfContent(ids, settings, si, k))), linked: ids.map((_, si) => HF_KEYS.map((k) => hfLinked(ids, settings, si, k))) }),
+    [idsKey, settings.header, settings.footer, settings.headerFirst, settings.footerFirst, settings.headerEven, settings.footerEven, settings.sectionHf], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const hfVariant = hfEditing ? hfVariantOf(pages[hfPage], hfPage, settings) : "default";
   const hfField = hfEditing ? hfKey(hfEditing, hfVariant) : null;
+  const hfSection = pages[hfPage]?.section ?? 0;
   const onHfChange = useCallback(
     (json: JSONContent) => {
-      if (hfField) updateSettings((s) => ({ ...s, [hfField]: json }));
+      if (hfField) updateSettings((s) => withHfContent(s, sectionIds(editor.state.doc), hfSection, hfField, json));
     },
-    [hfField, updateSettings],
+    [hfField, hfSection, updateSettings, editor],
   );
 
   const setMargins = (section: number | undefined) => (v: { left?: number; right?: number; top?: number; bottom?: number }) =>
@@ -321,8 +332,11 @@ export function DocumentView(props: Props) {
                     notes={notes}
                     onNoteChange={onNoteChange}
                     sectionCount={geoms.length}
+                    hf={hfTable}
                   />
                 )}
+                {print && <LineNumbers editor={editor} controller={controller} pagesRef={pagesRef} scale={scale} pages={pages} geoms={geoms} rectOf={rectOf} />}
+                {!printing && <CropOverlay editor={editor} pagesRef={pagesRef} scale={scale} />}
                 <div
                   className={`bl-body bl-doc${tiled ? " is-tiled" : ""}`}
                   style={
@@ -340,12 +354,12 @@ export function DocumentView(props: Props) {
                 </div>
                 {hfEditing && print && hfPg && hfRect && hfField && (
                   <HeaderFooterEditor
-                    key={`${hfField}:${hfPage}`}
+                    key={`${hfField}:${hfPage}:${hfTable.linked[hfSection]?.[HF_KEYS.indexOf(hfField)] ? "l" : "o"}`}
                     which={hfEditing}
                     label={hfLabel(hfEditing, hfVariant, settings.oddEven, hfPg.section, geoms.length)}
                     page={hfPg}
                     rect={hfRect}
-                    content={settings[hfField]}
+                    content={hfTable.content[Math.min(hfSection, hfTable.content.length - 1)]?.[HF_KEYS.indexOf(hfField)] ?? null}
                     onChange={onHfChange}
                     onEditor={onHfEditor}
                     onClose={() => setHfEditing(null)}

@@ -39,6 +39,7 @@ export function ParagraphDialog({ onClose }: { onClose: () => void }) {
   const [lineVal, setLineVal] = useState(fmtNum(rule === "auto" ? lh : lh, 2));
   const [keepNext, setKeepNext] = useState(!!a.keepNext);
   const [keepLines, setKeepLines] = useState(!!a.keepLines);
+  const [noLnum, setNoLnum] = useState(!!a.suppressLineNumbers);
   const [pbb, setPbb] = useState(!!a.pageBreakBefore);
   const isHeading = p?.node.type.name === "heading";
   const [outline, setOutline] = useState(String(isHeading ? (p?.node.attrs.level as number) : ((a.outlineLevel as number | null) ?? 0)));
@@ -88,6 +89,7 @@ export function ParagraphDialog({ onClose }: { onClose: () => void }) {
       keepNext,
       keepLines,
       pageBreakBefore: pbb,
+      suppressLineNumbers: noLnum,
       ...(isHeading ? {} : { outlineLevel: Number(outline) || null }),
     });
     onClose();
@@ -244,6 +246,13 @@ export function ParagraphDialog({ onClose }: { onClose: () => void }) {
             <Check label="Sonrakiyle birlikte tut" v={keepNext} set={setKeepNext} />
             <Check label="Satırları birlikte tut" v={keepLines} set={setKeepLines} />
             <Check label="Önce sayfa sonu" v={pbb} set={setPbb} />
+          </div>
+        </FieldSet>
+      )}
+      {tab !== "indent" && (
+        <FieldSet legend="Biçimlendirme özel durumları">
+          <div className="bl-dlg-checks is-single">
+            <Check label="Satır numaralarını gizle" v={noLnum} set={setNoLnum} />
           </div>
         </FieldSet>
       )}

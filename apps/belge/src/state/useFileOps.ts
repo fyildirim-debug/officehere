@@ -74,6 +74,8 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       try {
         const { doc, warning } = await openDocument(name, data);
         load(doc, baseName(name), ref);
+        // Önceki (vazgeçilen) belgenin taslağı bu pencereden kaldırılır.
+        clearOwnDraft();
         if (warning) notify(warning, "warning");
         await addRecentFile({ path: ref?.path ?? name, name, app: "belge", openedAt: Date.now() });
       } catch (err) {

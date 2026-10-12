@@ -10,12 +10,14 @@ import {
   TextAddSpaceBefore20Regular,
   TextAddSpaceAfter20Regular,
   Orientation24Regular,
+  TextNumberListLtr20Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator, MenuHeader, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonStack, RibbonLabel } from "@officehere/ui";
 import type { Editor } from "@tiptap/core";
 import { useBelge } from "../state/context";
 import { MARGIN_PRESETS, PAGE_SIZE_LIST, fmtCm, marginPresetId, pageSizeId, samePage, type DocSettings, type PageSetup, type SectionAttrs } from "../model/document";
 import { setParaAttrs } from "../editor/commands";
+import type { LineNumbering } from "../model/document";
 import { isolateSelection } from "../editor/sections";
 import { applyPageSetup, sectionPageAt } from "../state/pageSetup";
 import { ArrangeGroup } from "./ArrangeGroup";
@@ -67,6 +69,9 @@ export function LayoutTab() {
   const sz = pageSizeId(page);
   const chain = () => editor.chain().focus();
   const sectionBreak = (kind: SectionAttrs["kind"]) => chain().insertSectionBreak(kind).run();
+  // Satır numaraları imleçteki bölüme (tek bölümde belgeye) uygulanır.
+  const ln = page.lineNumbers ?? null;
+  const setLineNumbers = (restart: LineNumbering["restart"] | null) => setPage((p) => ({ ...p, lineNumbers: restart ? { ...(p.lineNumbers ?? {}), restart } : null }));
 
   return (
     <>
@@ -149,6 +154,22 @@ export function LayoutTab() {
                 <MenuItem label="Sürekli" description="Bölüm sonu ekleyin ve yeni bölümü aynı sayfada başlatın." disabled={!ctx.inBody} onClick={() => sectionBreak("continuous")} />
                 <MenuItem label="Çift Sayfa" description="Bölüm sonu ekleyin ve yeni bölümü sonraki çift numaralı sayfada başlatın." disabled={!ctx.inBody} onClick={() => sectionBreak("evenPage")} />
                 <MenuItem label="Tek Sayfa" description="Bölüm sonu ekleyin ve yeni bölümü sonraki tek numaralı sayfada başlatın." disabled={!ctx.inBody} onClick={() => sectionBreak("oddPage")} />
+              </Menu>
+            }
+          />
+          <RibbonMenuButton
+            icon={<TextNumberListLtr20Regular />}
+            label="Satır Numaraları"
+            menu={
+              <Menu width={280}>
+                <MenuItem label="Yok" checked={!ln} onClick={() => setLineNumbers(null)} />
+                <MenuItem label="Sürekli" checked={ln?.restart === "continuous"} onClick={() => setLineNumbers("continuous")} />
+                <MenuItem label="Her Sayfada Yeniden Başlat" checked={ln?.restart === "newPage"} onClick={() => setLineNumbers("newPage")} />
+                <MenuItem label="Her Bölümde Yeniden Başlat" checked={ln?.restart === "newSection"} onClick={() => setLineNumbers("newSection")} />
+                <MenuSeparator />
+                <MenuItem label="Geçerli Paragrafta Gizle" checked={!!fmt.suppressLineNumbers} onClick={() => setParaAttrs(ctx.editor, { suppressLineNumbers: !fmt.suppressLineNumbers })} />
+                <MenuSeparator />
+                <MenuItem label="Satır Numaralandırma Seçenekleri..." onClick={() => ctx.openDialog("lineNumbers")} />
               </Menu>
             }
           />

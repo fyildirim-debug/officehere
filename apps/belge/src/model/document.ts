@@ -62,6 +62,19 @@ export interface PageSetup {
   columnLine?: boolean;
   /** İlk sayfada farklı üst/alt bilgi (w:titlePg). */
   titlePage?: boolean;
+  /** Satır numaraları (w:lnNumType). */
+  lineNumbers?: LineNumbering | null;
+}
+
+export interface LineNumbering {
+  /** Yeniden başlatma: sürekli, her sayfada, her bölümde. */
+  restart: "continuous" | "newPage" | "newSection";
+  /** İlk numara (varsayılan 1). */
+  start?: number;
+  /** Numara aralığı (her n. satır; varsayılan 1). */
+  countBy?: number;
+  /** Metinden uzaklık (twip; 0/yok: otomatik). */
+  distance?: number;
 }
 
 /** Bölümün nasıl başladığı (OOXML sectPr/w:type). */
@@ -78,6 +91,8 @@ export const SECTION_KIND_LABEL: Record<SectionKind, string> = {
 export interface SectionAttrs {
   kind: SectionKind;
   page: PageSetup | null;
+  /** Kalıcı bölüm kimliği (kendi üst/alt bilgisi olan bölümler). */
+  sid?: string | null;
 }
 
 /** Üst/alt bilgi türü: varsayılan (tek sayfalar), ilk sayfa, çift sayfalar. */
@@ -147,6 +162,28 @@ export interface DocSettings {
   /** Alıntılar ve Kaynakça: kaynaklar ve kaynakça stili. */
   sources?: import("./sources").Source[];
   bibStyle?: "apa" | "ieee";
+  /** Bağı kaldırılmış bölümlerin kendi üst/alt bilgileri (bölüm kimliği → tür → içerik). */
+  sectionHf?: Record<string, Partial<Record<"header" | "footer" | "headerFirst" | "footerFirst" | "headerEven" | "footerEven", JSONContent | null>>>;
+  /** Düzenlemeyi kısıtla. */
+  protection?: DocProtection | null;
+  /** Adres mektup birleştirme veri kaynağı (alıcı listesi ve hariç tutulanlar); belgeyle saklanır. */
+  mailMerge?: MailMergeData | null;
+}
+
+/** Düzenlemeyi Kısıtla (w:documentProtection). */
+export interface DocProtection {
+  mode: "readOnly" | "comments" | "trackedChanges";
+  enforced: boolean;
+  /** ISO/IEC 29500 parola karması (isteğe bağlı). */
+  algorithm?: string;
+  hash?: string;
+  salt?: string;
+  spinCount?: number;
+}
+
+export interface MailMergeData {
+  list: { name: string; fields: string[]; records: Record<string, string>[] };
+  excluded: number[];
 }
 
 export interface BelgeDocument {

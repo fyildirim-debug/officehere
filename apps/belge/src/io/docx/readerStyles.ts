@@ -36,6 +36,7 @@ export interface ParaProps {
   indentFirst?: number;
   keepNext?: boolean;
   keepLines?: boolean;
+  suppressLineNumbers?: boolean;
   pageBreakBefore?: boolean;
   shading?: string | null;
   borders?: { top?: BorderSpec; bottom?: BorderSpec; left?: BorderSpec; right?: BorderSpec } | null;
@@ -183,6 +184,9 @@ export function parsePPr(pPr: Element | null): ParaProps {
         break;
       case "pageBreakBefore":
         p.pageBreakBefore = onOff(c) ?? undefined;
+        break;
+      case "suppressLineNumbers":
+        p.suppressLineNumbers = onOff(c) ?? undefined;
         break;
       case "spacing": {
         const b = attrNum(c, "before");

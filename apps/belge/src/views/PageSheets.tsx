@@ -8,18 +8,32 @@ import { NUMPAGES_TOKEN, PAGE_TOKEN } from "../editor/nodes";
 import { headerFooterExtensions } from "../editor/extensions";
 import type { PageInfo } from "../editor/pagination";
 import { FootnoteText, type FootnoteView } from "./FootnoteText";
+import { HF_KEYS, hfKeyOf, type HfKey } from "../editor/sectionHf";
 
 export type { FootnoteView } from "./FootnoteText";
 
 const hfExtensions = headerFooterExtensions();
 
+const htmlCache = new WeakMap<JSONContent, string>();
+
 function toHtml(json: JSONContent | null): string {
   if (!json) return "";
+  const hit = htmlCache.get(json);
+  if (hit !== undefined) return hit;
+  let out = "";
   try {
-    return generateHTML(json, hfExtensions);
+    out = hasContent(json) ? generateHTML(json, hfExtensions) : "";
   } catch {
-    return "";
+    out = "";
   }
+  htmlCache.set(json, out);
+  return out;
+}
+
+/** Bölüm × tür üst/alt bilgi tablosu (HF_KEYS sırasıyla) ve "Öncekiyle Aynı" bilgisi. */
+export interface HfTable {
+  content: (JSONContent | null)[][];
+  linked: boolean[][];
 }
 
 export function hasContent(json: JSONContent | null): boolean {
@@ -35,10 +49,8 @@ export function hfVariantOf(page: PageInfo | undefined, index: number, settings:
   return "default";
 }
 
-export function hfKey(which: "header" | "footer", v: HfVariant): "header" | "footer" | "headerFirst" | "footerFirst" | "headerEven" | "footerEven" {
-  if (v === "first") return which === "header" ? "headerFirst" : "footerFirst";
-  if (v === "even") return which === "header" ? "headerEven" : "footerEven";
-  return which;
+export function hfKey(which: "header" | "footer", v: HfVariant): HfKey {
+  return hfKeyOf(which, v);
 }
 
 /** Düzenleme sırasında sayfadaki üst/alt bilgi alanı etiketi (Word'deki gibi). */
@@ -63,17 +75,14 @@ interface Props {
   /** Düzenlenen üst/alt bilginin bulunduğu sayfa. */
   editingPage: number;
   sectionCount: number;
+  /** Bölümlerin etkin üst/alt bilgileri. */
+  hf: HfTable;
 }
 
-export const PageSheets = memo(function PageSheets({ pages, rects, settings, gridlines, editing, editingPage, footnotes, notes, onNoteChange, sectionCount }: Props) {
-  const html = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const k of ["header", "footer", "headerFirst", "footerFirst", "headerEven", "footerEven"] as const) {
-      const json = settings[k];
-      m.set(k, hasContent(json) ? toHtml(json) : "");
-    }
-    return m;
-  }, [settings.header, settings.footer, settings.headerFirst, settings.footerFirst, settings.headerEven, settings.footerEven]); // eslint-disable-line react-hooks/exhaustive-deps
+export const PageSheets = memo(function PageSheets({ pages, rects, settings, gridlines, editing, editingPage, footnotes, notes, onNoteChange, sectionCount, hf }: Props) {
+  const html = useMemo(() => hf.content.map((row) => row.map((json) => toHtml(json))), [hf]);
+  const htmlOf = (section: number, key: HfKey) => html[Math.min(section, html.length - 1)]?.[HF_KEYS.indexOf(key)] ?? "";
+  const linkedOf = (section: number, key: HfKey) => hf.linked[Math.min(section, hf.linked.length - 1)]?.[HF_KEYS.indexOf(key)] ?? false;
   const wm = settings.watermark;
   const pb = settings.pageBorder;
   const count = pages.length;
@@ -81,8 +90,8 @@ export const PageSheets = memo(function PageSheets({ pages, rects, settings, gri
   for (let i = 0; i < count; i++) {
     const g = pages[i];
     const v = hfVariantOf(g, i, settings);
-    const headerHtml = html.get(hfKey("header", v)) ?? "";
-    const footerHtml = html.get(hfKey("footer", v)) ?? "";
+    const headerHtml = htmlOf(g.section, hfKey("header", v));
+    const footerHtml = htmlOf(g.section, hfKey("footer", v));
     const fill = (h: string) => h.split(PAGE_TOKEN).join(String(i + 1)).split(NUMPAGES_TOKEN).join(String(count));
     // Aynı türdeki üst/alt bilgi düzenlenirken diğer sayfalarda canlı kopya gösterilmez (düzenleyici tek sayfada).
     const hideHeader = editing === "header" && i === editingPage;
@@ -131,9 +140,11 @@ export const PageSheets = memo(function PageSheets({ pages, rects, settings, gri
           <>
             <div className="bl-hf-line" style={{ top: g.mt }}>
               <span>{hfLabel("header", v, settings.oddEven, g.section, sectionCount)}</span>
+              {linkedOf(g.section, hfKey("header", v)) && <span className="bl-hf-same">Öncekiyle Aynı</span>}
             </div>
             <div className="bl-hf-line is-footer" style={{ top: g.h - g.mb }}>
               <span>{hfLabel("footer", v, settings.oddEven, g.section, sectionCount)}</span>
+              {linkedOf(g.section, hfKey("footer", v)) && <span className="bl-hf-same">Öncekiyle Aynı</span>}
             </div>
           </>
         )}

@@ -5,6 +5,7 @@ import { CellSelection } from "@tiptap/pm/tables";
 import { styleIdOf, type StyleDef } from "../model/styles";
 import { currentPara, effectiveFont, effectiveFontSize } from "./commands";
 import { isTracking } from "./trackChanges";
+import { repeatKey } from "./repeat";
 
 export interface FormatState {
   bold: boolean;
@@ -45,6 +46,8 @@ export interface FormatState {
   section: number;
   sectionCount: number;
   sectionKey: string;
+  /** Satır numaraları bu paragrafta gizli. */
+  suppressLineNumbers: boolean;
 }
 
 export function computeFormat(editor: Editor, styles: Record<string, StyleDef>): FormatState {
@@ -99,12 +102,14 @@ export function computeFormat(editor: Editor, styles: Record<string, StyleDef>):
     textBox,
     link: editor.isActive("link") ? ((editor.getAttributes("link").href as string) ?? "") : null,
     canUndo: editor.can().undo(),
-    canRedo: editor.can().redo(),
+    // Yinele: geri alınmış adım ya da yinelenebilecek son eylem varsa etkin (Word'deki "Yinele").
+    canRedo: editor.can().redo() || !!repeatKey.getState(state),
     indentLeft: (pa.indentLeft as number | null) ?? 0,
     indentRight: (pa.indentRight as number | null) ?? 0,
     indentFirst: (pa.indentFirst as number | null) ?? 0,
     spaceBefore: (pa.spaceBefore as number | null) ?? null,
     spaceAfter: (pa.spaceAfter as number | null) ?? null,
+    suppressLineNumbers: !!pa.suppressLineNumbers,
     lineHeight: (pa.lineHeight as number | null) ?? null,
     lineRule: (pa.lineRule as string | null) ?? null,
     empty: sel.empty,

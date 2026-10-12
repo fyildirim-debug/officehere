@@ -38,8 +38,9 @@ export function MailingsTab() {
       ctx.notify(`Alıcı listesi okunamadı: ${(err as Error).message}`, "error");
     }
   };
+  // Gruplar şerit içeriğinin doğrudan çocukları olmalı: dar pencerede şerit onları açılır düğmeye daraltır.
   return (
-    <div className="bl-tab-mailings">
+    <>
       <RibbonGroup label="Adres Mektup Birleştirmeyi Başlat" icon={<MailMultiple32Regular />}>
         <RibbonMenuButton
           size="large"
@@ -124,6 +125,6 @@ export function MailingsTab() {
         />
       </RibbonGroup>
       <input ref={input} type="file" accept=".csv,.txt,.xlsx" className="oh-hidden-input" aria-label="Alıcı listesi" data-testid="bl-merge-input" onChange={onFile} />
-    </div>
+    </>
   );
 }

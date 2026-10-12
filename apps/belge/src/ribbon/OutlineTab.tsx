@@ -13,6 +13,7 @@ import {
   TextBulletListTree24Regular,
 } from "@fluentui/react-icons";
 import { RibbonButton, RibbonCheckbox, RibbonGroup, RibbonRow, RibbonStack } from "@officehere/ui";
+import { useEditorState } from "@tiptap/react";
 import { useBelge } from "../state/context";
 import { moveBlock, outlineLevelOf, outlineState, setOutline, setOutlineLevel, shiftOutline, toggleCollapse } from "../editor/outline";
 
@@ -22,9 +23,18 @@ const levelLabel = (l: number) => (l === 10 ? "Gövde Metni" : `Düzey ${l}`);
 export function OutlineTab() {
   const ctx = useBelge();
   const ed = ctx.mainEditor;
-  const $p = ed.state.selection.$from;
-  const cur = $p.depth >= 2 ? outlineLevelOf($p.node(2)) : 10;
-  const s = outlineState(ed.state);
+  // Anahat durumu ve imleçteki düzey her işlemde yeniden okunur (onay kutusu ve süzgeç durumu yansıtsın).
+  const view = useEditorState({
+    editor: ed,
+    selector: ({ editor }) => {
+      const $p = editor.state.selection.$from;
+      const st = outlineState(editor.state);
+      return { cur: $p.depth >= 2 ? outlineLevelOf($p.node(2)) : 10, level: st.level, firstLineOnly: st.firstLineOnly };
+    },
+    equalityFn: (a, b) => !!a && !!b && a.cur === b.cur && a.level === b.level && a.firstLineOnly === b.firstLineOnly,
+  });
+  const cur = view?.cur ?? 10;
+  const s = { level: view?.level ?? 0, firstLineOnly: view?.firstLineOnly ?? false };
   return (
     <>
       <RibbonGroup label="Anahat Araçları" icon={<TextBulletListTree24Regular />}>

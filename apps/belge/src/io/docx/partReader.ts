@@ -1,5 +1,8 @@
 // DOCX parça dönüştürücüsü: gövde / üst bilgi / alt bilgi / not içeriğini (paragraflar, koşular,
 // alanlar, çizimler, metin kutuları, tablolar, İçindekiler) ProseMirror JSON'a çevirir.
+import { toLinear } from "../../editor/math/ast";
+import { fromOmml } from "../../editor/math/render";
+import { indexNode, xeNode } from "./indexXml";
 import type { JSONContent } from "@tiptap/core";
 import type { DocSettings } from "../../model/document";
 import type { TocEntry } from "../../editor/nodes";
@@ -27,6 +30,9 @@ interface FieldState {
 }
 
 /** Bir parçanın (gövde / üst bilgi / alt bilgi) dönüştürücüsü. */
+/** Sayfa/tarih alanı olarak okunan alan anahtar sözcükleri. */
+const PAGE_FIELDS = new Set(["PAGE", "NUMPAGES", "DATE", "TIME"]);
+
 export class PartReader {
   private fields: FieldState[] = [];
   /** Paragraf içindeki kesmelerin türü (sayfa / sütun), parça sırasıyla. */
@@ -69,7 +75,8 @@ export class PartReader {
             const tag = attr(kid(pr, "tag"), "val");
             const content = kid(c, "sdtContent");
             const instr = content ? descendants(content, "instrText").map((t) => t.textContent ?? "").join("") : "";
-            if (content && (tag === "OfficeHereTableOfFigures" || /\\c\s+"/.test(instr))) items.push({ node: tofNode(this.toc(content), instr) });
+            if (content && (tag === "OfficeHereIndex" || /^\s*INDEX\b/i.test(instr))) items.push({ node: indexNode(content, instr) });
+            else if (content && (tag === "OfficeHereTableOfFigures" || /\\c\s+"/.test(instr))) items.push({ node: tofNode(this.toc(content), instr) });
             else if (gallery === "Table of Contents" && content) items.push({ node: this.toc(content) });
             else if (content && (gallery === "Bibliographies" || tag === "OfficeHereBibliography")) items.push({ node: bibliographyNode(content) });
             else if (content) visit(content);
@@ -174,6 +181,7 @@ export class PartReader {
     if (direct.keepNext) attrs.keepNext = true;
     if (direct.keepLines) attrs.keepLines = true;
     if (direct.pageBreakBefore) attrs.pageBreakBefore = true;
+    if (direct.suppressLineNumbers) attrs.suppressLineNumbers = true;
 
     const extra: JSONContent[] = [];
     const segments: JSONContent[][] = [[]];
@@ -215,6 +223,13 @@ export class PartReader {
         case "r":
           this.run(c, base, marks, segs, extra);
           break;
+        case "oMath":
+        case "oMathPara": {
+          // Denklem: OMML → doğrusal giriş.
+          const list = c.localName === "oMath" ? [c] : kids(c, "oMath");
+          for (const m of list) push({ type: "equation", attrs: { latex: toLinear(fromOmml(m)), display: c.localName === "oMathPara" } });
+          break;
+        }
         case "hyperlink": {
           const rid = c.getAttributeNS(NS.r, "id") ?? attr(c, "id");
           const anchor = attr(c, "anchor");
@@ -237,7 +252,7 @@ export class PartReader {
           const kw = instr.split(/\s+/)[0]?.toUpperCase();
           const fnode = fieldNode(instr, kids(c).map((r) => descendants(r, "t").map((t) => t.textContent ?? "").join("")).join(""));
           if (fnode) push(fnode);
-          else if (kw === "PAGE" || kw === "NUMPAGES") push({ type: "pageField", attrs: { field: kw } });
+          else if (PAGE_FIELDS.has(kw)) push({ type: "pageField", attrs: { field: kw } });
           else if (kw === "HYPERLINK") {
             const href = parseHyperlinkInstr(instr);
             this.inline(c, base, href ? [...marks, { type: "link", attrs: { href } }] : marks, segs, extra);
@@ -304,8 +319,8 @@ export class PartReader {
               f.kind = "link";
               f.href = parseHyperlinkInstr(f.instr) ?? undefined;
               if (f.href) marks = [...marks.filter((m) => m.type !== "link"), { type: "link", attrs: { href: f.href } }];
-            } else if (kw === "PAGE" || kw === "NUMPAGES") {
-              f.kind = kw === "PAGE" ? "page" : "numpages";
+            } else if (PAGE_FIELDS.has(kw)) {
+              f.kind = kw === "NUMPAGES" ? "numpages" : "page";
               push({ type: "pageField", attrs: { field: kw } });
               f.emitted = true;
             } else {
@@ -319,7 +334,11 @@ export class PartReader {
             }
           } else if (t === "end" && f) {
             const kw = f.instr.trim().split(/\s+/)[0]?.toUpperCase();
-            if (!f.emitted && f.phase === "instr" && (kw === "PAGE" || kw === "NUMPAGES")) push({ type: "pageField", attrs: { field: kw } });
+            if (!f.emitted && f.phase === "instr" && PAGE_FIELDS.has(kw)) push({ type: "pageField", attrs: { field: kw } });
+            if (!f.emitted && f.phase === "instr" && kw === "XE") {
+              const xe = xeNode(f.instr);
+              if (xe) push(xe);
+            }
             this.fields.pop();
             if (f.kind === "link") marks = marks.filter((m) => m.type !== "link");
           }

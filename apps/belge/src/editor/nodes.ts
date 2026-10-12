@@ -7,7 +7,7 @@ declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     pageBreak: { setPageBreak: () => ReturnType };
     toc: { insertToc: (entries: TocEntry[]) => ReturnType };
-    pageField: { insertPageField: (field: "PAGE" | "NUMPAGES") => ReturnType };
+    pageField: { insertPageField: (field: PageFieldKind) => ReturnType };
     bookmark: { insertBookmark: (name: string) => ReturnType };
   }
 }
@@ -157,6 +157,16 @@ export const TableOfContents = Node.create({
   },
 });
 
+/** Sayfa/tarih alanları: PAGE, NUMPAGES, DATE (gg.aa.yyyy), TIME (SS:dd). */
+export type PageFieldKind = "PAGE" | "NUMPAGES" | "DATE" | "TIME";
+
+/** Tarih/saat alanının güncel değeri (diğer alanlar için null). */
+export function fieldNowText(field: unknown, d = new Date()): string | null {
+  if (field === "DATE") return d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  if (field === "TIME") return d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+  return null;
+}
+
 /** Üst/alt bilgideki sayfa numarası alanı. Statik çizimde jeton metni sayfa numarasıyla değiştirilir. */
 export const PAGE_TOKEN = "⁠#SAYFA#⁠";
 export const NUMPAGES_TOKEN = "⁠#TOPLAM#⁠";
@@ -173,12 +183,17 @@ export const PageField = Node.create({
     return [{ tag: "span[data-field]" }];
   },
   renderHTML({ node, HTMLAttributes }) {
-    return ["span", mergeAttributes(HTMLAttributes, { class: "bl-field" }), node.attrs.field === "NUMPAGES" ? NUMPAGES_TOKEN : PAGE_TOKEN];
+    return ["span", mergeAttributes(HTMLAttributes, { class: "bl-field" }), fieldNowText(node.attrs.field) ?? (node.attrs.field === "NUMPAGES" ? NUMPAGES_TOKEN : PAGE_TOKEN)];
   },
   addNodeView() {
     return ({ node, editor, getPos }) => {
       const dom = document.createElement("span");
       dom.className = "bl-field is-editing";
+      const now = fieldNowText(node.attrs.field);
+      if (now) {
+        dom.textContent = now;
+        return { dom, update: (n) => n.type.name === "pageField" && n.attrs.field === node.attrs.field };
+      }
       const total = node.attrs.field === "NUMPAGES";
       dom.textContent = total ? "#" : "1";
       // Belge gövdesinde alan, bulunduğu sayfanın numarasını gösterir (sayfalama denetleyicisinden).
@@ -196,7 +211,7 @@ export const PageField = Node.create({
     };
   },
   renderText({ node }) {
-    return node.attrs.field === "NUMPAGES" ? "#" : "1";
+    return fieldNowText(node.attrs.field) ?? (node.attrs.field === "NUMPAGES" ? "#" : "1");
   },
   addCommands() {
     return {

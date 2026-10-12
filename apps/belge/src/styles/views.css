@@ -157,7 +157,17 @@
   white-space: nowrap;
 }
 
+.bl-draftprev {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+}
+
 .bl-draftwhen {
   color: var(--oh-text-secondary, #616161);
   margin-right: auto;
+  white-space: nowrap;
 }

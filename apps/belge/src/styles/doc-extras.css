@@ -555,12 +555,13 @@ button.bl-styles-item {
   width: 56px;
 }
 
-.bl-tab-mailings {
-  display: contents;
+/* Postalar sekmesi: uzun etiketli büyük düğmeler iki satıra sarılır. */
+.oh-ribbon-content:has(> .oh-ribbon-group[aria-label="Adres Mektup Birleştirmeyi Başlat"]) .oh-rbtn-large {
+  max-width: 112px;
 }
 
-.bl-tab-mailings .oh-rbtn-large {
-  max-width: 112px;
+.oh-ribbon-group[aria-label="Adres Mektup Birleştirmeyi Başlat"] .oh-rbtn-large:first-child {
+  max-width: 144px;
 }
 
 /* Metin efektleri */

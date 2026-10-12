@@ -340,7 +340,8 @@ export function HomeTab() {
           expandedColumns={6}
           selectedId={fmt.charStyle ?? fmt.styleId}
           onSelect={(id) => applyStyle(editor, styles, id)}
-          items={[...GALLERY_STYLES.filter((id) => styles[id]), ...Object.values(ctx.settings.customStyles ?? {}).filter((s) => s.gallery !== false && !GALLERY_STYLES.includes(s.id)).map((s) => s.id)].filter((id) => styles[id]).map((id) => ({
+          // Word gibi yeni oluşturulan stiller galerinin başında (en yenisi önce).
+          items={[...Object.values(ctx.settings.customStyles ?? {}).filter((s) => s.gallery !== false && !GALLERY_STYLES.includes(s.id)).map((s) => s.id).reverse(), ...GALLERY_STYLES.filter((id) => styles[id])].filter((id) => styles[id]).map((id) => ({
             id,
             label: styles[id].name,
             preview: (

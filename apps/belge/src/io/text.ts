@@ -3,6 +3,7 @@ import type { JSONContent } from "@tiptap/core";
 import { fontStack } from "@officehere/core";
 import { pageMetrics, type DocSettings } from "../model/document";
 import { resolveStyles, styleSheetCss } from "../model/styles";
+import { fieldNowText } from "../editor/nodes";
 import documentCssMain from "../styles/document.css?raw";
 import documentCssMarks from "../styles/document-marks.css?raw";
 
@@ -48,7 +49,8 @@ const ROMAN = ["", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"];
 function inlineText(n: JSONContent, notes?: NoteAcc): string {
   if (n.type === "text") return n.text ?? "";
   if (n.type === "hardBreak") return "\n";
-  if (n.type === "pageField") return "1";
+  if (n.type === "pageField") return fieldNowText(n.attrs?.field) ?? "1";
+  if (n.type === "equation") return String(n.attrs?.latex ?? "");
   if (n.type === "note" && notes) {
     const end = n.attrs?.kind === "endnote";
     const label = end ? (ROMAN[++notes.e] ?? String(notes.e)) : String(++notes.f);

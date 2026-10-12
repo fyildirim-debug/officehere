@@ -18,6 +18,8 @@ import { annotateNotesHtml } from "./editor/notes";
 import { BelgeContext, type BelgeCtx, type DialogKind, type DialogState, type ViewOptions } from "./state/context";
 import { useFileOps } from "./state/useFileOps";
 import { useDraftRecovery } from "./state/useDraftRecovery";
+import { guardSettings, useProtection } from "./state/useProtection";
+import { ProtectionBar } from "./dialogs/ProtectDialog";
 import { DocumentView } from "./views/DocumentView";
 import { BelgeBackstage } from "./views/BelgeBackstage";
 import { DraftBar } from "./views/DraftBar";
@@ -52,6 +54,8 @@ import { ShapeTab } from "./ribbon/ShapeTab";
 import { MailingsTab } from "./ribbon/MailingsTab";
 import { OutlineTab } from "./ribbon/OutlineTab";
 import { MergeContext, useMailMerge } from "./mailmerge/useMailMerge";
+import { EQUATION_EVENT } from "./editor/equation";
+import { CHART_EVENT } from "./editor/chart";
 import "./styles/workspace.css";
 import "./styles/panes.css";
 import "./styles/ribbon.css";
@@ -61,6 +65,7 @@ import "./styles/document-marks.css";
 import "./styles/ui-extras.css";
 import "./styles/doc-extras.css";
 import "./styles/views.css";
+import "./styles/features.css";
 
 type Note = { text: string; kind: "info" | "warning" | "error" | "success"; id: number };
 
@@ -110,8 +115,9 @@ export function App() {
     return () => window.clearTimeout(id);
   }, [note]);
 
+  // Düzenlemeyi Kısıtla zorlanıyorsa izin verilmeyen ayar değişiklikleri yok sayılır.
   const updateSettings = useCallback((fn: (s: DocSettings) => DocSettings) => {
-    setSettingsState((s) => fn(s));
+    setSettingsState((s) => guardSettings(s, fn(s)));
     setDirty(true);
   }, []);
 
@@ -235,15 +241,36 @@ export function App() {
   confirmRef.current = confirmDiscard;
 
   // Hata sınırları için güncel belge anlık görüntüsü ve kaydetme işlevi.
+  useProtection([editor, hfEditor], settings);
   recovery.snapshot = () => (editor.isDestroyed ? null : { content: editor.getJSON(), settings, fileName: files.fileName, savedAt: Date.now() });
   recovery.save = files.save;
   // Açılışta: aktarılan belge (birleştirme sonucu / kurtarılan taslak), çökme kurtarması ve sahipsiz taslaklar.
   const recoveryUi = useDraftRecovery({ load: files.load, setDirty, isPristine: files.isPristine, onPrint: () => setBackstage("print"), notify });
-  const merge = useMailMerge(editor, () => controller.request());
+  const merge = useMailMerge(editor, () => controller.request(), settings.mailMerge ?? null, updateSettings);
 
   useFocusReturn(active, !!dialog);
 
   const openDialog = useCallback((kind: DialogKind, arg?: string) => setDialog({ kind, arg }), []);
+  // Denkleme çift tıklama: denklem seçilir ve Denklem iletişim kutusu açılır.
+  useEffect(() => {
+    const on = (e: Event) => {
+      const { pos, editor: ed } = (e as CustomEvent<{ pos?: number; editor: Editor }>).detail;
+      if (typeof pos === "number" && !ed.isDestroyed) ed.view.dispatch(ed.state.tr.setSelection(NodeSelection.create(ed.state.doc, pos)));
+      openDialog("equation");
+    };
+    // Grafiğe çift tıklama: Verileri Düzenle.
+    const onChart = (e: Event) => {
+      const { pos, editor: ed } = (e as CustomEvent<{ pos?: number; editor: Editor }>).detail;
+      if (typeof pos === "number" && !ed.isDestroyed) ed.view.dispatch(ed.state.tr.setSelection(NodeSelection.create(ed.state.doc, pos)));
+      openDialog("chart");
+    };
+    window.addEventListener(EQUATION_EVENT, on);
+    window.addEventListener(CHART_EVENT, onChart);
+    return () => {
+      window.removeEventListener(EQUATION_EVENT, on);
+      window.removeEventListener(CHART_EVENT, onChart);
+    };
+  }, [openDialog]);
   const openFind = useCallback(() => {
     setView({ navPane: true });
     setNavFocus((n) => n + 1);
@@ -315,6 +342,8 @@ export function App() {
     "Mod+H": () => openDialog("findReplace", "replace"),
     "Mod+G": () => openDialog("findReplace", "goto"),
     "Mod+Shift+G": () => openDialog("wordCount"),
+    "Alt+=": () => openDialog("equation"),
+    "Alt+Shift+X": () => openDialog("markEntry"),
     Escape: () => {
       if (view.focusMode) setView({ focusMode: false });
       else if (hfEditing) setHfEditing(null);
@@ -370,6 +399,10 @@ export function App() {
     openDialog,
     openFind,
     editHeaderFooter,
+    editHeaderFooterAt: (which, page) => {
+      setHfEditing(null);
+      requestAnimationFrame(() => setHfEditing(which, page));
+    },
     headerFooterEditing: hfEditing,
     headerFooterPage: hfPage,
     newComment,
@@ -455,6 +488,7 @@ export function App() {
   const belowRibbon = (
     <>
       <DraftBar drafts={recoveryUi.drafts} onRestore={recoveryUi.restore} onDiscard={recoveryUi.discard} onClose={recoveryUi.close} />
+      {settings.protection?.enforced && <ProtectionBar mode={settings.protection.mode} onStop={() => openDialog("protect")} />}
       {note && (
         <MessageBar kind={note.kind} onClose={() => setNote(null)}>
           {note.text}

@@ -73,7 +73,7 @@ export function MergeDialog({ mode, onClose }: { mode: "edit" | "print"; onClose
     else if (which === "range") recs = all.slice(Math.max(0, from - 1), Math.max(0, to)).filter((_, k) => !m.excluded.includes(k + from - 1));
     if (!recs.length) return ctx.notify("Birleştirilecek kayıt yok.", "warning");
     const content = mergeDocument(ctx.mainEditor.getJSON(), recs);
-    const opened = openInNewWindow({ content, settings: ctx.settings }, "Mektuplar1", mode === "print" ? "print" : undefined);
+    const opened = openInNewWindow({ content, settings: { ...ctx.settings, mailMerge: null } }, "Mektuplar1", mode === "print" ? "print" : undefined);
     if (!opened) ctx.notify("Birleştirilen belge açılamadı.", "error");
     else ctx.notify(`${recs.length} kayıt yeni belgede birleştirildi.`, "success");
     onClose();

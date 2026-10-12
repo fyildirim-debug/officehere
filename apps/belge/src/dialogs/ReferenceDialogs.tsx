@@ -1,5 +1,5 @@
 // Başvurular iletişim kutuları: Resim Yazısı, Şekiller Tablosu, Çapraz Başvuru.
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Dialog, DialogButton, Field, FieldSet } from "@officehere/ui";
 import { NodeSelection } from "@tiptap/pm/state";
 import { useBelge } from "../state/context";
@@ -140,10 +140,13 @@ export function CrossRefDialog({ onClose }: { onClose: () => void }) {
   const kinds: CrossRefKind[] = type === "Başlık" || type === "Yer İşareti" ? ["full", "page", "position"] : ["full", "label", "text", "page", "position"];
   const kindLabel = (k: CrossRefKind) =>
     type === "Başlık" && k === "full" ? "Başlık metni" : type === "Yer İşareti" && k === "full" ? "Yer işareti metni" : k === "full" ? "Tüm resim yazısı" : CROSSREF_KIND_LABEL[k];
+  const listRef = useRef<HTMLDivElement>(null);
+  // Word gibi kutu açık kalır ve odak kutuda kalır (Esc ile kapanır, art arda eklenebilir).
   const insert = () => {
     const t = targets[index];
     if (!t) return;
-    insertCrossRef(editor, t, kinds.includes(kind) ? kind : "full", link);
+    insertCrossRef(editor, t, kinds.includes(kind) ? kind : "full", link, false);
+    listRef.current?.focus();
   };
   return (
     <Dialog open title="Çapraz Başvuru" width={480} onClose={onClose} onSubmit={insert} footer={okCancel(insert, onClose, "Ekle", !targets.length)}>
@@ -177,7 +180,19 @@ export function CrossRefDialog({ onClose }: { onClose: () => void }) {
       </div>
       <Check label="Köprü olarak ekle" v={link} set={setLink} />
       <div className="bl-xref-head">Hangi {type.toLocaleLowerCase("tr-TR")} için:</div>
-      <div className="bl-xref-list" role="listbox" aria-label="Başvuru hedefleri">
+      <div
+        ref={listRef}
+        className="bl-xref-list"
+        role="listbox"
+        tabIndex={0}
+        aria-label="Başvuru hedefleri"
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            setIndex((i) => Math.max(0, Math.min(targets.length - 1, i + (e.key === "ArrowDown" ? 1 : -1))));
+          }
+        }}
+      >
         {targets.length === 0 && <div className="bl-xref-empty">Belgede bu türde öğe yok.</div>}
         {targets.map((t, i) => (
           <div key={`${t.pos}-${i}`} role="option" aria-selected={i === index} className={i === index ? "is-selected" : undefined} onClick={() => setIndex(i)} onDoubleClick={insert}>

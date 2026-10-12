@@ -27,6 +27,8 @@ export interface ParagraphAttrs {
   keepNext: boolean;
   keepLines: boolean;
   pageBreakBefore: boolean;
+  /** Satır numaralarını gizle (w:suppressLineNumbers). */
+  suppressLineNumbers?: boolean;
   /** Özel sekme durakları (tabStops eklentisi). */
   tabs?: import("./tabStops").TabStop[] | null;
   /** Anahat düzeyi 1-9 (null: gövde metni). */
@@ -127,6 +129,7 @@ export const ParagraphFormat = Extension.create({
           },
           keepNext: { default: false, parseHTML: (el) => el.hasAttribute("data-keep-next"), renderHTML: (a) => (a.keepNext ? { "data-keep-next": "" } : {}) },
           keepLines: { default: false, parseHTML: (el) => el.hasAttribute("data-keep-lines"), renderHTML: (a) => (a.keepLines ? { "data-keep-lines": "" } : {}) },
+          suppressLineNumbers: { default: false, parseHTML: (el) => el.hasAttribute("data-no-lnum"), renderHTML: (a) => (a.suppressLineNumbers ? { "data-no-lnum": "" } : {}) },
           pageBreakBefore: {
             default: false,
             parseHTML: (el) => el.style.breakBefore === "page" || el.style.pageBreakBefore === "always",

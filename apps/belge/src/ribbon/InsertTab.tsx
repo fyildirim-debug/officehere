@@ -22,8 +22,12 @@ import {
   Edit20Regular,
   Textbox24Regular,
   Textbox32Regular,
+  MathFormula20Regular,
+  MathFormula32Regular,
+  DataBarVertical32Regular,
 } from "@fluentui/react-icons";
-import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonStack, TableGridPicker, useMenuClose } from "@officehere/ui";
+import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack, TableGridPicker, useMenuClose } from "@officehere/ui";
+import { BUILTIN_EQUATIONS } from "../editor/equation";
 import { useBelge } from "../state/context";
 import { COMMON_SYMBOLS, COVER_PAGES, FOOTER_PRESETS, HEADER_PRESETS, pageNumberDoc, stripPageFields } from "../templates/parts";
 import { SHAPES, selectInsertedImage, shapeSvg, svgToPng, type ShapeKind } from "../editor/image";
@@ -175,6 +179,7 @@ export function InsertTab() {
             </div>
           }
         />
+        <RibbonButton size="large" icon={<DataBarVertical32Regular />} label="Grafik" tip="Grafik Ekle" disabled={!ctx.inBody && !ctx.headerFooterEditing} onClick={() => ctx.openDialog("chart")} />
       </RibbonGroup>
 
       <RibbonGroup label="Bağlantılar" icon={<Link32Regular />}>
@@ -254,6 +259,24 @@ export function InsertTab() {
       </RibbonGroup>
 
       <RibbonGroup label="Simgeler" icon={<Symbols20Regular />}>
+        <RibbonSplitButton
+          size="large"
+          icon={<MathFormula32Regular />}
+          label="Denklem"
+          tip="Yeni Denklem Ekle"
+          shortcut="Alt+="
+          onClick={() => ctx.openDialog("equation")}
+          menu={
+            <Menu width={300}>
+              <MenuHeader>Yerleşik</MenuHeader>
+              {BUILTIN_EQUATIONS.map((q) => (
+                <MenuItem key={q.label} label={q.label} description={q.latex} onClick={() => chain().insertEquation(q.latex).run()} />
+              ))}
+              <MenuSeparator />
+              <MenuItem icon={<MathFormula20Regular />} label="Yeni Denklem Ekle" onClick={() => ctx.openDialog("equation")} />
+            </Menu>
+          }
+        />
         <RibbonMenuButton
           size="large"
           icon={<span className="bl-omega">Ω</span>}

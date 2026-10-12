@@ -1,9 +1,10 @@
 // Başvurular sekmesi grupları: Alıntılar ve Kaynakça, Resim Yazıları.
-import { ArrowSync20Regular, BookAdd24Regular, BookDatabase32Regular, BookOpen32Regular, ImageTable24Regular, LinkSquare24Regular, TextQuote24Regular } from "@fluentui/react-icons";
+import { ArrowSync20Regular, BookLetter20Regular, BookLetter24Regular, BookAdd24Regular, BookDatabase32Regular, BookOpen32Regular, ImageTable24Regular, LinkSquare24Regular, TextQuote24Regular } from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonStack } from "@officehere/ui";
 import { useBelge } from "../state/context";
 import { BIB_STYLE_LABEL, citationText, type BibStyle } from "../model/sources";
 import { setFieldContext } from "../editor/fields";
+import { indexUpdate } from "../editor/indexing";
 
 export function CitationsGroup() {
   const ctx = useBelge();
@@ -84,6 +85,24 @@ export function CaptionsGroup() {
         <RibbonButton icon={<ImageTable24Regular />} label="Şekiller Tablosu Ekle" disabled={!ctx.inBody} onClick={() => ctx.openDialog("tableOfFigures")} />
         <RibbonButton icon={<ArrowSync20Regular />} label="Tabloyu Güncelleştir" onClick={ctx.updateToc} />
         <RibbonButton icon={<LinkSquare24Regular />} label="Çapraz Başvuru" disabled={!ctx.inBody} onClick={() => ctx.openDialog("crossRef")} />
+      </RibbonStack>
+    </RibbonGroup>
+  );
+}
+
+/** Dizin: Girdiyi İşaretle (Alt+Shift+X), Dizin Ekle, Dizini Güncelleştir. */
+export function IndexGroup() {
+  const ctx = useBelge();
+  const update = () => {
+    const tr = indexUpdate(ctx.mainEditor.state, (p) => ctx.controller.pageOf(p));
+    if (tr) ctx.mainEditor.view.dispatch(tr);
+  };
+  return (
+    <RibbonGroup label="Dizin" icon={<BookLetter24Regular />}>
+      <RibbonButton size="large" icon={<BookLetter24Regular />} label="Girdiyi İşaretle" shortcut="Alt+Shift+X" disabled={!ctx.inBody} onClick={() => ctx.openDialog("markEntry")} />
+      <RibbonStack>
+        <RibbonButton icon={<BookLetter20Regular />} label="Dizin Ekle" disabled={!ctx.inBody} onClick={() => ctx.openDialog("insertIndex")} />
+        <RibbonButton icon={<ArrowSync20Regular />} label="Dizini Güncelleştir" onClick={update} />
       </RibbonStack>
     </RibbonGroup>
   );

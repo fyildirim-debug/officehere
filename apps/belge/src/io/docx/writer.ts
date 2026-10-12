@@ -1,5 +1,8 @@
 // DOCX yazıcı: ProseMirror JSON + belge ayarları → OOXML paketi (ECMA-376).
 import JSZip from "jszip";
+import { BIB_NS, MERGE_NS, mergeToXml, sourcesToXml, writeCustomXml } from "./customXml";
+import { hfKeyOf, hfOwner } from "../../editor/sectionHf";
+import { CT_CHART } from "./chartXml";
 import type { JSONContent } from "@tiptap/core";
 import type { BelgeDocument, CommentData, DocSettings, HfVariant, PageSetup, SectionKind } from "../../model/document";
 import { normalizeDoc } from "../../model/document";
@@ -106,6 +109,10 @@ function sectPr(s: DocSettings, p: PageSetup, kind: SectionKind, refs: HfRefs | 
     const b: BorderSpec = { style: s.pageBorder.style, size: s.pageBorder.width, color: s.pageBorder.color, space: 24 };
     x += `<w:pgBorders w:offsetFrom="page">${borderXml("top", b)}${borderXml("left", b)}${borderXml("bottom", b)}${borderXml("right", b)}</w:pgBorders>`;
   }
+  // Şema sırası: pgBorders → lnNumType → cols.
+  const ln = p.lineNumbers;
+  // Satır numaraları: OOXML'de başlangıç sıfır tabanlıdır (1 → yazılmaz).
+  if (ln) x += `<w:lnNumType w:countBy="${Math.max(1, ln.countBy ?? 1)}"${ln.start && ln.start > 1 ? ` w:start="${ln.start - 1}"` : ""}${ln.distance ? ` w:distance="${ln.distance}"` : ""} w:restart="${ln.restart}"/>`;
   x += `<w:cols w:space="${p.columnSpace}"${p.columns > 1 ? ` w:num="${p.columns}"` : ""}${p.columns > 1 && p.columnLine ? ' w:sep="1"' : ""}/>`;
   if (p.titlePage) x += "<w:titlePg/>";
   x += `<w:docGrid w:linePitch="360"/></w:sectPr>`;
@@ -129,6 +136,13 @@ function lastParagraph(nodes: JSONContent[] | undefined): JSONContent | null {
   return null;
 }
 
+/** Düzenlemeyi kısıtla (w:documentProtection; ISO/IEC 29500 parola karması). */
+function protectionXml(p: DocSettings["protection"]): string {
+  if (!p) return "";
+  const pw = p.hash && p.salt ? ` w:algorithmName="${esc(p.algorithm ?? "SHA-512")}" w:hashValue="${esc(p.hash)}" w:saltValue="${esc(p.salt)}" w:spinCount="${p.spinCount ?? 100000}"` : "";
+  return `<w:documentProtection w:edit="${p.mode}" w:enforcement="${p.enforced ? 1 : 0}"${pw}/>`;
+}
+
 function hasHfContent(json: JSONContent | null): boolean {
   if (!json?.content) return false;
   const walk = (n: JSONContent): boolean => (n.type === "text" && !!n.text) || n.type === "pageField" || n.type === "image" || !!n.content?.some(walk);
@@ -150,36 +164,59 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
   const refs: HfRefs = { header: {}, footer: {} };
   const anyTitle = sectionsOf(doc.content).some((sec) => !!((sec.attrs?.page as PageSetup | null) ?? settings.page).titlePage);
   let hfNo = 0;
-  const writeHf = (which: "header" | "footer", v: HfVariant, json: JSONContent | null) => {
+  const hfParts: { name: string; kind: "header" | "footer" }[] = [];
+  /** Üst/alt bilgi parçası yazar; ilişki kimliğini döner. `own`: bölümün kendi (boş olsa da yazılır). */
+  const writeHf = (which: "header" | "footer", v: HfVariant, json: JSONContent | null, own = false): string | undefined => {
     const has = hasHfContent(json);
     const needWm = which === "header" && !!settings.watermark && (v === "default" || (v === "first" && anyTitle) || (v === "even" && settings.oddEven));
-    if (!has && !needWm && !(v !== "default" && json)) return;
+    if (!own && !has && !needWm && !(v !== "default" && json)) return undefined;
     const rels = new Rels();
     const pw = new PartWriter(ctx, rels, contentWidthTw);
     hfNo++;
     const name = `${which}${hfNo}.xml`;
+    let rid: string;
     if (which === "header") {
       let inner = has ? pw.blocks(json?.content) : "";
       inner = watermarkXml(settings, settings.page.width) + (inner || '<w:p><w:pPr><w:pStyle w:val="Header"/></w:pPr></w:p>');
       zip.file(`word/${name}`, `${XML_HEAD}${hdrNs}${inner}</w:hdr>`);
-      refs.header[v] = docRels.add(REL.header, name);
+      rid = docRels.add(REL.header, name);
     } else {
       const inner = (has ? pw.blocks(json?.content) : "") || '<w:p><w:pPr><w:pStyle w:val="Footer"/></w:pPr></w:p>';
       zip.file(`word/${name}`, `${XML_HEAD}<w:ftr ${DOC_NS}>${inner}</w:ftr>`);
-      refs.footer[v] = docRels.add(REL.footer, name);
+      rid = docRels.add(REL.footer, name);
     }
     if (rels.size) zip.file(`word/_rels/${name}.rels`, rels.xml());
     hfParts.push({ name, kind: which });
+    return rid;
   };
-  const hfParts: { name: string; kind: "header" | "footer" }[] = [];
-  writeHf("header", "default", settings.header);
-  writeHf("footer", "default", settings.footer);
-  writeHf("header", "first", settings.headerFirst);
-  writeHf("footer", "first", settings.footerFirst);
-  if (settings.oddEven) {
-    writeHf("header", "even", settings.headerEven);
-    writeHf("footer", "even", settings.footerEven);
+  const variants: HfVariant[] = settings.oddEven ? ["default", "first", "even"] : ["default", "first"];
+  for (const v of variants) {
+    for (const w of ["header", "footer"] as const) {
+      const rid = writeHf(w, v, settings[hfKeyOf(w, v)]);
+      if (rid) refs[w][v] = rid;
+    }
   }
+  // Bağı kaldırılmış bölümlerin kendi üst/alt bilgileri: her bölüm etkin parçalara açıkça başvurur.
+  const ids = sectionsOf(doc.content).map((sec) => (sec.attrs?.sid as string | null | undefined) ?? null);
+  const ownRid = new Map<string, string | undefined>();
+  const sectionRefs = ids.map((_, i): HfRefs => {
+    const r: HfRefs = { header: {}, footer: {} };
+    for (const v of variants) {
+      for (const w of ["header", "footer"] as const) {
+        const key = hfKeyOf(w, v);
+        const owner = hfOwner(ids, settings, i, key);
+        if (owner < 0) {
+          if (refs[w][v]) r[w][v] = refs[w][v];
+          continue;
+        }
+        const ck = `${owner}:${key}`;
+        if (!ownRid.has(ck)) ownRid.set(ck, writeHf(w, v, settings.sectionHf?.[ids[owner]!]?.[key] ?? null, true));
+        const rid = ownRid.get(ck);
+        if (rid) r[w][v] = rid;
+      }
+    }
+    return r;
+  });
 
   // Gövde: her bölümün sectPr'ı son paragrafına, son bölümünkü gövdenin sonuna yazılır.
   const body = new PartWriter(ctx, docRels, contentWidthTw);
@@ -190,7 +227,7 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
     const page = (sec.attrs?.page as PageSetup | null) ?? settings.page;
     const kind = ((sec.attrs?.kind as SectionKind | undefined) ?? "nextPage") as SectionKind;
     // Başvurular her bölüme yazılır (aynı parçalar): devralmayı tam desteklemeyen okuyucular için.
-    const xml = sectPr(settings, page, i === 0 ? "nextPage" : kind, refs);
+    const xml = sectPr(settings, page, i === 0 ? "nextPage" : kind, sectionRefs[i] ?? refs);
     const blocks = sec.content ?? [];
     body.contentWidthTw = Math.round((page.width - page.margin.left - page.margin.right - page.margin.gutter - (page.columns > 1 ? (page.columns - 1) * page.columnSpace : 0)) / Math.max(1, page.columns));
     if (i === sections.length - 1) {
@@ -223,7 +260,7 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
   zip.file("word/numbering.xml", numberingXml(ctx));
   zip.file(
     "word/settings.xml",
-    `${XML_HEAD}<w:settings xmlns:w="${NS.w}" xmlns:r="${NS.r}"><w:zoom w:percent="100"/>${settings.pageColor ? "<w:displayBackgroundShape/>" : ""}<w:defaultTabStop w:val="708"/><w:hyphenationZone w:val="425"/><w:characterSpacingControl w:val="doNotCompress"/>${settings.oddEven ? "<w:evenAndOddHeaders/>" : ""}${ctx.footnotes.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}${ctx.endnotes.length ? '<w:endnotePr><w:endnote w:id="-1"/><w:endnote w:id="0"/></w:endnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat><w:themeFontLang w:val="tr-TR"/></w:settings>`,
+    `${XML_HEAD}<w:settings xmlns:w="${NS.w}" xmlns:r="${NS.r}"><w:zoom w:percent="100"/>${settings.pageColor ? "<w:displayBackgroundShape/>" : ""}${protectionXml(settings.protection)}<w:defaultTabStop w:val="708"/><w:hyphenationZone w:val="425"/><w:characterSpacingControl w:val="doNotCompress"/>${settings.oddEven ? "<w:evenAndOddHeaders/>" : ""}${ctx.footnotes.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}${ctx.endnotes.length ? '<w:endnotePr><w:endnote w:id="-1"/><w:endnote w:id="0"/></w:endnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat><w:themeFontLang w:val="tr-TR"/></w:settings>`,
   );
   if (ctx.usedComments.size) {
     zip.file("word/comments.xml", commentsXml(ctx, settings.comments));
@@ -240,6 +277,12 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
     docRels.add(rel, part);
   }
   for (const m of ctx.media) zip.file(`word/media/${m.name}`, m.data);
+  for (const ch of ctx.charts) zip.file(`word/charts/${ch.name}`, ch.xml);
+  // Özel XML: kaynakça kaynakları (Kaynakları Yönet listesi) ve birleştirme veri kaynağı.
+  const customParts: { xml: string; schema: string }[] = [];
+  if (settings.sources?.length) customParts.push({ xml: sourcesToXml(settings.sources, settings.bibStyle), schema: BIB_NS });
+  if (settings.mailMerge?.list.records.length) customParts.push({ xml: mergeToXml(settings.mailMerge), schema: MERGE_NS });
+  const customOverrides = writeCustomXml(zip, docRels, customParts);
   zip.file("word/_rels/document.xml.rels", docRels.xml());
 
   // Paket ilişkileri ve içerik türleri
@@ -266,6 +309,8 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
       `<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>` +
       ov("docProps/app.xml", "extended-properties+xml") +
       ov("docProps/custom.xml", "custom-properties+xml") +
+      customOverrides +
+      ctx.charts.map((ch) => `<Override PartName="/word/charts/${ch.name}" ContentType="${CT_CHART}"/>`).join("") +
       `</Types>`,
   );
   const pr = settings.properties;

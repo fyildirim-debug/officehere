@@ -2,7 +2,7 @@
 // Tek taslakta kısa çubuk; birden çok taslakta her biri ayrı satırda Geri Yükle / Sil ile listelenir.
 // Kapat (×) yalnız çubuğu gizler, taslaklar silinmez (sonraki açılışta yeniden önerilir).
 import { MessageBar } from "@officehere/ui";
-import type { StoredDraft } from "../state/drafts";
+import { draftPreview, type StoredDraft } from "../state/drafts";
 
 const when = (t: number) => new Date(t).toLocaleString("tr-TR");
 
@@ -43,6 +43,7 @@ export function DraftBar({ drafts, onRestore, onDiscard, onClose }: Props) {
         {drafts.map((d) => (
           <li key={d.key} className="bl-draftitem">
             <span className="bl-draftname">“{d.fileName}”</span>
+            <span className="bl-draftprev">{draftPreview(d)}</span>
             <span className="bl-draftwhen">{when(d.savedAt)}</span>
             <button type="button" className="oh-btn is-primary" onClick={() => onRestore(d)} aria-label={`${d.fileName} belgesini geri yükle`}>
               Geri Yükle

@@ -154,6 +154,10 @@ export function createWordKeymap(hooks: EditorHooks) {
         "Mod-Shift-+": () => ed().chain().focus().toggleSuperscript().run(),
         "Mod-=": () => ed().chain().focus().toggleSubscript().run(),
         "Mod-d": () => (hooks.openDialog("font"), true),
+        // Alan kısayolları: Alt+Shift+D tarih, Alt+Shift+T saat, Alt+Shift+P sayfa numarası.
+        "Alt-Shift-d": () => ed().chain().focus().insertPageField("DATE").run(),
+        "Alt-Shift-t": () => ed().chain().focus().insertPageField("TIME").run(),
+        "Alt-Shift-p": () => ed().chain().focus().insertPageField("PAGE").run(),
         "Mod-k": () => (hooks.openDialog("link"), true),
         "Mod-Shift-8": () => (hooks.toggleShowMarks(), true),
         "Mod-*": () => (hooks.toggleShowMarks(), true),
@@ -208,8 +212,7 @@ export function createWordKeymap(hooks: EditorHooks) {
           return tabIndent(e, -1);
         },
         Backspace: () => tabIndent(ed(), -1),
-        // F4: son eylemi yinele; Ctrl+Yukarı/Aşağı: paragraf başına / sonraki paragrafa.
-        F4: () => ed().commands.redo(),
+        // F4 / Ctrl+Y (Yinele) repeat.ts'de; Ctrl+Yukarı/Aşağı: paragraf başına / sonraki paragrafa.
         "Mod-ArrowUp": () => paraJump(ed(), -1, false),
         "Mod-ArrowDown": () => paraJump(ed(), 1, false),
         "Mod-Shift-ArrowUp": () => paraJump(ed(), -1, true),

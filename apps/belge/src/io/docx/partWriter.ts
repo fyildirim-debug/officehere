@@ -4,14 +4,19 @@ import type { JSONContent } from "@tiptap/core";
 import type { DocSettings } from "../../model/document";
 import { type BorderSpec } from "../../model/styles";
 import type { ParaBorders } from "../../editor/paragraphFormat";
-import type { TocEntry } from "../../editor/nodes";
+import { fieldNowText, type TocEntry } from "../../editor/nodes";
+import { parseMath } from "../../editor/math/ast";
+import type { ChartData } from "../../editor/chart";
+import { CHART_NS, REL_CHART, chartSpaceXml } from "./chartXml";
+import { indexXml, xeXml } from "./indexXml";
+import { MATH_NS, ommlOf } from "../../editor/math/render";
 import { NS, REL, XML_HEAD, cleanText, esc, hex6, highlightName } from "./xml";
 import { borderXml, fontsXml, tableStyleId } from "./styleXml";
 import { sigKey, type ListSig } from "./numbering";
 
 export type Mark = { type: string; attrs?: Record<string, unknown> };
 
-export const DOC_NS = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="${NS.mc}" xmlns:o="${NS.o}" xmlns:r="${NS.r}" xmlns:v="${NS.v}" xmlns:w10="${NS.w10}" xmlns:wp="${NS.wp}" xmlns:a="${NS.a}" xmlns:pic="${NS.pic}" xmlns:w="${NS.w}" xmlns:w14="${NS.w14}" xmlns:wp14="${NS.wp14}" xmlns:wps="${NS.wps}"`;
+export const DOC_NS = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="${NS.mc}" xmlns:o="${NS.o}" xmlns:r="${NS.r}" xmlns:v="${NS.v}" xmlns:w10="${NS.w10}" xmlns:wp="${NS.wp}" xmlns:a="${NS.a}" xmlns:pic="${NS.pic}" xmlns:w="${NS.w}" xmlns:w14="${NS.w14}" xmlns:wp14="${NS.wp14}" xmlns:wps="${NS.wps}" xmlns:m="${MATH_NS}"`;
 
 const EMU_PER_PX = 9525;
 
@@ -75,6 +80,8 @@ export class Ctx {
   revId = 1;
   footnotes: NoteData[] = [];
   endnotes: NoteData[] = [];
+  /** Grafik parçaları (word/charts/chartN.xml). */
+  charts: { name: string; xml: string }[] = [];
   constructor(public settings: DocSettings) {}
 
   commentNum(id: string): number {
@@ -181,6 +188,8 @@ export class PartWriter {
         return this.toc(n);
       case "bibliography":
         return bibliographyXml(n);
+      case "indexBlock":
+        return indexXml(n);
       default:
         return n.content ? this.blocks(n.content, list) : "";
     }
@@ -216,6 +225,8 @@ export class PartWriter {
     if (a.keepLines) x += "<w:keepLines/>";
     if (a.pageBreakBefore) x += "<w:pageBreakBefore/>";
     if (list) x += `<w:numPr><w:ilvl w:val="${list.ilvl}"/><w:numId w:val="${list.numId}"/></w:numPr>`;
+    // Şema sırası: numPr → suppressLineNumbers → pBdr.
+    if (a.suppressLineNumbers) x += "<w:suppressLineNumbers/>";
     const b = a.borders as ParaBorders | null;
     if (b && (b.top || b.left || b.bottom || b.right)) {
       x += `<w:pBdr>${b.top ? borderXml("top", b.top) : ""}${b.left ? borderXml("left", b.left as BorderSpec) : ""}${b.bottom ? borderXml("bottom", b.bottom) : ""}${b.right ? borderXml("right", b.right as BorderSpec) : ""}</w:pBdr>`;
@@ -405,11 +416,24 @@ export class PartWriter {
       case "hardBreak":
         return `<w:r>${rpr}<w:br/></w:r>`;
       case "pageField": {
-        const f = node.attrs?.field === "NUMPAGES" ? "NUMPAGES" : "PAGE";
-        return `<w:fldSimple w:instr=" ${f} \\* MERGEFORMAT "><w:r>${rpr}<w:t>1</w:t></w:r></w:fldSimple>`;
+        const kind = node.attrs?.field;
+        const f = kind === "NUMPAGES" ? "NUMPAGES" : kind === "DATE" ? 'DATE \\@ "dd.MM.yyyy"' : kind === "TIME" ? 'TIME \\@ "HH:mm"' : "PAGE";
+        return `<w:fldSimple w:instr=" ${esc(f)} \\* MERGEFORMAT "><w:r>${rpr}<w:t>${esc(fieldNowText(kind) ?? "1")}</w:t></w:r></w:fldSimple>`;
       }
       case "image":
         return this.image(node, rpr);
+      case "chart":
+        return this.chart(node, rpr);
+      case "indexEntry":
+        return xeXml(node);
+      case "equation": {
+        // OMML: satır içi m:oMath, kendi paragrafında görüntülü m:oMathPara.
+        try {
+          return ommlOf(parseMath(String(node.attrs?.latex ?? "")), !!node.attrs?.display);
+        } catch {
+          return `<w:r>${rpr}<w:t xml:space="preserve">${esc(String(node.attrs?.latex ?? ""))}</w:t></w:r>`;
+        }
+      }
       case "seqField":
       case "crossRef":
       case "citation":
@@ -427,6 +451,10 @@ export class PartWriter {
       default:
         return "";
     }
+  }
+
+  chart(node: JSONContent, rpr: string): string {
+    return chartDrawing(this.ctx, this.rels, node, rpr);
   }
 
   image(node: JSONContent, rpr: string): string {
@@ -448,10 +476,10 @@ export class PartWriter {
     const graphic =
       `<wp:docPr id="${id}" name="Resim ${id}"${descr}/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr>` +
       `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="${name}"${descr}/><pic:cNvPicPr/></pic:nvPicPr>` +
-      `<pic:blipFill><a:blip r:embed="${rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+      `<pic:blipFill><a:blip r:embed="${rid}"/>${srcRectXml(a.crop as { l: number; t: number; r: number; b: number } | null)}<a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
       `<pic:spPr><a:xfrm${xfrmAttr}><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic>`;
     const wrap = (a.wrap as string | undefined) ?? "inline";
-    if (wrap !== "inline") return `<w:r>${rpr}<w:drawing>${anchorXml(a, wrap, cx, cy, id)}${graphic}</wp:anchor></w:drawing></w:r>`;
+    if (wrap !== "inline") return `<w:r>${rpr}<w:drawing>${anchorXml(a, wrap, cx, cy, id, this.contentWidthTw / 15)}${graphic}</wp:anchor></w:drawing></w:r>`;
     return `<w:r>${rpr}<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>${graphic}</wp:inline></w:drawing></w:r>`;
   }
 
@@ -553,14 +581,42 @@ export class PartWriter {
   }
 }
 
+/** Kırpma (a:srcRect; yüzde binde biri: 100000 = %100). */
+function srcRectXml(c: { l: number; t: number; r: number; b: number } | null): string {
+  if (!c || (!c.l && !c.t && !c.r && !c.b)) return "";
+  const v = (x: number) => Math.round(Math.max(0, Math.min(0.99, x)) * 100000);
+  return `<a:srcRect l="${v(c.l)}" t="${v(c.t)}" r="${v(c.r)}" b="${v(c.b)}"/>`;
+}
+
+/** Grafik: gömülü grafik parçası + satır içi çizim (c:chart başvurusu). */
+function chartDrawing(ctx: Ctx, rels: Rels, node: JSONContent, rpr: string): string {
+  const data = node.attrs?.data as ChartData | null;
+  if (!data) return "";
+  const n = ctx.charts.length + 1;
+  const name = `chart${n}.xml`;
+  ctx.charts.push({ name, xml: chartSpaceXml(data) });
+  const rid = rels.add(REL_CHART, `charts/${name}`);
+  const id = ctx.drawingId++;
+  const cx = Math.round(data.width * EMU_PER_PX);
+  const cy = Math.round(data.height * EMU_PER_PX);
+  return (
+    `<w:r>${rpr}<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${id}" name="Grafik ${id}"${data.title ? ` descr="${esc(data.title)}"` : ""}/><wp:cNvGraphicFramePr/>` +
+    `<a:graphic><a:graphicData uri="${CHART_NS}"><c:chart xmlns:c="${CHART_NS}" r:id="${rid}"/></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`
+  );
+}
+
 /** Satır içi olmayan resmin wp:anchor başlangıcı (konum, metni kaydır, yığın sırası). */
-function anchorXml(a: Record<string, unknown>, wrap: string, cx: number, cy: number, id: number): string {
+function anchorXml(a: Record<string, unknown>, wrap: string, cx: number, cy: number, id: number, contentW: number): string {
   const free = wrap === "behind" || wrap === "front";
   const side = (a.floatSide as string | undefined) ?? "left";
   const z = 251658240 + Math.round(Number(a.z) || 0) * 1024 + id;
   const dist = 'distT="0" distB="0" distL="114300" distR="114300"';
-  const posH = free ? `<wp:positionH relativeFrom="column"><wp:posOffset>${Math.round((Number(a.posX) || 0) * EMU_PER_PX)}</wp:posOffset></wp:positionH>` : `<wp:positionH relativeFrom="column"><wp:align>${side === "right" ? "right" : side === "center" ? "center" : "left"}</wp:align></wp:positionH>`;
-  const posV = `<wp:positionV relativeFrom="paragraph"><wp:posOffset>${Math.round((free ? Number(a.posY) || 0 : 0) * EMU_PER_PX)}</wp:posOffset></wp:positionV>`;
+  const px = Number(a.posX) || 0;
+  // Kaydırmalı resim: kenara yaslı ve uzaklıksızsa hizalama; sürüklenmişse sütuna göre uzaklık.
+  let offH: number | null = free ? px : null;
+  if (!free && px > 0 && side !== "center") offH = side === "right" ? Math.max(0, contentW - cx / EMU_PER_PX - px) : px;
+  const posH = offH !== null ? `<wp:positionH relativeFrom="column"><wp:posOffset>${Math.round(offH * EMU_PER_PX)}</wp:posOffset></wp:positionH>` : `<wp:positionH relativeFrom="column"><wp:align>${side === "right" ? "right" : side === "center" ? "center" : "left"}</wp:align></wp:positionH>`;
+  const posV = `<wp:positionV relativeFrom="paragraph"><wp:posOffset>${Math.round((Number(a.posY) || 0) * EMU_PER_PX)}</wp:posOffset></wp:positionV>`;
   let wrapXml = "<wp:wrapSquare wrapText=\"bothSides\"/>";
   if (free) wrapXml = "<wp:wrapNone/>";
   else if (wrap === "topBottom") wrapXml = "<wp:wrapTopAndBottom/>";

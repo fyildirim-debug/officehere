@@ -1,12 +1,14 @@
 // DOCX okuyucu: OOXML (JSZip + DOMParser) → ProseMirror JSON + belge ayarları.
 import JSZip from "jszip";
 import type { JSONContent } from "@tiptap/core";
-import { defaultSettings, normalizeDoc, samePage, type BelgeDocument, type CommentData, type DocSettings, type PageSetup } from "../../model/document";
+import { defaultSettings, normalizeDoc, pageMetrics, samePage, type BelgeDocument, type CommentData, type DocSettings, type PageSetup } from "../../model/document";
 import { noteText } from "../../editor/notes";
 import { effectiveProps, resolveStyles, type StyleDef } from "../../model/styles";
 import { attr, attrNum, descendants, kid, kids, parseXml, relsTarget, NS } from "./xml";
 import { Numbering, StyleSheet, parseTheme, type ParaProps, type RunProps, type ThemeFonts } from "./readerStyles";
 import { PartReader, stripNoteStyle, type Rel } from "./partReader";
+import { readCustomXml } from "./customXml";
+import type { HfKey } from "../../editor/sectionHf";
 
 const KNOWN_BY_NAME: Record<string, string> = {
   normal: "Normal",
@@ -56,9 +58,14 @@ export class DocxReader {
   numbering!: Numbering;
   theme: ThemeFonts = { major: "Aptos Display", minor: "Aptos" };
   media = new Map<string, string>();
+  /** Grafik parçaları (yol → XML). */
+  charts = new Map<string, Document>();
   footnotes = new Map<string, { text: string; content: JSONContent[] | null }>();
   endnotes = new Map<string, { text: string; content: JSONContent[] | null }>();
   ours: Record<string, StyleDef> = resolveStyles("default", "OfficeHere");
+  /** Belge (son bölüm) metin alanı genişliği ve sol kenar boşluğu (px; kaydırmalı resim konumu için). */
+  contentWPx = 605;
+  marginLPx = 94;
 
   mapParagraphStyle(id: string | null): { type: "heading" | "paragraph"; level?: number; ourId: string } {
     const info = id ? this.sheet.styles.get(id) : undefined;
@@ -100,6 +107,14 @@ export class DocxReader {
     page.columns = Math.max(1, Math.min(13, attrNum(cols, "num") ?? 1));
     page.columnSpace = attrNum(cols, "space") ?? 708;
     page.columnLine = page.columns > 1 && (attr(cols, "sep") === "1" || attr(cols, "sep") === "true");
+    const ln = kid(sect, "lnNumType");
+    const countBy = attrNum(ln, "countBy");
+    if (ln && countBy && countBy > 0) {
+      const restart = attr(ln, "restart");
+      const start = attrNum(ln, "start");
+      const distance = attrNum(ln, "distance");
+      page.lineNumbers = { restart: restart === "continuous" || restart === "newSection" ? restart : "newPage", countBy, ...(start ? { start: start + 1 } : {}), ...(distance ? { distance } : {}) };
+    } else delete page.lineNumbers;
     const tp = kid(sect, "titlePg");
     page.titlePage = !!tp && attr(tp, "val") !== "0" && attr(tp, "val") !== "false";
     if (!page.columnLine) delete page.columnLine;
@@ -187,6 +202,13 @@ export class DocxReader {
         }
       }
     }
+    // Özel XML: kaynakça kaynakları (OfficeHere ayarı yoksa) ve birleştirme veri kaynağı.
+    const cx = await readCustomXml(zip);
+    if (cx.sources && !settings.sources?.length) {
+      settings.sources = cx.sources;
+      if (cx.bibStyle && !settings.bibStyle) settings.bibStyle = cx.bibStyle;
+    }
+    if (cx.mailMerge) settings.mailMerge = cx.mailMerge;
     this.ours = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing, settings.customStyles);
     this.theme = parseTheme(await loadXml(relOf("/theme")));
     this.sheet = new StyleSheet(await loadXml(relOf("/styles")), this.theme);
@@ -197,6 +219,14 @@ export class DocxReader {
       const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
       const bytes = await zip.file(name)!.async("uint8array");
       this.media.set(name, `data:${MIME[ext] ?? "application/octet-stream"};base64,${toBase64(bytes)}`);
+    }
+
+    for (const name of Object.keys(zip.files).filter((n) => /\/charts\/chart\d+\.xml$/i.test(n))) {
+      try {
+        this.charts.set(name, parseXml(await zip.file(name)!.async("string")));
+      } catch {
+        // bozuk grafik parçası atlanır
+      }
     }
 
     // Dipnotlar ve son notlar (zengin içerik)
@@ -229,6 +259,12 @@ export class DocxReader {
     const body = kid(docEl, "body");
     if (!body) throw new Error("Belge gövdesi bulunamadı.");
     const reader = new PartReader(this, docRels);
+    const bodySect = kid(body, "sectPr");
+    if (bodySect) {
+      const m = pageMetrics(this.pageOf(bodySect, settings.page));
+      this.contentWPx = m.contentW;
+      this.marginLPx = m.ml;
+    }
     const parts = reader.sections(body);
     const pages = parts.map((p) => (p.sectPr ? this.pageOf(p.sectPr, settings.page) : { ...settings.page }));
     const last = pages[pages.length - 1];
@@ -255,29 +291,64 @@ export class DocxReader {
         };
       }
     }
-    const hfRef = async (tag: "headerReference" | "footerReference", type: "default" | "first" | "even") => {
-      let ref: Element | undefined;
-      for (const sp of sects) {
-        ref = kids(sp, tag).find((r) => (attr(r, "type") ?? "default") === type);
-        if (ref) break;
-      }
-      const rid = ref ? (ref.getAttributeNS(NS.r, "id") ?? attr(ref, "id")) : null;
-      const target = rid ? docRels.get(rid)?.target : undefined;
+    // Üst/alt bilgiler: ilk bölümünküler belge ayarlarına; sonraki bölümde farklı parçaya başvuru varsa
+    // bölümün kendi içeriği (Öncekine Bağla kapalı), yoksa öncekine bağlı.
+    const partCache = new Map<string, JSONContent | null>();
+    const readPart = async (target: string): Promise<JSONContent | null> => {
+      if (partCache.has(target)) return partCache.get(target)!;
       const xml = await loadXml(target);
-      if (!xml || !target) return null;
-      const pr = new PartReader(this, await readRels(zip, target));
-      const content = pr.blocks(xml.documentElement);
-      if (pr.watermark) settings.watermark = pr.watermark;
-      const hasText = JSON.stringify(content).match(/"text":"[^"]*\S|pageField|"image"/);
-      return hasText ? ({ type: "doc", content } as JSONContent) : null;
+      let out: JSONContent | null = null;
+      if (xml) {
+        const pr = new PartReader(this, await readRels(zip, target));
+        const content = pr.blocks(xml.documentElement);
+        if (pr.watermark) settings.watermark = pr.watermark;
+        const hasText = JSON.stringify(content).match(/"text":"[^"]*\S|pageField|"image"/);
+        out = hasText ? ({ type: "doc", content } as JSONContent) : null;
+      }
+      partCache.set(target, out);
+      return out;
     };
-    settings.header = await hfRef("headerReference", "default");
-    settings.footer = await hfRef("footerReference", "default");
-    settings.headerFirst = await hfRef("headerReference", "first");
-    settings.footerFirst = await hfRef("footerReference", "first");
-    settings.headerEven = await hfRef("headerReference", "even");
-    settings.footerEven = await hfRef("footerReference", "even");
+    const refTarget = (sp: Element | null, tag: string, type: string) => {
+      const ref = sp ? kids(sp, tag).find((r) => (attr(r, "type") ?? "default") === type) : undefined;
+      const rid = ref ? (ref.getAttributeNS(NS.r, "id") ?? attr(ref, "id")) : null;
+      return rid ? docRels.get(rid)?.target : undefined;
+    };
+    const HF: [HfKey, "headerReference" | "footerReference", string][] = [
+      ["header", "headerReference", "default"],
+      ["footer", "footerReference", "default"],
+      ["headerFirst", "headerReference", "first"],
+      ["footerFirst", "footerReference", "first"],
+      ["headerEven", "headerReference", "even"],
+      ["footerEven", "footerReference", "even"],
+    ];
+    for (const [key, tag, type] of HF) {
+      let eff: string | undefined;
+      for (let i = 0; i < parts.length; i++) {
+        const t = refTarget(parts[i].sectPr, tag, type);
+        if (i === 0) {
+          eff = t;
+          settings[key] = t ? await readPart(t) : null;
+          continue;
+        }
+        if (!t || t === eff) continue;
+        eff = t;
+        const sec = sections[i];
+        const sid = `s${i}`;
+        sec.attrs = { ...sec.attrs, sid };
+        settings.sectionHf = { ...settings.sectionHf, [sid]: { ...settings.sectionHf?.[sid], [key]: await readPart(t) } };
+      }
+    }
     const settingsXml = await loadXml(relOf("/settings"));
+    const prot = settingsXml ? descendants(settingsXml.documentElement, "documentProtection")[0] : undefined;
+    const edit = attr(prot, "edit");
+    if (prot && (edit === "readOnly" || edit === "comments" || edit === "trackedChanges")) {
+      const enf = attr(prot, "enforcement");
+      settings.protection = {
+        mode: edit,
+        enforced: enf === "1" || enf === "true" || enf === "on",
+        ...(attr(prot, "hashValue") ? { algorithm: attr(prot, "algorithmName") ?? "SHA-512", hash: attr(prot, "hashValue")!, salt: attr(prot, "saltValue") ?? "", spinCount: attrNum(prot, "spinCount") ?? 100000 } : {}),
+      };
+    }
     if (settingsXml && descendants(settingsXml.documentElement, "evenAndOddHeaders").some((e) => attr(e, "val") !== "0" && attr(e, "val") !== "false")) settings.oddEven = true;
     const bg = kid(docEl, "background");
     const bgc = attr(bg, "color");

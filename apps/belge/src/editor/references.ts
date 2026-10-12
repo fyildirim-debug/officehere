@@ -137,7 +137,7 @@ export function ensureRefBookmark(editor: Editor, target: RefTarget): string {
 }
 
 /** İmlece çapraz başvuru ekler. */
-export function insertCrossRef(editor: Editor, target: RefTarget, kind: CrossRefKind, link: boolean) {
+export function insertCrossRef(editor: Editor, target: RefTarget, kind: CrossRefKind, link: boolean, focus = true) {
   const sel = editor.state.selection;
   const from = sel.from;
   const name = ensureRefBookmark(editor, target);
@@ -148,5 +148,5 @@ export function insertCrossRef(editor: Editor, target: RefTarget, kind: CrossRef
   const tr = state.tr.insert(Math.min(at, state.doc.content.size), node);
   tr.setSelection(TextSelection.create(tr.doc, Math.min(at + 1, tr.doc.content.size)));
   editor.view.dispatch(tr);
-  editor.view.focus();
+  if (focus) editor.view.focus();
 }

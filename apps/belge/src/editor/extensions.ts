@@ -12,6 +12,11 @@ import { CharStyle, CommentMark, Deletion, FormatChange, Insertion, TextStyleExt
 import { Bookmark, ListStyles, PageBreak, PageField, TableOfContents } from "./nodes";
 import { BelgeTable, BelgeTableCell, BelgeTableHeader, BelgeTableRow } from "./table";
 import { BelgeImage } from "./image";
+import { Repeat, SelectionSync } from "./repeat";
+import { Equation } from "./equation";
+import { Chart } from "./chart";
+import { Protection } from "./protection";
+import { IndexBlock, IndexEntry } from "./indexing";
 import { Pagination, type PaginationController } from "./pagination";
 import { Search } from "./search";
 import { ShowMarks } from "./showMarks";
@@ -79,8 +84,9 @@ function contentExtensions(): AnyExtension[] {
     BackgroundColor,
     Align,
     Highlight.configure({ multicolor: true }),
-    Subscript,
-    Superscript,
+    // Alt simge ve üst simge birbirini dışlar (Word gibi Ctrl+= üst simgeyi kaldırır).
+    Subscript.extend({ excludes: "superscript" }),
+    Superscript.extend({ excludes: "subscript" }),
     Underline,
     CharStyle,
     CommentMark,
@@ -106,6 +112,10 @@ function contentExtensions(): AnyExtension[] {
     Citation,
     MergeField,
     Bibliography,
+    Equation,
+    Chart,
+    IndexEntry,
+    IndexBlock,
   ];
 }
 
@@ -141,11 +151,14 @@ export function editorExtensions(controller: PaginationController, hooks: Editor
     TableHandles,
     FieldUpdater,
     Outline,
+    Repeat,
+    SelectionSync,
+    Protection,
     createSectionLayout({ enabled: () => controller.geometry.enabled, defaultPage: () => controller.geometry.defaultPage, tiled: () => controller.geometry.tiles > 0 }),
   ];
 }
 
 /** Üst/alt bilgi editörü: gövdeyle aynı biçimlendirme, sayfalama yok. */
 export function headerFooterExtensions(): AnyExtension[] {
-  return [...contentExtensions(), PlainDocument, NoBreakKeys, AutoCorrect];
+  return [...contentExtensions(), PlainDocument, NoBreakKeys, AutoCorrect, Repeat, Protection];
 }

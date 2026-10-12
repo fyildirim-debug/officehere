@@ -18,6 +18,9 @@ import {
   Image20Regular,
   ArrowUp20Regular,
   ArrowDown20Regular,
+  ArrowPrevious20Regular,
+  ArrowNext20Regular,
+  Link20Regular,
   Dismiss32Regular,
   ReadingModeMobile24Regular, TextBulletListTree24Regular, Drafts24Regular } from "@fluentui/react-icons";
 import { getNative } from "@officehere/core";
@@ -25,6 +28,7 @@ import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuBu
 import { useBelge } from "../state/context";
 import { FOOTER_PRESETS, HEADER_PRESETS, pageNumberDoc } from "../templates/parts";
 import { hfKey, hfVariantOf } from "../views/PageSheets";
+import { hfLinked, sectionIds, setHfLink, withHfContent } from "../editor/sectionHf";
 import { applyPageSetup, sectionPageAt } from "../state/pageSetup";
 import type { PageSetup } from "../model/document";
 
@@ -104,9 +108,28 @@ export function HeaderFooterTab() {
   // Hazır içerik, düzenlenen türdeki (ilk/çift/varsayılan) üst ya da alt bilgiye uygulanır; düzenleyici yeniden kurulur.
   const setPart = (w: "header" | "footer", json: typeof settings.header) => {
     const key = hfKey(w, variant);
-    updateSettings((s) => ({ ...s, [key]: json }));
-    ctx.editHeaderFooter(w);
+    updateSettings((s) => withHfContent(s, sectionIds(mainEditor.state.doc), secIndex, key, json));
+    ctx.editHeaderFooterAt(w, pageIndex);
   };
+  // Önceki/Sonraki: türü (bölüm, ilk/çift/tek) farklı olan önceki/sonraki üst/alt bilgiye geçer.
+  const pages = controller.info.pages;
+  const storyOf = (i: number) => `${pages[i]?.section ?? 0}:${hfVariantOf(pages[i], i, settings)}`;
+  const stepTo = (dir: -1 | 1): number | null => {
+    const cur = storyOf(pageIndex);
+    for (let i = pageIndex + dir; i >= 0 && i < pages.length; i += dir) if (!pages[i]?.blank && storyOf(i) !== cur) return dir < 0 ? firstOfStory(i) : i;
+    return null;
+  };
+  // Önceki türün ilk sayfası (Word gibi önceki bölümün başına gider).
+  const firstOfStory = (i: number) => {
+    const st = storyOf(i);
+    let k = i;
+    while (k - 1 >= 0 && storyOf(k - 1) === st) k--;
+    return k;
+  };
+  const prev = stepTo(-1);
+  const next = stepTo(1);
+  const key = hfKey(which, variant);
+  const linked = hfLinked(sectionIds(mainEditor.state.doc), settings, secIndex, key);
   return (
     <>
       <RibbonGroup label="Üst Bilgi ve Alt Bilgi" icon={<DocumentHeader32Regular />}>
@@ -158,6 +181,21 @@ export function HeaderFooterTab() {
         <RibbonStack>
           <RibbonButton icon={<ArrowUp20Regular />} label="Üst Bilgiye Git" checked={which === "header"} onClick={() => ctx.editHeaderFooter("header")} />
           <RibbonButton icon={<ArrowDown20Regular />} label="Alt Bilgiye Git" checked={which === "footer"} onClick={() => ctx.editHeaderFooter("footer")} />
+        </RibbonStack>
+        <RibbonStack>
+          <RibbonButton icon={<ArrowPrevious20Regular />} label="Önceki" tip="Önceki bölümün ya da sayfa türünün üst/alt bilgisine git" disabled={prev === null} onClick={() => prev !== null && ctx.editHeaderFooterAt(which, prev)} />
+          <RibbonButton icon={<ArrowNext20Regular />} label="Sonraki" tip="Sonraki bölümün ya da sayfa türünün üst/alt bilgisine git" disabled={next === null} onClick={() => next !== null && ctx.editHeaderFooterAt(which, next)} />
+          <RibbonButton
+            icon={<Link20Regular />}
+            label="Öncekine Bağla"
+            tip="Bu bölümün üst/alt bilgisini önceki bölümdekiyle aynı yapar"
+            checked={linked}
+            disabled={secIndex === 0}
+            onClick={() => {
+              if (linked) setHfLink(mainEditor, updateSettings, settings, secIndex, key, false);
+              else if (window.confirm("Bu üst/alt bilgi silinip önceki bölümdekine bağlansın mı?")) setHfLink(mainEditor, updateSettings, settings, secIndex, key, true);
+            }}
+          />
         </RibbonStack>
       </RibbonGroup>
       <RibbonGroup label="Seçenekler" icon={<DocumentHeader32Regular />}>

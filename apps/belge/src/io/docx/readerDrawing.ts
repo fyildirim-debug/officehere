@@ -3,8 +3,21 @@
 import type { JSONContent } from "@tiptap/core";
 import { attr, attrNum, descendants, kid, NS } from "./xml";
 import type { PartReader } from "./partReader";
+import { CHART_NS, readChartXml } from "./chartXml";
 
 export function readDrawing(pr: PartReader, d: Element, push: (n: JSONContent) => void, extra: JSONContent[]) {
+  // Grafik: gömülü grafik parçası (değer önbelleğinden).
+  const gd = descendants(d, "graphicData")[0];
+  if (gd?.getAttribute("uri") === CHART_NS) {
+    const ref = descendants(gd, "chart")[0];
+    const rid = ref ? (ref.getAttributeNS(NS.r, "id") ?? attr(ref, "id")) : null;
+    const target = rid ? pr.rels.get(rid)?.target : undefined;
+    const doc = target ? pr.r.charts.get(target) : undefined;
+    const ext = descendants(d, "extent")[0];
+    const data = doc ? readChartXml(doc, Math.round((attrNum(ext, "cx") ?? 5486400) / 9525), Math.round((attrNum(ext, "cy") ?? 3200400) / 9525)) : null;
+    if (data) push({ type: "chart", attrs: { data } });
+    return;
+  }
   const blip = descendants(d, "blip")[0];
   const txbx = descendants(d, "txbxContent")[0];
   if (txbx && !blip) {
@@ -33,13 +46,17 @@ export function readDrawing(pr: PartReader, d: Element, push: (n: JSONContent) =
       rotate: rot || 0,
       flipH: xfrm?.getAttribute("flipH") === "1",
       flipV: xfrm?.getAttribute("flipV") === "1",
-      ...anchorAttrs(d),
+      crop: cropOf(descendants(d, "srcRect")[0]),
+      ...anchorAttrs(d, pr.r.contentWPx, pr.r.marginLPx),
     },
   });
 }
 
-/** wp:anchor yerleşimi → metni kaydır, yatay hizalama/konum, yığın sırası. */
-export function anchorAttrs(d: Element): Record<string, unknown> {
+/**
+ * wp:anchor yerleşimi → metni kaydır, yatay hizalama/konum, yığın sırası. Kaydırmalı resimde yatay uzaklık
+ * yaslandığı kenara (sol/sağ), dikey uzaklık paragrafa göre okunur.
+ */
+export function anchorAttrs(d: Element, contentW = 605, marginL = 94): Record<string, unknown> {
   const anchor = d.localName === "anchor" ? d : descendants(d, "anchor")[0];
   if (!anchor) return {};
   const EMU = 9525;
@@ -55,9 +72,24 @@ export function anchorAttrs(d: Element): Record<string, unknown> {
   const offV = posV ? kid(posV, "posOffset")?.textContent : undefined;
   const posX = offH ? Math.round(parseInt(offH, 10) / EMU) : 0;
   const posY = offV ? Math.round(parseInt(offV, 10) / EMU) : 0;
-  const floatSide = alignH === "right" || alignH === "outside" ? "right" : alignH === "center" ? "center" : posX > 300 ? "right" : "left";
   const rel = attrNum(anchor, "relativeHeight");
-  return { wrap, floatSide, posX: wrap === "behind" || wrap === "front" ? posX : 0, posY: wrap === "behind" || wrap === "front" ? posY : 0, z: rel ? Math.max(-50, Math.min(50, Math.round((rel - 251658240) / 1024))) : 0 };
+  const z = rel ? Math.max(-50, Math.min(50, Math.round((rel - 251658240) / 1024))) : 0;
+  if (wrap === "behind" || wrap === "front") {
+    const floatSide = alignH === "right" || alignH === "outside" ? "right" : alignH === "center" ? "center" : posX > 300 ? "right" : "left";
+    return { wrap, floatSide, posX, posY, z };
+  }
+  const width = (attrNum(kid(anchor, "extent"), "cx") ?? 0) / EMU;
+  const fromH = attr(posH, "relativeFrom") ?? "column";
+  const vRel = (attr(posV, "relativeFrom") ?? "paragraph") === "paragraph" || attr(posV, "relativeFrom") === "line";
+  const y = vRel && !kid(posV, "align") ? Math.max(0, posY) : 0;
+  if (alignH || !offH) {
+    const floatSide = alignH === "right" || alignH === "outside" ? "right" : alignH === "center" ? "center" : "left";
+    return { wrap, floatSide, posX: 0, posY: y, z };
+  }
+  // Uzaklık sütun/kenar boşluğuna göre (sayfaya göreyse sol kenar boşluğu düşülür).
+  const off = fromH === "page" ? posX - marginL : posX;
+  if (off + width / 2 > contentW / 2) return { wrap, floatSide: "right", posX: Math.max(0, Math.round(contentW - width - off)), posY: y, z };
+  return { wrap, floatSide: "left", posX: Math.max(0, Math.round(off)), posY: y, z };
 }
 
 export function readPict(pr: PartReader, pc: Element, push: (n: JSONContent) => void, _extra: JSONContent[]) {
@@ -116,6 +148,14 @@ export function readPict(pr: PartReader, pc: Element, push: (n: JSONContent) => 
       content: textBoxBlocks(pr, txbx),
     });
   }
+}
+
+/** a:srcRect → kırpma oranları. */
+function cropOf(el: Element | undefined): { l: number; t: number; r: number; b: number } | null {
+  if (!el) return null;
+  const v = (n: string) => Math.max(0, Math.min(0.99, (Number(el.getAttribute(n)) || 0) / 100000));
+  const c = { l: v("l"), t: v("t"), r: v("r"), b: v("b") };
+  return c.l || c.t || c.r || c.b ? c : null;
 }
 
 /** Metin kutusu içeriği (yalnız paragraf ve listeler; tablolar paragraflara dönüşür). */

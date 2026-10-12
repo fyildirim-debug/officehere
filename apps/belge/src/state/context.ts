@@ -42,7 +42,15 @@ export type DialogKind =
   | "tableSort"
   | "textToTable"
   | "tableToText"
-  | "cellMargins";
+  | "cellMargins"
+  | "lineNumbers"
+  | "crop"
+  | "equation"
+  | "chart"
+  | "markEntry"
+  | "insertIndex"
+  | "compare"
+  | "protect";
 
 export interface DialogState {
   kind: DialogKind;
@@ -93,6 +101,8 @@ export interface BelgeCtx {
   /** Gezinti bölmesini arama sekmesiyle açar. */
   openFind: () => void;
   editHeaderFooter: (which: "header" | "footer" | null) => void;
+  /** Verilen sayfanın üst/alt bilgisini düzenlemeye geçer (Önceki/Sonraki). */
+  editHeaderFooterAt: (which: "header" | "footer", page: number) => void;
   headerFooterEditing: "header" | "footer" | null;
   /** Üst/alt bilgisi düzenlenen sayfa (0 tabanlı). */
   headerFooterPage: number;

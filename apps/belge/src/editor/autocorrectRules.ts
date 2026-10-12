@@ -166,10 +166,14 @@ export function correctBefore(before: string, o: AutoCorrectOptions, cellStart =
     const core = tail && tail.length < word.length ? word.slice(0, -tail.length) : word;
     const hit = o.entries.find((x) => x.from === word) ?? o.entries.find((x) => x.from === core) ?? o.entries.find((x) => /\p{L}/u.test(x.from) && lowerTr(x.from) === lowerTr(core));
     if (hit) word = hit.from === word ? hit.to : matchCase(core, hit.to) + (hit.from === core || lowerTr(hit.from) === lowerTr(core) ? tail : "");
-    // Simge girdileri sözcüğe bitişik de düzeltilir ("Bekle..." → "Bekle…").
+    // Harf/rakamla başlamayan simge girdileri sözcüğe bitişik de düzeltilir ("Bekle..." → "Bekle…", "Marka(c)" → "Marka©").
     else {
-      const sym = o.entries.find((x) => x.from.length >= 3 && !/[\p{L}\p{N}]/u.test(x.from) && word.endsWith(x.from) && word.length > x.from.length);
+      const sym = o.entries.find((x) => x.from.length >= 2 && !/^[\p{L}\p{N}]/u.test(x.from) && word.endsWith(x.from) && word.length > x.from.length);
+      const punct = /[.,;:!?]+$/u.exec(word)?.[0] ?? "";
+      const body = word.slice(0, word.length - punct.length);
+      const symCore = !sym && punct ? o.entries.find((x) => x.from.length >= 2 && !/^[\p{L}\p{N}]/u.test(x.from) && body.endsWith(x.from) && body.length > x.from.length) : undefined;
       if (sym) word = word.slice(0, -sym.from.length) + sym.to;
+      else if (symCore) word = body.slice(0, -symCore.from.length) + symCore.to + punct;
     }
   }
   if (o.fractions && FRACTIONS[word]) word = FRACTIONS[word];

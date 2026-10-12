@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import type { Editor } from "@tiptap/core";
 import { setFieldContext } from "../editor/fields";
 import type { RecipientList } from "./data";
+import type { DocSettings, MailMergeData } from "../model/document";
 
 export interface MergeState {
   list: RecipientList | null;
@@ -22,9 +23,15 @@ export interface MergeApi extends MergeState {
   included: () => Record<string, string>[];
 }
 
-export function useMailMerge(editor: Editor, remeasure: () => void): MergeApi {
-  const [s, setS] = useState<MergeState>({ list: null, excluded: [], preview: false, index: 0, highlight: false });
-  const patch = useCallback((p: Partial<MergeState>) => setS((x) => ({ ...x, ...p })), []);
+/**
+ * Veri kaynağı (alıcı listesi, hariç tutulanlar) belge ayarlarında saklanır: kaydet/aç, otomatik kurtarma
+ * ve sayfa yenileme sonrası korunur. Önizleme durumu yalnız bu oturumdadır.
+ */
+export function useMailMerge(editor: Editor, remeasure: () => void, data: MailMergeData | null, updateSettings: (fn: (s: DocSettings) => DocSettings) => void): MergeApi {
+  const [ui, setUi] = useState<Omit<MergeState, "list" | "excluded">>({ preview: false, index: 0, highlight: false });
+  const s: MergeState = { ...ui, list: data?.list ?? null, excluded: data?.excluded ?? [] };
+  const patch = useCallback((p: Partial<Omit<MergeState, "list" | "excluded">>) => setUi((x) => ({ ...x, ...p })), []);
+  const setData = useCallback((d: MailMergeData | null) => updateSettings((x) => ({ ...x, mailMerge: d })), [updateSettings]);
   // Önizlemede birleştirme alanları geçerli kaydın değerlerini gösterir.
   useEffect(() => {
     const rec = s.preview && s.list ? (s.list.records[s.index] ?? null) : null;
@@ -34,8 +41,11 @@ export function useMailMerge(editor: Editor, remeasure: () => void): MergeApi {
   }, [editor, s.preview, s.index, s.list]); // eslint-disable-line react-hooks/exhaustive-deps
   return {
     ...s,
-    setList: (list) => patch({ list, excluded: [], index: 0, preview: false }),
-    setExcluded: (excluded) => patch({ excluded }),
+    setList: (list) => {
+      setData(list ? { list, excluded: [] } : null);
+      patch({ index: 0, preview: false });
+    },
+    setExcluded: (excluded) => s.list && setData({ list: s.list, excluded }),
     setPreview: (preview) => patch({ preview }),
     setIndex: (index) => patch({ index: Math.max(0, Math.min((s.list?.records.length ?? 1) - 1, index)) }),
     setHighlight: (highlight) => patch({ highlight }),

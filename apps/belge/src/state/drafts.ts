@@ -123,8 +123,24 @@ export function listDrafts(): StoredDraft[] {
  */
 export function adoptDraft(d: StoredDraft): void {
   if (d.key === draftKey()) return;
-  const ok = writeDraft({ content: d.content, settings: d.settings, fileName: d.fileName, savedAt: Date.now() });
+  const ok = writeDraft({ content: d.content, settings: d.settings, fileName: d.fileName, savedAt: d.savedAt });
   if (ok) removeDraft(d.key);
+}
+
+/** Taslağın ilk sözcükleri (listede belgeleri ayırt etmek için). */
+export function draftPreview(d: Pick<Draft, "content">, max = 48): string {
+  let out = "";
+  const walk = (n: { text?: string; content?: unknown[] } | undefined) => {
+    if (!n || out.length > max) return;
+    if (typeof n.text === "string") out += n.text;
+    for (const c of n.content ?? []) {
+      walk(c as { text?: string; content?: unknown[] });
+      if ((c as { type?: string }).type === "paragraph" || (c as { type?: string }).type === "heading") out += " ";
+    }
+  };
+  walk(d.content as { content?: unknown[] });
+  const t = out.replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max).trimEnd()}…` : t;
 }
 
 /* ------------------------------------------------------------------ */

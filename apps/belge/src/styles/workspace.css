@@ -389,6 +389,12 @@
   border-bottom: 0;
 }
 
+/* Öncekine bağlı üst/alt bilgi etiketi (sağda) */
+.bl-hf-line span.bl-hf-same {
+  left: auto;
+  right: 8px;
+}
+
 .bl-hf-edit {
   position: absolute;
   z-index: 3;

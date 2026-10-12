@@ -40,8 +40,11 @@ export function BelgeStatusBar({ editor, controller, paged, words, tracking, vie
     useCallback((cb: () => void) => controller.subscribe(cb), [controller]),
     () => controller.info,
   );
-  const pages = paged ? info.pageCount : 1;
-  const page = paged ? controller.pageOf(sel?.from ?? 0) + 1 : 1;
+  // Taslak ve Anahat görünümünde sayfa bilgisi son Yazdırma Düzeni sayfalamasından gelir (Word gibi).
+  const flow = !paged && (view.mode === "draft" || view.mode === "outline");
+  const fp = flow ? controller.pagedPosition(sel?.from ?? 0) : null;
+  const pages = paged ? info.pageCount : (fp?.count ?? 1);
+  const page = paged ? controller.pageOf(sel?.from ?? 0) + 1 : (fp ? fp.page + 1 : 1);
   const selWords = sel?.words ?? -1;
   return (
     <StatusBar

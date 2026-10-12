@@ -1,6 +1,7 @@
 // Bul ve Değiştir iletişim kutusu (Bul / Değiştir / Git sekmeleri).
 import { useEffect, useState } from "react";
 import { TextSelection } from "@tiptap/pm/state";
+import { useEditorState } from "@tiptap/react";
 import { Dialog, DialogButton, DialogTabs, Field } from "@officehere/ui";
 import { useBelge } from "../state/context";
 import { getSearch, gotoMatch, replaceAll, replaceCurrent, setSearch } from "../editor/search";
@@ -20,6 +21,8 @@ export function FindReplaceDialog({ initialTab, onClose }: { initialTab: string;
   const [gotoKind, setGotoKind] = useState("page");
   const [gotoVal, setGotoVal] = useState("");
   const [msg, setMsg] = useState("");
+  // Sayaç eklenti durumundan canlı okunur (vurgu ve Tümünü Değiştir ile aynı eşleşmeler).
+  const count = useEditorState({ editor, selector: ({ editor: ed }) => getSearch(ed.state)?.matches.length ?? 0 }) ?? 0;
 
   useEffect(() => {
     setSearch(editor.view, { query, caseSensitive: matchCase, wholeWord: whole });
@@ -106,7 +109,7 @@ export function FindReplaceDialog({ initialTab, onClose }: { initialTab: string;
               <input type="text" value={repl} onChange={(e) => setRepl(e.target.value)} style={{ flex: 1 }} />
             </Field>
           )}
-          <div className="bl-dlg-msg">{msg || (query ? `${getSearch(editor.state)?.matches.length ?? 0} eşleşme` : "")}</div>
+          <div className="bl-dlg-msg">{msg || (query ? `${count} eşleşme` : "")}</div>
           {more && (
             <div className="bl-dlg-checks is-single">
               <Check label="Büyük/küçük harf eşleştir" v={matchCase} set={setMatchCase} />

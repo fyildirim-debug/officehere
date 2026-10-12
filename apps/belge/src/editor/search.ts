@@ -23,12 +23,15 @@ interface SearchState extends SearchOptions {
 
 export const searchKey = new PluginKey<SearchState>("belgeSearch");
 
-/** Türkçe duyarlı katlama: İ/I/ı/i aynı kabul edilir; uzunluk korunur. */
+/**
+ * Türkçe büyük/küçük harf katlaması (Word gibi): İ↔i ve I↔ı eşleşir, i↔ı eşleşmez.
+ * Uzunluk korunur (konum eşlemesi için); küçük hâli farklı uzunlukta olan harf olduğu gibi kalır.
+ */
 export function foldTr(s: string): string {
   let out = "";
   for (const ch of s) {
     const l = ch.toLocaleLowerCase("tr-TR");
-    out += l === "ı" ? "i" : l.length === ch.length ? l : ch;
+    out += l.length === ch.length ? l : ch;
   }
   return out;
 }
@@ -185,19 +188,21 @@ export function replaceCurrent(view: EditorView, replacement: string): boolean {
   return true;
 }
 
-/** Tüm eşleşmeleri değiştirir; değiştirilen sayısını döner. */
+/** Tüm eşleşmeleri değiştirir; değiştirilen sayısını döner (sayaç ve vurguyla aynı eşleştirici). */
 export function replaceAll(view: EditorView, replacement: string): number {
   const st = getSearch(view.state);
-  if (!st || !st.matches.length) return 0;
+  if (!st?.query) return 0;
+  const matches = findMatches(view.state.doc, st);
+  if (!matches.length) return 0;
   const tr = view.state.tr;
-  for (let i = st.matches.length - 1; i >= 0; i--) {
-    const m = st.matches[i];
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const m = matches[i];
     const marks = tr.doc.resolve(m.from).marksAcross(tr.doc.resolve(m.to)) ?? undefined;
     const text = adaptCase(tr.doc.textBetween(m.from, m.to), replacement, st.caseSensitive);
     if (text) tr.replaceWith(m.from, m.to, view.state.schema.text(text, marks));
     else tr.delete(m.from, m.to);
   }
-  const n = st.matches.length;
+  const n = matches.length;
   view.dispatch(tr);
   return n;
 }

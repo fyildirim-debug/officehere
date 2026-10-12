@@ -1,0 +1,394 @@
+/* 4. tur: postalar şeridi, sürükleme, satır numaraları, denklem, grafik, kırpma, dizin. */
+
+/* İki satırlık etiket: açılır ok ikinci satırın sonunda (üçüncü satıra taşmasın). */
+.oh-ribbon-group[aria-label="Adres Mektup Birleştirmeyi Başlat"] .oh-rbtn-large:first-child .oh-rbtn-label {
+  display: block;
+}
+
+.oh-ribbon-group[aria-label="Adres Mektup Birleştirmeyi Başlat"] .oh-rbtn-large:first-child .oh-chevron {
+  display: inline-block;
+  margin-left: 3px;
+  vertical-align: middle;
+}
+
+/* Kaydırmalı resim sürüklenirken */
+.bl-doc [data-wrap].is-dragging {
+  opacity: 0.75;
+  z-index: 20;
+  cursor: move;
+}
+
+/* Satır numaraları */
+.bl-lnums {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bl-lnum {
+  position: absolute;
+  width: 60px;
+  text-align: right;
+  white-space: nowrap;
+  color: #000;
+  user-select: none;
+}
+
+/* Denklemler */
+.bl-eq {
+  display: inline-block;
+  cursor: default;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+.bl-eq.is-display {
+  display: block;
+  text-align: center;
+  margin: 2px 0;
+}
+
+.bl-eq math {
+  font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", math;
+  font-size: 1.05em;
+}
+
+.bl-eq.is-selected,
+.bl-eq:hover {
+  background: rgba(0, 0, 0, 0.06);
+  outline: 1px solid rgba(43, 87, 154, 0.45);
+}
+
+.bl-eq-palette,
+.bl-eq-symbols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.bl-eq-palette .oh-btn {
+  min-width: 0;
+  padding: 2px 8px;
+}
+
+.bl-eq-symbols button {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--oh-border, #d1d1d1);
+  background: var(--oh-surface, #fff);
+  color: inherit;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.bl-eq-symbols button:hover {
+  background: var(--oh-hover, #f0f0f0);
+}
+
+.bl-eq-label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.bl-eq-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 13px;
+}
+
+.bl-eq-preview {
+  min-height: 64px;
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--oh-border, #d1d1d1);
+  background: #fff;
+  color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  overflow: auto;
+}
+
+.bl-eq-empty {
+  color: #888;
+  font-size: 13px;
+}
+
+.bl-eq-mode {
+  display: flex;
+  gap: 16px;
+}
+
+/* Grafikler */
+.bl-chart {
+  display: inline-block;
+  line-height: 0;
+  vertical-align: bottom;
+}
+
+.bl-chart.is-selected svg {
+  outline: 2px solid #2b579a;
+  outline-offset: 1px;
+}
+
+.bl-chart-types {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.bl-chart-type {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--oh-border, #d1d1d1);
+  background: var(--oh-surface, #fff);
+  color: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.bl-chart-type.is-on {
+  border-color: #2b579a;
+  box-shadow: 0 0 0 1px #2b579a;
+}
+
+.bl-chart-main {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.bl-chart-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.bl-chart-grid-wrap {
+  max-height: 220px;
+  overflow: auto;
+  margin: 8px 0;
+  border: 1px solid var(--oh-border, #d1d1d1);
+}
+
+.bl-chart-grid {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.bl-chart-grid th,
+.bl-chart-grid td {
+  border: 1px solid var(--oh-border, #e0e0e0);
+  padding: 0;
+}
+
+.bl-chart-grid input {
+  width: 100%;
+  min-width: 56px;
+  box-sizing: border-box;
+  border: 0;
+  padding: 3px 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.bl-chart-grid thead th,
+.bl-chart-grid tbody th {
+  background: var(--oh-hover, #f3f3f3);
+}
+
+.bl-chart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.bl-chart-preview {
+  flex: none;
+  line-height: 0;
+}
+
+/* Resim kırpma kipi */
+.bl-crop {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.bl-crop img {
+  position: absolute;
+  max-width: none;
+  user-select: none;
+}
+
+.bl-crop-ghost {
+  opacity: 0.35;
+  outline: 1px dashed #666;
+}
+
+.bl-crop-win {
+  position: absolute;
+  overflow: hidden;
+  outline: 1px solid #000;
+  pointer-events: auto;
+}
+
+.bl-crop-win > img {
+  pointer-events: none;
+}
+
+.bl-crop-h {
+  position: absolute;
+  background: #000;
+  border: 1px solid #fff;
+  pointer-events: auto;
+}
+
+.bl-crop-h.is-t,
+.bl-crop-h.is-b {
+  left: calc(50% - 9px);
+  width: 18px;
+  height: 5px;
+  cursor: ns-resize;
+}
+
+.bl-crop-h.is-l,
+.bl-crop-h.is-r {
+  top: calc(50% - 9px);
+  width: 5px;
+  height: 18px;
+  cursor: ew-resize;
+}
+
+.bl-crop-h.is-t {
+  top: 0;
+}
+
+.bl-crop-h.is-b {
+  bottom: 0;
+}
+
+.bl-crop-h.is-l {
+  left: 0;
+}
+
+.bl-crop-h.is-r {
+  right: 0;
+}
+
+.bl-crop-h.is-tl,
+.bl-crop-h.is-tr,
+.bl-crop-h.is-bl,
+.bl-crop-h.is-br {
+  width: 12px;
+  height: 12px;
+  background: transparent;
+  border: 0;
+}
+
+.bl-crop-h.is-tl {
+  left: 0;
+  top: 0;
+  border-left: 5px solid #000;
+  border-top: 5px solid #000;
+  cursor: nwse-resize;
+}
+
+.bl-crop-h.is-tr {
+  right: 0;
+  top: 0;
+  border-right: 5px solid #000;
+  border-top: 5px solid #000;
+  cursor: nesw-resize;
+}
+
+.bl-crop-h.is-bl {
+  left: 0;
+  bottom: 0;
+  border-left: 5px solid #000;
+  border-bottom: 5px solid #000;
+  cursor: nesw-resize;
+}
+
+.bl-crop-h.is-br {
+  right: 0;
+  bottom: 0;
+  border-right: 5px solid #000;
+  border-bottom: 5px solid #000;
+  cursor: nwse-resize;
+}
+
+.bl-chart ::selection {
+  background: transparent;
+}
+
+.bl-crop-prev {
+  position: relative;
+  display: inline-block;
+  margin-top: 10px;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.bl-crop-prev img {
+  max-width: 400px;
+  max-height: 220px;
+  opacity: 0.45;
+}
+
+.bl-crop-prev-win {
+  position: absolute;
+  outline: 2px solid #000;
+  box-shadow: 0 0 0 1px #fff inset;
+  background: rgba(255, 255, 255, 0.0);
+  backdrop-filter: brightness(1.6);
+}
+
+/* Dizin */
+.bl-xe {
+  display: none;
+}
+
+.bl-show-marks .bl-xe {
+  display: inline;
+  color: #555;
+  border-bottom: 1px dotted #555;
+  font-size: 0.9em;
+}
+
+.bl-index {
+  column-gap: 24px;
+  margin: 6px 0;
+}
+
+.bl-index .bl-ix-1 {
+  padding-left: 16px;
+  text-indent: -16px;
+  break-inside: avoid;
+}
+
+.bl-index .bl-ix-2 {
+  padding-left: 32px;
+  text-indent: -16px;
+  break-inside: avoid;
+}
+
+.bl-index .bl-ix-empty {
+  color: #666;
+}
+
+.bl-dlg-note {
+  color: var(--oh-text-secondary, #616161);
+  font-size: 12px;
+  margin: 6px 0 0;
+}

@@ -51,6 +51,12 @@ export const Section = Node.create({
         },
         renderHTML: (a) => (a.page ? { "data-page": JSON.stringify(a.page) } : {}),
       },
+      // Kalıcı bölüm kimliği (kendi üst/alt bilgisi olan bölümler için; bkz. sectionHf.ts).
+      sid: {
+        default: null,
+        parseHTML: (el) => el.getAttribute("data-sid"),
+        renderHTML: (a) => (a.sid ? { "data-sid": a.sid } : {}),
+      },
     };
   },
   parseHTML() {
@@ -179,7 +185,7 @@ export function removeSectionBreak(state: EditorState, dispatch: ((tr: Transacti
   const boundary = aPos + a.nodeSize;
   const tr = state.tr;
   tr.join(boundary, 1);
-  tr.setNodeMarkup(aPos, undefined, { kind: a.attrs.kind, page: b.attrs.page });
+  tr.setNodeMarkup(aPos, undefined, { kind: a.attrs.kind, page: b.attrs.page, sid: b.attrs.sid ?? null });
   // Sınırdaki iki metin bloğu birleşir (bölüm işareti paragraf işaretinin yerindeydi).
   const inner = boundary - 1;
   const $j = tr.doc.resolve(inner);
