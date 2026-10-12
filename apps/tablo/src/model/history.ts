@@ -26,6 +26,24 @@ export class UndoManager {
     }
   }
 
+  /** Geçerli yığın derinliği (squash için işaret). */
+  mark(): number {
+    return this.past.length;
+  }
+
+  /** İşaretten sonra eklenen girdileri tek adımda birleştirir. */
+  squash(since: number, label: string): void {
+    if (this.past.length - since < 2) return;
+    const parts = this.past.splice(since);
+    const cost = parts.reduce((n, e) => n + (e.cost ?? 1), 0);
+    this.past.push({
+      label,
+      cost,
+      undo: () => [...parts].reverse().forEach((e) => e.undo()),
+      redo: () => parts.forEach((e) => e.redo()),
+    });
+  }
+
   undo(): UndoEntry | undefined {
     const e = this.past.pop();
     if (!e) return undefined;

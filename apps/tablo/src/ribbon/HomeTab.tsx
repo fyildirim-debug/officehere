@@ -41,6 +41,9 @@ import {
   TextStrikethrough20Regular,
   ClipboardPaste20Regular,
   TextDirectionHorizontalLtr20Regular,
+  TextFont24Regular,
+  TextAlignLeft24Regular,
+  NumberSymbol24Regular,
 } from "@fluentui/react-icons";
 import { useState } from "react";
 import { FONT_LIST, FONT_SIZES, fontStack } from "@officehere/core";
@@ -119,7 +122,7 @@ export function HomeTab({ ctl }: { ctl: Controller }) {
         </RibbonStack>
       </RibbonGroup>
 
-      <RibbonGroup label="Yazı Tipi" onLauncher={() => ctl.openDialog("formatCells", { tab: "font" })} launcherTip="Hücreleri Biçimlendir: Yazı Tipi">
+      <RibbonGroup label="Yazı Tipi" icon={<TextFont24Regular />} onLauncher={() => ctl.openDialog("formatCells", { tab: "font" })} launcherTip="Hücreleri Biçimlendir: Yazı Tipi">
         <RibbonStack>
           <RibbonRow>
             <RibbonCombo value={st.font ?? DEFAULT_FONT} width={124} options={FONT_LIST.map((f) => ({ value: f, style: { fontFamily: fontStack(f) } }))} onCommit={(f) => F.setFont(ctl, f)} tip="Yazı Tipi" shortcut="Ctrl+Shift+F" />
@@ -205,7 +208,7 @@ export function HomeTab({ ctl }: { ctl: Controller }) {
         </RibbonStack>
       </RibbonGroup>
 
-      <RibbonGroup label="Hizalama" onLauncher={() => ctl.openDialog("formatCells", { tab: "align" })} launcherTip="Hücreleri Biçimlendir: Hizalama">
+      <RibbonGroup label="Hizalama" icon={<TextAlignLeft24Regular />} onLauncher={() => ctl.openDialog("formatCells", { tab: "align" })} launcherTip="Hücreleri Biçimlendir: Hizalama">
         <RibbonStack>
           <RibbonRow>
             <RibbonButton size="small" icon={<AlignTop20Regular />} tip="Üste Hizala" checked={st.vAlign === "top"} onClick={() => F.setVAlign(ctl, "top")} />
@@ -255,7 +258,7 @@ export function HomeTab({ ctl }: { ctl: Controller }) {
         </RibbonStack>
       </RibbonGroup>
 
-      <RibbonGroup label="Sayı" onLauncher={() => ctl.openDialog("formatCells", { tab: "number" })} launcherTip="Hücreleri Biçimlendir: Sayı">
+      <RibbonGroup label="Sayı" icon={<NumberSymbol24Regular />} onLauncher={() => ctl.openDialog("formatCells", { tab: "number" })} launcherTip="Hücreleri Biçimlendir: Sayı">
         <RibbonStack>
           <RibbonCombo
             value={curFmt?.label ?? "Özel"}

@@ -1,6 +1,6 @@
 /** Bağlamsal grafik sekmeleri: Grafik Tasarımı ve Biçim. */
 import { useEffect, useState } from "react";
-import { ArrowSwap24Regular, ArrowUp20Regular, ArrowDown20Regular, Color24Regular, DataBarVerticalAdd24Regular, DataBarVerticalEdit24Regular, ArrowMove24Regular, TableEdit24Regular, Delete20Regular } from "@fluentui/react-icons";
+import { ArrowSwap24Regular, ArrowUp20Regular, ArrowDown20Regular, Color24Regular, DataBarVerticalAdd24Regular, DataBarVerticalEdit24Regular, ArrowMove24Regular, TableEdit24Regular, Delete20Regular, TextT24Regular, Layer24Regular, ResizeLarge24Regular } from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, RibbonButton, RibbonGallery, RibbonGroup, RibbonLabel, RibbonMenuButton, RibbonSpinner, RibbonStack } from "@officehere/ui";
 import type { Controller } from "../controller";
 import { reorderObject, updateChart } from "../actions/objects";
@@ -145,21 +145,21 @@ export function ChartFormatTab({ ctl, chart }: { ctl: Controller; chart: ChartDe
   );
   return (
     <>
-      <RibbonGroup label="Başlıklar">
+      <RibbonGroup label="Başlıklar" icon={<TextT24Regular />}>
         <RibbonStack>
           {field("Grafik başlığı:", title, setTitle, (v) => v !== chart.title && up({ title: v, showTitle: true }, "Grafik Başlığı"))}
           {field("Yatay eksen:", xt, setXt, (v) => v !== (chart.xTitle ?? "") && up({ xTitle: v || undefined }, "Eksen Başlığı"), isPie)}
           {field("Dikey eksen:", yt, setYt, (v) => v !== (chart.yTitle ?? "") && up({ yTitle: v || undefined }, "Eksen Başlığı"), isPie)}
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Yerleştir">
+      <RibbonGroup label="Yerleştir" icon={<Layer24Regular />}>
         <RibbonStack>
           <RibbonButton icon={<ArrowUp20Regular />} label="Öne Getir" onClick={() => reorderObject(ctl, "chart", chart.id, true)} />
           <RibbonButton icon={<ArrowDown20Regular />} label="Arkaya Gönder" onClick={() => reorderObject(ctl, "chart", chart.id, false)} />
           <RibbonButton icon={<Delete20Regular />} label="Grafiği Sil" onClick={() => deleteObject(ctl, "chart", chart.id)} />
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Boyut">
+      <RibbonGroup label="Boyut" icon={<ResizeLarge24Regular />}>
         <RibbonStack>
           <RibbonSpinner label="Yükseklik:" value={chart.height / CM} unit="cm" step={0.1} min={1} max={50} decimals={2} width={80} onChange={(v) => up({ height: Math.round(v * CM) }, "Grafik Boyutu")} />
           <RibbonSpinner label="Genişlik:" value={chart.width / CM} unit="cm" step={0.1} min={1} max={80} decimals={2} width={80} onChange={(v) => up({ width: Math.round(v * CM) }, "Grafik Boyutu")} />

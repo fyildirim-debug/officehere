@@ -92,11 +92,13 @@ export function FormatCellsDialog({ ctl, onClose, arg }: P) {
 
   const ok = () => {
     if (ctl.edit) ctl.commitEdit(null);
+    const mark = ctl.ops.history.mark();
     const patch: Partial<CellStyle> = {};
     for (const k of touched) (patch as Record<string, unknown>)[k] = draft[k] ?? undefined;
     if (touched.size) F.applyStyle(ctl, patch, "Hücreleri Biçimlendir");
     if (Object.keys(borders).length) applyBorderDraft(ctl, borders);
     if (merge !== merged) F.mergeCells(ctl, merge ? "merge" : "unmerge");
+    ctl.ops.history.squash(mark, "Hücreleri Biçimlendir");
     onClose();
   };
 

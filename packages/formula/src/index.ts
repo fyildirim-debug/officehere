@@ -1,6 +1,6 @@
 /**
  * @officehere/formula — DOM'suz formül motoru: ayrıştırıcı, değerlendirici,
- * ~250 fonksiyon, Türkçe yerelleştirme, sayı biçimleri ve hesap motoru.
+ * ~370 fonksiyon, Türkçe yerelleştirme, sayı biçimleri ve hesap motoru.
  */
 import "./functions";
 

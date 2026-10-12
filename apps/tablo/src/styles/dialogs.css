@@ -839,7 +839,8 @@
   font-size: 11pt;
   white-space: nowrap;
 }
-.tb-print-preview .tb-print-table {
+.tb-print-preview > .tb-print-table,
+.tb-print-preview > .tb-print-sheet {
   zoom: 0.45;
 }
 .tb-print-preview .tb-print-table.has-grid td,
@@ -961,4 +962,28 @@
 .tb-dv-prompt {
   pointer-events: none;
   max-width: 240px;
+}
+
+/* ---------------- Yazdırmada nesneler ---------------- */
+.tb-print-sheet {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+}
+.tb-print-obj {
+  position: absolute;
+  overflow: hidden;
+}
+.tb-print-obj.is-chart .tb-chart-tip {
+  display: none;
+}
+.tb-print-shape-text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 12px sans-serif;
+  color: #000;
+  text-align: center;
 }

@@ -92,6 +92,8 @@ function budget(): WorkbookModel {
   s.charts[0].showDataLabels = false;
   s.charts[0].showGridlines = true;
   s.frozen = { rows: 0, cols: 0 };
+  s.page.orientation = "landscape";
+  s.page.fitToWidth = true;
   wb.props.title = "Aylık Bütçe";
   return wb;
 }
@@ -204,6 +206,9 @@ function sales(): WorkbookModel {
   s.cols.setHidden(9, true);
   s.charts[1].range = "'Satış Raporu'!I3:J9";
   s.frozen = { rows: 3, cols: 1 };
+  s.page.orientation = "landscape";
+  s.page.fitToWidth = true;
+  s.page.footer = "Sayfa &[Sayfa] / &[Sayfalar]";
   wb.props.title = "Satış Raporu";
   return wb;
 }

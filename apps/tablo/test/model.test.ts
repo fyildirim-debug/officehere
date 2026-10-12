@@ -123,6 +123,25 @@ describe("düzenleme ve geri alma", () => {
   });
 });
 
+describe("geri alma birleştirme", () => {
+  it("birden çok adım tek geri almada geri alınır", () => {
+    const ctl = sample();
+    const mark = ctl.ops.history.mark();
+    ctl.selectCell(1, 1);
+    F.applyStyle(ctl, { bold: true });
+    F.borders(ctl, "outside");
+    ctl.ops.history.squash(mark, "Hücreleri Biçimlendir");
+    expect(ctl.ops.history.undoLabel).toBe("Hücreleri Biçimlendir");
+    E.undo(ctl);
+    const st = ctl.wb.styleAt(ctl.sheet, 1, 1);
+    expect(st.bold).toBeUndefined();
+    expect(st.bTop).toBeUndefined();
+    E.redo(ctl);
+    expect(ctl.wb.styleAt(ctl.sheet, 1, 1).bold).toBe(true);
+    expect(ctl.wb.styleAt(ctl.sheet, 1, 1).bTop).toBeTruthy();
+  });
+});
+
 describe("veri araçları", () => {
   it("çok düzeyli sıralama başlığı korur", () => {
     const ctl = sample();

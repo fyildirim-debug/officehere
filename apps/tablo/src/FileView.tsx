@@ -10,7 +10,7 @@ import { printRange, printSheet, rangeToHtml } from "./io/print";
 import { buildTemplate, TEMPLATES } from "./templates";
 import type { WorkbookModel } from "./model/workbook";
 
-const XLSX_FILTER: FileFilter = { name: "Excel Çalışma Kitabı", extensions: ["xlsx"] };
+const XLSX_FILTER: FileFilter = { name: "Çalışma Kitabı (.xlsx)", extensions: ["xlsx"] };
 const CSV_FILTER: FileFilter = { name: "CSV (Noktalı virgülle ayrılmış)", extensions: ["csv"] };
 const OPEN_FILTERS: FileFilter[] = [{ name: "Tüm Çalışma Kitapları", extensions: ["xlsx", "xlsm", "csv", "txt"] }, XLSX_FILTER, CSV_FILTER];
 
@@ -111,8 +111,8 @@ export function useFileActions(ctl: Controller): FileActions {
           printSheet(ctl.wb, ctl.sheet);
         } else if (kind === "html") {
           const r = printRange(ctl.wb, ctl.sheet);
-          const body = r ? rangeToHtml(ctl.wb, ctl.sheet, r, { gridlines: true }) : "";
-          const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${base}</title><style>table{border-collapse:collapse;font-family:Calibri,Carlito,sans-serif}td{padding:0 4px;border:1px solid #d4d4d4;overflow:hidden}</style></head><body>${body}</body></html>`;
+          const body = r ? rangeToHtml(ctl.wb, ctl.sheet, r, { gridlines: true, objects: true }) : "";
+          const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${base}</title><style>table{border-collapse:collapse;table-layout:fixed;font-family:Calibri,Carlito,sans-serif}td{padding:0 4px;border:1px solid #d4d4d4;overflow:hidden;white-space:nowrap}.tb-print-sheet{position:relative;display:inline-block}.tb-print-obj{position:absolute;overflow:hidden}.tb-chart-tip{display:none}</style></head><body>${body}</body></html>`;
           downloadBlob(new Blob([html], { type: "text/html" }), `${base}.html`);
         } else if (kind === "xlsx") {
           const data = await writeXlsx(ctl.wb);
@@ -177,7 +177,7 @@ export function FileView({ ctl, files, page, onClose }: { ctl: Controller; files
     const r = printRange(wb, ctl.sheet);
     if (!r) return <div className="tb-print-empty">Yazdırılacak bir şey yok.</div>;
     const limited = { ...r, r2: Math.min(r.r2, r.r1 + 40), c2: Math.min(r.c2, r.c1 + 12) };
-    return <div className={`tb-print-preview is-${ctl.sheet.page.orientation}`} dangerouslySetInnerHTML={{ __html: rangeToHtml(wb, ctl.sheet, limited, { gridlines: ctl.sheet.page.printGridlines, headings: ctl.sheet.page.printHeadings }) }} />;
+    return <div className={`tb-print-preview is-${ctl.sheet.page.orientation}`} dangerouslySetInnerHTML={{ __html: rangeToHtml(wb, ctl.sheet, limited, { gridlines: ctl.sheet.page.printGridlines, headings: ctl.sheet.page.printHeadings, objects: true }) }} />;
   })();
   return (
     <OfficeBackstage

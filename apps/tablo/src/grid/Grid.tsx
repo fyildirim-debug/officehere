@@ -4,7 +4,7 @@
  * taşıma, formül işaretleme) ve klavye.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { formatValue, keyCol, keyRow } from "@officehere/formula";
+import { formatValue } from "@officehere/formula";
 import type { Controller } from "../controller";
 import * as E from "../actions/edit";
 import { buildClipboard, pastePayload } from "../model/clipboard";
@@ -19,7 +19,7 @@ import { measureText, renderGrid, type RenderState } from "./render";
 import { SheetTabs } from "./SheetTabs";
 import { autoFitCols, autoFitRows } from "./autofit";
 import { FloatingLayer } from "../charts/FloatingLayer";
-import { ValidationUi } from "./ValidationUi";
+import { AllNotes, ValidationUi } from "./ValidationUi";
 import { computePageBreaks } from "../io/print";
 import { filterAt, filtersOf } from "../actions/data";
 
@@ -718,32 +718,4 @@ export function openLink(ctl: Controller, link: string): void {
     return;
   }
   window.open(link, "_blank", "noopener");
-}
-
-/** "Tüm Notları Göster": görünür alandaki notlar sürekli gösterilir. */
-function AllNotes({ ctl, layout }: { ctl: Controller; layout: GridLayout }) {
-  const sheet = ctl.sheet;
-  const [r1, r2] = layout.visibleRows();
-  const [c1, c2] = layout.visibleCols();
-  const items: { key: number; x: number; y: number; text: string; author?: string }[] = [];
-  for (const [k, n] of sheet.notes) {
-    const row = keyRow(k);
-    const col = keyCol(k);
-    const inFrozen = row < sheet.frozen.rows || col < sheet.frozen.cols;
-    if (!inFrozen && (row < r1 || row > r2 || col < c1 || col > c2)) continue;
-    const rc = layout.cellRect(row, col);
-    items.push({ key: k, x: rc.x + rc.w + 8, y: rc.y, text: n.text, author: n.author });
-  }
-  return (
-    <>
-      {items.map((it) => (
-        <div key={it.key} className="tb-tip tb-tip-note" style={{ left: it.x, top: it.y }}>
-          {it.author && <strong>{it.author}:</strong>}
-          {it.text.split("\n").map((l, i) => (
-            <div key={i}>{l}</div>
-          ))}
-        </div>
-      ))}
-    </>
-  );
 }

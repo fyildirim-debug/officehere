@@ -6,12 +6,14 @@ import { computeView } from "../model/display";
 import type { Rect } from "../model/types";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
 import { CondFormatter } from "../model/condfmt";
+import { objectsExtent, objectsHtml } from "./printObjects";
 
 export function printRange(wb: WorkbookModel, sheet: SheetModel): Rect | null {
   if (sheet.page.printArea) return sheet.page.printArea;
   const u = wb.usedRange(sheet);
-  if (!u) return null;
-  return { r1: 0, c1: 0, r2: u.r2, c2: u.c2 };
+  const o = objectsExtent(sheet);
+  if (!u && !o) return null;
+  return { r1: 0, c1: 0, r2: Math.max(u?.r2 ?? 0, o?.r2 ?? 0), c2: Math.max(u?.c2 ?? 0, o?.c2 ?? 0) };
 }
 
 export function pageInner(sheet: SheetModel): { w: number; h: number } {
@@ -69,7 +71,7 @@ function esc(s: string): string {
 }
 
 /** Aralığı HTML tablosuna çevirir (yazdırma, PDF ve HTML dışa aktarma). */
-export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts: { gridlines?: boolean; headings?: boolean; cellAttrs?: boolean } = {}): string {
+export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts: { gridlines?: boolean; headings?: boolean; cellAttrs?: boolean; objects?: boolean } = {}): string {
   const cf = new CondFormatter(wb);
   const covered = new Set<string>();
   const cols: string[] = [];
@@ -79,7 +81,7 @@ export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts:
   if (opts.headings) {
     const hs = ["<th></th>"];
     for (let c = r.c1; c <= r.c2; c++) if (sheet.cols.size(c) > 0) hs.push(`<th>${colToName(c)}</th>`);
-    rows.push(`<tr class="hdr">${hs.join("")}</tr>`);
+    rows.push(`<tr class="hdr" style="height:20px">${hs.join("")}</tr>`);
   }
   for (let row = r.r1; row <= r.r2; row++) {
     const rh = sheet.rows.size(row);
@@ -102,7 +104,9 @@ export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts:
     }
     rows.push(`<tr style="height:${rh}px">${tds.join("")}</tr>`);
   }
-  return `<table class="tb-print-table${opts.gridlines ? " has-grid" : ""}"><colgroup>${cols.join("")}</colgroup>${rows.join("")}</table>`;
+  const table = `<table class="tb-print-table${opts.gridlines ? " has-grid" : ""}"><colgroup>${cols.join("")}</colgroup>${rows.join("")}</table>`;
+  if (!opts.objects || !(sheet.charts.length || sheet.images.length || sheet.shapes.length)) return table;
+  return `<div class="tb-print-sheet">${table}${objectsHtml(wb, sheet, r, !!opts.headings)}</div>`;
 }
 
 /** Tarayıcının yazdırma iletişim kutusunu açar (PDF olarak kaydet dahil). */
@@ -115,7 +119,7 @@ export function printSheet(wb: WorkbookModel, sheet: SheetModel): void {
     document.body.appendChild(host);
   }
   const page = sheet.page;
-  host.innerHTML = r ? rangeToHtml(wb, sheet, r, { gridlines: page.printGridlines, headings: page.printHeadings }) : "<p></p>";
+  host.innerHTML = r ? rangeToHtml(wb, sheet, r, { gridlines: page.printGridlines, headings: page.printHeadings, objects: true }) : "<p></p>";
   host.style.zoom = r ? String(fitScale(sheet, r)) : "";
   let st = document.getElementById("tb-print-page") as HTMLStyleElement | null;
   if (!st) {

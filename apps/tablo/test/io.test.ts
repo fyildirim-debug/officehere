@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { writeFileSync } from "node:fs";
 import { cellKey, isError } from "@officehere/formula";
 import { WorkbookModel } from "../src/model/workbook";
-import { readXlsx, writeXlsx, addXlfnPrefixes, compressCells } from "../src/io/xlsx";
+import { readXlsx, writeXlsx, addXlfnPrefixes, compressCells, hfToFile, stripHF } from "../src/io/xlsx";
 import { csvToInputs, detectDelimiter, decodeText, parseCsv, readCsv, writeCsv } from "../src/io/csv";
 import { chartXml } from "../src/io/xlsxCharts";
 
@@ -145,6 +145,8 @@ describe("XLSX gidiş-dönüş", () => {
     expect(addXlfnPrefixes("XLOOKUP(1,A:A,B:B)+SUM(1)")).toBe("_xlfn.XLOOKUP(1,A:A,B:B)+SUM(1)");
     expect(addXlfnPrefixes("IFS(A1>1,1)&CONCAT(A1)")).toBe("_xlfn.IFS(A1>1,1)&_xlfn.CONCAT(A1)");
     expect(addXlfnPrefixes('"XLOOKUP("&1')).toBe('"XLOOKUP("&1');
+    // LibreOffice ile doğrulandı: AGGREGATE/T.INV.2T/GAMMA önekli, NETWORKDAYS.INTL öneksiz
+    expect(addXlfnPrefixes("AGGREGATE(9,6,A1:A2)+T.INV.2T(0.05,10)+GAMMA(2)+NETWORKDAYS.INTL(A1,B1)")).toBe("_xlfn.AGGREGATE(9,6,A1:A2)+_xlfn.T.INV.2T(0.05,10)+_xlfn.GAMMA(2)+NETWORKDAYS.INTL(A1,B1)");
   });
   it("hücre sıkıştırma", () => {
     expect(compressCells([[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [5, 0]])).toEqual([
@@ -198,5 +200,14 @@ describe("CSV", () => {
     expect(en.rows[1][0].input).toBe(1.5);
     const wb = readCsv(new TextEncoder().encode("x;y\n1;=A2*2\n"));
     expect(wb.getValue(wb.active, 1, 1)).toBe(2);
+  });
+});
+
+describe("üst/alt bilgi kodları", () => {
+  it("arayüz kodları dosya kodlarına çevrilir ve geri okunur", () => {
+    expect(hfToFile("Sayfa &[Sayfa] / &[Sayfalar] - &[Sekme]")).toBe("&CSayfa &P / &N - &A");
+    expect(stripHF("&CSayfa &P / &N - &A")).toBe("Sayfa &[Sayfa] / &[Sayfalar] - &[Sekme]");
+    expect(stripHF('&L&"Arial,Bold"&12Rapor&R&D')).toBe("Rapor&[Tarih]");
+    expect(stripHF(hfToFile("A & B"))).toBe("A & B");
   });
 });

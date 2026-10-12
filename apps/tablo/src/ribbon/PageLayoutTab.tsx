@@ -1,17 +1,5 @@
 /** Sayfa Düzeni sekmesi: Sayfa Yapısı, Sığdırmak İçin Ölçeklendir, Sayfa Seçenekleri, Yerleştir. */
-import {
-  ArrowStepIn24Regular,
-  DocumentLandscape24Regular,
-  DocumentMargins24Regular,
-  DocumentPageBreak24Regular,
-  OrientationPortrait20Regular,
-  DocumentLandscape20Regular,
-  Print24Regular,
-  PageFit24Regular,
-  Layer24Regular,
-  ArrowUp20Regular,
-  ArrowDown20Regular,
-} from "@fluentui/react-icons";
+import { ArrowStepIn24Regular, DocumentLandscape24Regular, DocumentMargins24Regular, DocumentPageBreak24Regular, OrientationPortrait20Regular, DocumentLandscape20Regular, Print24Regular, PageFit24Regular, Layer24Regular, ArrowUp20Regular, ArrowDown20Regular, Grid24Regular } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonStack, RibbonLabel } from "@officehere/ui";
 import type { Controller } from "../controller";
 import { MARGIN_PRESETS, PAPERS, setPage } from "../dialogs/PageSetupDialog";
@@ -105,7 +93,7 @@ export function PageLayoutTab({ ctl }: { ctl: Controller }) {
           <RibbonCheckbox label="Tek sayfaya sığdır" checked={!!p.fitToWidth} onChange={(v) => setPage(ctl, { fitToWidth: v || undefined }, "Ölçek")} />
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Sayfa Seçenekleri" onLauncher={() => ctl.openDialog("pageSetup", { tab: "sheet" })}>
+      <RibbonGroup label="Sayfa Seçenekleri" icon={<Grid24Regular />} onLauncher={() => ctl.openDialog("pageSetup", { tab: "sheet" })}>
         <RibbonStack>
           <RibbonLabel>Kılavuz Çizgileri</RibbonLabel>
           <RibbonCheckbox label="Görüntüle" checked={sheet.showGridlines} onChange={(v) => viewToggle("showGridlines", v)} />

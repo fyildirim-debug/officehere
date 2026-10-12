@@ -248,8 +248,25 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
   }
 }
 
-function stripHF(s: string): string {
-  return s.replace(/&[LCR]/g, "").replace(/&"[^"]*"/g, "").replace(/&\d+/g, "").replace(/&[A-Z]/g, "").trim();
+/** Üst/alt bilgi kodları: dosya (&P, &N, &A, &F, &D) ↔ arayüz (&[Sayfa] …). */
+const HF_CODES: [string, string][] = [
+  ["&P", "&[Sayfa]"],
+  ["&N", "&[Sayfalar]"],
+  ["&A", "&[Sekme]"],
+  ["&F", "&[Dosya]"],
+  ["&D", "&[Tarih]"],
+];
+
+export function stripHF(s: string): string {
+  let t = s.replace(/&[LCR]/g, "").replace(/&"[^"]*"/g, "").replace(/&\d+/g, "");
+  for (const [file, ui] of HF_CODES) t = t.split(file).join(ui);
+  return t.replace(/&(?!\[)[A-Z]/g, "").replace(/&&/g, "&").trim();
+}
+
+export function hfToFile(s: string): string {
+  let t = s.replace(/&(?!\[)/g, "&&");
+  for (const [file, ui] of HF_CODES) t = t.split(ui).join(file);
+  return "&C" + t;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -570,7 +587,7 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
     ...(p.printArea ? { printArea: formatRange(p.printArea) } : {}),
     ...(p.fitToWidth ? { fitToPage: true, fitToWidth: 1, fitToHeight: 0 } : {}),
   };
-  if (p.header || p.footer) ws.headerFooter = { oddHeader: p.header ? `&C${p.header}` : undefined, oddFooter: p.footer ? `&C${p.footer}` : undefined };
+  if (p.header || p.footer) ws.headerFooter = { oddHeader: p.header ? hfToFile(p.header) : undefined, oddFooter: p.footer ? hfToFile(p.footer) : undefined };
   if (sheet.protected) ws.sheetProtection = { sheet: true, objects: true, scenarios: true };
   // Resimler
   for (const img of sheet.images) {

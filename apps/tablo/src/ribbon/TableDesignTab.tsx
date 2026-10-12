@@ -1,6 +1,6 @@
 /** Bağlamsal Tablo Tasarımı sekmesi: Özellikler, Araçlar, Tablo Stili Seçenekleri, Tablo Stilleri. */
 import { useEffect, useState } from "react";
-import { TableDismiss20Regular, TableSettings24Regular, ArrowSync20Regular } from "@fluentui/react-icons";
+import { TableDismiss20Regular, TableSettings24Regular, ArrowSync20Regular, Table24Regular } from "@fluentui/react-icons";
 import { RibbonButton, RibbonCheckbox, RibbonGallery, RibbonGroup, RibbonLabel, RibbonStack } from "@officehere/ui";
 import type { Controller } from "../controller";
 import * as D from "../actions/data";
@@ -58,7 +58,7 @@ export function TableDesignTab({ ctl, table }: { ctl: Controller; table: TableDe
           />
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Tablo Stili Seçenekleri">
+      <RibbonGroup label="Tablo Stili Seçenekleri" icon={<TableSettings24Regular />}>
         <RibbonStack>
           {opt("headerRow", "Üst Bilgi Satırı")}
           {opt("totalRow", "Toplam Satırı")}
@@ -71,7 +71,7 @@ export function TableDesignTab({ ctl, table }: { ctl: Controller; table: TableDe
         </RibbonStack>
         <RibbonStack>{opt("filterButton", "Filtre Düğmesi")}</RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="Tablo Stilleri">
+      <RibbonGroup label="Tablo Stilleri" icon={<Table24Regular />}>
         <RibbonGallery
           items={TABLE_STYLES.map((p) => ({ id: p.id, label: p.label, preview: <TablePreview p={p} size={50} /> }))}
           selectedId={table.style}

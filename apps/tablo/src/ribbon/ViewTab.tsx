@@ -1,5 +1,5 @@
 /** Görünüm sekmesi: Çalışma Kitabı Görünümleri, Göster, Yakınlaştır, Pencere. */
-import { DocumentPageBreak24Regular, Grid20Regular, PageFit24Regular, ZoomFit24Regular, ZoomIn24Regular, TableFreezeColumnAndRow20Regular, TableFreezeRow20Regular, TableFreezeColumn20Regular, TableFreezeColumnAndRowDismiss20Regular, Window24Regular } from "@fluentui/react-icons";
+import { DocumentPageBreak24Regular, Grid20Regular, PageFit24Regular, ZoomFit24Regular, ZoomIn24Regular, TableFreezeColumnAndRow20Regular, TableFreezeRow20Regular, TableFreezeColumn20Regular, TableFreezeColumnAndRowDismiss20Regular, Window24Regular, Eye24Regular } from "@fluentui/react-icons";
 import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonStack } from "@officehere/ui";
 import type { Controller } from "../controller";
 import { freeze, isFrozen, setViewMode, setZoom, zoomToSelection } from "../actions/view";
@@ -19,7 +19,7 @@ export function ViewTab({ ctl }: { ctl: Controller }) {
         <RibbonButton size="large" icon={<DocumentPageBreak24Regular />} label="Sayfa Sonu Önizleme" checked={sheet.viewMode === "pageBreak"} onClick={() => setViewMode(ctl, "pageBreak")} />
         <RibbonButton size="large" icon={<PageFit24Regular />} label="Sayfa Düzeni" checked={sheet.viewMode === "pageLayout"} onClick={() => setViewMode(ctl, "pageLayout")} />
       </RibbonGroup>
-      <RibbonGroup label="Göster">
+      <RibbonGroup label="Göster" icon={<Eye24Regular />}>
         <RibbonStack>
           <RibbonCheckbox label="Formül Çubuğu" checked={ctl.showFormulaBar} onChange={(v) => ((ctl.showFormulaBar = v), ctl.emit())} />
           <RibbonCheckbox label="Kılavuz Çizgileri" checked={sheet.showGridlines} onChange={(v) => toggle("showGridlines", v)} />

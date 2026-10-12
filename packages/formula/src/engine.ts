@@ -5,123 +5,39 @@
  * başvuru güncelleme.
  */
 import "./functions";
-import { walk, type Node } from "./ast";
+import type { Node } from "./ast";
 import { TR_LOCALE, type LocaleInfo } from "./coerce";
 import type { EvalHost } from "./context";
 import { jsDateToSerial } from "./dates";
 import { createContext, evaluateNode } from "./evaluator";
-import { getFunction } from "./functions/registry";
-import { parseFormula } from "./locale";
-import { MAX_COLS, MAX_ROWS } from "./references";
-import { adjustFormula, moveRefsInFormula, removeSheetFromFormula, renameSheetInFormula, shiftFormula, type MoveSpec } from "./transform";
+import { shiftFormula } from "./transform";
 import { Errors, FormulaError, isArray, isError, isLambda, isMultiRef, isRef, type RefValue, type Scalar, type Value } from "./values";
+import { DependencyIndex, analyzeDeps } from "./depindex";
+import { applySpillImpl, clearSpillImpl, exportInputsImpl, importInputsImpl, moveRangeImpl, removeSheetImpl, renameSheetImpl, shiftCellsImpl, structuralChange } from "./engine-structure";
+import {
+  DEPTH_LIMIT,
+  SHEET_STRIDE,
+  gk,
+  gkLocal,
+  gkSheet,
+  keyCol,
+  keyRow,
+  cellKey,
+  safeParse,
+  type CellRecord,
+  type DefinedName,
+  type EngineOptions,
+  type EngineSnapshot,
+  type FormulaInfo,
+  type SheetData,
+  type SpillInfo,
+} from "./engine-types";
 
-const SHEET_STRIDE = 17179869184; // 2^34
-const ROW_STRIDE = MAX_COLS;
-const DEPTH_LIMIT = 300;
-
-export function cellKey(row: number, col: number): number {
-  return row * ROW_STRIDE + col;
-}
-
-export function keyRow(k: number): number {
-  return Math.floor(k / ROW_STRIDE);
-}
-
-export function keyCol(k: number): number {
-  return k % ROW_STRIDE;
-}
-
-function gk(sheet: number, row: number, col: number): number {
-  return sheet * SHEET_STRIDE + row * ROW_STRIDE + col;
-}
-
-function gkSheet(k: number): number {
-  return Math.floor(k / SHEET_STRIDE);
-}
-
-function gkLocal(k: number): number {
-  return k % SHEET_STRIDE;
-}
-
-interface RangeDep {
-  sheet: number;
-  r1: number;
-  c1: number;
-  r2: number;
-  c2: number;
-  f: number;
-}
-
-interface SpillState {
-  rows: number;
-  cols: number;
-  data: Scalar[][];
-}
-
-interface FormulaInfo {
-  text: string;
-  ast: Node | null;
-  volatile: boolean;
-  usesNames: boolean;
-  cellDeps: number[];
-  rangeDeps: RangeDep[];
-  spill: SpillState | null;
-  /** Taşmanın hedeflediği alan (engellenmiş olsa bile). */
-  spillTarget: { r1: number; c1: number; r2: number; c2: number } | null;
-}
-
-export interface CellRecord {
-  value: Scalar;
-  formula?: FormulaInfo;
-}
-
-interface SheetData {
-  id: number;
-  name: string;
-  cells: Map<number, CellRecord>;
-  maxRow: number;
-  maxCol: number;
-  extentDirty: boolean;
-  hiddenRows: Set<number>;
-  filteredRows: Set<number>;
-}
-
-interface DefinedName {
-  name: string;
-  text: string;
-  ast: Node | null;
-  /** Sayfa kapsamı (yoksa çalışma kitabı). */
-  sheet?: number;
-}
+export { cellKey, keyCol, keyRow } from "./engine-types";
+export type { CellRecord, CellSnapshot, EngineOptions, EngineSnapshot, SpillInfo } from "./engine-types";
 
 class DeferSignal {
   constructor(readonly key: number) {}
-}
-
-export interface EngineOptions {
-  locale?: LocaleInfo;
-  now?: () => number;
-  random?: () => number;
-}
-
-export interface CellSnapshot {
-  row: number;
-  col: number;
-  value?: Scalar;
-  formula?: string;
-}
-
-export interface EngineSnapshot {
-  sheets: { id: number; name: string; cells: CellSnapshot[] }[];
-  names: { name: string; text: string; sheet?: number }[];
-}
-
-export interface SpillInfo {
-  anchorRow: number;
-  anchorCol: number;
-  rows: number;
-  cols: number;
 }
 
 /** Hücre okuma sırasında değer: hata nesnelerini kodlarına göre tekilleştirir. */
@@ -160,22 +76,24 @@ function normalizeResult(v: Value, host: FormulaEngine, sheet: number): Scalar |
 export class FormulaEngine implements EvalHost {
   locale: LocaleInfo;
   autoCalc = true;
-  private sheets = new Map<number, SheetData>();
-  private order: number[] = [];
-  private nextSheetId = 1;
-  private names = new Map<string, DefinedName>();
-  private cellDependents = new Map<number, Set<number>>();
-  /** Küçük aralıklar: (sütun bloğu, satır bloğu) ızgarası. */
-  private gridIndex = new Map<number, Map<number, Set<RangeDep>>>();
-  /** Uzun aralıklar: sütun bloğuna göre. */
-  private rangeIndex = new Map<number, Map<number, Set<RangeDep>>>();
-  private wideRanges = new Map<number, Set<RangeDep>>();
+  /** @internal */
+  sheets = new Map<number, SheetData>();
+  /** @internal */
+  order: number[] = [];
+  /** @internal */
+  nextSheetId = 1;
+  /** @internal */
+  names = new Map<string, DefinedName>();
+  private deps = new DependencyIndex();
   private volatiles = new Set<number>();
   private nameUsers = new Set<number>();
-  private spillOwner = new Map<number, number>();
-  private spillAnchors = new Set<number>();
+  /** @internal */
+  spillOwner = new Map<number, number>();
+  /** @internal */
+  spillAnchors = new Set<number>();
   private dirty = new Set<number>();
-  private changed = new Set<number>();
+  /** @internal */
+  changed = new Set<number>();
   private computing = new Set<number>();
   private computingStack: number[] = [];
   private depth = 0;
@@ -208,56 +126,11 @@ export class FormulaEngine implements EvalHost {
   }
 
   removeSheet(id: number): void {
-    const s = this.sheets.get(id);
-    if (!s) return;
-    for (const [k] of s.cells) this.unregister(id * SHEET_STRIDE + k);
-    this.sheets.delete(id);
-    this.order = this.order.filter((x) => x !== id);
-    for (const sid of this.order) {
-      const sh = this.sheets.get(sid)!;
-      for (const [k, rec] of sh.cells) {
-        if (!rec.formula) continue;
-        const t = removeSheetFromFormula(rec.formula.text, s.name);
-        if (t !== rec.formula.text) this.setFormulaInternal(sid, keyRow(k), keyCol(k), t);
-      }
-    }
-    for (const [key, n] of this.names) {
-      if (n.sheet === id) this.names.delete(key);
-      else {
-        n.text = removeSheetFromFormula(n.text, s.name);
-        n.ast = safeParse(n.text);
-      }
-    }
-    for (const k of [...this.spillOwner.keys()]) if (gkSheet(k) === id) this.spillOwner.delete(k);
-    for (const k of [...this.spillAnchors]) if (gkSheet(k) === id) this.spillAnchors.delete(k);
-    this.reregisterAll();
-    this.markAllDirty();
+    removeSheetImpl(this, id);
   }
 
   renameSheet(id: number, name: string): void {
-    const s = this.sheets.get(id);
-    if (!s || s.name === name) return;
-    const other = this.getSheetId(name);
-    if (other !== undefined && other !== id) throw new Error(`"${name}" adlı sayfa zaten var`);
-    const old = s.name;
-    s.name = name;
-    for (const sid of this.order) {
-      const sh = this.sheets.get(sid)!;
-      for (const [, rec] of sh.cells) {
-        if (!rec.formula) continue;
-        const t = renameSheetInFormula(rec.formula.text, old, name);
-        if (t !== rec.formula.text) {
-          rec.formula.text = t;
-          rec.formula.ast = safeParse(t);
-        }
-      }
-    }
-    for (const n of this.names.values()) {
-      n.text = renameSheetInFormula(n.text, old, name);
-      n.ast = safeParse(n.text);
-    }
-    this.reregisterAll();
-    this.markAllDirty();
+    renameSheetImpl(this, id, name);
   }
 
   moveSheet(id: number, index: number): void {
@@ -387,7 +260,8 @@ export class FormulaEngine implements EvalHost {
     s.extentDirty = false;
   }
 
-  private growExtent(s: SheetData, row: number, col: number): void {
+  /** @internal */
+  growExtent(s: SheetData, row: number, col: number): void {
     if (row > s.maxRow) s.maxRow = row;
     if (col > s.maxCol) s.maxCol = col;
   }
@@ -444,7 +318,8 @@ export class FormulaEngine implements EvalHost {
 
   /* ------------------------------ Hücreler ------------------------------ */
 
-  private sheetOrThrow(id: number): SheetData {
+  /** @internal */
+  sheetOrThrow(id: number): SheetData {
     const s = this.sheets.get(id);
     if (!s) throw new Error(`Sayfa yok: ${id}`);
     return s;
@@ -475,7 +350,8 @@ export class FormulaEngine implements EvalHost {
     this.setFormulaInternal(sheet, row, col, formula.startsWith("=") ? formula.slice(1) : formula);
   }
 
-  private setFormulaInternal(sheet: number, row: number, col: number, text: string): void {
+  /** @internal */
+  setFormulaInternal(sheet: number, row: number, col: number, text: string): void {
     const s = this.sheetOrThrow(sheet);
     const k = cellKey(row, col);
     const g = sheet * SHEET_STRIDE + k;
@@ -565,133 +441,26 @@ export class FormulaEngine implements EvalHost {
 
   private register(g: number, info: FormulaInfo, sheet: number): void {
     if (!info.ast) return;
-    const cellDeps: number[] = [];
-    const rangeDeps: RangeDep[] = [];
-    let volatile = false;
-    let usesNames = false;
-    const seenNames = new Set<string>();
-    const visit = (n: Node, depth: number) => {
-      if (n.type === "func") {
-        const def = getFunction(n.name);
-        if (def?.volatile) volatile = true;
-      } else if (n.type === "name") {
-        usesNames = true;
-        const key = n.name.toLocaleUpperCase("tr-TR");
-        if (seenNames.has(key) || depth > 8) return;
-        seenNames.add(key);
-        const ast = this.getDefinedName(n.name, sheet);
-        if (ast) walk(ast, (m) => visit(m, depth + 1));
-      } else if (n.type === "ref") {
-        const t = n.ref;
-        if (t.refError) return;
-        const sid = t.sheet !== undefined ? this.getSheetId(t.sheet) : sheet;
-        if (sid === undefined) return;
-        if (t.kind === "cell") cellDeps.push(gk(sid, t.a.row, t.a.col));
-        else {
-          const b = t.b!;
-          let r1: number, r2: number, c1: number, c2: number;
-          if (t.kind === "cols") {
-            r1 = 0;
-            r2 = MAX_ROWS - 1;
-            c1 = Math.min(t.a.col, b.col);
-            c2 = Math.max(t.a.col, b.col);
-          } else if (t.kind === "rows") {
-            c1 = 0;
-            c2 = MAX_COLS - 1;
-            r1 = Math.min(t.a.row, b.row);
-            r2 = Math.max(t.a.row, b.row);
-          } else {
-            r1 = Math.min(t.a.row, b.row);
-            r2 = Math.max(t.a.row, b.row);
-            c1 = Math.min(t.a.col, b.col);
-            c2 = Math.max(t.a.col, b.col);
-          }
-          if (r1 === r2 && c1 === c2) cellDeps.push(gk(sid, r1, c1));
-          else rangeDeps.push({ sheet: sid, r1, c1, r2, c2, f: g });
-        }
-      } else if (n.type === "binary" && n.op === ":" && n.left.type === "ref" && n.right.type === "ref") {
-        // A1:B2 dışındaki ":" kullanımları (ör. Sayfa1!A1:Sayfa1!B2) — sınırlayıcı kutu
-        const l = n.left.ref;
-        const r = n.right.ref;
-        if (!l.refError && !r.refError && l.kind === "cell" && r.kind === "cell") {
-          const sid = l.sheet !== undefined ? this.getSheetId(l.sheet) : sheet;
-          if (sid !== undefined)
-            rangeDeps.push({ sheet: sid, r1: Math.min(l.a.row, r.a.row), c1: Math.min(l.a.col, r.a.col), r2: Math.max(l.a.row, r.a.row), c2: Math.max(l.a.col, r.a.col), f: g });
-        }
-      }
-    };
-    walk(info.ast, (n) => visit(n, 0));
+    const { cellDeps, rangeDeps, volatile, usesNames } = analyzeDeps(info.ast, g, sheet, {
+      sheetId: (name) => this.getSheetId(name),
+      definedName: (name, sh) => this.getDefinedName(name, sh),
+    });
     info.cellDeps = cellDeps;
     info.rangeDeps = rangeDeps;
     info.volatile = volatile;
     info.usesNames = usesNames;
-    for (const d of cellDeps) {
-      let set = this.cellDependents.get(d);
-      if (!set) this.cellDependents.set(d, (set = new Set()));
-      set.add(g);
-    }
-    for (const rd of rangeDeps) this.addRangeDep(rd);
+    this.deps.add(g, cellDeps, rangeDeps);
     if (volatile) this.volatiles.add(g);
     if (usesNames) this.nameUsers.add(g);
   }
 
-  /** Aralığın dizindeki yeri: ızgara blokları, sütun blokları ya da geniş liste. */
-  private rangeSlots(rd: RangeDep): { kind: "grid" | "col" | "wide"; keys: number[] } {
-    const cb1 = rd.c1 >> 4;
-    const cb2 = rd.c2 >> 4;
-    if (cb2 - cb1 > 32) return { kind: "wide", keys: [] };
-    const rb1 = rd.r1 >> 6;
-    const rb2 = rd.r2 >> 6;
-    const keys: number[] = [];
-    if ((cb2 - cb1 + 1) * (rb2 - rb1 + 1) <= 64) {
-      for (let cb = cb1; cb <= cb2; cb++) for (let rb = rb1; rb <= rb2; rb++) keys.push(cb * 16384 + rb);
-      return { kind: "grid", keys };
-    }
-    for (let cb = cb1; cb <= cb2; cb++) keys.push(cb);
-    return { kind: "col", keys };
-  }
-
-  private addRangeDep(rd: RangeDep): void {
-    const slot = this.rangeSlots(rd);
-    if (slot.kind === "wide") {
-      let set = this.wideRanges.get(rd.sheet);
-      if (!set) this.wideRanges.set(rd.sheet, (set = new Set()));
-      set.add(rd);
-      return;
-    }
-    const map = slot.kind === "grid" ? this.gridIndex : this.rangeIndex;
-    let idx = map.get(rd.sheet);
-    if (!idx) map.set(rd.sheet, (idx = new Map()));
-    for (const k of slot.keys) {
-      let set = idx.get(k);
-      if (!set) idx.set(k, (set = new Set()));
-      set.add(rd);
-    }
-  }
-
-  private removeRangeDep(rd: RangeDep): void {
-    const slot = this.rangeSlots(rd);
-    if (slot.kind === "wide") {
-      this.wideRanges.get(rd.sheet)?.delete(rd);
-      return;
-    }
-    const idx = (slot.kind === "grid" ? this.gridIndex : this.rangeIndex).get(rd.sheet);
-    if (!idx) return;
-    for (const k of slot.keys) {
-      const set = idx.get(k);
-      if (!set) continue;
-      set.delete(rd);
-      if (!set.size) idx.delete(k);
-    }
-  }
-
-  private unregister(g: number): void {
+  /** @internal */
+  unregister(g: number): void {
     const s = this.sheets.get(gkSheet(g));
     const rec = s?.cells.get(gkLocal(g));
     const info = rec?.formula;
     if (!info) return;
-    for (const d of info.cellDeps) this.cellDependents.get(d)?.delete(g);
-    for (const rd of info.rangeDeps) this.removeRangeDep(rd);
+    this.deps.remove(g, info.cellDeps, info.rangeDeps);
     info.cellDeps = [];
     info.rangeDeps = [];
     this.volatiles.delete(g);
@@ -701,34 +470,15 @@ export class FormulaEngine implements EvalHost {
     this.dirty.delete(g);
   }
 
-  private reregisterAll(): void {
-    this.cellDependents.clear();
-    this.gridIndex.clear();
-    this.rangeIndex.clear();
-    this.wideRanges.clear();
+  /** @internal */
+  reregisterAll(): void {
+    this.deps.clear();
     this.volatiles.clear();
     this.nameUsers.clear();
     for (const id of this.order) {
       const s = this.sheets.get(id)!;
       for (const [k, rec] of s.cells) if (rec.formula) this.register(id * SHEET_STRIDE + k, rec.formula, id);
     }
-  }
-
-  /** Konumdaki değişikliğe bağlı formüller. */
-  private dependentsOf(g: number, out: (f: number) => void): void {
-    const set = this.cellDependents.get(g);
-    if (set) for (const f of set) out(f);
-    const sheet = gkSheet(g);
-    const local = gkLocal(g);
-    const row = keyRow(local);
-    const col = keyCol(local);
-    const cell = this.gridIndex.get(sheet)?.get((col >> 4) * 16384 + (row >> 6));
-    if (cell) for (const rd of cell) if (row >= rd.r1 && row <= rd.r2 && col >= rd.c1 && col <= rd.c2) out(rd.f);
-    const idx = this.rangeIndex.get(sheet);
-    const bucket = idx?.get(col >> 4);
-    if (bucket) for (const rd of bucket) if (row >= rd.r1 && row <= rd.r2 && col >= rd.c1 && col <= rd.c2) out(rd.f);
-    const wide = this.wideRanges.get(sheet);
-    if (wide) for (const rd of wide) if (row >= rd.r1 && row <= rd.r2 && col >= rd.c1 && col <= rd.c2) out(rd.f);
   }
 
   private noteChange(g: number): void {
@@ -778,7 +528,7 @@ export class FormulaEngine implements EvalHost {
         const seen = new Set<number>(queue);
         while (queue.length) {
           const g = queue.pop()!;
-          this.dependentsOf(g, (f) => {
+          this.deps.dependentsOf(g, (f) => {
             if (!seen.has(f)) {
               seen.add(f);
               this.dirty.add(f);
@@ -879,83 +629,12 @@ export class FormulaEngine implements EvalHost {
   }
 
   private applySpill(g: number, s: SheetData, info: FormulaInfo, row: number, col: number, data: Scalar[][]): void {
-    const rows = data.length;
-    const cols = data[0]?.length ?? 0;
-    const target = { r1: row, c1: col, r2: row + rows - 1, c2: col + cols - 1 };
-    const rec = s.cells.get(cellKey(row, col))!;
-    let blocked = target.r2 >= MAX_ROWS || target.c2 >= MAX_COLS;
-    if (!blocked) {
-      outer: for (let i = 0; i < rows; i++) {
-        for (let j = 0; j < cols; j++) {
-          if (i === 0 && j === 0) continue;
-          const k = cellKey(row + i, col + j);
-          if (s.cells.has(k)) {
-            blocked = true;
-            break outer;
-          }
-          const owner = this.spillOwner.get(s.id * SHEET_STRIDE + k);
-          if (owner !== undefined && owner !== g) {
-            blocked = true;
-            break outer;
-          }
-        }
-      }
-    }
-    const old = info.spill;
-    const sameShape = old && old.rows === rows && old.cols === cols;
-    if (blocked) {
-      if (old) this.clearSpill(g, info);
-      info.spillTarget = target;
-      this.spillAnchors.add(g);
-      rec.value = Errors.SPILL;
-      return;
-    }
-    if (!sameShape) {
-      if (old) this.clearSpill(g, info);
-      for (let i = 0; i < rows; i++)
-        for (let j = 0; j < cols; j++) {
-          if (i === 0 && j === 0) continue;
-          const pk = gk(s.id, row + i, col + j);
-          this.spillOwner.set(pk, g);
-          this.changed.add(pk);
-        }
-      this.growExtent(s, target.r2, target.c2);
-    } else {
-      // Aynı şekil: değişen hücreleri bildir
-      for (let i = 0; i < rows; i++)
-        for (let j = 0; j < cols; j++) {
-          if (i === 0 && j === 0) continue;
-          if (!sameScalar(old!.data[i][j], data[i][j])) this.changed.add(gk(s.id, row + i, col + j));
-        }
-    }
-    info.spill = { rows, cols, data };
-    info.spillTarget = target;
-    this.spillAnchors.add(g);
-    rec.value = data[0][0];
+    applySpillImpl(this, g, s, info, row, col, data);
   }
 
-  private clearSpill(g: number, info: FormulaInfo): void {
-    const sp = info.spill;
-    if (sp) {
-      const sheet = gkSheet(g);
-      const local = gkLocal(g);
-      const row = keyRow(local);
-      const col = keyCol(local);
-      for (let i = 0; i < sp.rows; i++)
-        for (let j = 0; j < sp.cols; j++) {
-          if (i === 0 && j === 0) continue;
-          const pk = gk(sheet, row + i, col + j);
-          if (this.spillOwner.get(pk) === g) {
-            this.spillOwner.delete(pk);
-            this.changed.add(pk);
-          }
-        }
-      const s = this.sheets.get(sheet);
-      if (s) s.extentDirty = true;
-    }
-    info.spill = null;
-    info.spillTarget = null;
-    this.spillAnchors.delete(g);
+  /** @internal */
+  clearSpill(g: number, info: FormulaInfo): void {
+    clearSpillImpl(this, g, info);
   }
 
   /** Bir formülü verilen hücre bağlamında değerlendirir (koşullu biçim, veri doğrulama). */
@@ -1005,228 +684,41 @@ export class FormulaEngine implements EvalHost {
 
   /* ------------------------- Yapısal değişiklikler ------------------------- */
 
-  /** Satır/sütun ekler (count > 0) ya da siler (count < 0). */
-  private structural(sheet: number, axis: "row" | "col", at: number, count: number): void {
-    const s = this.sheetOrThrow(sheet);
-    const name = s.name;
-    // Taşmaları temizle
-    for (const a of [...this.spillAnchors]) {
-      const rec = this.sheets.get(gkSheet(a))?.cells.get(gkLocal(a));
-      if (rec?.formula) this.clearSpill(a, rec.formula);
-    }
-    this.spillOwner.clear();
-    this.spillAnchors.clear();
-    // Hücreleri taşı
-    const moved = new Map<number, CellRecord>();
-    for (const [k, rec] of s.cells) {
-      let r = keyRow(k);
-      let c = keyCol(k);
-      const idx = axis === "row" ? r : c;
-      let ni: number | null;
-      if (count > 0) ni = idx >= at ? idx + count : idx;
-      else ni = idx < at ? idx : idx < at - count ? null : idx + count;
-      if (ni === null) continue;
-      if (axis === "row") r = ni;
-      else c = ni;
-      if (r >= MAX_ROWS || c >= MAX_COLS) continue;
-      moved.set(cellKey(r, c), rec);
-    }
-    s.cells = moved;
-    s.extentDirty = true;
-    // Gizli satırlar
-    if (axis === "row") {
-      const shiftSet = (set: Set<number>) => {
-        const next = new Set<number>();
-        for (const r of set) {
-          if (count > 0) next.add(r >= at ? r + count : r);
-          else if (r < at) next.add(r);
-          else if (r >= at - count) next.add(r + count);
-        }
-        return next;
-      };
-      s.hiddenRows = shiftSet(s.hiddenRows);
-      s.filteredRows = shiftSet(s.filteredRows);
-    }
-    // Tüm formülleri güncelle
-    const ch = { sheet: name, axis, at, count };
-    for (const id of this.order) {
-      const sh = this.sheets.get(id)!;
-      for (const [, rec] of sh.cells) {
-        if (!rec.formula) continue;
-        const t = adjustFormula(rec.formula.text, sh.name, ch);
-        if (t !== rec.formula.text) {
-          rec.formula.text = t;
-          rec.formula.ast = safeParse(t);
-        }
-        rec.formula.spill = null;
-        rec.formula.spillTarget = null;
-      }
-    }
-    for (const n of this.names.values()) {
-      const scopeName = n.sheet !== undefined ? this.getSheetName(n.sheet) ?? name : name;
-      const t = adjustFormula(n.text, scopeName, ch);
-      if (t !== n.text) {
-        n.text = t;
-        n.ast = safeParse(t);
-      }
-    }
-    this.reregisterAll();
-    this.markAllDirty();
-  }
-
   insertRows(sheet: number, at: number, count = 1): void {
-    this.structural(sheet, "row", at, count);
+    structuralChange(this, sheet, "row", at, count);
   }
 
   deleteRows(sheet: number, at: number, count = 1): void {
-    this.structural(sheet, "row", at, -count);
+    structuralChange(this, sheet, "row", at, -count);
   }
 
   insertCols(sheet: number, at: number, count = 1): void {
-    this.structural(sheet, "col", at, count);
+    structuralChange(this, sheet, "col", at, count);
   }
 
   deleteCols(sheet: number, at: number, count = 1): void {
-    this.structural(sheet, "col", at, -count);
+    structuralChange(this, sheet, "col", at, -count);
   }
 
-  /**
-   * Hücre aralığını yatay/dikey kaydırır (Hücre Ekle/Sil: "hücreleri sağa/aşağı kaydır").
-   * Yalnız verilen satır/sütun bandını etkiler.
-   */
+  /** Hücre aralığını kaydırır (Hücre Ekle/Sil: "hücreleri sağa/aşağı kaydır"). */
   shiftCells(sheet: number, r1: number, c1: number, r2: number, c2: number, direction: "down" | "right" | "up" | "left"): void {
-    const s = this.sheetOrThrow(sheet);
-    const inputs: { row: number; col: number; input: Scalar | { formula: string } }[] = [];
-    const h = r2 - r1 + 1;
-    const w = c2 - c1 + 1;
-    const inBand = (r: number, c: number) => (direction === "down" || direction === "up" ? c >= c1 && c <= c2 && r >= r1 : r >= r1 && r <= r2 && c >= c1);
-    const affected: [number, number][] = [];
-    for (const [k] of s.cells) {
-      const r = keyRow(k);
-      const c = keyCol(k);
-      if (inBand(r, c)) affected.push([r, c]);
-    }
-    for (const [r, c] of affected) {
-      const rec = s.cells.get(cellKey(r, c))!;
-      let nr = r;
-      let nc = c;
-      if (direction === "down") nr = r + h;
-      else if (direction === "right") nc = c + w;
-      else if (direction === "up") {
-        if (r <= r2) continue;
-        nr = r - h;
-      } else {
-        if (c <= c2) continue;
-        nc = c - w;
-      }
-      inputs.push({ row: nr, col: nc, input: rec.formula ? { formula: rec.formula.text } : rec.value });
-    }
-    const mv: MoveSpec = { srcSheet: s.name, r1: 0, c1: 0, r2: 0, c2: 0, dRow: 0, dCol: 0, dstSheet: s.name };
-    if (direction === "down") Object.assign(mv, { r1, c1, r2: MAX_ROWS - 1, c2, dRow: h });
-    else if (direction === "right") Object.assign(mv, { r1, c1, r2, c2: MAX_COLS - 1, dCol: w });
-    else if (direction === "up") Object.assign(mv, { r1: r2 + 1, c1, r2: MAX_ROWS - 1, c2, dRow: -h });
-    else Object.assign(mv, { r1, c1: c2 + 1, r2, c2: MAX_COLS - 1, dCol: -w });
-    for (const [r, c] of affected) this.setValue(sheet, r, c, null);
-    for (const it of inputs) {
-      if (it.row < MAX_ROWS && it.col < MAX_COLS) this.setInput(sheet, it.row, it.col, it.input);
-    }
-    this.rewriteAll((text, sheetName) => moveRefsInFormula(text, sheetName, mv));
+    shiftCellsImpl(this, sheet, r1, c1, r2, c2, direction);
   }
 
   /** Kes-yapıştır: kaynak dikdörtgeni hedefe taşır, başvuruları günceller. */
   moveRange(srcSheet: number, r1: number, c1: number, r2: number, c2: number, dstSheet: number, dRow: number, dCol: number): void {
-    const src = this.sheetOrThrow(srcSheet);
-    const dst = this.sheetOrThrow(dstSheet);
-    const items: { row: number; col: number; input: Scalar | { formula: string } }[] = [];
-    for (let r = r1; r <= r2; r++)
-      for (let c = c1; c <= c2; c++) {
-        const rec = src.cells.get(cellKey(r, c));
-        if (rec) items.push({ row: r + dRow, col: c + dCol, input: rec.formula ? { formula: rec.formula.text } : rec.value });
-      }
-    // Hedefi temizle, kaynağı temizle, yaz
-    for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) this.setValue(srcSheet, r, c, null);
-    for (let r = r1 + dRow; r <= r2 + dRow; r++) for (let c = c1 + dCol; c <= c2 + dCol; c++) if (r >= 0 && c >= 0) this.setValue(dstSheet, r, c, null);
-    for (const it of items) if (it.row >= 0 && it.col >= 0) this.setInput(dstSheet, it.row, it.col, it.input);
-    // Taşınan formüller kendi içlerindeki göreli başvuruları korur (Excel davranışı)
-    const mv: MoveSpec = { srcSheet: src.name, r1, c1, r2, c2, dRow, dCol, dstSheet: dst.name };
-    this.rewriteAll((text, sheetName) => moveRefsInFormula(text, sheetName, mv));
-  }
-
-  private rewriteAll(fn: (text: string, sheetName: string) => string): void {
-    for (const id of this.order) {
-      const sh = this.sheets.get(id)!;
-      for (const [k, rec] of sh.cells) {
-        if (!rec.formula) continue;
-        const t = fn(rec.formula.text, sh.name);
-        if (t !== rec.formula.text) this.setFormulaInternal(id, keyRow(k), keyCol(k), t);
-      }
-    }
-    for (const n of this.names.values()) {
-      const t = fn(n.text, n.sheet !== undefined ? this.getSheetName(n.sheet) ?? "" : "");
-      if (t !== n.text) {
-        n.text = t;
-        n.ast = safeParse(t);
-      }
-    }
+    moveRangeImpl(this, srcSheet, r1, c1, r2, c2, dstSheet, dRow, dCol);
   }
 
   /* ----------------------------- Anlık görüntü ----------------------------- */
 
   exportInputs(): EngineSnapshot {
-    return {
-      sheets: this.order.map((id) => {
-        const s = this.sheets.get(id)!;
-        const cells: CellSnapshot[] = [];
-        for (const [k, rec] of s.cells) {
-          if (rec.formula) cells.push({ row: keyRow(k), col: keyCol(k), formula: rec.formula.text });
-          else cells.push({ row: keyRow(k), col: keyCol(k), value: rec.value });
-        }
-        return { id, name: s.name, cells };
-      }),
-      names: [...this.names.values()].map((n) => ({ name: n.name, text: n.text, sheet: n.sheet })),
-    };
+    return exportInputsImpl(this);
   }
 
-  /** Bir sayfanın girdilerini ve sayfa listesini anlık görüntüden geri yükler. */
+  /** Sayfa listesini ve girdileri anlık görüntüden geri yükler. */
   importInputs(snap: EngineSnapshot): void {
-    const keepIds = new Set(snap.sheets.map((s) => s.id));
-    for (const id of [...this.order]) if (!keepIds.has(id)) this.sheets.delete(id);
-    this.order = snap.sheets.map((s) => s.id);
-    for (const ss of snap.sheets) {
-      let s = this.sheets.get(ss.id);
-      if (!s) {
-        s = { id: ss.id, name: ss.name, cells: new Map(), maxRow: -1, maxCol: -1, extentDirty: false, hiddenRows: new Set(), filteredRows: new Set() };
-        this.sheets.set(ss.id, s);
-      }
-      s.name = ss.name;
-      s.cells = new Map();
-      s.extentDirty = true;
-      for (const c of ss.cells) {
-        const k = cellKey(c.row, c.col);
-        if (c.formula !== undefined) {
-          const ast = safeParse(c.formula);
-          s.cells.set(k, { value: 0, formula: { text: c.formula, ast, volatile: false, usesNames: false, cellDeps: [], rangeDeps: [], spill: null, spillTarget: null } });
-        } else s.cells.set(k, { value: c.value ?? null });
-      }
-      this.nextSheetId = Math.max(this.nextSheetId, ss.id + 1);
-    }
-    this.names.clear();
-    for (const n of snap.names) {
-      const u = n.name.toLocaleUpperCase("tr-TR");
-      this.names.set(n.sheet !== undefined ? `${n.sheet}!${u}` : u, { name: n.name, text: n.text, ast: safeParse(n.text), sheet: n.sheet });
-    }
-    this.spillOwner.clear();
-    this.spillAnchors.clear();
-    this.reregisterAll();
-    this.markAllDirty();
-  }
-}
-
-function safeParse(text: string): Node | null {
-  try {
-    return parseFormula(text);
-  } catch {
-    return null;
+    importInputsImpl(this, snap);
   }
 }
 

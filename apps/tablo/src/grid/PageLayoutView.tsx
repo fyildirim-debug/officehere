@@ -62,7 +62,7 @@ export function PageLayoutView({ ctl }: { ctl: Controller }) {
             className="tb-pl-body"
             style={{ left: m.left * 96 * z, top: m.top * 96 * z, width: (pw - (m.left + m.right) * 96) * z, height: (ph - (m.top + m.bottom) * 96) * z }}
           >
-            <div style={{ zoom: z * scale }} dangerouslySetInnerHTML={{ __html: rangeToHtml(wb, sheet, r, { gridlines: page.printGridlines || sheet.showGridlines, headings: page.printHeadings, cellAttrs: true }) }} />
+            <div style={{ zoom: z * scale }} dangerouslySetInnerHTML={{ __html: rangeToHtml(wb, sheet, r, { gridlines: page.printGridlines || sheet.showGridlines, headings: page.printHeadings, cellAttrs: true, objects: true }) }} />
           </div>
           <div className="tb-pl-hf is-bottom" style={{ bottom: m.footer * 96 * z, fontSize: 11 * z }} onClick={() => ctl.openDialog("pageSetup", { tab: "hf" })}>
             {hf(page.footer, i) || <span className="tb-pl-hf-empty">Alt bilgi eklemek için tıklayın</span>}
