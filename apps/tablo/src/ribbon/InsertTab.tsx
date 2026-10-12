@@ -1,4 +1,4 @@
-/** Ekle sekmesi: Tablolar, Çizimler, Grafikler, Bağlantılar, Metin, Simgeler. */
+/** Ekle sekmesi: Tablolar, Çizimler, Grafikler, Mini Grafikler, Bağlantılar, Metin, Simgeler. */
 import {
   DataBarVertical24Regular,
   DataLine24Regular,
@@ -19,7 +19,7 @@ import type { Controller } from "../controller";
 import { insertChart, insertShape, pickAndInsertImage, SHAPE_KINDS } from "../actions/objects";
 import { CHART_FAMILIES, ChartTypeIcon } from "../dialogs/ChartDialogs";
 import type { ShapeDef } from "../model/types";
-import { PivotGlyph } from "./glyphs";
+import { PivotGlyph, SparkGlyph } from "./glyphs";
 
 function ChartMenu({ ctl, families }: { ctl: Controller; families: string[] }) {
   return (
@@ -61,7 +61,7 @@ export function InsertTab({ ctl }: { ctl: Controller }) {
   return (
     <>
       <RibbonGroup label="Tablolar" icon={<Table24Regular />}>
-        <RibbonButton size="large" icon={<PivotGlyph />} label="PivotTable" description="Karmaşık verileri PivotTable ile kolayca düzenleyip özetleyin." onClick={() => ctl.openDialog("createPivot")} />
+        <RibbonButton size="large" icon={<PivotGlyph />} label="Özet Tablo" description="Karmaşık verileri özet tabloyla kolayca düzenleyip özetleyin." onClick={() => ctl.openDialog("createPivot")} />
         <RibbonButton size="large" icon={<Table24Regular />} label="Tablo" shortcut="Ctrl+T" description="Verileri düzenlemek ve çözümlemek için tablo oluşturur." onClick={() => ctl.openDialog("createTable")} />
       </RibbonGroup>
       <RibbonGroup label="Çizimler" icon={<ImageAdd24Regular />}>
@@ -86,6 +86,11 @@ export function InsertTab({ ctl }: { ctl: Controller }) {
         <RibbonMenuButton size="large" icon={<DataLine24Regular />} label="Çizgi veya Alan" menu={<ChartMenu ctl={ctl} families={["line", "area"]} />} />
         <RibbonMenuButton size="large" icon={<DataPie24Regular />} label="Pasta veya Halka" menu={<ChartMenu ctl={ctl} families={["pie"]} />} />
         <RibbonMenuButton size="large" icon={<DataScatter24Regular />} label="Dağılım" menu={<ChartMenu ctl={ctl} families={["scatter"]} />} />
+      </RibbonGroup>
+      <RibbonGroup label="Mini Grafikler" icon={<SparkGlyph kind="line" />}>
+        <RibbonButton size="large" icon={<SparkGlyph kind="line" />} label="Çizgi" description="Tek hücreye çizgi mini grafik ekler." onClick={() => ctl.openDialog("sparkline", { type: "line" })} />
+        <RibbonButton size="large" icon={<SparkGlyph kind="column" />} label="Sütun" description="Tek hücreye sütun mini grafik ekler." onClick={() => ctl.openDialog("sparkline", { type: "column" })} />
+        <RibbonButton size="large" icon={<SparkGlyph kind="winLoss" />} label="Kazanç/Kayıp" description="Tek hücreye kazanç/kayıp mini grafiği ekler." onClick={() => ctl.openDialog("sparkline", { type: "winLoss" })} />
       </RibbonGroup>
       <RibbonGroup label="Bağlantılar" icon={<Link24Regular />}>
         <RibbonButton size="large" icon={<Link24Regular />} label="Bağlantı" shortcut="Ctrl+K" description="Web sayfasına ya da bu belgedeki bir yere bağlantı ekler." onClick={() => ctl.openDialog("hyperlink")} />

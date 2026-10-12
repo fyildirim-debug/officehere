@@ -84,7 +84,7 @@ function cellStyleFor(c: PivotCell, def: PivotDef, lay: PivotLayout): CellStyle 
 
 export function readSource(wb: WorkbookModel, def: PivotDef): PivotSource | string {
   const sheet = wb.sheetById(def.sourceSheet);
-  if (!sheet) return "PivotTable kaynak verisinin bulunduğu sayfa artık yok.";
+  if (!sheet) return "Özet tablo kaynak verisinin bulunduğu sayfa artık yok.";
   const r = def.source;
   if (r.r2 <= r.r1 && r.r1 === r.r2) return "Kaynak aralık en az bir başlık satırı ve bir veri satırı içermelidir.";
   const ext = wb.dataExtent(sheet);
@@ -93,7 +93,7 @@ export function readSource(wb: WorkbookModel, def: PivotDef): PivotSource | stri
   const headers: string[] = [];
   for (let c = r.c1; c <= c2; c++) {
     const h = displayText(wb, sheet, r.r1, c).trim();
-    if (!h) return "PivotTable alan adı geçerli değil. PivotTable raporu oluşturmak için, etiketli sütunlardan oluşan bir liste biçiminde düzenlenmiş veriler kullanmanız gerekir. PivotTable alanının adını değiştiriyorsanız, alan için yeni bir ad yazmanız gerekir.";
+    if (!h) return "Özet tablo oluşturulamadı: kaynak aralığın ilk satırındaki her sütunun bir başlığı olmalıdır. Boş başlıklı sütunlara ad verip yeniden deneyin.";
     headers.push(h);
   }
   const records: Scalar[][] = [];
@@ -211,7 +211,7 @@ export function uniquePivotName(wb: WorkbookModel): string {
   const names = new Set(wb.sheets.flatMap((s) => s.pivots.map((p) => p.name.toLocaleUpperCase("tr-TR"))));
   let n = 1;
   while (names.has(`PIVOTTABLE${n}`)) n++;
-  return `PivotTable${n}`;
+  return `ÖzetTablo${n}`;
 }
 
 /** Hedef alanda PivotTable dışı veri var mı (üzerine yazma onayı için)? */
@@ -229,7 +229,7 @@ export function overwritesData(wb: WorkbookModel, sheet: SheetModel, r: Rect, de
 /* ------------------------------ İşlemler ------------------------------ */
 
 /** Tanımı güncelleyip raporu yeniden çizer (tek geri alma adımı). */
-export function applyPivot(ctl: Controller, sheet: SheetModel, id: string, patch: (d: PivotDef) => void, label = "PivotTable"): boolean {
+export function applyPivot(ctl: Controller, sheet: SheetModel, id: string, patch: (d: PivotDef) => void, label = "Özet Tablo"): boolean {
   const cur = sheet.pivots.find((p) => p.id === id);
   if (!cur) return false;
   const next: PivotDef = structuredClone(cur);
@@ -242,7 +242,7 @@ export function applyPivot(ctl: Controller, sheet: SheetModel, id: string, patch
   const plan = planPivot(next, src);
   const other = sheet.pivots.find((p) => p.id !== id && p.output && intersects(p.output, plan.rect));
   if (other) {
-    ctl.alert("Bir PivotTable raporu başka bir PivotTable raporunun üzerine gelemez.");
+    ctl.alert("Bir özet tablo başka bir özet tablonun üzerine gelemez.");
     return false;
   }
   const doIt = () => {
@@ -288,7 +288,7 @@ export function createPivot(ctl: Controller, sourceSheet: SheetModel, source: Re
   const id = wb.newId("pivot");
   if (!target) {
     // Excel: etkin sayfanın önüne yeni sayfa, rapor A3'te
-    ctl.ops.snapshotOp("PivotTable Ekle", () => {
+    ctl.ops.snapshotOp("Özet Tablo Ekle", () => {
       const sh = wb.addSheet(undefined, wb.activeIndex);
       const def = newPivotDef(id, name, sourceSheet.id, source, { row: 2, col: 0 });
       def.output = rect(2, 0, 2, 0);
@@ -301,10 +301,10 @@ export function createPivot(ctl: Controller, sourceSheet: SheetModel, source: Re
     const def = newPivotDef(id, name, sourceSheet.id, source, { row: target.row, col: target.col });
     def.output = rect(target.row, target.col);
     if (sh.pivots.some((p) => p.output && intersects(p.output, placeholderRect(def)))) {
-      ctl.alert("Bir PivotTable raporu başka bir PivotTable raporunun üzerine gelemez.");
+      ctl.alert("Bir özet tablo başka bir özet tablonun üzerine gelemez.");
       return;
     }
-    ctl.ops.sheetOp(sh, "PivotTable Ekle", () => {
+    ctl.ops.sheetOp(sh, "Özet Tablo Ekle", () => {
       sh.pivots.push(def);
     });
     const idx = wb.sheets.indexOf(sh);
@@ -332,7 +332,7 @@ export function deletePivot(ctl: Controller, sheet: SheetModel, id: string): voi
   if (!cur) return;
   ctl.ops.sheetOp(
     sheet,
-    "PivotTable'ı Temizle",
+    "Özet Tabloyu Temizle",
     () => {
       clearOutput(ctl.wb, sheet, cur.output);
       sheet.pivots = sheet.pivots.filter((p) => p.id !== id);
@@ -356,7 +356,7 @@ export function clearPivotFields(ctl: Controller, sheet: SheetModel, id: string)
 export function movePivot(ctl: Controller, sheet: SheetModel, id: string, to: { row: number; col: number }): void {
   applyPivot(ctl, sheet, id, (d) => {
     d.anchor = { ...to };
-  }, "PivotTable'ı Taşı");
+  }, "Özet Tabloyu Taşı");
 }
 
 /** Hücre PivotTable raporunun parçası mı (düzenlemeyi engellemek için)? */
@@ -365,7 +365,7 @@ export function isPivotCell(sheet: SheetModel, row: number, col: number): boolea
   return sheet.pivots.some((p) => p.output && contains(p.output, row, col) && !(p.values.length === 0 && p.rows.length === 0 && p.cols.length === 0));
 }
 
-export const PIVOT_EDIT_MESSAGE = "PivotTable raporunun bu bölümü değiştirilemez. Raporu değiştirmek için PivotTable Alanları bölmesini kullanın ya da kaynak veriyi değiştirip Yenile'yi tıklatın.";
+export const PIVOT_EDIT_MESSAGE = "Özet tablonun bu bölümü doğrudan düzenlenemez. Düzeni Özet Tablo Alanları bölmesinden değiştirin ya da kaynak veriyi güncelleyip Yenile'ye tıklayın.";
 
 /** Izgarada çizilecek PivotTable filtre düğmeleri. */
 export function pivotButtons(sheet: SheetModel): { row: number; col: number; field: number; pivotId: string; active: boolean }[] {

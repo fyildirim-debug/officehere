@@ -17,6 +17,7 @@ import { addXlfnPrefixes, normalizeFileFormula, utcSerial } from "./xlsxFormula"
 
 export { compressCells, addXlfnPrefixes, normalizeFileFormula };
 import { readPivotsFromData } from "./xlsxPivot";
+import { readSparklinesFromData } from "./xlsxSpark";
 import { parseThemeXml } from "../model/theme";
 import { activateTheme } from "../model/themeRuntime";
 
@@ -94,6 +95,11 @@ export async function readXlsx(data: ArrayBuffer): Promise<WorkbookModel> {
     await readPivotsFromData(data, wb);
   } catch {
     /* PivotTable okunamazsa hücre değerleri kalır */
+  }
+  try {
+    await readSparklinesFromData(data, wb);
+  } catch {
+    /* mini grafikler okunamazsa yok say */
   }
   return wb;
 }

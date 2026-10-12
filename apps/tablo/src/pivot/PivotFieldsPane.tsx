@@ -32,14 +32,14 @@ export function PivotFieldsPane({ ctl, sheet, def }: { ctl: Controller; sheet: S
   const [dropAt, setDropAt] = useState<{ area: PivotArea; index: number } | null>(null);
   if (typeof src === "string") {
     return (
-      <aside className="tb-pane tb-pv-pane" aria-label="PivotTable Alanları">
+      <aside className="tb-pane tb-pv-pane" aria-label="Özet Tablo Alanları">
         <PaneHeader ctl={ctl} />
         <p className="tb-pv-error">{src}</p>
       </aside>
     );
   }
   const cur = draft ?? def;
-  const change = (fn: (d: PivotDef) => void, label = "PivotTable Alanı") => {
+  const change = (fn: (d: PivotDef) => void, label = "Özet Tablo Alanı") => {
     if (defer) {
       const d = structuredClone(cur);
       fn(d);
@@ -66,11 +66,11 @@ export function PivotFieldsPane({ ctl, sheet, def }: { ctl: Controller; sheet: S
     setDropAt(null);
     if (!d) return;
     if (d.from === area && area !== "values" && d.field !== VALUES_FIELD) {
-      change((def2) => moveWithin(def2, area, d.index, index > d.index ? index - 1 : index), "PivotTable Alanını Taşı");
+      change((def2) => moveWithin(def2, area, d.index, index > d.index ? index - 1 : index), "Özet Tablo Alanını Taşı");
       return;
     }
     if (d.field === VALUES_FIELD && (area === "filters" || area === "values")) return;
-    change((def2) => placeField(def2, src, d.field, area, index, d.from === "values" ? d.index : undefined), "PivotTable Alanını Taşı");
+    change((def2) => placeField(def2, src, d.field, area, index, d.from === "values" ? d.index : undefined), "Özet Tablo Alanını Taşı");
   };
 
   const dropProps = (area: PivotArea, index: number) => ({
@@ -94,7 +94,7 @@ export function PivotFieldsPane({ ctl, sheet, def }: { ctl: Controller; sheet: S
   };
 
   return (
-    <aside className="tb-pane tb-pv-pane" aria-label="PivotTable Alanları">
+    <aside className="tb-pane tb-pv-pane" aria-label="Özet Tablo Alanları">
       <PaneHeader ctl={ctl} />
       <div className="tb-pv-sub">Rapora eklenecek alanları seçin:</div>
       <div className="tb-pv-search">
@@ -166,7 +166,7 @@ export function PivotFieldsPane({ ctl, sheet, def }: { ctl: Controller; sheet: S
               if (!e.target.checked && draft) {
                 const d = draft;
                 setDraft(null);
-                applyPivot(ctl, sheet, def.id, (x) => Object.assign(x, d), "PivotTable Alanları");
+                applyPivot(ctl, sheet, def.id, (x) => Object.assign(x, d), "Özet Tablo Alanları");
               }
             }}
           />
@@ -178,7 +178,7 @@ export function PivotFieldsPane({ ctl, sheet, def }: { ctl: Controller; sheet: S
             if (!draft) return;
             const d = draft;
             setDraft(null);
-            applyPivot(ctl, sheet, def.id, (x) => Object.assign(x, d), "PivotTable Alanları");
+            applyPivot(ctl, sheet, def.id, (x) => Object.assign(x, d), "Özet Tablo Alanları");
           }}
         >
           Güncelleştir
@@ -208,7 +208,7 @@ export function PivotFieldsPane({ ctl, sheet, def }: { ctl: Controller; sheet: S
             field={filterFor.field}
             onApply={(sel) => {
               setFilterFor(null);
-              change((d) => setItemSelection(d, filterFor.field, sel, src), "PivotTable Filtresi");
+              change((d) => setItemSelection(d, filterFor.field, sel, src), "Özet Tablo Filtresi");
             }}
             onCancel={() => setFilterFor(null)}
           />
@@ -221,7 +221,7 @@ export function PivotFieldsPane({ ctl, sheet, def }: { ctl: Controller; sheet: S
 function PaneHeader({ ctl }: { ctl: Controller }) {
   return (
     <div className="tb-pane-head">
-      <span>PivotTable Alanları</span>
+      <span>Özet Tablo Alanları</span>
       <button
         type="button"
         className="tb-pane-close"
@@ -247,13 +247,13 @@ function ChipMenu({ ctl, def, area, index, chips, onClose, change, src }: { ctl:
     onClose();
     change(fn, label);
   };
-  const moveTo = (to: PivotArea) => run((d) => placeField(d, src, chip.field, to, undefined, area === "values" ? index : undefined), "PivotTable Alanını Taşı");
+  const moveTo = (to: PivotArea) => run((d) => placeField(d, src, chip.field, to, undefined, area === "values" ? index : undefined), "Özet Tablo Alanını Taşı");
   return (
     <Menu width={230}>
-      <MenuItem icon={<ArrowUp16Regular />} label="Yukarı Taşı" disabled={isSigma || index === 0} onClick={run((d) => moveWithin(d, area, index, index - 1), "PivotTable Alanını Taşı")} />
-      <MenuItem icon={<ArrowDown16Regular />} label="Aşağı Taşı" disabled={isSigma || index >= n - 1} onClick={run((d) => moveWithin(d, area, index, index + 1), "PivotTable Alanını Taşı")} />
-      <MenuItem label="Başa Taşı" disabled={isSigma || index === 0} onClick={run((d) => moveWithin(d, area, index, 0), "PivotTable Alanını Taşı")} />
-      <MenuItem label="Sona Taşı" disabled={isSigma || index >= n - 1} onClick={run((d) => moveWithin(d, area, index, n - 1), "PivotTable Alanını Taşı")} />
+      <MenuItem icon={<ArrowUp16Regular />} label="Yukarı Taşı" disabled={isSigma || index === 0} onClick={run((d) => moveWithin(d, area, index, index - 1), "Özet Tablo Alanını Taşı")} />
+      <MenuItem icon={<ArrowDown16Regular />} label="Aşağı Taşı" disabled={isSigma || index >= n - 1} onClick={run((d) => moveWithin(d, area, index, index + 1), "Özet Tablo Alanını Taşı")} />
+      <MenuItem label="Başa Taşı" disabled={isSigma || index === 0} onClick={run((d) => moveWithin(d, area, index, 0), "Özet Tablo Alanını Taşı")} />
+      <MenuItem label="Sona Taşı" disabled={isSigma || index >= n - 1} onClick={run((d) => moveWithin(d, area, index, n - 1), "Özet Tablo Alanını Taşı")} />
       <MenuSeparator />
       <MenuItem label="Rapor Filtresine Taşı" disabled={isSigma || area === "filters"} onClick={moveTo("filters")} />
       <MenuItem label="Satır Etiketlerine Taşı" disabled={area === "rows"} onClick={moveTo("rows")} />
@@ -370,7 +370,7 @@ export function PivotButtonMenu({ ctl, sheet, pivotId, field, x, y, onClose }: {
           field={field}
           onApply={(sel) => {
             onClose();
-            applyPivot(ctl, sheet, def.id, (d) => setItemSelection(d, field, sel, src), "PivotTable Filtresi");
+            applyPivot(ctl, sheet, def.id, (d) => setItemSelection(d, field, sel, src), "Özet Tablo Filtresi");
           }}
           onCancel={onClose}
         />

@@ -29,6 +29,8 @@ import { PivotAnalyzeTab, PivotDesignTab } from "./pivot/PivotTabs";
 import { PivotButtonMenu, PivotFieldsPane } from "./pivot/PivotFieldsPane";
 import { PivotCellMenu } from "./pivot/PivotMenu";
 import { WatchWindow } from "./panes/WatchWindow";
+import { sparkAt } from "./sparkline/geometry";
+import { SparklineTab } from "./sparkline/SparkTab";
 import { ThemePaletteContext } from "./themeContext";
 import { paletteOf } from "./model/theme";
 
@@ -37,6 +39,31 @@ let dialogSeq = 0;
 export function App() {
   const ctl = useMemo(() => new Controller(), []);
   useEffect(() => installTestHook(ctl), [ctl]);
+  // Şeritteki onay kutusu değişince odak çalışma sayfasına döner (Ctrl+Z vb. çalışsın)
+  useEffect(() => {
+    const onChange = (e: Event) => {
+      const t = e.target;
+      if (t instanceof HTMLInputElement && t.type === "checkbox" && t.closest(".oh-ribbon")) requestAnimationFrame(() => ctl.focusGrid());
+    };
+    document.addEventListener("change", onChange, true);
+    // Odak şeritte/sekme düğmesindeyken de Ctrl+Z / Ctrl+Y çalışır
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing || !(e.ctrlKey || e.metaKey) || e.altKey || (e.code !== "KeyZ" && e.code !== "KeyY")) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.("textarea, [contenteditable='true'], .oh-dialog, .oh-backstage")) return;
+      if (t instanceof HTMLInputElement && t.type !== "checkbox" && t.type !== "radio") return;
+      if (ctl.edit) return;
+      e.preventDefault();
+      if (e.code === "KeyZ" && !e.shiftKey) E.undo(ctl);
+      else E.redo(ctl);
+      ctl.focusGrid();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("change", onChange, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [ctl]);
   // Geliştirme kipinde tarayıcı testleri için erişim
   if (import.meta.env.DEV) (window as unknown as { __tablo?: Controller }).__tablo = ctl;
   useSyncExternalStore(ctl.subscribe, ctl.getVersion);
@@ -122,9 +149,10 @@ export function App() {
   const activeTable = sheet.tableAt(ctl.sel.active.row, ctl.sel.active.col);
   const activeChart = ctl.selObj?.kind === "chart" ? sheet.charts.find((c) => c.id === ctl.selObj!.id) : undefined;
   const activePivot = !ctl.selObj ? pivotAt(sheet, ctl.sel.active.row, ctl.sel.active.col) : undefined;
+  const activeSpark = !ctl.selObj && sheet.sparklines.length ? sparkAt(sheet, ctl.sel.active.row, ctl.sel.active.col)?.group : undefined;
   useEffect(() => {
-    if ((tab === "tableDesign" && !activeTable) || ((tab === "chartDesign" || tab === "chartFormat") && !activeChart) || ((tab === "pivotAnalyze" || tab === "pivotDesign") && !activePivot)) setTab("home");
-  }, [tab, activeTable, activeChart, activePivot]);
+    if ((tab === "tableDesign" && !activeTable) || ((tab === "chartDesign" || tab === "chartFormat") && !activeChart) || ((tab === "pivotAnalyze" || tab === "pivotDesign") && !activePivot) || (tab === "sparkline" && !activeSpark)) setTab("home");
+  }, [tab, activeTable, activeChart, activePivot, activeSpark]);
   useEffect(() => {
     if (activeChart && tab !== "chartFormat") setTab("chartDesign");
   }, [activeChart?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -147,8 +175,9 @@ export function App() {
     { id: "tableDesign", label: "Tablo Tasarımı", contextual: true, contextualGroup: "Tablo Araçları", hidden: !activeTable, content: activeTable ? <TableDesignTab ctl={ctl} table={activeTable} /> : null },
     { id: "chartDesign", label: "Grafik Tasarımı", contextual: true, contextualGroup: "Grafik Araçları", hidden: !activeChart, content: activeChart ? <ChartDesignTab ctl={ctl} chart={activeChart} /> : null },
     { id: "chartFormat", label: "Biçim", contextual: true, contextualGroup: "Grafik Araçları", hidden: !activeChart, content: activeChart ? <ChartFormatTab ctl={ctl} chart={activeChart} /> : null },
-    { id: "pivotAnalyze", label: "PivotTable Analiz", contextual: true, contextualGroup: "PivotTable Araçları", hidden: !activePivot, content: activePivot ? <PivotAnalyzeTab ctl={ctl} def={activePivot} /> : null },
-    { id: "pivotDesign", label: "Tasarım", contextual: true, contextualGroup: "PivotTable Araçları", hidden: !activePivot, content: activePivot ? <PivotDesignTab ctl={ctl} def={activePivot} /> : null },
+    { id: "pivotAnalyze", label: "Özet Tablo Analizi", contextual: true, contextualGroup: "Özet Tablo Araçları", hidden: !activePivot, content: activePivot ? <PivotAnalyzeTab ctl={ctl} def={activePivot} /> : null },
+    { id: "pivotDesign", label: "Tasarım", contextual: true, contextualGroup: "Özet Tablo Araçları", hidden: !activePivot, content: activePivot ? <PivotDesignTab ctl={ctl} def={activePivot} /> : null },
+    { id: "sparkline", label: "Mini Grafik", contextual: true, contextualGroup: "Mini Grafik Araçları", hidden: !activeSpark, content: activeSpark ? <SparklineTab ctl={ctl} group={activeSpark} /> : null },
   ];
 
   const palette = useMemo(() => paletteOf(ctl.wb.theme), [ctl.wb.theme]);

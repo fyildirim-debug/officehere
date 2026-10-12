@@ -47,7 +47,7 @@ export function PivotCellMenu({ ctl, def }: { ctl: Controller; def: PivotDef }) 
         />
       )}
       {af?.kind === "value" && <MenuItem label="Değer Alanı Ayarları..." onClick={() => ctl.openDialog("pivotValueField", { pivotId: def.id, index: af.index })} />}
-      <MenuItem label="PivotTable Seçenekleri..." onClick={() => ctl.openDialog("pivotOptions", { pivotId: def.id })} />
+      <MenuItem label="Özet Tablo Seçenekleri..." onClick={() => ctl.openDialog("pivotOptions", { pivotId: def.id })} />
       <MenuItem
         icon={<TextBulletListSquare20Regular />}
         label={ctl.showFieldList ? "Alan Listesini Gizle" : "Alan Listesini Göster"}

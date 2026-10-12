@@ -7,6 +7,7 @@ import { FormulaEngine, cellKey, keyCol, keyRow, toLocalFormula, numberToText, i
 import { AxisSizes } from "./axis";
 import { MAX_COLS, MAX_ROWS, contains, intersects, shiftIndex, shiftRect } from "./rect";
 import { StyleTable, type CellStyle } from "./styles";
+import { renameRangeText, shiftRangeText } from "./rangeRefs";
 import { defaultTheme, type WorkbookTheme } from "./theme";
 import type { AutoFilter, ChartDef, CondRule, ImageDef, Note, PageSetup, PivotDef, Rect, Selection, ShapeDef, SparklineGroup, TableDef, Validation, ViewMode } from "./types";
 
@@ -320,6 +321,11 @@ export class WorkbookModel {
   renameSheet(index: number, name: string): void {
     const s = this.sheets[index];
     this.engine.renameSheet(s.id, name);
+    // Grafik ve mini grafik veri aralıkları yeni adı göstersin
+    for (const o of this.sheets) {
+      for (const c of o.charts) c.range = renameRangeText(c.range, s.name, name);
+      for (const g of o.sparklines) for (const it of g.items) it.range = renameRangeText(it.range, s.name, name);
+    }
     s.name = name;
   }
 
@@ -473,14 +479,17 @@ export class WorkbookModel {
     return v === null;
   }
 
-  /** Satır/sütun ekleme-silmede bu sayfayı kaynak alan PivotTable aralıklarını kaydırır. */
-  shiftPivotSources(sheet: SheetModel, axis: "row" | "col", at: number, count: number): void {
-    for (const s of this.sheets)
+  /** Satır/sütun ekleme-silmede bu sayfayı gösteren PivotTable kaynaklarını, grafik ve mini grafik aralıklarını kaydırır. */
+  shiftDataRefs(sheet: SheetModel, axis: "row" | "col", at: number, count: number): void {
+    for (const s of this.sheets) {
       for (const p of s.pivots) {
         if (p.sourceSheet !== sheet.id) continue;
         const r = shiftRect(p.source, axis, at, count);
         if (r) p.source = r;
       }
+      for (const c of s.charts) c.range = shiftRangeText(c.range, s.name, sheet.name, axis, at, count);
+      for (const g of s.sparklines) for (const it of g.items) it.range = shiftRangeText(it.range, s.name, sheet.name, axis, at, count);
+    }
   }
 
   /** Tüm sayfaların anlık görüntüsü (yapısal işlemleri geri almak için). */

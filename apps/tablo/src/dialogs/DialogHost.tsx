@@ -16,6 +16,7 @@ import { ShortcutsDialog, WorkbookStatsDialog } from "./HelpDialogs";
 import { DialogErrorBoundary } from "./common";
 import { ErrorCheckDialog, ErrorOptionsDialog, EvaluateFormulaDialog } from "./AuditDialogs";
 import { traceError } from "../actions/audit";
+import { SparklineAxisDialog, SparklineDialog, SparklineHiddenDialog, SparklineItemDialog } from "../sparkline/SparkDialogs";
 import { ChangePivotSourceDialog, CreatePivotDialog, MovePivotDialog, PivotOptionsDialog, ValueFieldDialog } from "../pivot/PivotDialogs";
 
 export interface DialogState {
@@ -176,6 +177,14 @@ function OneDialog({ ctl, state, onClose, files, onBackstage }: { ctl: Controlle
       return <ErrorCheckDialog {...p} />;
     case "errorOptions":
       return <ErrorOptionsDialog {...p} />;
+    case "sparkline":
+      return <SparklineDialog {...p} />;
+    case "sparklineItem":
+      return <SparklineItemDialog {...p} />;
+    case "sparklineHidden":
+      return <SparklineHiddenDialog {...p} />;
+    case "sparklineAxis":
+      return <SparklineAxisDialog {...p} />;
   }
   return <M.AlertDialog {...p} arg={{ message: `"${state.id}" iletişim kutusu bulunamadı.` }} />;
 }

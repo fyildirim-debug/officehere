@@ -55,7 +55,13 @@ export class OpsCore {
     const linesBefore = lines ? { c: new Map(sheet.colStyles), r: new Map(sheet.rowStyles) } : null;
     const before = new Map<number, CellState>();
     for (const k of collect()) before.set(k, wb.cellState(sheet, k));
+    // Mini grafikler hücreyle birlikte kopyalanabilir (doldurma, yapıştırma)
+    const sparkBefore = sheet.sparklines.length ? structuredClone(sheet.sparklines) : null;
     mutate();
+    const sparkAfter = sparkBefore || sheet.sparklines.length ? structuredClone(sheet.sparklines) : null;
+    const applySpark = (v: typeof sparkBefore) => {
+      if (sparkBefore || sparkAfter) sheet.sparklines = structuredClone(v ?? []);
+    };
     const rowChanges = this.afterCells ? this.afterCells(sheet, rects) : [];
     const applyRows = (which: 1 | 2) => {
       for (const ch of rowChanges) {
@@ -79,8 +85,8 @@ export class OpsCore {
     this.history.push({
       label,
       cost: before.size + after.size,
-      undo: () => (apply(before, after, linesBefore), applyRows(1)),
-      redo: () => (apply(after, before, linesAfter), applyRows(2)),
+      undo: () => (apply(before, after, linesBefore), applyRows(1), applySpark(sparkBefore)),
+      redo: () => (apply(after, before, linesAfter), applyRows(2), applySpark(sparkAfter)),
     });
     this.done(label);
   }

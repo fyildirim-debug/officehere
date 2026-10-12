@@ -16,7 +16,7 @@ export function PivotPlaceholders({ ctl, layout }: { ctl: Controller; layout: Gr
         return (
           <div key={p.id} className="tb-pv-placeholder" style={{ left: rc.x, top: rc.y, width: rc.w, height: rc.h }}>
             <strong>{p.name}</strong>
-            <span>Rapor oluşturmak için PivotTable Alan Listesinden alanları seçin</span>
+            <span>Rapor oluşturmak için Özet Tablo Alanları bölmesinden alanları seçin</span>
           </div>
         );
       })}

@@ -31,10 +31,10 @@ function fmt(v: Scalar): string {
 }
 
 function def(p: Partial<PivotDef>): PivotDef {
-  return { ...newPivotDef("p1", "PivotTable1", 1, { r1: 0, c1: 0, r2: 7, c2: 4 }, { row: 2, col: 0 }), ...p };
+  return { ...newPivotDef("p1", "ÖzetTablo1", 1, { r1: 0, c1: 0, r2: 7, c2: 4 }, { row: 2, col: 0 }), ...p };
 }
 
-describe("PivotTable hesaplama", () => {
+describe("Özet Tablo hesaplama", () => {
   it("satırlar + toplam (sıkıştırılmış)", () => {
     const g = grid(def({ rows: [0], values: [{ field: 3, fn: "sum" }] }));
     expect(g).toEqual([
@@ -112,7 +112,7 @@ describe("PivotTable hesaplama", () => {
   });
 });
 
-describe("PivotTable XLSX gidiş-dönüşü", () => {
+describe("Özet Tablo XLSX gidiş-dönüşü", () => {
   it("tanım, çıktı ve filtreler korunur; pivot parçaları yazılır", async () => {
     const { Controller } = await import("../src/controller");
     const { createPivot, applyPivot } = await import("../src/pivot/pivotOps");
@@ -153,8 +153,8 @@ describe("PivotTable XLSX gidiş-dönüşü", () => {
   });
 });
 
-describe("Başka uygulamanın yazdığı PivotTable", () => {
-  it("LibreOffice'in kaydettiği PivotTable canlı olarak okunur", async () => {
+describe("Başka uygulamanın yazdığı Özet Tablo", () => {
+  it("LibreOffice'in kaydettiği Özet Tablo canlı olarak okunur", async () => {
     const { readFileSync } = await import("node:fs");
     const { readXlsx } = await import("../src/io/xlsx");
     const buf = readFileSync(new URL("./fixtures/lo-pivot.xlsx", import.meta.url));

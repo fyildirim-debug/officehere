@@ -22,6 +22,12 @@ export function objectsExtent(sheet: SheetModel): { r2: number; c2: number } | n
     r2 = Math.max(r2, sheet.rows.indexAt(p.y + o.height - 1));
     c2 = Math.max(c2, sheet.cols.indexAt(p.x + o.width - 1));
   }
+  // Mini grafikli hücreler boş olsa da basılır
+  for (const g of sheet.sparklines)
+    for (const it of g.items) {
+      r2 = Math.max(r2, it.row);
+      c2 = Math.max(c2, it.col);
+    }
   return r2 < 0 ? null : { r2, c2 };
 }
 

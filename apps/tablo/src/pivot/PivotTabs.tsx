@@ -56,10 +56,10 @@ export function PivotAnalyzeTab({ ctl, def }: { ctl: Controller; def: PivotDef }
     const n = name.trim();
     if (!n || n === def.name) return setName(def.name);
     if (ctl.wb.sheets.some((s) => s.pivots.some((p) => p.id !== def.id && p.name.toLocaleUpperCase("tr-TR") === n.toLocaleUpperCase("tr-TR")))) {
-      ctl.alert("Bu ada sahip bir PivotTable zaten var.");
+      ctl.alert("Bu ada sahip bir özet tablo zaten var.");
       return setName(def.name);
     }
-    applyPivot(ctl, sheet, def.id, (d) => (d.name = n), "PivotTable Adı");
+    applyPivot(ctl, sheet, def.id, (d) => (d.name = n), "Özet Tablo Adı");
   };
   const sortField = (desc: boolean) => {
     if (!af || (af.kind !== "row" && af.kind !== "col")) return;
@@ -68,9 +68,9 @@ export function PivotAnalyzeTab({ ctl, def }: { ctl: Controller; def: PivotDef }
   };
   return (
     <>
-      <RibbonGroup label="PivotTable" icon={<TableSettings24Regular />}>
+      <RibbonGroup label="Özet Tablo" icon={<TableSettings24Regular />}>
         <RibbonStack>
-          <RibbonLabel>PivotTable Adı:</RibbonLabel>
+          <RibbonLabel>Özet Tablo Adı:</RibbonLabel>
           <input
             className="tb-ribbon-input"
             value={name}
@@ -80,7 +80,7 @@ export function PivotAnalyzeTab({ ctl, def }: { ctl: Controller; def: PivotDef }
               if (e.key === "Enter") (commitName(), ctl.focusGrid());
               else if (e.key === "Escape") (setName(def.name), ctl.focusGrid());
             }}
-            aria-label="PivotTable Adı"
+            aria-label="Özet Tablo Adı"
           />
           <RibbonButton icon={<Settings20Regular />} label="Seçenekler" onClick={() => ctl.openDialog("pivotOptions", { pivotId: def.id })} />
         </RibbonStack>
@@ -109,7 +109,7 @@ export function PivotAnalyzeTab({ ctl, def }: { ctl: Controller; def: PivotDef }
           icon={<ArrowSync24Regular />}
           label="Yenile"
           shortcut="Alt+F5"
-          description="Kaynak verideki değişiklikleri PivotTable'a yansıtır."
+          description="Kaynak verideki değişiklikleri Özet Tabloya yansıtır."
           onClick={() => refreshPivot(ctl, sheet, def.id)}
           menu={
             <Menu width={200}>
@@ -147,11 +147,11 @@ export function PivotAnalyzeTab({ ctl, def }: { ctl: Controller; def: PivotDef }
           label="Seç"
           menu={
             <Menu width={200}>
-              <MenuItem label="Tüm PivotTable" disabled={!def.output} onClick={() => def.output && ctl.selectRange(def.output)} />
+              <MenuItem label="Tüm Özet Tablo" disabled={!def.output} onClick={() => def.output && ctl.selectRange(def.output)} />
             </Menu>
           }
         />
-        <RibbonButton size="large" icon={<ArrowMove24Regular />} label="PivotTable'ı Taşı" onClick={() => ctl.openDialog("pivotMove", { pivotId: def.id })} />
+        <RibbonButton size="large" icon={<ArrowMove24Regular />} label="Özet Tabloyu Taşı" onClick={() => ctl.openDialog("pivotMove", { pivotId: def.id })} />
       </RibbonGroup>
       <RibbonGroup label="Göster" icon={<TextBulletListSquare24Regular />}>
         <RibbonButton
@@ -190,7 +190,7 @@ export function PivotPreview({ p, size = 50 }: { p: PivotStylePreset; size?: num
 export function PivotDesignTab({ ctl, def }: { ctl: Controller; def: PivotDef }) {
   const sheet = ctl.sheet;
   const set = (patch: Partial<PivotDef>, label: string) => applyPivot(ctl, sheet, def.id, (d) => Object.assign(d, patch), label);
-  const opt = (k: "rowHeaders" | "colHeaders" | "bandedRows" | "bandedCols", label: string) => <RibbonCheckbox label={label} checked={!!def[k]} onChange={(v) => set({ [k]: v }, "PivotTable Stil Seçenekleri")} />;
+  const opt = (k: "rowHeaders" | "colHeaders" | "bandedRows" | "bandedCols", label: string) => <RibbonCheckbox label={label} checked={!!def[k]} onChange={(v) => set({ [k]: v }, "Özet Tablo Stil Seçenekleri")} />;
   return (
     <>
       <RibbonGroup label="Düzen" icon={<RowTriple24Regular />}>
@@ -245,7 +245,7 @@ export function PivotDesignTab({ ctl, def }: { ctl: Controller; def: PivotDef })
           }
         />
       </RibbonGroup>
-      <RibbonGroup label="PivotTable Stil Seçenekleri" icon={<TableSettings24Regular />}>
+      <RibbonGroup label="Özet Tablo Stil Seçenekleri" icon={<TableSettings24Regular />}>
         <RibbonStack>
           {opt("rowHeaders", "Satır Üst Bilgileri")}
           {opt("colHeaders", "Sütun Üst Bilgileri")}
@@ -255,8 +255,8 @@ export function PivotDesignTab({ ctl, def }: { ctl: Controller; def: PivotDef })
           {opt("bandedCols", "Şeritli Sütunlar")}
         </RibbonStack>
       </RibbonGroup>
-      <RibbonGroup label="PivotTable Stilleri" icon={<TableSimple24Regular />}>
-        <RibbonGallery items={PIVOT_STYLES.map((p) => ({ id: p.id, label: p.label, preview: <PivotPreview p={p} /> }))} selectedId={def.style} onSelect={(id) => set({ style: id }, "PivotTable Stili")} itemWidth={58} itemHeight={44} columns={6} expandedColumns={6} />
+      <RibbonGroup label="Özet Tablo Stilleri" icon={<TableSimple24Regular />}>
+        <RibbonGallery items={PIVOT_STYLES.map((p) => ({ id: p.id, label: p.label, preview: <PivotPreview p={p} /> }))} selectedId={def.style} onSelect={(id) => set({ style: id }, "Özet Tablo Stili")} itemWidth={58} itemHeight={44} columns={6} expandedColumns={6} />
       </RibbonGroup>
     </>
   );

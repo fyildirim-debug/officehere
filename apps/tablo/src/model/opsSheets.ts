@@ -53,7 +53,7 @@ export class OpsSheets extends OpsCore {
         const names = new Set(wb.sheets.flatMap((s) => s.pivots.map((x) => x.name.toLocaleUpperCase("tr-TR"))));
         let n = 1;
         while (names.has(`PIVOTTABLE${n}`)) n++;
-        return { ...p, id: wb.newId("pivot"), name: `PivotTable${n}`, sourceSheet: p.sourceSheet === src.id ? copy.id : p.sourceSheet };
+        return { ...p, id: wb.newId("pivot"), name: `ÖzetTablo${n}`, sourceSheet: p.sourceSheet === src.id ? copy.id : p.sourceSheet };
       });
       wb.engine.forEachCell(src.id, (row, col, rec) => {
         if (rec.formula) wb.engine.setFormula(copy.id, row, col, rec.formula.text);

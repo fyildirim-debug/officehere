@@ -10,6 +10,7 @@ import { rect, rectCols, rectRows } from "./rect";
 import { DEFAULT_FONT, DEFAULT_SIZE, type BorderSide, type CellStyle } from "./styles";
 import type { Rect } from "./types";
 import type { CellInput, SheetModel, WorkbookModel } from "./workbook";
+import { copySparkline, moveSparklines } from "../sparkline/sparkOps";
 
 export interface ClipCell {
   input: CellInput;
@@ -261,6 +262,7 @@ export function pastePayload(ops: Ops, sheet: SheetModel, target: Rect, p: ClipP
         if (id === undefined) sheet.styles.delete(k);
         else sheet.styles.set(k, id);
       }
+      if (srcSheet === sheet) moveSparklines(sheet, p.src, dr, dc, wb);
       srcSheet.merges = srcSheet.merges.filter((m) => !(m.r1 >= p.src.r1 && m.r2 <= p.src.r2 && m.c1 >= p.src.c1 && m.c2 <= p.src.c2));
       for (const m of p.merges) sheet.merges.push({ r1: m.r1 + dst.r1, c1: m.c1 + dst.c1, r2: m.r2 + dst.r1, c2: m.c2 + dst.c1 });
     });
@@ -311,6 +313,7 @@ export function pastePayload(ops: Ops, sheet: SheetModel, target: Rect, p: ClipP
               if (w === "allExceptBorders" && style) style = { ...style, bTop: undefined, bBottom: undefined, bLeft: undefined, bRight: undefined };
               wb.setStyleRaw(sheet, row, col, style ? wb.styles.intern(style) : undefined);
             }
+            if (opts.what === "all" && !opts.transpose && srcSheet === sheet && sheet.sparklines.length) copySparkline(sheet, { row: p.src.r1 + si, col: p.src.c1 + sj }, { row, col }, wb);
           }
     if (opts.what === "widths" || opts.what === "all") {
       if (opts.what === "widths") p.colWidths.forEach((w, j) => sheet.cols.set(dst.c1 + j, w));

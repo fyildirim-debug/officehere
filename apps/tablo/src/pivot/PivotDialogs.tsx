@@ -75,13 +75,13 @@ export function CreatePivotDialog({ ctl, onClose }: P) {
     createPivot(ctl, s.sheet, s.rect, target);
   };
   return (
-    <SimpleDialog title="PivotTable Oluştur" onClose={onClose} onOk={ok} width={430}>
+    <SimpleDialog title="Özet Tablo Oluştur" onClose={onClose} onOk={ok} width={430}>
       <FieldSet legend="Çözümlemek istediğiniz verileri seçin">
         <Field label="Tablo/Aralık:" inline>
           <input type="text" value={src} onChange={(e) => setSrc(e.target.value)} data-autofocus="true" style={{ flex: 1 }} aria-label="Tablo/Aralık" />
         </Field>
       </FieldSet>
-      <FieldSet legend="PivotTable raporunun yerleştirileceği yeri seçin">
+      <FieldSet legend="Özet tablonun yerleştirileceği yeri seçin">
         <Radio name="pvwhere" value="new" current={where} onChange={setWhere}>
           Yeni Çalışma Sayfası
         </Radio>
@@ -162,12 +162,12 @@ export function MovePivotDialog({ ctl, onClose, arg }: P) {
   const ok = () => {
     const l = parseSheetRange(ctl, loc);
     if (!l) return ctl.alert("Başvuru geçerli değil.");
-    if (l.sheet !== sheet) return ctl.alert("PivotTable yalnız aynı sayfa içinde taşınabilir.");
+    if (l.sheet !== sheet) return ctl.alert("Özet tablo yalnız aynı sayfa içinde taşınabilir.");
     onClose();
     movePivot(ctl, sheet, def.id, { row: l.rect.r1, col: l.rect.c1 });
   };
   return (
-    <SimpleDialog title="PivotTable'ı Taşı" onClose={onClose} onOk={ok} width={360}>
+    <SimpleDialog title="Özet Tabloyu Taşı" onClose={onClose} onOk={ok} width={360}>
       <Field label="Konum:">
         <input type="text" value={loc} onChange={(e) => setLoc(e.target.value)} data-autofocus="true" aria-label="Konum" />
       </Field>
@@ -198,7 +198,7 @@ export function ChangePivotSourceDialog({ ctl, onClose, arg }: P) {
     );
   };
   return (
-    <SimpleDialog title="PivotTable Veri Kaynağını Değiştir" onClose={onClose} onOk={ok} width={400}>
+    <SimpleDialog title="Özet Tablo Veri Kaynağını Değiştir" onClose={onClose} onOk={ok} width={400}>
       <Field label="Tablo/Aralık:">
         <input type="text" value={src} onChange={(e) => setSrc(e.target.value)} data-autofocus="true" aria-label="Tablo/Aralık" />
       </Field>
@@ -216,9 +216,9 @@ export function PivotOptionsDialog({ ctl, onClose, arg }: P) {
   if (!def) return null;
   const ok = () => {
     const n = name.trim();
-    if (!n) return ctl.alert("PivotTable adı boş olamaz.");
+    if (!n) return ctl.alert("Özet tablo adı boş olamaz.");
     const clash = ctl.wb.sheets.some((s) => s.pivots.some((p) => p.id !== def.id && p.name.toLocaleUpperCase("tr-TR") === n.toLocaleUpperCase("tr-TR")));
-    if (clash) return ctl.alert("Bu ada sahip bir PivotTable zaten var.");
+    if (clash) return ctl.alert("Bu ada sahip bir özet tablo zaten var.");
     onClose();
     applyPivot(
       ctl,
@@ -229,13 +229,13 @@ export function PivotOptionsDialog({ ctl, onClose, arg }: P) {
         d.grandRows = grandRows;
         d.grandCols = grandCols;
       },
-      "PivotTable Seçenekleri",
+      "Özet Tablo Seçenekleri",
     );
   };
   return (
-    <SimpleDialog title="PivotTable Seçenekleri" onClose={onClose} onOk={ok} width={380}>
-      <Field label="PivotTable Adı:">
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} data-autofocus="true" aria-label="PivotTable Adı" />
+    <SimpleDialog title="Özet Tablo Seçenekleri" onClose={onClose} onOk={ok} width={380}>
+      <Field label="Özet Tablo Adı:">
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)} data-autofocus="true" aria-label="Özet Tablo Adı" />
       </Field>
       <FieldSet legend="Genel Toplamlar">
         {/* Excel adlandırması: "satırlar için" = her satırın toplamı (sağdaki Genel Toplam sütunu) */}

@@ -302,7 +302,7 @@ async function parseStandard(zip: JSZip, tPath: string, xml: string, wb: Workboo
   if (!srcSheet || !srcRect) return null;
   const loc = parseRangeAddress(attr(/<location\b[^>]*>/.exec(xml)?.[0] ?? "", "ref") ?? "");
   if (!loc) return null;
-  const def = newPivotDef(wb.newId("pivot"), attr(xml, "name") ?? "PivotTable1", srcSheet.id, srcRect, { row: loc.r1, col: loc.c1 });
+  const def = newPivotDef(wb.newId("pivot"), attr(xml, "name") ?? "ÖzetTablo1", srcSheet.id, srcRect, { row: loc.r1, col: loc.c1 });
   const fieldsOf = (tag: string) => {
     const fm = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`).exec(xml);
     return fm ? [...fm[1].matchAll(/<field x="(-?\d+)"/g)].map((x) => Number(x[1])) : [];

@@ -428,3 +428,11 @@
 .oh-dialog[aria-label="Bul ve Değiştir"] .oh-dialog-footer .oh-btn {
   white-space: nowrap;
 }
+
+/* Mini Grafik sekmesi: iki sözcüklü bölünmüş düğme etiketi tek satırda */
+.oh-split-large.tb-split-nowrap {
+  max-width: none;
+}
+.oh-split-large.tb-split-nowrap .oh-split-arrow .oh-rbtn-label {
+  white-space: nowrap;
+}

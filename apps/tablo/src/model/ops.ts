@@ -9,6 +9,7 @@ import type { CellStyle } from "./styles";
 import type { Rect } from "./types";
 import { generateFill, type FillSource } from "./fill";
 import type { CellInput, SheetModel } from "./workbook";
+import { copySparkline } from "../sparkline/sparkOps";
 
 export type StylePatch = Partial<CellStyle> | ((s: CellStyle) => Partial<CellStyle>);
 
@@ -242,7 +243,7 @@ export class Ops extends OpsSheets {
     this.snapshotOp("Satır Ekle", () => {
       this.wb.engine.insertRows(sheet.id, at, count);
       sheet.shiftStructure("row", at, count);
-      this.wb.shiftPivotSources(sheet, "row", at, count);
+      this.wb.shiftDataRefs(sheet, "row", at, count);
       // Yeni satırlar üstteki satırın biçimini alır
       if (at > 0) {
         const h = sheet.rows.isCustom(at - 1) ? sheet.rows.rawSize(at - 1) : undefined;
@@ -263,7 +264,7 @@ export class Ops extends OpsSheets {
     this.snapshotOp("Satır Sil", () => {
       this.wb.engine.deleteRows(sheet.id, at, count);
       sheet.shiftStructure("row", at, -count);
-      this.wb.shiftPivotSources(sheet, "row", at, -count);
+      this.wb.shiftDataRefs(sheet, "row", at, -count);
     });
   }
 
@@ -271,7 +272,7 @@ export class Ops extends OpsSheets {
     this.snapshotOp("Sütun Ekle", () => {
       this.wb.engine.insertCols(sheet.id, at, count);
       sheet.shiftStructure("col", at, count);
-      this.wb.shiftPivotSources(sheet, "col", at, count);
+      this.wb.shiftDataRefs(sheet, "col", at, count);
       if (at > 0) {
         const w = sheet.cols.isCustom(at - 1) ? sheet.cols.rawSize(at - 1) : undefined;
         const cs = sheet.colStyles.get(at - 1);
@@ -287,7 +288,7 @@ export class Ops extends OpsSheets {
     this.snapshotOp("Sütun Sil", () => {
       this.wb.engine.deleteCols(sheet.id, at, count);
       sheet.shiftStructure("col", at, -count);
-      this.wb.shiftPivotSources(sheet, "col", at, -count);
+      this.wb.shiftDataRefs(sheet, "col", at, -count);
     });
   }
 
@@ -446,6 +447,8 @@ export class Ops extends OpsSheets {
             wb.setInputRaw(sheet, row, col, v ?? null);
           }
           if (mode !== "values") wb.setStyleRaw(sheet, row, col, sheet.styles.get(cellKey(sr, sc)));
+          // Mini grafik aynı gruba göreli veri aralığıyla kopyalanır
+          if ((mode === "series" || mode === "copy") && sheet.sparklines.length) copySparkline(sheet, { row: sr, col: sc }, { row, col }, wb);
         }
       }
     });

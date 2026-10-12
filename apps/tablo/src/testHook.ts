@@ -17,6 +17,8 @@ export interface TabloTestApi {
   selection(): string;
   chartCount(sheet?: string): number;
   pivotCount(sheet?: string): number;
+  /** Mini grafik grupları: tür ve hücreleri ("H2"). */
+  sparklines(sheet?: string): { type: string; cells: string[] }[];
   isRowHidden(row: number, sheet?: string): boolean;
   undoCount(): number;
   version(): number;
@@ -61,6 +63,7 @@ export function installTestHook(ctl: Controller): void {
         .join(","),
     chartCount: (name) => sheetOf(name)?.charts.length ?? 0,
     pivotCount: (name) => sheetOf(name)?.pivots.length ?? 0,
+    sparklines: (name) => (sheetOf(name)?.sparklines ?? []).map((g) => ({ type: g.type, cells: g.items.map((i) => `${colToName(i.col)}${i.row + 1}`) })),
     isRowHidden: (row, name) => !!sheetOf(name)?.rows.isHidden(row),
     undoCount: () => ctl.ops.history.undoCount,
     version: () => ctl.version,

@@ -77,7 +77,7 @@ export class Controller {
   /** İzleme Penceresi. */
   watches: Watch[] = [];
   showWatch = false;
-  /** Şeridin geçmesi istenen sekme (ör. PivotTable oluşturulunca "PivotTable Analiz"). */
+  /** Şeridin geçmesi istenen sekme (ör. PivotTable oluşturulunca "Özet Tablo Analizi"). */
   requestTab: string | null = null;
   /** Veri doğrulama açılan listesi açık mı. */
   listDropdown = false;

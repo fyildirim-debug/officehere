@@ -7,6 +7,7 @@ import type { Rect } from "../model/types";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
 import { CondFormatter } from "../model/condfmt";
 import { objectsExtent, objectsHtml } from "./printObjects";
+import { sparkSvgForCell } from "../sparkline/geometry";
 
 export function printRange(wb: WorkbookModel, sheet: SheetModel): Rect | null {
   if (sheet.page.printArea) return sheet.page.printArea;
@@ -100,13 +101,24 @@ export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts:
       const v = computeView(wb, sheet, row, c, cf);
       const css = styleToCss({ ...v.style, fill: v.fill, color: v.color, hAlign: v.style.hAlign ?? (v.align === "left" ? undefined : v.align) }, v.isNumber);
       const attrs = opts.cellAttrs ? ` data-r="${row}" data-c="${c}"` : "";
-      tds.push(`<td${span}${attrs} style="${css}">${esc(v.text).replace(/\n/g, "<br>")}</td>`);
+      tds.push(`<td${span}${attrs} style="${css}${opts.objects && sheet.sparklines.length ? sparkCss(wb, sheet, row, c, m) : ""}">${esc(v.text).replace(/\n/g, "<br>")}</td>`);
     }
     rows.push(`<tr style="height:${rh}px">${tds.join("")}</tr>`);
   }
   const table = `<table class="tb-print-table${opts.gridlines ? " has-grid" : ""}"><colgroup>${cols.join("")}</colgroup>${rows.join("")}</table>`;
   if (!opts.objects || !(sheet.charts.length || sheet.images.length || sheet.shapes.length)) return table;
   return `<div class="tb-print-sheet">${table}${objectsHtml(wb, sheet, r, !!opts.headings)}</div>`;
+}
+
+/** Mini grafikli hücrenin arka planı (SVG). */
+function sparkCss(wb: WorkbookModel, sheet: SheetModel, row: number, col: number, m: Rect | null | undefined): string {
+  const span = m && m.r1 === row && m.c1 === col ? m : { r1: row, c1: col, r2: row, c2: col };
+  let w = 0;
+  let h = 0;
+  for (let c = span.c1; c <= span.c2; c++) w += sheet.cols.size(c);
+  for (let r = span.r1; r <= span.r2; r++) h += sheet.rows.size(r);
+  const svg = sparkSvgForCell(wb, sheet, row, col, w, h);
+  return svg ? `;background-image:url('data:image/svg+xml;utf8,${encodeURIComponent(svg)}');background-size:100% 100%;background-repeat:no-repeat` : "";
 }
 
 /** Yazdırma kökünü (#tb-print) ve @page kuralını hazırlar; temizleme işlevini döndürür. */

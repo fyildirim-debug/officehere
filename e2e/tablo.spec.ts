@@ -24,6 +24,7 @@ type Api = {
   selection(): string;
   chartCount(sheet?: string): number;
   pivotCount(sheet?: string): number;
+  sparklines(sheet?: string): { type: string; cells: string[] }[];
   isRowHidden(row: number, sheet?: string): boolean;
   undoCount(): number;
 };
@@ -70,8 +71,16 @@ const ribbon = (page: Page, name: string) => page.locator(`.oh-ribbon-body butto
 const tab = (page: Page, name: string) => page.getByRole("tab", { name, exact: true });
 
 test.describe("OfficeHere Tablo uçtan uca", () => {
+  // Her senaryoda sayfa/konsol hatası olmamalı
+  let errors: string[] = [];
+  test.beforeEach(({ page }) => {
+    errors = collectErrors(page);
+  });
+  test.afterEach(() => {
+    expect(errors).toEqual([]);
+  });
+
   test("değer yazma, Enter ile aşağı inme ve sayı/tarih/yüzde tanıma", async ({ page }) => {
-    const errors = collectErrors(page);
     await open(page);
     await clickCell(page, "A1");
     await page.keyboard.type("Merhaba");
@@ -89,7 +98,6 @@ test.describe("OfficeHere Tablo uçtan uca", () => {
     expect((await cell(page, "A3"))!.edit).toBe("12.10.2026");
     expect((await cell(page, "A4"))!.value).toBe(0.15);
     await expect(page.getByRole("textbox", { name: "Formül Çubuğu" })).toHaveValue("");
-    expect(errors).toEqual([]);
   });
 
   test("=TOPLA ve =SUM aynı sonucu verir; Türkçe gösterilir", async ({ page }) => {
@@ -302,14 +310,14 @@ test.describe("OfficeHere Tablo uçtan uca", () => {
     expect((await cell(page, "B2"))!.value).toBe(null);
   });
 
-  test("PivotTable: oluştur, alan seç, sütuna sürükle, düzenleme engeli", async ({ page }) => {
+  test("Özet Tablo: oluştur, alan seç, sütuna sürükle, düzenleme engeli", async ({ page }) => {
     await open(page);
     await fillData(page, [["Bölge", "Yıl", "Satış"], ["Ege", "2024", "100"], ["Ege", "2025", "50"], ["Marmara", "2024", "200"]]);
     await clickCell(page, "A1");
     await tab(page, "Ekle").click();
-    await ribbon(page, "PivotTable").click();
-    await page.getByRole("dialog", { name: "PivotTable Oluştur" }).getByRole("button", { name: "Tamam" }).click();
-    await expect(page.getByRole("complementary", { name: "PivotTable Alanları" })).toBeVisible();
+    await ribbon(page, "Özet Tablo").click();
+    await page.getByRole("dialog", { name: "Özet Tablo Oluştur" }).getByRole("button", { name: "Tamam" }).click();
+    await expect(page.getByRole("complementary", { name: "Özet Tablo Alanları" })).toBeVisible();
     expect(await page.evaluate(() => window.__ohTablo!.activeSheet())).toBe("Sayfa2");
     await page.locator(".tb-pv-field", { hasText: "Bölge" }).locator("input").check();
     await page.locator(".tb-pv-field", { hasText: "Satış" }).locator("input").check();
@@ -319,10 +327,10 @@ test.describe("OfficeHere Tablo uçtan uca", () => {
     await page.locator(".tb-pv-field", { hasText: "Yıl" }).dragTo(page.locator('.tb-pv-area[data-area="cols"]'));
     await expect.poll(() => page.evaluate(() => window.__ohTablo!.cell("B4")?.value)).toBe(2024);
     expect((await cell(page, "D7"))!.value).toBe(350);
-    await expect(tab(page, "PivotTable Analiz")).toBeVisible();
+    await expect(tab(page, "Özet Tablo Analizi")).toBeVisible();
     await clickCell(page, "B5");
     await page.keyboard.type("9");
-    await expect(page.getByRole("dialog").getByText("PivotTable raporunun bu bölümü değiştirilemez", { exact: false })).toBeVisible();
+    await expect(page.getByRole("dialog").getByText("Özet tablonun bu bölümü doğrudan düzenlenemez", { exact: false })).toBeVisible();
   });
 
   test("Formül Denetimi: etkileyen okları ve Formülü Değerlendir", async ({ page }) => {
@@ -355,5 +363,36 @@ test.describe("OfficeHere Tablo uçtan uca", () => {
     await alert.getByRole("button", { name: "Tamam" }).click();
     await expect(find).toBeVisible();
     expect((await cell(page, "A2"))!.value).toBe("armut ELMA");
+  });
+  test("Mini grafikler: ekle, türünü değiştir, doldurma ile kopyala, temizle", async ({ page }) => {
+    await open(page);
+    await fillData(page, [["Ürün", "Oca", "Şub", "Mar"], ["Kalem", "10", "14", "9"], ["Defter", "-5", "3", "-2"]]);
+    await clickCell(page, "B2");
+    await page.keyboard.press("Shift+ArrowRight");
+    await page.keyboard.press("Shift+ArrowRight");
+    await tab(page, "Ekle").click();
+    await ribbon(page, "Çizgi").click();
+    const dlg = page.getByRole("dialog", { name: "Mini Grafikler Oluştur" });
+    await expect(dlg.getByLabel("Veri Aralığı")).toHaveValue("B2:D2");
+    await dlg.getByLabel("Konum Aralığı").fill("E2");
+    await dlg.getByRole("button", { name: "Tamam" }).click();
+    expect(await page.evaluate(() => window.__ohTablo!.sparklines())).toEqual([{ type: "line", cells: ["E2"] }]);
+    await expect(tab(page, "Mini Grafik")).toBeVisible();
+    await ribbon(page, "Sütun").click();
+    expect((await page.evaluate(() => window.__ohTablo!.sparklines()))[0].type).toBe("column");
+    // Doldurma tutamacıyla E3'e kopyala (aynı gruba, göreli veri aralığıyla)
+    const r = (await page.evaluate(() => window.__ohTablo!.cellRect("E2")))!;
+    const r3 = (await page.evaluate(() => window.__ohTablo!.cellRect("E3")))!;
+    await page.mouse.move(r.x + r.w - 1, r.y + r.h - 1);
+    await page.mouse.down();
+    await page.mouse.move(r3.x + r3.w / 2, r3.y + r3.h - 2, { steps: 5 });
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.__ohTablo!.sparklines())).toEqual([{ type: "column", cells: ["E2", "E3"] }]);
+    // Temizle ve geri al
+    await clickCell(page, "E3");
+    await ribbon(page, "Temizle").click();
+    expect(await page.evaluate(() => window.__ohTablo!.sparklines())).toEqual([{ type: "column", cells: ["E2"] }]);
+    await page.keyboard.press("Control+z");
+    expect((await page.evaluate(() => window.__ohTablo!.sparklines()))[0].cells).toEqual(["E2", "E3"]);
   });
 });

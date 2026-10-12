@@ -235,11 +235,38 @@ export interface SparklineGroup {
   type: "line" | "column" | "winLoss";
   /** Her mini grafik: hedef hücre ve veri aralığı ("Sayfa1!A1:F1" ya da "A1:F1"). */
   items: { row: number; col: number; range: string }[];
+  /** Mini grafik rengi. */
   color: string;
-  negativeColor?: string;
+  /** Çizgi kalınlığı (punto). */
+  weight?: number;
+  /** Göster: işaretçiler (yalnız çizgi), yüksek/düşük/ilk/son/negatif noktalar. */
   markers?: boolean;
   highPoint?: boolean;
   lowPoint?: boolean;
+  firstPoint?: boolean;
+  lastPoint?: boolean;
+  negative?: boolean;
+  /** İşaretçi renkleri. */
+  markerColor?: string;
+  negativeColor?: string;
+  highColor?: string;
+  lowColor?: string;
+  firstColor?: string;
+  lastColor?: string;
+  /** Yatay ekseni göster (sıfır çizgisi). */
+  showAxis?: boolean;
+  axisColor?: string;
+  /** Dikey eksen en küçük/en büyük: her mini grafik için otomatik, grupta aynı ya da özel değer. */
+  minAxis?: "individual" | "group" | "custom";
+  maxAxis?: "individual" | "group" | "custom";
+  minValue?: number;
+  maxValue?: number;
+  /** Boş hücreler: boşluk, sıfır ya da veri noktalarını çizgiyle bağla. */
+  emptyAs?: "gap" | "zero" | "span";
+  /** Gizli satır ve sütunlardaki verileri göster. */
+  showHidden?: boolean;
+  /** Sağdan sola çizim (Eksen > Sağdan Sola Çizim Verileri). */
+  rightToLeft?: boolean;
 }
 
 export type ViewMode = "normal" | "pageLayout" | "pageBreak";
