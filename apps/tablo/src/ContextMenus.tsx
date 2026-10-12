@@ -30,6 +30,7 @@ import type { TableDef } from "./model/types";
 import { insertPageBreak, resetPageBreaks } from "./grid/pageBreakDrag";
 import { setPage } from "./dialogs/PageSetupDialog";
 import { deleteTableCols, deleteTableRows, insertTableCols, insertTableRows, selectTablePart, tableSpan } from "./actions/tableEdit";
+import { ContextMiniBar } from "./ContextMiniBar";
 
 function copy(ctl: Controller, cut: boolean) {
   const d = E.copySelection(ctl, cut);
@@ -108,6 +109,8 @@ export function CellMenu({ ctl }: { ctl: Controller }) {
   const table = sheet.tableAt(row, col);
   return (
     <Menu width={230}>
+      {/* Yaygın tablolama uygulamalarındaki gibi menünün üstünde mini araç çubuğu. */}
+      <ContextMiniBar ctl={ctl} />
       <MenuItem icon={<Cut20Regular />} label="Kes" shortcut="Ctrl+X" onClick={() => copy(ctl, true)} />
       <MenuItem icon={<Copy20Regular />} label="Kopyala" shortcut="Ctrl+C" onClick={() => copy(ctl, false)} />
       <PasteItems ctl={ctl} />
@@ -220,6 +223,7 @@ export function HeaderMenu({ ctl, axis }: { ctl: Controller; axis: "row" | "col"
   for (let i = a; i <= b; i++) items.push(i);
   return (
     <Menu width={220}>
+      <ContextMiniBar ctl={ctl} />
       <MenuItem icon={<Cut20Regular />} label="Kes" onClick={() => copy(ctl, true)} />
       <MenuItem icon={<Copy20Regular />} label="Kopyala" onClick={() => copy(ctl, false)} />
       <PasteItems ctl={ctl} />

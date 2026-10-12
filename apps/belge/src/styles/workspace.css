@@ -1,4 +1,13 @@
 /* OfficeHere Belge — çalışma alanı, sayfa görünümü ve belge içeriği stilleri. */
+@import "./dark-page.css";
+
+/* Sayfa belirteçleri: zemin, ekranda görünen otomatik metin rengi, belge çizgileri (tablo kenarlığı vb.).
+   Görünüm › Koyu Sayfa yalnız ekrandaki çalışma alanında değiştirir (dark-page.css). */
+:root {
+  --bl-page-bg: #fff;
+  --bl-page-fg: #000;
+  --bl-page-line: #000;
+}
 
 .bl-app {
   height: 100%;
@@ -44,7 +53,7 @@
 .bl-page {
   position: absolute;
   left: 0;
-  background: #fff;
+  background: var(--bl-page-bg);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.18);
   overflow: hidden;
   pointer-events: none;
@@ -160,7 +169,7 @@
 
 /* Web Düzeni: sayfa sınırı yok, metin pencereye sarılır. */
 .is-web .bl-scroll {
-  background: #fff;
+  background: var(--bl-page-bg);
 }
 
 .is-web .bl-canvas {
@@ -230,7 +239,7 @@
   word-wrap: break-word;
   font-variant-ligatures: none;
   tab-size: 1.25cm;
-  caret-color: #000;
+  caret-color: var(--bl-page-fg);
 }
 
 .bl-doc .ProseMirror > * {

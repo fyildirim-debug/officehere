@@ -22,7 +22,7 @@ import {
   ArrowNext20Regular,
   Link20Regular,
   Dismiss32Regular,
-  ReadingModeMobile24Regular, TextBulletListTree24Regular, Drafts24Regular } from "@fluentui/react-icons";
+  ReadingModeMobile24Regular, TextBulletListTree24Regular, Drafts24Regular, DarkTheme24Regular } from "@fluentui/react-icons";
 import { getNative } from "@officehere/core";
 import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonStack } from "@officehere/ui";
 import { useBelge } from "../state/context";
@@ -31,10 +31,12 @@ import { hfKey, hfVariantOf } from "../views/PageSheets";
 import { hfLinked, sectionIds, setHfLink, withHfContent } from "../editor/sectionHf";
 import { applyPageSetup, sectionPageAt } from "../state/pageSetup";
 import type { PageSetup } from "../model/document";
+import { setDarkPage, useDarkPage } from "./darkPage";
 
 export function ViewTab({ zoomTo }: { zoomTo: (kind: "100" | "onePage" | "multi" | "width") => void }) {
   const ctx = useBelge();
   const v = ctx.view;
+  const darkPage = useDarkPage();
   return (
     <>
       <RibbonGroup label="Görünümler" icon={<DocumentOnePage32Regular />}>
@@ -48,6 +50,9 @@ export function ViewTab({ zoomTo }: { zoomTo: (kind: "100" | "onePage" | "multi"
       </RibbonGroup>
       <RibbonGroup label="Tam Ekran" icon={<ScanText32Regular />}>
         <RibbonButton size="large" icon={<ScanText32Regular />} label="Odak" description="Dikkat dağıtıcı öğeleri kaldırıp belgenize odaklanın. Çıkmak için Esc." checked={v.focusMode} onClick={() => ctx.setView({ focusMode: !v.focusMode })} />
+      </RibbonGroup>
+      <RibbonGroup label="Koyu Mod" icon={<DarkTheme24Regular />}>
+        <RibbonButton size="large" icon={<DarkTheme24Regular />} label="Koyu Sayfa" description="Sayfayı ekranda koyu zeminle gösterin. Yazdırma ve PDF etkilenmez, sayfa beyaz basılır." checked={darkPage} onClick={() => setDarkPage(!darkPage)} />
       </RibbonGroup>
       <RibbonGroup label="Göster" icon={<DocumentOnePage32Regular />}>
         <RibbonStack>

@@ -1,0 +1,103 @@
+/* Görünüm › Koyu Sayfa (<html data-bl-page="dark">): yalnız ekrandaki çalışma alanı koyulaşır.
+   Ekran dışı önizleme kopyası (.bl-offscreen), yazdırma kökü ve Dosya › Yazdır önizlemesi çalışma alanı
+   dışında olduğundan beyaz kalır; belgenin kendi sayfa rengi varsa koyu sayfa uygulanmaz.
+   Belgedeki renkler (color) değişmez: ekranda görünen metin -webkit-text-fill-color ile çizilir. Böylece
+   yazdırma ve DOM kopyaları (yinelenen başlık satırı) etkilenmez. Otomatik/siyah ve siyaha yakın koyu
+   tonlar aynı renk tonunda açılır (OKLCH açıklığı), belirgin renkler aynen kalır. Vurgu, gölgelendirme ve
+   dolgulu tablolar kâğıttaki gibi (koyu metin, kendi zemini) çizilir; resim ve grafikler değişmez. */
+
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) {
+  --bl-page-bg: #1f1f1f;
+  --bl-page-fg: #e4e4e4;
+  --bl-page-line: #8c8c8c;
+  --bl-rev-color: #ff8f8f;
+  --bl-rev-line: rgba(255, 143, 143, 0.9);
+  /* Elemanın kendi renginden: açıklığı 0,5'ten küçükse 0,92 − 0,55·L'ye çıkar (siyah → #e4e4e4). */
+  --bl-ink: oklch(from currentColor clamp(l, calc((0.5 - l) * 1000), calc(0.92 - 0.55 * l)) c h);
+  background: color-mix(in srgb, var(--oh-canvas-bg) 90%, #fff);
+}
+
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-page {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) :is(.bl-doc, .bl-doc *) {
+  -webkit-text-fill-color: var(--bl-page-fg);
+  -webkit-text-fill-color: oklch(from currentColor clamp(l, calc((0.5 - l) * 1000), calc(0.92 - 0.55 * l)) c h);
+  -webkit-text-stroke-color: var(--bl-ink);
+  text-decoration-color: var(--bl-ink);
+  caret-color: var(--bl-page-fg);
+}
+
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-doc li::marker {
+  color: var(--bl-ink);
+}
+
+/* Kâğıt görünümü korunan bölgeler: metin vurgusu, arama vurgusu, gölgelendirilmiş paragraf/karakter/hücre,
+   dolgulu metin kutusu ve dolgulu tablo stilleri (bantlı satırlar açık zeminlidir). */
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-doc :is(mark, .bl-hit, [data-bg], [style*="background"]:not([style*="background:transparent"], [style*="background: transparent"]), table:is([data-table-style^="grid-"], [data-table-style^="list-"], [data-table-style^="light-"])),
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-doc :is(mark, .bl-hit, [data-bg], [style*="background"]:not([style*="background:transparent"], [style*="background: transparent"]), table:is([data-table-style^="grid-"], [data-table-style^="list-"], [data-table-style^="light-"])) * {
+  -webkit-text-fill-color: currentColor;
+  -webkit-text-stroke-color: currentColor;
+  text-decoration-color: currentColor;
+  caret-color: currentColor;
+}
+
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-doc table:is([data-table-style^="grid-"], [data-table-style^="list-"], [data-table-style^="light-"]) {
+  background: #fff;
+}
+
+/* İçi boş (anahat) metin: dolgu sayfa zemini olur. */
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-doc [data-outline-text] {
+  -webkit-text-fill-color: var(--bl-page-bg);
+}
+
+/* Alan gölgelendirmesi, işaret etiketleri ve kılavuz çizgileri koyu zemine uyar. */
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-body .bl-field {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-hf-edit .bl-field.is-editing {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-doc :is(.bl-secmark b, .bl-pagebreak span, .bl-colbreak span) {
+  background: var(--bl-page-bg);
+}
+
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-gridlines {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.13) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.13) 1px, transparent 1px);
+}
+
+/* Seçim koyu zeminde belirgin kalır. */
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-doc .ProseMirror ::selection {
+  background: rgba(86, 156, 255, 0.45);
+}
+
+/* Siyah çizgiler (dipnot ayracı, içindekiler noktaları, siyah paragraf/sayfa kenarlıkları) açılır. */
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) .bl-doc :is(.bl-note-sep, .bl-toc-dots) {
+  border-color: var(--bl-page-line);
+}
+
+:root[data-bl-page="dark"] .bl-workspace:not(.bl-offscreen *):not(:has(.bl-pages > :is(.bl-page, .bl-body)[style*="background"])) :is(.bl-doc, .bl-page) :is([style*="solid #000000" i], [style*="double #000000" i], [style*="dotted #000000" i], [style*="dashed #000000" i]) {
+  border-color: var(--bl-page-line) !important;
+}
+
+/* Kenarlık stili olmayan (varsayılan/kılavuz) tablolar: çizgi rengi belirteçten. Yinelenen başlık satırı
+   kopyası hesaplanmış rengi satır içine yazdığından ona da uygulanır (yazdırmada siyah kalır). */
+.bl-doc table:is(:not([data-table-style]), [data-table-style="grid"]) :is(td, th) {
+  border-color: var(--bl-page-line);
+}
+
+.bl-doc table:is(:not([data-table-style]), [data-table-style="grid"]) tr.bl-pg-rhead > :is(td, th) {
+  border-color: var(--bl-page-line) !important;
+}
+
+/* Değişiklik izleme renkleri (işaretleme kiplerinin "inherit" kuralları daha özgüldür, korunur). */
+.bl-doc :is(.bl-ins, .bl-del) {
+  color: var(--bl-rev-color, #c00000);
+}
+
+.bl-doc .bl-fmtchg {
+  background-image: linear-gradient(to right, var(--bl-rev-line, rgba(192, 0, 0, 0.7)) 50%, transparent 50%);
+}
