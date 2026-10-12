@@ -112,7 +112,7 @@ metninin bulunmasını şart koşar. Bu şart otomatik karşılanır:
 - Önceden derlenmiş paketlerin içine gömülü bileşenler de listelenir:
   `exceljs.min.js` için kaynak haritasından (crypto-browserify, core-js…),
   `jszip.min.js` için incelenerek belirlenen listeden (pako, lie…).
-- Yerelde lisans dosyası bulunmayan bileşenlerin metinleri `scripts/lisanslar/`
+- Gömülü bileşenlerin ve lisans dosyası olmayan paketlerin metinleri (her ortamda aynı sonuç için) `scripts/lisanslar/`
   altında tutulur (`node scripts/lisans-onbellek.mjs <paket>` ile npm'den
   indirilir; npm paketinde lisans dosyası yoksa metin kaynak deposundan ya da
   README'deki lisans bölümünden birebir alınır).
