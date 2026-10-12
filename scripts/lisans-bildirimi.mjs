@@ -4,9 +4,10 @@
 // dağıtılan her kopyada telif ve lisans metninin bulunmasını şart koşar.
 //
 // Önceden derlenmiş paketlerin (ör. exceljs.min.js) içine gömülü bileşenler
-// kaynak haritasından (.map) bulunur. Yerelde kurulu olmayanların lisans metni
-// scripts/lisanslar/ altındaki önbellekten okunur; eksik varsa derleme durur
-// ve `node scripts/lisans-onbellek.mjs` ile önbellek doldurulur.
+// kaynak haritasından (.map) bulunur ve lisans metinleri her ortamda aynı
+// sonucu vermesi için yalnız scripts/lisanslar/ önbelleğinden okunur. Lisans
+// dosyası olmayan doğrudan bağımlılıklar da oradan okunur. Eksik varsa derleme
+// durur ve `node scripts/lisans-onbellek.mjs <paket>` ile önbellek doldurulur.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -157,12 +158,16 @@ export function kayitlariTopla(modulKimlikleri) {
     else eksik.push(p.ad);
     for (const ic of gomuluPaketler(p.ad, p.dosya)) {
       if (kayitlar.has(ic)) continue;
-      const ki = kayit(ic, yereldeBul(ic), p.ad);
+      // Gömülü bileşenler yalnız depodaki önbellekten okunur; yerel pnpm deposu ortama göre değişir.
+      const ki = kayit(ic, null, p.ad);
       if (ki) kayitlar.set(ic, ki);
       else eksik.push(ic);
     }
   }
-  return { kayitlar: [...kayitlar.values()].sort((a, b) => a.ad.localeCompare(b.ad)), eksik: [...new Set(eksik)] };
+  return {
+    kayitlar: [...kayitlar.values()].sort((a, b) => a.ad.localeCompare(b.ad)),
+    eksik: [...new Set(eksik)].filter((ad) => !kayitlar.has(ad)),
+  };
 }
 
 const CIZGI = "=".repeat(78);
