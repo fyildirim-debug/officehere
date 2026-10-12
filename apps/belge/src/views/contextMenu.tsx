@@ -86,7 +86,7 @@ export function buildContextMenu({ editor, openDialog, newComment, notify, openL
             }
           />
           <MenuItem icon={<TableCellsMerge20Regular />} label="Hücreleri Birleştir" disabled={!(sel instanceof CellSelection)} onClick={() => chain().mergeCells().run()} />
-          <MenuItem icon={<TableCellsSplit20Regular />} label="Hücreleri Böl..." onClick={() => chain().splitCell().run()} />
+          <MenuItem icon={<TableCellsSplit20Regular />} label="Hücreleri Böl..." onClick={() => openDialog("splitCells")} />
           <MenuItem icon={<TableSettings20Regular />} label="Tablo Özellikleri..." onClick={() => openDialog("tableProps")} />
           <MenuSeparator />
         </>

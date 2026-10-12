@@ -159,7 +159,10 @@ export const TrackChanges = Extension.create({
               const a = out.mapping.map(rest.map(s.from, -1), -1);
               const b = out.mapping.map(rest.map(s.from + s.slice.size, 1), 1);
               if (b > a) {
-                out.addMark(a, b, ins);
+                // Aynı yazarın bitişik eklemesi sürer: tek değişiklik olarak kalır (her tuşta yeni tarih yok).
+                const $a = out.doc.resolve(a);
+                const near = [$a.nodeBefore, out.doc.resolve(b).nodeAfter].flatMap((n) => n?.marks ?? []).find((m) => m.type === insType && m.attrs.author === st.author);
+                out.addMark(a, b, near ?? ins);
                 out.removeMark(a, b, delType);
                 touched = true;
               }
@@ -178,7 +181,7 @@ export const TrackChanges = Extension.create({
               if (s.slice.size === 0) cursor = lastKey === "Delete" ? at + frag.size : at;
             }
           }
-          if (!touched) return null;
+          if (!touched || (!out.docChanged && cursor === null)) return null;
           if (cursor !== null && t.selection.empty) out.setSelection(TextSelection.create(out.doc, Math.min(cursor, out.doc.content.size)));
           out.setMeta(trackKey, { applied: true });
           return out;

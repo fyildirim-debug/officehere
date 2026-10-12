@@ -148,7 +148,7 @@ export function TableLayoutTab() {
       <RibbonGroup label="Birleştir" icon={<TableCellsMerge20Regular />}>
         <RibbonStack>
           <RibbonButton icon={<TableCellsMerge20Regular />} label="Hücreleri Birleştir" disabled={!ctx.fmt.cellSelection} onClick={() => chain().mergeCells().run()} />
-          <RibbonButton icon={<TableCellsSplit20Regular />} label="Hücreleri Böl" onClick={() => chain().splitCell().run()} />
+          <RibbonButton icon={<TableCellsSplit20Regular />} label="Hücreleri Böl" onClick={() => ctx.openDialog("splitCells")} />
         </RibbonStack>
       </RibbonGroup>
       <RibbonGroup label="Hücre Boyutu" icon={<TableResizeColumn20Regular />}>

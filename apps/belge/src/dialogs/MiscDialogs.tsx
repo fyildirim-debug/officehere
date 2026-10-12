@@ -1,4 +1,5 @@
-// Diğer iletişim kutuları: Yakınlaştır, Sözcük Sayısı, Klavye Kısayolları, Filigran, Sayfa Kenarlıkları, Tablo Özellikleri, Sırala, Alternatif Metin, Resim Boyutu.
+// Diğer iletişim kutuları: Yakınlaştır, Sözcük Sayısı, Klavye Kısayolları, Filigran, Sayfa Kenarlıkları, Tablo Özellikleri,
+// Hücreleri Böl, Sırala, Alternatif Metin, Resim Boyutu.
 import { useMemo, useState } from "react";
 import { NodeSelection } from "@tiptap/pm/state";
 import { FONT_LIST } from "@officehere/core";
@@ -7,6 +8,7 @@ import { useBelge } from "../state/context";
 import { docStats, countWords, sortParagraphs } from "../editor/commands";
 import type { PageBorder } from "../model/document";
 import { tableInfo } from "../ribbon/tableUtil";
+import { splitCellGrid, splitDefaults } from "../editor/tableSplit";
 import { Check, ColorField } from "./FontDialog";
 
 const okCancel = (ok: () => void, close: () => void) => (
@@ -302,6 +304,36 @@ export function PageBordersDialog({ onClose }: { onClose: () => void }) {
       <div className="bl-pb-preview">
         <span style={{ border: setting === "none" ? "1px dashed #ccc" : `${Math.max(1, width)}px ${style === "thick" || style === "single" ? "solid" : style} ${color ?? "#000"}` }} />
       </div>
+    </Dialog>
+  );
+}
+
+export function SplitCellsDialog({ onClose }: { onClose: () => void }) {
+  const { editor, notify } = useBelge();
+  const def = useMemo(() => splitDefaults(editor.state), [editor]);
+  const [cols, setCols] = useState(def.cols);
+  const [rows, setRows] = useState(def.rows);
+  const [merge, setMerge] = useState(true);
+  const apply = () => {
+    if (!splitCellGrid(editor.state, editor.view.dispatch, cols, rows, merge)) {
+      notify(`Hücre ${rows} satıra bölünemez: satır sayısı hücrenin kapladığı satır sayısını tam bölmelidir.`, "warning");
+      return;
+    }
+    editor.commands.focus();
+    onClose();
+  };
+  const num = (label: string, v: number, set: (n: number) => void) => (
+    <Field label={label}>
+      <input type="number" min={1} max={63} value={v} autoFocus={label.startsWith("Sütun")} onChange={(e) => set(Math.max(1, Math.min(63, Number(e.target.value) || 1)))} />
+    </Field>
+  );
+  return (
+    <Dialog open title="Hücreleri Böl" width={300} onClose={onClose} onSubmit={apply} footer={okCancel(apply, onClose)}>
+      <div className="bl-dlg-grid">
+        {num("Sütun sayısı:", cols, setCols)}
+        {num("Satır sayısı:", rows, setRows)}
+      </div>
+      {def.multi && <Check label="Bölmeden önce hücreleri birleştir" v={merge} set={setMerge} />}
     </Dialog>
   );
 }

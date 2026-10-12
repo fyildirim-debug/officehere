@@ -40,6 +40,7 @@ import { ReviewTab } from "./ribbon/ReviewTab";
 import { HeaderFooterTab, HelpTab, ViewTab } from "./ribbon/ViewTab";
 import { TableDesignTab, TableLayoutTab } from "./ribbon/TableTabs";
 import { PictureTab } from "./ribbon/PictureTab";
+import { ShapeTab } from "./ribbon/ShapeTab";
 import "./styles/belge.css";
 import "./styles/document.css";
 
@@ -252,8 +253,17 @@ export function App() {
         if (idle && !document.querySelector(".oh-dialog, [data-oh-popover]")) activeRef.current.view.focus();
       }, 0);
     };
+    // Menü öğesine fareyle basmak belgeden odağı almaz: komut sonrası ilk tuşlar belgeye gider.
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest?.('[data-oh-popover] [role="menuitem"]') && activeRef.current.view.hasFocus()) e.preventDefault();
+    };
     document.addEventListener("pointerup", onUp, true);
-    return () => document.removeEventListener("pointerup", onUp, true);
+    document.addEventListener("mousedown", onDown, true);
+    return () => {
+      document.removeEventListener("pointerup", onUp, true);
+      document.removeEventListener("mousedown", onDown, true);
+    };
   }, []);
 
   // İletişim kutusu kapanınca odak belgeye döner (kutuyu açan şerit düğmesinde kalmaz).
@@ -447,6 +457,7 @@ export function App() {
     { id: "tableDesign", label: "Tablo Tasarımı", content: <TableDesignTab />, contextual: true, hidden: !fmt?.inTable || !!hfEditing },
     { id: "tableLayout", label: "Düzen", content: <TableLayoutTab />, contextual: true, hidden: !fmt?.inTable || !!hfEditing },
     { id: "picture", label: "Resim Biçimi", content: <PictureTab />, contextual: true, hidden: !fmt?.image },
+    { id: "shape", label: "Şekil Biçimi", content: <ShapeTab />, contextual: true, hidden: !fmt?.textBox || !!hfEditing },
   ];
 
   // Üst bilgi düzenlemesi başlayınca bağlamsal sekmeye geç.
@@ -472,7 +483,13 @@ export function App() {
   const openLocalFile = async (file: File) => {
     if (!(await confirmDiscard())) return;
     setBackstage(null);
-    await files.openData(file.name, await file.arrayBuffer(), { name: file.name });
+    let data: ArrayBuffer;
+    try {
+      data = await file.arrayBuffer();
+    } catch (err) {
+      return notify(`"${file.name}" okunamadı: ${(err as Error).message}`, "error");
+    }
+    await files.openData(file.name, data, { name: file.name });
   };
   const onOpenFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

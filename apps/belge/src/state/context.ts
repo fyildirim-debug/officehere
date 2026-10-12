@@ -22,6 +22,7 @@ export type DialogKind =
   | "watermark"
   | "pageBorders"
   | "tableProps"
+  | "splitCells"
   | "sort"
   | "bookmark"
   | "columns"
@@ -78,7 +79,7 @@ export interface BelgeCtx {
   updateToc: () => void;
   /** Dipnot / son not ekler ve metnine odaklanır. */
   insertNote: (kind: "footnote" | "endnote") => void;
-  notify: (text: string) => void;
+  notify: (text: string, kind?: "info" | "warning" | "error" | "success") => void;
   /** Dosya > Hakkında'yı açar. */
   openBackstage: (page?: "about" | "info" | "new" | "open" | "export" | "print") => void;
 }

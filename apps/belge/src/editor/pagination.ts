@@ -61,11 +61,13 @@ export class PaginationController {
     if (JSON.stringify(next) === JSON.stringify(this.geometry)) return;
     this.geometry = next;
     const v = this.view;
+    if (v && !v.isDestroyed) syncDomSelection(v);
     if (v && !v.isDestroyed) v.dispatch(v.state.tr.setMeta(sectionLayoutKey, true).setMeta(paginationKey, { remeasure: true }).setMeta("addToHistory", false));
   }
 
   request() {
     const v = this.view;
+    if (v && !v.isDestroyed) syncDomSelection(v);
     if (v && !v.isDestroyed) v.dispatch(v.state.tr.setMeta(paginationKey, { remeasure: true }).setMeta("addToHistory", false));
   }
 
@@ -479,8 +481,25 @@ class PaginationView {
   }
 
   private apply(breaks: PageBreakMark[], styles: SectionStyle[]) {
+    syncDomSelection(this.view);
     const tr = this.view.state.tr.setMeta(paginationKey, { breaks, styles }).setMeta("addToHistory", false);
     this.view.dispatch(tr);
+  }
+}
+
+/**
+ * Zamanlayıcıyla gelen (kullanıcı kaynaklı olmayan) bir işlemden önce bekleyen yerel seçim değişikliği
+ * okunur: tarayıcı seçimi değiştirmiş ama "selectionchange" henüz işlenmemişse, güncelleme seçimi eski
+ * konuma geri yazmasın (ör. Home'dan hemen sonra Ctrl+Shift+Sağ). ProseMirror'ın iç gözlemcisi kullanılır.
+ */
+export function syncDomSelection(view: EditorView) {
+  try {
+    // forceFlush: "selectionchange" gelmiş, gecikmeli okuma bekliyor; flush: olay henüz gelmemiş.
+    const obs = (view as unknown as { domObserver?: { flush(): void; forceFlush(): void } }).domObserver;
+    obs?.forceFlush();
+    obs?.flush();
+  } catch {
+    /* gözlemci yoksa yoksay */
   }
 }
 

@@ -25,6 +25,8 @@ export interface FormatState {
   inTable: boolean;
   cellSelection: boolean;
   image: boolean;
+  /** Metin kutusu seçili ya da imleç metin kutusunun içinde. */
+  textBox: boolean;
   link: string | null;
   canUndo: boolean;
   canRedo: boolean;
@@ -65,6 +67,7 @@ export function computeFormat(editor: Editor, styles: Record<string, StyleDef>):
     }
   }
   const image = sel instanceof NodeSelection && sel.node.type.name === "image";
+  const textBox = textBoxAt(editor.state) !== null;
   const deepest = (() => {
     const { $from } = sel;
     for (let d = $from.depth; d > 0; d--) {
@@ -93,6 +96,7 @@ export function computeFormat(editor: Editor, styles: Record<string, StyleDef>):
     inTable: editor.isActive("table"),
     cellSelection: sel instanceof CellSelection,
     image,
+    textBox,
     link: editor.isActive("link") ? ((editor.getAttributes("link").href as string) ?? "") : null,
     canUndo: editor.can().undo(),
     canRedo: editor.can().redo(),
@@ -119,4 +123,13 @@ export function computeFormat(editor: Editor, styles: Record<string, StyleDef>):
 export function sameFormat(a: FormatState, b: FormatState): boolean {
   for (const k of Object.keys(a) as (keyof FormatState)[]) if (a[k] !== b[k]) return false;
   return true;
+}
+
+/** Seçili ya da imleci içeren metin kutusu (konum ve düğüm). */
+export function textBoxAt(state: Editor["state"]): { pos: number; node: Editor["state"]["doc"] } | null {
+  const sel = state.selection;
+  if (sel instanceof NodeSelection && sel.node.type.name === "textBox") return { pos: sel.from, node: sel.node };
+  const { $from } = sel;
+  for (let d = $from.depth; d > 0; d--) if ($from.node(d).type.name === "textBox") return { pos: $from.before(d), node: $from.node(d) };
+  return null;
 }

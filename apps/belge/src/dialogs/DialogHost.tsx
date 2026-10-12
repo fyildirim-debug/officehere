@@ -5,7 +5,7 @@ import { ParagraphDialog } from "./ParagraphDialog";
 import { FindReplaceDialog } from "./FindReplaceDialog";
 import { ColumnsDialog, PageSetupDialog } from "./PageSetupDialog";
 import { BookmarkDialog, DateTimeDialog, InsertTableDialog, LinkDialog, SymbolDialog } from "./InsertDialogs";
-import { AltTextDialog, ImageSizeDialog, PageBordersDialog, ShortcutsDialog, SortDialog, TablePropsDialog, WatermarkDialog, WordCountDialog, ZoomDialog, type ZoomTarget } from "./MiscDialogs";
+import { AltTextDialog, ImageSizeDialog, PageBordersDialog, ShortcutsDialog, SortDialog, SplitCellsDialog, TablePropsDialog, WatermarkDialog, WordCountDialog, ZoomDialog, type ZoomTarget } from "./MiscDialogs";
 
 interface Props {
   dialog: DialogState | null;
@@ -49,6 +49,8 @@ export function DialogHost({ dialog, onClose, zoom, onZoom, pages }: Props) {
       return <WatermarkDialog onClose={onClose} />;
     case "pageBorders":
       return <PageBordersDialog onClose={onClose} />;
+    case "splitCells":
+      return <SplitCellsDialog onClose={onClose} />;
     case "tableProps":
       return <TablePropsDialog onClose={onClose} />;
     case "sort":

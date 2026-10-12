@@ -43,6 +43,8 @@ export function RibbonGallery({ items, selectedId, onSelect, itemWidth = 72, ite
       type="button"
       className={`oh-gallery-item${it.id === selectedId ? " is-selected" : ""}`}
       style={{ width: itemWidth, height: itemHeight }}
+      aria-label={it.label}
+      aria-pressed={it.id === selectedId}
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => {
         onSelect(it.id);

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { URL, collectErrors } from "./ortak";
 
@@ -43,6 +44,7 @@ test.describe("OfficeHere Belge senaryoları", () => {
     await expect(body(page)).toContainText("Merhaba kalın dünya");
     // Sözcüğü seçip şeritteki İtalik düğmesiyle biçimle.
     await page.keyboard.press("Control+Shift+ArrowLeft");
+    await expect.poll(() => page.evaluate(() => window.getSelection()!.toString())).toBe("dünya");
     await button(page, "İtalik").click();
     await expect(body(page).locator("em")).toHaveText("dünya");
     await expect(button(page, "İtalik")).toHaveAttribute("aria-pressed", "true");
@@ -86,6 +88,14 @@ test.describe("OfficeHere Belge senaryoları", () => {
     await button(page, "Sil").click();
     await menuItem(page, "Satırları Sil").click();
     await expect(cells).toHaveCount(6);
+    // Hücreleri Böl: B1 üç sütuna bölünür, diğer satırdaki hücre genişler.
+    await cells.nth(1).click();
+    await button(page, "Hücreleri Böl").click();
+    const dlg = page.locator(".oh-dialog");
+    await dlg.getByLabel("Sütun sayısı:").fill("3");
+    await dlg.getByRole("button", { name: "Tamam" }).click();
+    await expect(cells).toHaveCount(8);
+    await expect(body(page).locator("tr").nth(1).locator("td").nth(1)).toHaveAttribute("colspan", "3");
   });
 
   test("stil galerisi: Başlık 1 ve gezinti bölmesinde başlık", async ({ page }) => {
@@ -171,7 +181,8 @@ test.describe("OfficeHere Belge senaryoları", () => {
     const other = await browser.newPage();
     const otherErrors = collectErrors(other);
     await other.goto(URL.belge);
-    await other.setInputFiles("#bl-open-input", path);
+    // Dosya içeriği doğrudan verilir (yol Türkçe karakter içerebilir).
+    await other.setInputFiles("#bl-open-input", { name: file.suggestedFilename(), mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: readFileSync(path) });
     await expect(other.locator(".oh-titlebar")).toContainText(file.suggestedFilename().replace(/\.docx$/, ""));
     const ob = other.locator(".bl-body .ProseMirror");
     await expect(ob.locator("h1")).toHaveText("Rapor Başlığı");
@@ -184,6 +195,7 @@ test.describe("OfficeHere Belge senaryoları", () => {
 
   test("geri al ve yinele: yazma, biçim ve şerit düğmeleri", async ({ page }) => {
     await page.keyboard.type("bir");
+    // Geri alma geçmişi 500 ms'den uzun aradan sonra yeni adım başlatır (Word'deki gibi sözcük sözcük).
     await page.waitForTimeout(600);
     await page.keyboard.type(" iki");
     await expect(body(page)).toHaveText("bir iki");
@@ -230,6 +242,7 @@ test.describe("OfficeHere Belge senaryoları", () => {
   test("sağ tık menüsü: Kes/Kopyala, Yazı Tipi iletişim kutusu", async ({ page }) => {
     await page.keyboard.type("Bağlam menüsü deneme");
     await page.keyboard.press("Control+Shift+ArrowLeft");
+    await expect.poll(() => page.evaluate(() => window.getSelection()!.toString())).toBe("deneme");
     const word = body(page).locator("p").first();
     const box = (await word.boundingBox())!;
     await page.mouse.click(box.x + box.width - 20, box.y + box.height / 2, { button: "right" });
@@ -255,8 +268,11 @@ test.describe("OfficeHere Belge senaryoları", () => {
     await expect(status(page)).toContainText("Değişiklikleri İzle: Açık");
     await page.keyboard.type(" eklendi");
     await expect(body(page).locator("ins")).toHaveText(" eklendi");
-    await page.keyboard.press("Home");
+    await page.keyboard.press("Control+Home");
     await page.keyboard.press("Control+Shift+ArrowRight");
+    // Tarayıcının seçim değişikliği olayı düzenleyiciye ulaşsın.
+    await expect.poll(() => page.evaluate(() => window.getSelection()!.toString())).toMatch(/^Önceki ?$/);
+    await page.waitForTimeout(50);
     await page.keyboard.press("Control+b");
     await expect(body(page).locator(".bl-fmtchg")).toHaveCount(1);
     await ribbon(page).getByRole("button", { name: "Reddet seçenekleri" }).click();

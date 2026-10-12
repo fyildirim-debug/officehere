@@ -1978,3 +1978,9 @@
 .bl-fn-icon sup {
   font-size: 10px;
 }
+
+/* Bul ve Değiştir: etiketler aynı genişlikte, giriş kutuları hizalı */
+.bl-find-fields .oh-field.is-inline .oh-field-label {
+  flex: none;
+  min-width: 84px;
+}

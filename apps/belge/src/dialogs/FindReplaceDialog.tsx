@@ -85,7 +85,7 @@ export function FindReplaceDialog({ initialTab, onClose }: { initialTab: string;
     );
 
   return (
-    <Dialog open title="Bul ve Değiştir" width={520} onClose={onClose} onSubmit={tab === "goto" ? doGoto : findNext} footer={footer}>
+    <Dialog open title="Bul ve Değiştir" width={580} onClose={onClose} onSubmit={tab === "goto" ? doGoto : findNext} footer={footer}>
       <DialogTabs
         tabs={[
           { id: "find", label: "Bul" },
@@ -97,7 +97,7 @@ export function FindReplaceDialog({ initialTab, onClose }: { initialTab: string;
       />
       <AutoFocus deps={[tab]}>
       {tab !== "goto" ? (
-        <>
+        <div className="bl-find-fields">
           <Field label="Aranan:" inline>
             <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} style={{ flex: 1 }} />
           </Field>
@@ -113,7 +113,7 @@ export function FindReplaceDialog({ initialTab, onClose }: { initialTab: string;
               <Check label="Yalnızca tam sözcükleri bul" v={whole} set={setWhole} />
             </div>
           )}
-        </>
+        </div>
       ) : (
         <div className="bl-dlg-goto">
           <div className="bl-listfield">

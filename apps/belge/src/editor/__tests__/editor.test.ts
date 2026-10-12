@@ -245,3 +245,37 @@ describe("liste uygulama", () => {
     expect(blocks(ed.getJSON()).map((x) => x.type)).toEqual(["paragraph", "paragraph", "paragraph", "paragraph"]);
   });
 });
+
+describe("Hücreleri Böl", () => {
+  const cell = (text: string, attrs: Record<string, unknown> = {}) => ({ type: "tableCell", attrs, content: [para(text)] });
+  const row = (...cells: object[]) => ({ type: "tableRow", content: cells });
+  const grid = (ed: Editor) => {
+    const t = blocks(ed.getJSON()).find((b) => b.type === "table")!;
+    return t.content!.map((r) => (r.content ?? []).map((c) => `${(c.content ?? []).map((p) => (p.content ?? []).map((x) => x.text).join("")).join("/") || "_"}${c.attrs!.colspan > 1 ? `c${c.attrs!.colspan}` : ""}${c.attrs!.rowspan > 1 ? `r${c.attrs!.rowspan}` : ""}`).join("|"));
+  };
+  it("birleştirilmemiş hücre 3 sütuna bölünür; diğer satırdaki hücre genişler", async () => {
+    const { splitCellGrid } = await import("../tableSplit");
+    const ed = make(doc({ type: "table", content: [row(cell("A1", { colwidth: [120] }), cell("B1", { colwidth: [60] })), row(cell("A2", { colwidth: [120] }), cell("B2", { colwidth: [60] }))] }, para("")));
+    // A1 içine imleç
+    ed.commands.setTextSelection(5);
+    expect(splitCellGrid(ed.state, ed.view.dispatch, 3, 1)).toBe(true);
+    expect(grid(ed)).toEqual(["A1|_|_|B1", "A2c3|B2"]);
+    const t = blocks(ed.getJSON())[0];
+    expect(t.content![0].content![0].attrs!.colwidth).toEqual([40]);
+    expect(t.content![1].content![0].attrs!.colwidth).toEqual([40, 40, 40]);
+  });
+  it("2 satıra bölme yeni satır ekler; komşu hücre satır kapsamı artar", async () => {
+    const { splitCellGrid } = await import("../tableSplit");
+    const ed = make(doc({ type: "table", content: [row(cell("A1"), cell("B1")), row(cell("A2"), cell("B2"))] }, para("")));
+    ed.commands.setTextSelection(5);
+    expect(splitCellGrid(ed.state, ed.view.dispatch, 1, 2)).toBe(true);
+    expect(grid(ed)).toEqual(["A1|B1r2", "_", "A2|B2"]);
+  });
+  it("birleştirilmiş hücre geri bölünür (2×2)", async () => {
+    const { splitCellGrid } = await import("../tableSplit");
+    const ed = make(doc({ type: "table", content: [row(cell("X", { colspan: 2, rowspan: 2 }), cell("C1")), row(cell("C2"))] }, para("")));
+    ed.commands.setTextSelection(5);
+    expect(splitCellGrid(ed.state, ed.view.dispatch, 2, 2)).toBe(true);
+    expect(grid(ed)).toEqual(["X|_|C1", "_|_|C2"]);
+  });
+});
