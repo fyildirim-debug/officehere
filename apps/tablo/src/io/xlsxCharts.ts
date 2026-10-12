@@ -9,6 +9,7 @@ import { PALETTES, extractChartData, seriesRefs } from "../charts/chartData";
 import type { ChartDef, ChartType, Rect } from "../model/types";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
 import { writePivotsInto } from "./xlsxPivot";
+import { patchThemeXml } from "../model/theme";
 import { NS_R, esc, nextRid, relsPathOf, resolveTarget, sheetPaths, unescapeXml } from "./ooxmlZip";
 
 const NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
@@ -165,6 +166,9 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise
   }
   if (wb.sheets.some((s) => s.charts.length)) await writeChartsInto(zip, wb, paths);
   if (wb.sheets.some((s) => s.pivots.length)) await writePivotsInto(zip, wb, paths);
+  // Çalışma kitabı teması (renk ve yazı tipi şemaları)
+  const themeFile = zip.file("xl/theme/theme1.xml");
+  if (themeFile) zip.file("xl/theme/theme1.xml", patchThemeXml(await themeFile.async("string"), wb.theme));
   return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
 }
 

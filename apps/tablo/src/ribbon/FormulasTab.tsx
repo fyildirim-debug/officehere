@@ -16,14 +16,17 @@ import {
   History24Regular,
   Settings20Regular,
   Eye20Regular,
+  Eraser20Regular,
+  ErrorCircle20Regular,
 } from "@fluentui/react-icons";
 import { useMemo } from "react";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack } from "@officehere/ui";
-import { FUNCTIONS, type FnDef } from "@officehere/formula";
+import { addr, FUNCTIONS, type FnDef } from "@officehere/formula";
 import type { Controller } from "../controller";
 import * as E from "../actions/edit";
 import { allFunctions } from "../dialogs/FunctionDialog";
-import { FxGlyph, SigmaGlyph } from "./glyphs";
+import { FxGlyph, SigmaGlyph, TraceGlyph, WatchGlyph } from "./glyphs";
+import * as A from "../actions/audit";
 
 function FnMenu({ ctl, list }: { ctl: Controller; list: FnDef[] }) {
   return (
@@ -65,6 +68,7 @@ export function FormulasTab({ ctl }: { ctl: Controller }) {
   const sheet = ctl.sheet;
   const auto = ctl.wb.engine.autoCalc;
   const names = ctl.wb.engine.getNames();
+  const circular = ctl.wb.engine.getCircularRefs();
   return (
     <>
       <RibbonGroup label="İşlev Kitaplığı" icon={<MathFormula24Regular />}>
@@ -140,6 +144,23 @@ export function FormulasTab({ ctl }: { ctl: Controller }) {
       </RibbonGroup>
       <RibbonGroup label="Formül Denetimi" icon={<Eye20Regular />}>
         <RibbonStack>
+          <RibbonButton icon={<TraceGlyph kind="prec" />} label="Etkileyenleri İzle" description="Seçili hücrenin değerini etkileyen hücreleri gösteren oklar ekler." onClick={() => A.tracePrecedents(ctl)} />
+          <RibbonButton icon={<TraceGlyph kind="dep" />} label="Etkilenenleri İzle" description="Seçili hücrenin değerinden etkilenen hücreleri gösteren oklar ekler." onClick={() => A.traceDependents(ctl)} />
+          <RibbonSplitButton
+            icon={<Eraser20Regular />}
+            label="Okları Kaldır"
+            disabled={!ctl.arrows.length}
+            onClick={() => A.removeArrows(ctl)}
+            menu={
+              <Menu width={240}>
+                <MenuItem label="Okları Kaldır" onClick={() => A.removeArrows(ctl)} />
+                <MenuItem label="Etkileyen Okları Kaldır" onClick={() => A.removeArrows(ctl, "prec")} />
+                <MenuItem label="Etkilenen Okları Kaldır" onClick={() => A.removeArrows(ctl, "dep")} />
+              </Menu>
+            }
+          />
+        </RibbonStack>
+        <RibbonStack>
           <RibbonButton
             icon={<Eye20Regular />}
             label="Formülleri Göster"
@@ -151,8 +172,40 @@ export function FormulasTab({ ctl }: { ctl: Controller }) {
               ctl.emit();
             }}
           />
-          <RibbonButton icon={<Search24Regular />} label="Formülleri Seç" description="Sayfadaki formül içeren tüm hücreleri seçer." onClick={() => selectFormulas(ctl)} />
+          <RibbonSplitButton
+            icon={<ErrorCircle20Regular />}
+            label="Hata Denetimi"
+            description="Formüllerdeki genel hataları denetler."
+            onClick={() => ctl.openDialog("errorCheck")}
+            menu={
+              <Menu width={240}>
+                <MenuItem label="Hata Denetimi..." onClick={() => ctl.openDialog("errorCheck")} />
+                <MenuItem label="Hatayı İzle" onClick={() => A.traceError(ctl)} />
+                <MenuItem
+                  label="Döngüsel Başvurular"
+                  disabled={!circular.length}
+                  submenu={
+                    <Menu width={200}>
+                      {circular.map((c) => (
+                        <MenuItem
+                          key={`${c.sheet}:${c.row}:${c.col}`}
+                          label={`${ctl.wb.sheetById(c.sheet)?.name ?? ""}!${addr(c.row, c.col)}`}
+                          onClick={() => {
+                            const idx = ctl.wb.sheets.findIndex((s) => s.id === c.sheet);
+                            if (idx >= 0 && idx !== ctl.wb.activeIndex) ctl.activateSheet(idx);
+                            ctl.selectCell(c.row, c.col);
+                          }}
+                        />
+                      ))}
+                    </Menu>
+                  }
+                />
+              </Menu>
+            }
+          />
+          <RibbonButton icon={<FxGlyph size={20} />} label="Formülü Değerlendir" description="Formülü adım adım değerlendirerek hata ayıklamanıza yardımcı olur." onClick={() => ctl.openDialog("evaluateFormula")} />
         </RibbonStack>
+        <RibbonButton size="large" icon={<WatchGlyph />} label="İzleme Penceresi" checked={ctl.showWatch} description="Çalışma kitabının başka bölümlerindeyken belirli hücrelerin değerlerini izleyin." onClick={() => ((ctl.showWatch = !ctl.showWatch), ctl.emit())} />
       </RibbonGroup>
       <RibbonGroup label="Hesaplama" icon={<Calculator24Regular />}>
         <RibbonMenuButton
@@ -195,13 +248,4 @@ function setAuto(ctl: Controller, on: boolean): void {
   ctl.wb.engine.autoCalc = on;
   if (on) ctl.wb.engine.recalc();
   ctl.emit();
-}
-
-function selectFormulas(ctl: Controller): void {
-  const ranges: { r1: number; c1: number; r2: number; c2: number }[] = [];
-  ctl.wb.engine.forEachCell(ctl.sheet.id, (row, col, rec) => {
-    if (rec.formula) ranges.push({ r1: row, c1: col, r2: row, c2: col });
-  });
-  if (!ranges.length) return ctl.alert("Hiçbir hücre bulunamadı.");
-  ctl.setSelection({ ranges, active: { row: ranges[0].r1, col: ranges[0].c1 }, anchor: { row: ranges[0].r1, col: ranges[0].c1 } });
 }

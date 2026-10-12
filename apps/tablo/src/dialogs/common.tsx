@@ -1,6 +1,7 @@
 /** İletişim kutuları için küçük ortak denetimler. */
 import { Component, useRef, useState, type ReactNode } from "react";
 import { ColorPalette, Dialog, DialogButton, MenuProvider, Popover } from "@officehere/ui";
+import { useThemePalette } from "../themeContext";
 
 export interface BaseDialogProps {
   onClose: () => void;
@@ -56,6 +57,7 @@ export function fmtTr(n: number, digits = 2): string {
 export function ColorDrop({ value, onChange, noneLabel = "Otomatik", width = 120 }: { value: string | null | undefined; onChange: (c: string | null) => void; noneLabel?: string; width?: number }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const theme = useThemePalette();
   return (
     <>
       <button ref={ref} type="button" className="tb-colordrop" style={{ width }} onClick={() => setOpen((o) => !o)} aria-label="Renk">
@@ -66,7 +68,7 @@ export function ColorDrop({ value, onChange, noneLabel = "Otomatik", width = 120
       <Popover open={open} onClose={() => setOpen(false)} anchor={ref} className="tb-dialog-pop" ignore={[ref]}>
         <MenuProvider onClose={() => setOpen(false)}>
           <div className="oh-menu">
-            <ColorPalette value={value ?? null} noneLabel={noneLabel} onSelect={(c) => (onChange(c), setOpen(false))} />
+            <ColorPalette value={value ?? null} noneLabel={noneLabel} theme={theme} onSelect={(c) => (onChange(c), setOpen(false))} />
           </div>
         </MenuProvider>
       </Popover>

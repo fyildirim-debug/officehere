@@ -3,161 +3,16 @@
  * önceki/sonraki durumunu (ya da yapısal işlemlerde anlık görüntüyü) kaydeder.
  */
 import { cellKey, keyCol, keyRow, parseCellInput, type Scalar } from "@officehere/formula";
-import { UndoManager } from "./history";
+import { OpsSheets, uniqueTableName } from "./opsSheets";
 import { MAX_COLS, MAX_ROWS, contains, intersects, isFullCols, isFullRows, rect, rectCols, rectRows } from "./rect";
 import type { CellStyle } from "./styles";
 import type { Rect } from "./types";
 import { generateFill, type FillSource } from "./fill";
-import type { CellInput, CellState, SheetData, SheetModel, WorkbookModel } from "./workbook";
+import type { CellInput, SheetModel } from "./workbook";
 
 export type StylePatch = Partial<CellStyle> | ((s: CellStyle) => Partial<CellStyle>);
 
-export class Ops {
-  readonly history = new UndoManager();
-  /** Değişiklik sonrası çağrılır (yeniden çizim, kirli işareti). */
-  onChange: (label: string) => void = () => {};
-  /**
-   * Hücre içeriği/stili değişince otomatik satır yüksekliklerini ayarlar
-   * (arayüz katmanı ölçüm yapar). [satır, eski, yeni] listesi döndürür.
-   */
-  afterCells: ((sheet: SheetModel, rects: Rect[]) => [number, number | undefined, number | undefined][]) | null = null;
-
-  constructor(public wb: WorkbookModel) {}
-
-  private recalc(): void {
-    if (this.wb.engine.autoCalc) this.wb.engine.recalc();
-  }
-
-  private done(label: string): void {
-    this.recalc();
-    this.onChange(label);
-  }
-
-  undo(): string | undefined {
-    const e = this.history.undo();
-    if (e) this.done(e.label);
-    return e?.label;
-  }
-
-  redo(): string | undefined {
-    const e = this.history.redo();
-    if (e) this.done(e.label);
-    return e?.label;
-  }
-
-  /* ----------------------------- Genel kayıt ----------------------------- */
-
-  /** Hücre düzeyinde değişiklik: aralıklardaki hücrelerin öncesi/sonrası saklanır. */
-  cellsOp(sheet: SheetModel, rects: Rect[], label: string, mutate: () => void, extraKeys?: () => Iterable<number>): void {
-    const wb = this.wb;
-    const collect = () => {
-      const keys = new Set<number>();
-      for (const r of rects) for (const k of wb.cellKeysIn(sheet, r)) keys.add(k);
-      if (extraKeys) for (const k of extraKeys()) keys.add(k);
-      return keys;
-    };
-    const lines = rects.some((r) => isFullCols(r) || isFullRows(r));
-    const linesBefore = lines ? { c: new Map(sheet.colStyles), r: new Map(sheet.rowStyles) } : null;
-    const before = new Map<number, CellState>();
-    for (const k of collect()) before.set(k, wb.cellState(sheet, k));
-    mutate();
-    const rowChanges = this.afterCells ? this.afterCells(sheet, rects) : [];
-    const applyRows = (which: 1 | 2) => {
-      for (const ch of rowChanges) {
-        const v = ch[which];
-        if (v === undefined) sheet.rows.reset(ch[0]);
-        else sheet.rows.set(ch[0], v, false);
-      }
-    };
-    const after = new Map<number, CellState>();
-    for (const k of collect()) after.set(k, wb.cellState(sheet, k));
-    for (const k of before.keys()) if (!after.has(k)) after.set(k, wb.cellState(sheet, k));
-    const linesAfter = lines ? { c: new Map(sheet.colStyles), r: new Map(sheet.rowStyles) } : null;
-    const apply = (states: Map<number, CellState>, other: Map<number, CellState>, ln: typeof linesBefore) => {
-      for (const k of other.keys()) if (!states.has(k)) wb.applyCellState(sheet, k, undefined);
-      for (const [k, st] of states) wb.applyCellState(sheet, k, st);
-      if (ln) {
-        sheet.colStyles = new Map(ln.c);
-        sheet.rowStyles = new Map(ln.r);
-      }
-    };
-    this.history.push({
-      label,
-      cost: before.size + after.size,
-      undo: () => (apply(before, after, linesBefore), applyRows(1)),
-      redo: () => (apply(after, before, linesAfter), applyRows(2)),
-    });
-    this.done(label);
-  }
-
-  /** Sayfa verisinin belirli parçalarında değişiklik (birleştirme, nesneler…). */
-  sheetOp(sheet: SheetModel, label: string, mutate: () => void, withCells?: Rect[]): void {
-    const wb = this.wb;
-    const before = sheet.cloneData();
-    const cellsBefore = withCells ? this.captureCells(sheet, withCells) : null;
-    mutate();
-    const after = sheet.cloneData();
-    const cellsAfter = withCells ? this.captureCells(sheet, withCells) : null;
-    const apply = (d: SheetData, cells: Map<number, CellState> | null, other: Map<number, CellState> | null) => {
-      sheet.restoreData(d);
-      if (cells && other) {
-        for (const k of other.keys()) if (!cells.has(k)) wb.applyCellState(sheet, k, undefined);
-        for (const [k, st] of cells) wb.applyCellState(sheet, k, st);
-      }
-      this.syncHiddenRows(sheet);
-    };
-    this.history.push({ label, cost: sheet.styles.size / 4 + 10, undo: () => apply(before, cellsBefore, cellsAfter), redo: () => apply(after, cellsAfter, cellsBefore) });
-    this.done(label);
-  }
-
-  /** Tanımlı ad değişiklikleri (Ad Yöneticisi). */
-  namesOp(label: string, mutate: () => void): void {
-    const eng = this.wb.engine;
-    const before = eng.getNames();
-    mutate();
-    const after = eng.getNames();
-    const apply = (list: typeof before) => {
-      for (const n of eng.getNames()) eng.removeName(n.name, n.sheet);
-      for (const n of list) eng.defineName(n.name, n.formula, n.sheet);
-    };
-    this.history.push({ label, cost: 10, undo: () => apply(before), redo: () => apply(after) });
-    this.done(label);
-  }
-
-  /** Tüm kitabın anlık görüntüsüyle (yapısal işlemler). */
-  snapshotOp(label: string, mutate: () => void): void {
-    const wb = this.wb;
-    const before = wb.snapshot();
-    mutate();
-    const after = wb.snapshot();
-    const cost = before.engine.sheets.reduce((n, s) => n + s.cells.length, 0) * 2 + 100;
-    this.history.push({
-      label,
-      cost,
-      undo: () => {
-        wb.restore(before);
-        wb.sheets.forEach((s) => this.syncHiddenRows(s));
-      },
-      redo: () => {
-        wb.restore(after);
-        wb.sheets.forEach((s) => this.syncHiddenRows(s));
-      },
-    });
-    this.done(label);
-  }
-
-  private captureCells(sheet: SheetModel, rects: Rect[]): Map<number, CellState> {
-    const m = new Map<number, CellState>();
-    for (const r of rects) for (const k of this.wb.cellKeysIn(sheet, r)) m.set(k, this.wb.cellState(sheet, k));
-    return m;
-  }
-
-  /** Motorun gizli satır bilgisini sayfa modeliyle eşitler (ALTTOPLAM için). */
-  syncHiddenRows(sheet: SheetModel): void {
-    const e = this.wb.engine;
-    for (const r of sheet.rows.hiddenItems()) e.setRowHidden(sheet.id, r, true, sheet.filterHidden.has(r));
-  }
-
+export class Ops extends OpsSheets {
   /* ------------------------------ İçerik ------------------------------ */
 
   /** Kullanıcının yazdığı metni hücrelere uygular (Türkçe ayrıştırma, sayı biçimi algılama). */
@@ -622,85 +477,6 @@ export class Ops {
     });
   }
 
-  /* --------------------------- Sayfalar --------------------------- */
-
-  addSheet(index?: number): SheetModel {
-    let created!: SheetModel;
-    this.snapshotOp("Sayfa Ekle", () => {
-      created = this.wb.addSheet(undefined, index ?? this.wb.sheets.length);
-      this.wb.activeIndex = this.wb.sheets.indexOf(created);
-    });
-    return created;
-  }
-
-  deleteSheet(index: number): void {
-    if (this.wb.sheets.filter((s) => !s.hidden).length <= 1) return;
-    this.snapshotOp("Sayfayı Sil", () => {
-      this.wb.removeSheet(index);
-      this.wb.activeIndex = Math.min(index, this.wb.sheets.length - 1);
-      while (this.wb.active.hidden && this.wb.activeIndex > 0) this.wb.activeIndex--;
-    });
-  }
-
-  renameSheet(index: number, name: string): void {
-    this.snapshotOp("Sayfayı Yeniden Adlandır", () => this.wb.renameSheet(index, name.trim()));
-  }
-
-  moveSheet(from: number, to: number): void {
-    if (from === to) return;
-    this.snapshotOp("Sayfayı Taşı", () => {
-      const active = this.wb.active;
-      this.wb.moveSheet(from, to);
-      this.wb.activeIndex = this.wb.sheets.indexOf(active);
-    });
-  }
-
-  copySheet(from: number, to: number): void {
-    this.snapshotOp("Sayfayı Kopyala", () => {
-      const wb = this.wb;
-      const src = wb.sheets[from];
-      let base = src.name.replace(/ \(\d+\)$/, "");
-      let n = 2;
-      while (wb.sheetByName(`${base} (${n})`)) n++;
-      base = `${base} (${n})`.slice(0, 31);
-      const copy = wb.addSheet(base, to);
-      copy.restoreData(src.cloneData());
-      copy.charts = copy.charts.map((c) => ({ ...c, id: wb.newId("chart"), range: c.range.replace(new RegExp(`^'?${src.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}'?!`), `'${base}'!`) }));
-      copy.images = copy.images.map((i) => ({ ...i, id: wb.newId("img") }));
-      copy.tables = copy.tables.map((t) => ({ ...t, id: wb.newId("tbl"), name: uniqueTableName(wb, t.name) }));
-      copy.pivots = copy.pivots.map((p) => {
-        const names = new Set(wb.sheets.flatMap((s) => s.pivots.map((x) => x.name.toLocaleUpperCase("tr-TR"))));
-        let n = 1;
-        while (names.has(`PIVOTTABLE${n}`)) n++;
-        return { ...p, id: wb.newId("pivot"), name: `PivotTable${n}`, sourceSheet: p.sourceSheet === src.id ? copy.id : p.sourceSheet };
-      });
-      wb.engine.forEachCell(src.id, (row, col, rec) => {
-        if (rec.formula) wb.engine.setFormula(copy.id, row, col, rec.formula.text);
-        else wb.engine.setValue(copy.id, row, col, rec.value);
-      });
-      wb.activeIndex = wb.sheets.indexOf(copy);
-    });
-  }
-
-  setTabColor(sheet: SheetModel, color: string | undefined): void {
-    this.sheetOp(sheet, "Sekme Rengi", () => {
-      sheet.tabColor = color;
-    });
-  }
-
-  setSheetHidden(index: number, hidden: boolean): void {
-    const wb = this.wb;
-    if (hidden && wb.sheets.filter((s) => !s.hidden).length <= 1) return;
-    this.snapshotOp(hidden ? "Sayfayı Gizle" : "Sayfayı Göster", () => {
-      wb.sheets[index].hidden = hidden;
-      if (hidden && wb.activeIndex === index) {
-        const next = wb.sheets.findIndex((s) => !s.hidden);
-        wb.activeIndex = next;
-      }
-      if (!hidden) wb.activeIndex = index;
-    });
-  }
-
   /* ---------------------------- Diğer ---------------------------- */
 
   /** Bul ve Değiştir: eşleşen hücrelerin metnini değiştirir. */
@@ -726,10 +502,4 @@ export class Ops {
   }
 }
 
-export function uniqueTableName(wb: WorkbookModel, base = "Tablo"): string {
-  const names = new Set(wb.sheets.flatMap((s) => s.tables.map((t) => t.name.toLocaleUpperCase("tr-TR"))));
-  const stem = base.replace(/\d+$/, "") || "Tablo";
-  let n = 1;
-  while (names.has(`${stem}${n}`.toLocaleUpperCase("tr-TR"))) n++;
-  return `${stem}${n}`;
-}
+export { uniqueTableName };

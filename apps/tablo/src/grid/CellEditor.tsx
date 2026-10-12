@@ -254,7 +254,8 @@ export function CellEditor({ ctl, layout, inputRef, onGridKey }: Props) {
         <textarea
           ref={inputRef}
           className="tb-editor-input"
-          spellCheck={false}
+          spellCheck={ctl.spellcheck && !(ctl.edit?.text ?? "").startsWith("=")}
+          lang="tr"
           autoComplete="off"
           aria-label="Hücre düzenleyici"
           style={visible ? { font, lineHeight: `${lineH}px`, caretColor: style.color ?? "#000" } : undefined}

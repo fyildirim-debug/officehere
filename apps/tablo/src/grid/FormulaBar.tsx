@@ -109,7 +109,8 @@ export function FormulaBar({ ctl }: { ctl: Controller }) {
         <textarea
           ref={taRef}
           className="tb-fbar-input"
-          spellCheck={false}
+          spellCheck={ctl.spellcheck && !(ctl.edit?.text ?? "").startsWith("=")}
+          lang="tr"
           aria-label="Formül Çubuğu"
           defaultValue={shown}
           onFocus={() => {

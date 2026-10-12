@@ -63,3 +63,30 @@ export function SparkGlyph({ kind, size = 32 }: { kind: "line" | "column" | "win
     </svg>
   );
 }
+
+/** Etkileyenleri/Etkilenenleri İzle: hücreler arası mavi ok. */
+export function TraceGlyph({ kind, size = 20 }: { kind: "prec" | "dep"; size?: number }) {
+  const from = kind === "prec" ? { x: 4, y: 5 } : { x: 9, y: 10 };
+  const to = kind === "prec" ? { x: 15, y: 15 } : { x: 17, y: 4 };
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="6" height="6" fill="none" stroke="currentColor" strokeWidth="0.9" />
+      <rect x="12.5" y="12.5" width="6" height="6" fill="none" stroke="currentColor" strokeWidth="0.9" />
+      <path d={`M${from.x} ${from.y}L${to.x} ${to.y}`} stroke="#2F6FD8" strokeWidth="1.4" />
+      <circle cx={from.x} cy={from.y} r="1.6" fill="#2F6FD8" />
+      <path d={`M${to.x} ${to.y}l-4.2 -0.6 3.6 -3.6z`} fill="#2F6FD8" transform={kind === "dep" ? `rotate(-90 ${to.x} ${to.y})` : undefined} />
+    </svg>
+  );
+}
+
+/** İzleme Penceresi: büyüteçli pencere. */
+export function WatchGlyph({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="3" y="5" width="22" height="18" rx="1" fill="#fff" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M3 10h22" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="21" cy="21" r="5" fill="#fff" stroke="#107C41" strokeWidth="1.6" />
+      <path d="M24.6 24.6L29 29" stroke="#107C41" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}

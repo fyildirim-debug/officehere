@@ -40,7 +40,12 @@ export interface CellStyle {
   hidden?: boolean;
 }
 
-export const DEFAULT_FONT = "Calibri";
+/** Tema gövde yazı tipi (yazı tipi belirtilmemiş hücreler); tema değişince güncellenir. */
+export let DEFAULT_FONT = "Calibri";
+
+export function setDefaultFont(font: string): void {
+  DEFAULT_FONT = font;
+}
 export const DEFAULT_SIZE = 11;
 
 export class StyleTable {

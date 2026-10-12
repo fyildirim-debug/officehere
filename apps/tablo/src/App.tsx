@@ -28,6 +28,9 @@ import { pivotAt, pivotButtons } from "./pivot/pivotOps";
 import { PivotAnalyzeTab, PivotDesignTab } from "./pivot/PivotTabs";
 import { PivotButtonMenu, PivotFieldsPane } from "./pivot/PivotFieldsPane";
 import { PivotCellMenu } from "./pivot/PivotMenu";
+import { WatchWindow } from "./panes/WatchWindow";
+import { ThemePaletteContext } from "./themeContext";
+import { paletteOf } from "./model/theme";
 
 let dialogSeq = 0;
 
@@ -148,6 +151,8 @@ export function App() {
     { id: "pivotDesign", label: "Tasarım", contextual: true, contextualGroup: "PivotTable Araçları", hidden: !activePivot, content: activePivot ? <PivotDesignTab ctl={ctl} def={activePivot} /> : null },
   ];
 
+  const palette = useMemo(() => paletteOf(ctl.wb.theme), [ctl.wb.theme]);
+
   const openContext = (e: { clientX: number; clientY: number; preventDefault: () => void }, kind: "cell" | "col" | "row" | "tab", index?: number) => {
     if (ctl.edit) return;
     if (kind === "tab") ctx.open(e, <TabMenu ctl={ctl} index={index ?? ctl.wb.activeIndex} />);
@@ -159,6 +164,7 @@ export function App() {
   };
 
   return (
+    <ThemePaletteContext.Provider value={palette}>
     <AppShell
       app="tablo"
       titleBar={
@@ -193,6 +199,7 @@ export function App() {
           )}
           {activePivot && ctl.showFieldList && <PivotFieldsPane ctl={ctl} sheet={sheet} def={activePivot} />}
         </div>
+        {ctl.showWatch && <WatchWindow ctl={ctl} />}
       </div>
       {filterMenu &&
         (() => {
@@ -217,5 +224,6 @@ export function App() {
       />
       {lifecycle.dialog}
     </AppShell>
+    </ThemePaletteContext.Provider>
   );
 }

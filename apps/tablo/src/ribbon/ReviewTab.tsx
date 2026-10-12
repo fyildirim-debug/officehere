@@ -1,8 +1,8 @@
 /** Gözden Geçir sekmesi: Yazım Denetleme (istatistik), Notlar, Koruma. */
-import { ArrowLeft20Regular, ArrowRight20Regular, CommentNote20Regular, Delete20Regular, LockClosed24Regular, LockOpen24Regular, NoteAdd24Regular, NoteEdit24Regular, TextNumberFormat24Regular } from "@fluentui/react-icons";
+import { TextProofingTools24Regular, ArrowLeft20Regular, ArrowRight20Regular, CommentNote20Regular, Delete20Regular, LockClosed24Regular, LockOpen24Regular, NoteAdd24Regular, NoteEdit24Regular, TextNumberFormat24Regular } from "@fluentui/react-icons";
 import { RibbonButton, RibbonGroup, RibbonStack } from "@officehere/ui";
 import type { Controller } from "../controller";
-import { gotoNote } from "../actions/view";
+import { gotoNote, toggleSpellcheck } from "../actions/view";
 
 export function ReviewTab({ ctl }: { ctl: Controller }) {
   const sheet = ctl.sheet;
@@ -12,6 +12,15 @@ export function ReviewTab({ ctl }: { ctl: Controller }) {
   return (
     <>
       <RibbonGroup label="Yazım Denetleme" icon={<TextNumberFormat24Regular />}>
+        <RibbonButton
+          size="large"
+          icon={<TextProofingTools24Regular />}
+          label="Yazım Denetimi"
+          shortcut="F7"
+          checked={ctl.spellcheck}
+          description="Hücreyi düzenlerken yazım hatası olan sözcüklerin altını çizer (sistemin Türkçe yazım denetimi). Önerileri görmek için sözcüğe sağ tıklayın."
+          onClick={() => toggleSpellcheck(ctl)}
+        />
         <RibbonButton size="large" icon={<TextNumberFormat24Regular />} label="Çalışma Kitabı İstatistikleri" description="Geçerli sayfa ve çalışma kitabı hakkında istatistikleri gösterir." onClick={() => ctl.openDialog("workbookStats")} />
       </RibbonGroup>
       <RibbonGroup label="Notlar" icon={<NoteAdd24Regular />}>

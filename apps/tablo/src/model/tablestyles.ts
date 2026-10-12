@@ -6,6 +6,7 @@ import { tint } from "@officehere/core";
 import type { CellStyle } from "./styles";
 import type { TableDef } from "./types";
 
+/** Siyah + tema vurguları 1-6 (tema değişince setTableThemeAccents ile güncellenir). */
 const BASE = ["#000000", "#156082", "#E97132", "#196B24", "#0F9ED5", "#A02B93", "#4EA72E"];
 
 export interface TableStylePreset {
@@ -101,4 +102,13 @@ export function previewColors(p: TableStylePreset): { header: string; headerText
   if (p.group === "Açık") return { header: "#FFFFFF", headerText: c, band: tint(c, 0.8), body: "#FFFFFF", line: c };
   if (p.group === "Orta") return { header: c, headerText: "#FFFFFF", band: tint(c, 0.8), body: "#FFFFFF", line: tint(c, 0.6) };
   return { header: "#000000", headerText: "#FFFFFF", band: tint(c, -0.25), body: c === "#000000" ? "#404040" : c, line: "#FFFFFF" };
+}
+
+/** Tablo stillerini çalışma kitabı temasının vurgu renklerine bağlar. */
+export function setTableThemeAccents(accents: readonly string[]): void {
+  for (let i = 0; i < 6; i++) BASE[i + 1] = accents[i];
+  for (const t of TABLE_STYLES) {
+    const n = (parseInt(/(\d+)$/.exec(t.id)?.[1] ?? "1", 10) - 1) % 7;
+    t.color = BASE[n];
+  }
 }

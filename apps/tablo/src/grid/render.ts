@@ -11,6 +11,8 @@ import type { Rect, Selection } from "../model/types";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
 import type { GridLayout, Quadrant } from "./layout";
 import { cellFont, drawBorder, drawCellText, drawFilterButton, drawPattern, measureText, snap } from "./renderCell";
+import { drawArrows, drawErrorTriangles } from "./renderAudit";
+import type { TraceArrow } from "../actions/audit";
 
 export { cellFont, measureText, wrapLines } from "./renderCell";
 
@@ -32,6 +34,12 @@ export interface RenderState {
   dark: boolean;
   printArea?: Rect | null;
   pageBreaks?: { rows: number[]; cols: number[] } | null;
+  /** Formül Denetimi okları. */
+  arrows?: TraceArrow[];
+  /** Arka planda hata denetimi (yeşil üçgenler). */
+  errorCheck?: boolean;
+  /** Mini grafikler çizici (sparkline). */
+  extra?: (ctx: CanvasRenderingContext2D, q: Quadrant) => void;
 }
 
 const LIGHT = {
@@ -71,8 +79,13 @@ export function renderGrid(ctx: CanvasRenderingContext2D, st: RenderState): void
   ctx.fillRect(0, 0, L.width, L.height);
   ctx.textBaseline = "alphabetic";
   const quads = L.quadrants();
-  for (const q of quads) drawQuadrant(ctx, st, q);
+  for (const q of quads) {
+    drawQuadrant(ctx, st, q);
+    if (st.extra) st.extra(ctx, q);
+    if (st.errorCheck && !st.sheet.showFormulas) drawErrorTriangles(ctx, st.wb, st.sheet, L, q);
+  }
   for (const q of quads) drawOverlays(ctx, st, q);
+  if (st.arrows?.length) drawArrows(ctx, st.arrows, st.sheet, L);
   drawHeaders(ctx, st, quads);
   // Dondurulmuş bölme çizgileri
   ctx.fillStyle = COLORS.freeze;

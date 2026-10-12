@@ -4,7 +4,6 @@
  * taşıma, formül işaretleme) ve klavye.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { formatValue } from "@officehere/formula";
 import type { Controller } from "../controller";
 import * as E from "../actions/edit";
 import { buildClipboard, pastePayload } from "../model/clipboard";
@@ -19,11 +18,13 @@ import { measureText, renderGrid, type RenderState } from "./render";
 import { SheetTabs } from "./SheetTabs";
 import { autoFitCols, autoFitRows } from "./autofit";
 import { FloatingLayer } from "../charts/FloatingLayer";
+import { fillTipText, hitTestGrid, openLink, selectedLines, useDarkUi, type Hit } from "./gridUtil";
 import { PivotPlaceholders } from "../pivot/PivotPlaceholder";
 import { pivotButtons } from "../pivot/pivotOps";
 import { AllNotes, ValidationUi } from "./ValidationUi";
+import { ErrorTag } from "./ErrorTag";
 import { computePageBreaks } from "../io/print";
-import { filterAt, filtersOf } from "../actions/data";
+import { filtersOf } from "../actions/data";
 
 type Drag =
   | { kind: "select"; add: boolean }
@@ -35,16 +36,6 @@ type Drag =
   | { kind: "point"; anchor: CellPos; sheetId: number }
   | { kind: "move"; src: Rect; grab: CellPos; target: Rect | null; copy: boolean };
 
-interface Hit {
-  area: "corner" | "colHeader" | "rowHeader" | "cell" | "none";
-  row: number;
-  col: number;
-  colBorder?: number;
-  rowBorder?: number;
-  fillHandle?: boolean;
-  selBorder?: boolean;
-  filterButton?: boolean;
-}
 
 export interface GridProps {
   ctl: Controller;
@@ -126,6 +117,8 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         filterButtons,
         spill: spillInfo ? rect(spillInfo.anchorRow, spillInfo.anchorCol, spillInfo.anchorRow + spillInfo.rows - 1, spillInfo.anchorCol + spillInfo.cols - 1) : null,
         dark: darkUi,
+        arrows: ctl.arrows,
+        errorCheck: ctl.errorChecking,
         pageBreaks: sheet.viewMode === "pageBreak" ? computePageBreaks(ctl.wb, sheet) : null,
       };
       renderGrid(ctx, st);
@@ -229,50 +222,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
 
   /* --------------------------- İsabet testi --------------------------- */
 
-  const hitTest = (x: number, y: number): Hit => {
-    const L = layoutRef.current!;
-    const z = L.z;
-    if (x < L.headerW && y < L.headerH) return { area: "corner", row: -1, col: -1 };
-    if (y < L.headerH) {
-      const col = L.colAtX(x);
-      const cx = L.colX(col);
-      const cw = L.colW(col);
-      if (Math.abs(x - (cx + cw)) <= 4) return { area: "colHeader", row: -1, col, colBorder: col };
-      if (Math.abs(x - cx) <= 4 && col > 0) {
-        let prev = col - 1;
-        while (prev > 0 && sheet.cols.isHidden(prev) && x < cx + 2) prev--;
-        return { area: "colHeader", row: -1, col, colBorder: sheet.cols.isHidden(col - 1) && x >= cx ? col - 1 : prev };
-      }
-      return { area: "colHeader", row: -1, col };
-    }
-    if (x < L.headerW) {
-      const row = L.rowAtY(y);
-      const ry = L.rowY(row);
-      const rh = L.rowH(row);
-      if (Math.abs(y - (ry + rh)) <= 3) return { area: "rowHeader", row, col: -1, rowBorder: row };
-      if (Math.abs(y - ry) <= 3 && row > 0) return { area: "rowHeader", row, col: -1, rowBorder: row - 1 };
-      return { area: "rowHeader", row, col: -1 };
-    }
-    if (x > L.width || y > L.height) return { area: "none", row: -1, col: -1 };
-    const row = L.rowAtY(y);
-    const col = L.colAtX(x);
-    const hit: Hit = { area: "cell", row, col };
-    const last = ctl.range;
-    const lr = L.cellRect(last.r1, last.c1, Math.min(last.r2, MAX_ROWS - 1), Math.min(last.c2, MAX_COLS - 1));
-    if (ctl.sel.ranges.length === 1 && Math.abs(x - (lr.x + lr.w)) <= 5 && Math.abs(y - (lr.y + lr.h)) <= 5) hit.fillHandle = true;
-    else if (ctl.sel.ranges.length === 1 && !ctl.edit) {
-      const onV = (Math.abs(x - lr.x) <= 3 || Math.abs(x - (lr.x + lr.w)) <= 3) && y >= lr.y - 3 && y <= lr.y + lr.h + 3;
-      const onH = (Math.abs(y - lr.y) <= 3 || Math.abs(y - (lr.y + lr.h)) <= 3) && x >= lr.x - 3 && x <= lr.x + lr.w + 3;
-      if ((onV || onH) && last.r2 < MAX_ROWS - 1 && last.c2 < MAX_COLS - 1) hit.selBorder = true;
-    }
-    // Filtre düğmesi
-    if (filterAt(sheet, row, col) || (sheet.pivots.length && sheet.pivots.some((p) => p.buttons?.some((b) => b.row === row && b.col === col)))) {
-      const rc = L.cellRect(row, col);
-      const s = Math.min(rc.h, 18 * z);
-      if (x >= rc.x + rc.w - s - 1 && y >= rc.y) hit.filterButton = true;
-    }
-    return hit;
-  };
+  const hitTest = (x: number, y: number): Hit => hitTestGrid(layoutRef.current!, ctl, sheet, x, y);
 
   const cellAt = (x: number, y: number): CellPos => {
     const L = layoutRef.current!;
@@ -286,8 +236,12 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
 
+  /** React olayları portal (açılır menü) içinden de kabarcıklanır: yalnız ızgara DOM'undan gelenler işlenir. */
+  const fromGrid = (e: { target: EventTarget | null }) => !!wrapRef.current && e.target instanceof Node && wrapRef.current.contains(e.target);
+
   const onPointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest(".tb-float, .tb-editor.is-visible, .tb-assist")) return;
+    if (!fromGrid(e)) return;
+    if ((e.target as HTMLElement).closest(".tb-float, .tb-editor.is-visible, .tb-assist, .tb-errtag")) return;
     const { x, y } = local(e);
     const hit = hitTest(x, y);
     setTip(null);
@@ -456,6 +410,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    if (!drag.current && !fromGrid(e)) return;
     const { x, y } = local(e);
     if (drag.current) {
       lastPointer.current = { x, y };
@@ -569,6 +524,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
+    if (!fromGrid(e)) return;
     const { x, y } = local(e);
     const hit = hitTest(x, y);
     if (hit.area === "colHeader" && hit.colBorder !== undefined) {
@@ -601,6 +557,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
   };
 
   const onWheel = (e: React.WheelEvent) => {
+    if (!fromGrid(e)) return;
     if (e.ctrlKey) {
       const next = Math.max(10, Math.min(400, sheet.zoom + (e.deltaY < 0 ? 10 : -10)));
       sheet.zoom = next;
@@ -678,7 +635,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
           onWheel={onWheel}
           onPointerLeave={() => setTip(null)}
           onContextMenu={(e) => {
-            if ((e.target as HTMLElement).closest(".tb-float")) return;
+            if (!fromGrid(e) || (e.target as HTMLElement).closest(".tb-float")) return;
             const { x, y } = local(e);
             const hit = hitTest(x, y);
             const kind = hit.area === "colHeader" ? "col" : hit.area === "rowHeader" ? "row" : "cell";
@@ -691,6 +648,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
           <FloatingLayer ctl={ctl} layout={layout} />
           {ctl.showAllNotes && <AllNotes ctl={ctl} layout={layout} />}
           <ValidationUi ctl={ctl} layout={layout} />
+          <ErrorTag ctl={ctl} layout={layout} />
           {tip && (
             <div className="tb-tip" style={{ left: Math.min(tip.x, size.w - 220), top: tip.y }}>
               {tip.title && <strong>{tip.title}</strong>}
@@ -714,56 +672,4 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
   );
 }
 
-function selectedLines(ctl: Controller, axis: "row" | "col", fallback: number): number[] {
-  const out: number[] = [];
-  for (const r of ctl.sel.ranges) {
-    const full = axis === "col" ? r.r1 === 0 && r.r2 === MAX_ROWS - 1 : r.c1 === 0 && r.c2 === MAX_COLS - 1;
-    if (!full) continue;
-    const [a, b] = axis === "col" ? [r.c1, r.c2] : [r.r1, Math.min(r.r2, r.r1 + 50000)];
-    if (fallback < a || fallback > b) continue;
-    for (let i = a; i <= b; i++) out.push(i);
-  }
-  return out.length ? out : [fallback];
-}
-
-function fillTipText(ctl: Controller, src: Rect, target: Rect): string {
-  const vertical = target.c1 === src.c1 && target.c2 === src.c2;
-  const count = vertical ? rectRows(target) - rectRows(src) : rectCols(target) - rectCols(src);
-  const v = ctl.wb.getValue(ctl.sheet, src.r2, src.c2);
-  if (typeof v === "number") {
-    const n = rectRows(src) * rectCols(src) === 1 ? v : v + count;
-    return formatValue(n, ctl.wb.styleAt(ctl.sheet, src.r2, src.c2).numFmt).text;
-  }
-  return typeof v === "string" ? v : "";
-}
-
-export function openLink(ctl: Controller, link: string): void {
-  if (link.startsWith("#")) {
-    ctl.goTo(link.slice(1));
-    return;
-  }
-  window.open(link, "_blank", "noopener");
-}
-
-/** Arayüz teması koyu mu (Koyu Gri / Siyah ya da sistem koyu)? */
-function useDarkUi(): boolean {
-  const read = () => {
-    if (typeof document === "undefined") return false;
-    const t = document.documentElement.getAttribute("data-oh-theme");
-    if (t === "dark" || t === "black") return true;
-    return t === "system" && typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: dark)").matches;
-  };
-  const [dark, setDark] = useState(read);
-  useEffect(() => {
-    const update = () => setDark(read());
-    const mo = new MutationObserver(update);
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-oh-theme"] });
-    const mq = typeof matchMedia !== "undefined" ? matchMedia("(prefers-color-scheme: dark)") : null;
-    mq?.addEventListener("change", update);
-    return () => {
-      mo.disconnect();
-      mq?.removeEventListener("change", update);
-    };
-  }, []);
-  return dark;
-}
+export { openLink };

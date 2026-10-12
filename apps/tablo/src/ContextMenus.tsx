@@ -12,7 +12,7 @@ import {
   TableEdit20Regular,
 } from "@fluentui/react-icons";
 import { ColorPalette, Menu, MenuHeader, MenuItem, MenuSeparator } from "@officehere/ui";
-import { THEMES } from "@officehere/core";
+import { paletteOf } from "./model/theme";
 import type { Controller } from "./controller";
 import * as E from "./actions/edit";
 import * as D from "./actions/data";
@@ -168,7 +168,7 @@ export function TabMenu({ ctl, index }: { ctl: Controller; index: number }) {
         label="Sekme Rengi"
         submenu={
           <div className="oh-menu oh-menu-palette">
-            <ColorPalette value={sheet.tabColor} noneLabel="Renk Yok" theme={THEMES[0]} onSelect={(c) => ctl.ops.setTabColor(sheet, c ?? undefined)} />
+            <ColorPalette value={sheet.tabColor} noneLabel="Renk Yok" theme={paletteOf(ctl.wb.theme)} onSelect={(c) => ctl.ops.setTabColor(sheet, c ?? undefined)} />
           </div>
         }
       />

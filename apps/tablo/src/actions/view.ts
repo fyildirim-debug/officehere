@@ -72,3 +72,10 @@ export function gotoNote(ctl: Controller, dir: 1 | -1): void {
   }
   ctl.alert("Çalışma kitabında başka not yok.");
 }
+
+/** Yazım Denetimi (F7): düzenleyicide tarayıcının yazım denetimini açar/kapatır. */
+export function toggleSpellcheck(ctl: Controller): void {
+  ctl.spellcheck = !ctl.spellcheck;
+  ctl.status = ctl.spellcheck ? "Yazım denetimi açık: hücre düzenlenirken hatalı sözcüklerin altı çizilir" : "";
+  ctl.emit();
+}

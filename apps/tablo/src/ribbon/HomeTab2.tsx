@@ -19,7 +19,7 @@ import {
   ArrowSort20Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack, ColorPalette, useMenuClose } from "@officehere/ui";
-import { THEMES } from "@officehere/core";
+import { paletteOf } from "../model/theme";
 import type { Controller } from "../controller";
 import * as F from "../actions/format";
 import * as E from "../actions/edit";
@@ -333,7 +333,7 @@ export function CellsGroup({ ctl }: { ctl: Controller }) {
               label="Sekme Rengi"
               submenu={
                 <div className="oh-menu oh-menu-palette">
-                  <ColorPalette value={sheet.tabColor} noneLabel="Renk Yok" theme={THEMES[0]} onSelect={(c) => ctl.ops.setTabColor(sheet, c ?? undefined)} />
+                  <ColorPalette value={sheet.tabColor} noneLabel="Renk Yok" theme={paletteOf(ctl.wb.theme)} onSelect={(c) => ctl.ops.setTabColor(sheet, c ?? undefined)} />
                 </div>
               }
             />

@@ -1,3 +1,4 @@
+/* OfficeHere Tablo — çalışma alanı bölmeleri (PivotTable Alanları, İzleme Penceresi), formül denetimi, temalar. */
 /* Çalışma alanı: ızgara + sağ bölmeler (PivotTable Alanları, İzleme Penceresi) */
 .tb-workarea {
   display: flex;
@@ -283,4 +284,215 @@
 .tb-pv-btnfield {
   padding: 4px 10px 6px;
   color: var(--oh-text-muted);
+}
+
+/* İzleme Penceresi */
+.tb-watch {
+  position: absolute;
+  right: 24px;
+  bottom: 48px;
+  z-index: 40;
+  width: 560px;
+  max-width: calc(100% - 40px);
+  background: var(--oh-surface);
+  color: var(--oh-text);
+  border: 1px solid var(--oh-border-strong);
+  box-shadow: var(--oh-menu-shadow);
+  font-size: 12px;
+}
+.tb-watch-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 4px 10px;
+  background: var(--oh-chrome-bg);
+  cursor: move;
+  user-select: none;
+  font-weight: 600;
+}
+.tb-watch-bar {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+}
+.tb-watch-table {
+  max-height: 160px;
+  overflow: auto;
+  border-top: 1px solid var(--oh-separator);
+}
+.tb-watch-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 0.8fr 0.6fr 0.9fr 1.6fr;
+  gap: 6px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.tb-watch-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tb-watch-row.is-head {
+  position: sticky;
+  top: 0;
+  background: var(--oh-surface-2);
+  border-bottom: 1px solid var(--oh-separator);
+  color: var(--oh-text-muted);
+}
+.tb-watch-row.is-active {
+  background: var(--oh-checked);
+}
+.tb-watch-row:not(.is-head):hover {
+  background: var(--oh-hover);
+}
+
+/* Hata akıllı etiketi */
+.tb-errtag {
+  position: absolute;
+  z-index: 6;
+  width: 20px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #c8c8c8;
+  border-radius: 2px;
+  background: #ffffff;
+  cursor: pointer;
+}
+.tb-errtag:hover {
+  border-color: #8a8a8a;
+  background: #f3f3f3;
+}
+
+/* Formülü Değerlendir */
+.tb-eval-head,
+.tb-eval-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 8px;
+}
+.tb-eval-head {
+  color: var(--oh-text-muted);
+  margin-bottom: 4px;
+}
+.tb-eval-row {
+  margin-bottom: 6px;
+}
+.tb-eval-text {
+  min-height: 60px;
+  padding: 6px;
+  border: 1px solid var(--oh-border);
+  background: var(--oh-surface);
+  font-family: Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.tb-eval-row:not(.is-current) .tb-eval-text {
+  min-height: 0;
+  color: var(--oh-text-muted);
+}
+.tb-eval-mark {
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+.tb-eval-help {
+  color: var(--oh-text-muted);
+  margin-top: 8px;
+}
+.tb-errcheck {
+  display: grid;
+  grid-template-columns: 1fr 200px;
+  gap: 12px;
+}
+.tb-errcheck-formula {
+  font-family: Consolas, "Liberation Mono", monospace;
+}
+.tb-errcheck-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tb-dlg-note {
+  color: var(--oh-text-muted);
+  margin: 6px 0;
+}
+.tb-root {
+  position: relative;
+}
+
+/* Formüller sekmesi: İşlev Kitaplığı düğmeleri dar (Formül Denetimi 1366 px genişlikte açık kalsın) */
+.oh-ribbon-group[aria-label="İşlev Kitaplığı"] .oh-rbtn-large {
+  max-width: 64px;
+}
+
+/* Temalar */
+.tb-theme-menu {
+  padding: 4px 6px 8px;
+}
+.tb-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 84px);
+  gap: 6px;
+  padding: 4px 4px 0;
+}
+.tb-theme-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  height: 84px;
+  padding: 4px;
+  border: 1px solid var(--oh-border);
+  background: #ffffff;
+  cursor: pointer;
+}
+.tb-theme-tile:hover {
+  border-color: var(--oh-accent);
+}
+.tb-theme-tile.is-active {
+  outline: 2px solid var(--oh-accent);
+  outline-offset: -1px;
+}
+.tb-theme-aa {
+  font-size: 22px;
+  line-height: 34px;
+  text-align: left;
+  padding-left: 4px;
+}
+.tb-theme-bars {
+  display: flex;
+  height: 10px;
+  gap: 2px;
+}
+.tb-theme-bars span {
+  flex: 1;
+}
+.tb-theme-name {
+  margin-top: auto;
+  font-size: 11px;
+  color: #333333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tb-theme-swatches {
+  display: inline-flex;
+  gap: 1px;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.tb-theme-swatches span {
+  width: 11px;
+  height: 14px;
+}
+.tb-theme-fontrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.25;
+}
+.tb-theme-aa-small {
+  font-size: 18px;
+  width: 30px;
+  text-align: center;
 }

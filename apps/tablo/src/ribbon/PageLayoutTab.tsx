@@ -4,6 +4,7 @@ import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonCheckbox, RibbonGrou
 import type { Controller } from "../controller";
 import { MARGIN_PRESETS, PAPERS, setPage } from "../dialogs/PageSetupDialog";
 import { reorderObject } from "../actions/objects";
+import { ThemesGroup } from "./ThemesGroup";
 
 const cmText = (inch: number) => (inch * 2.54).toLocaleString("tr-TR", { maximumFractionDigits: 2 });
 
@@ -18,6 +19,7 @@ export function PageLayoutTab({ ctl }: { ctl: Controller }) {
   };
   return (
     <>
+      <ThemesGroup ctl={ctl} />
       <RibbonGroup label="Sayfa Yapısı" icon={<DocumentMargins24Regular />} onLauncher={() => ctl.openDialog("pageSetup")} launcherTip="Sayfa Yapısı">
         <RibbonMenuButton
           size="large"

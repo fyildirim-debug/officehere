@@ -1,4 +1,5 @@
 /** Grafik verisi: aralıktan seri/kategori tahmini (Excel'in sezgisel kuralları). */
+import { tint } from "@officehere/core";
 import { formatValue, isDateFormat, parseQualifiedRange } from "@officehere/formula";
 import { formatScalar } from "../model/display";
 import type { ChartDef, Rect } from "../model/types";
@@ -25,6 +26,11 @@ export const PALETTES: string[][] = [
   ["#196B24", "#4EA72E", "#7DC160", "#A9D69B", "#DAF2D0", "#2E7D32", "#66BB6A", "#A5D6A7"],
   ["#262626", "#595959", "#7F7F7F", "#A6A6A6", "#BFBFBF", "#D9D9D9", "#404040", "#8C8C8C"],
 ];
+
+/** "Renkli Palet 1" çalışma kitabı temasının vurgularıdır. */
+export function setChartThemePalette(accents: readonly string[]): void {
+  PALETTES[0] = [...accents.slice(0, 6), tint(accents[0], 0.3), tint(accents[1], 0.3)];
+}
 
 export const PALETTE_LABELS = ["Renkli Palet 1", "Renkli Palet 2", "Tek Renkli Palet 1 (Mavi)", "Tek Renkli Palet 2 (Turuncu)", "Tek Renkli Palet 3 (Yeşil)", "Tek Renkli Palet 4 (Gri)"];
 

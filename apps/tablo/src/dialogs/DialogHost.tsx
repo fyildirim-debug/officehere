@@ -14,6 +14,8 @@ import { ChartDataDialog, ChartTypeDialog, MoveChartDialog } from "./ChartDialog
 import { PageSetupDialog } from "./PageSetupDialog";
 import { ShortcutsDialog, WorkbookStatsDialog } from "./HelpDialogs";
 import { DialogErrorBoundary } from "./common";
+import { ErrorCheckDialog, ErrorOptionsDialog, EvaluateFormulaDialog } from "./AuditDialogs";
+import { traceError } from "../actions/audit";
 import { ChangePivotSourceDialog, CreatePivotDialog, MovePivotDialog, PivotOptionsDialog, ValueFieldDialog } from "../pivot/PivotDialogs";
 
 export interface DialogState {
@@ -26,6 +28,7 @@ export interface DialogState {
 /** Dialog açmadan doğrudan çalışan eylemler. */
 const ACTIONS: Record<string, (ctl: Controller) => void> = {
   toggleFilter: (ctl) => D.toggleAutoFilter(ctl),
+  traceError: (ctl) => traceError(ctl),
 };
 
 /** İletişim kutusu yığını: en üstteki etkindir; uyarılar alttakini kapatmadan üstte açılır. */
@@ -167,6 +170,12 @@ function OneDialog({ ctl, state, onClose, files, onBackstage }: { ctl: Controlle
       return <ChangePivotSourceDialog {...p} />;
     case "pivotOptions":
       return <PivotOptionsDialog {...p} />;
+    case "evaluateFormula":
+      return <EvaluateFormulaDialog {...p} />;
+    case "errorCheck":
+      return <ErrorCheckDialog {...p} />;
+    case "errorOptions":
+      return <ErrorOptionsDialog {...p} />;
   }
   return <M.AlertDialog {...p} arg={{ message: `"${state.id}" iletişim kutusu bulunamadı.` }} />;
 }

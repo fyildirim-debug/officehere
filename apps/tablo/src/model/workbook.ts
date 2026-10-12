@@ -7,6 +7,7 @@ import { FormulaEngine, cellKey, keyCol, keyRow, toLocalFormula, numberToText, i
 import { AxisSizes } from "./axis";
 import { MAX_COLS, MAX_ROWS, contains, intersects, shiftIndex, shiftRect } from "./rect";
 import { StyleTable, type CellStyle } from "./styles";
+import { defaultTheme, type WorkbookTheme } from "./theme";
 import type { AutoFilter, ChartDef, CondRule, ImageDef, Note, PageSetup, PivotDef, Rect, Selection, ShapeDef, SparklineGroup, TableDef, Validation, ViewMode } from "./types";
 
 export type CellInput = Scalar | { formula: string };
@@ -42,6 +43,8 @@ export class SheetModel {
   shapes: ShapeDef[] = [];
   pivots: PivotDef[] = [];
   sparklines: SparklineGroup[] = [];
+  /** Hata Denetimi'nde "Hatayı Yoksay" denen hücreler. */
+  ignoredErrors = new Set<number>();
   frozen = { rows: 0, cols: 0 };
   showGridlines = true;
   showHeadings = true;
@@ -106,6 +109,7 @@ export class SheetModel {
       shapes: structuredClone(this.shapes),
       pivots: structuredClone(this.pivots),
       sparklines: structuredClone(this.sparklines),
+      ignoredErrors: new Set(this.ignoredErrors),
       frozen: { ...this.frozen },
       page: structuredClone(this.page),
     };
@@ -132,6 +136,7 @@ export class SheetModel {
     this.shapes = structuredClone(d.shapes);
     this.pivots = structuredClone(d.pivots);
     this.sparklines = structuredClone(d.sparklines);
+    this.ignoredErrors = new Set(d.ignoredErrors);
     this.frozen = { ...d.frozen };
     this.page = structuredClone(d.page);
   }
@@ -155,6 +160,7 @@ export class SheetModel {
     this.styles = moveKeys(this.styles);
     this.notes = moveKeys(this.notes);
     this.links = moveKeys(this.links);
+    this.ignoredErrors = new Set(moveKeys(new Map([...this.ignoredErrors].map((k) => [k, true]))).keys());
     const moveLine = (m: Map<number, number>) => {
       const out = new Map<number, number>();
       for (const [k, v] of m) {
@@ -243,6 +249,7 @@ export interface SheetData {
   shapes: ShapeDef[];
   pivots: PivotDef[];
   sparklines: SparklineGroup[];
+  ignoredErrors: Set<number>;
   frozen: { rows: number; cols: number };
   page: PageSetup;
 }
@@ -269,6 +276,8 @@ export class WorkbookModel {
   sheets: SheetModel[] = [];
   activeIndex = 0;
   props: DocProps = {};
+  /** Çalışma kitabı teması (Sayfa Düzeni > Temalar). */
+  theme: WorkbookTheme = defaultTheme();
   private nextObjectId = 1;
 
   constructor(empty = false) {
@@ -480,6 +489,7 @@ export class WorkbookModel {
       engine: this.engine.exportInputs(),
       sheets: this.sheets.map((s) => ({ id: s.id, name: s.name, data: s.cloneData() })),
       activeIndex: this.activeIndex,
+      theme: structuredClone(this.theme),
     };
   }
 
@@ -493,6 +503,7 @@ export class WorkbookModel {
       return s;
     });
     this.activeIndex = Math.min(snap.activeIndex, this.sheets.length - 1);
+    this.theme = structuredClone(snap.theme);
     this.engine.recalc();
   }
 }
@@ -501,6 +512,7 @@ export interface WorkbookSnapshot {
   engine: ReturnType<FormulaEngine["exportInputs"]>;
   sheets: { id: number; name: string; data: SheetData }[];
   activeIndex: number;
+  theme: WorkbookTheme;
 }
 
 /** Değeri düzenleme metnine çevirir (tarihler gg.aa.yyyy, yüzde %, ondalık virgül). */

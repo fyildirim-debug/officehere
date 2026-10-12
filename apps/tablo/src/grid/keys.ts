@@ -5,6 +5,7 @@ import * as E from "../actions/edit";
 import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import { validationList } from "../controller";
 import { pivotAt, refreshAll, refreshPivot } from "../pivot/pivotOps";
+import { toggleSpellcheck } from "../actions/view";
 
 export interface GridKeyContext {
   pageRows: () => number;
@@ -135,6 +136,9 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
         return true;
       }
       return false;
+    case "F7":
+      toggleSpellcheck(ctl);
+      return true;
     case "F10":
       if (shift) return false;
       return false;

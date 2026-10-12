@@ -54,6 +54,7 @@ import * as F from "../actions/format";
 import * as E from "../actions/edit";
 import { DEFAULT_FONT, DEFAULT_SIZE, NUMBER_FORMATS } from "../model/styles";
 import { StylesGroup, CellsGroup, EditingGroup } from "./HomeTab2";
+import { useThemePalette } from "../themeContext";
 
 export function PasteMenu({ ctl }: { ctl: Controller }) {
   const p = (what: "all" | "values" | "formulas" | "formats" | "widths" | "allExceptBorders" | "valuesAndFormats" | "formulasAndFormats", transpose = false) => () => E.pasteFromButton(ctl, { what, transpose });
@@ -96,6 +97,7 @@ const BORDERS: { kind: string; label: string; icon: React.ReactElement }[] = [
 
 export function HomeTab({ ctl }: { ctl: Controller }) {
   const st = F.activeStyle(ctl);
+  const palette = useThemePalette();
   const [fontColor, setFontColor] = useState<string | null>("#C00000");
   const [fillColor, setFillColor] = useState<string | null>("#FFFF00");
   const [lastBorder, setLastBorder] = useState(BORDERS[0]);
@@ -174,7 +176,7 @@ export function HomeTab({ ctl }: { ctl: Controller }) {
                     label="Çizgi Rengi"
                     submenu={
                       <div className="oh-menu oh-menu-palette">
-                        <ColorPalette value={borderColor} onSelect={(c) => setBorderColor(c ?? "#000000")} noneLabel="Otomatik" />
+                        <ColorPalette value={borderColor} theme={palette} onSelect={(c) => setBorderColor(c ?? "#000000")} noneLabel="Otomatik" />
                       </div>
                     }
                   />
@@ -202,8 +204,8 @@ export function HomeTab({ ctl }: { ctl: Controller }) {
                 </Menu>
               )}
             />
-            <ColorSplitButton icon={<PaintBucket20Regular />} tip="Dolgu Rengi" description="Seçili hücrelerin arka plan rengini değiştirir." color={fillColor} noneLabel="Dolgu Yok" onColorChange={setFillColor} onApply={(c) => F.setFill(ctl, c)} />
-            <ColorSplitButton icon={<TextColor20Regular />} tip="Yazı Tipi Rengi" color={fontColor} noneLabel="Otomatik" onColorChange={setFontColor} onApply={(c) => F.setColor(ctl, c)} />
+            <ColorSplitButton icon={<PaintBucket20Regular />} tip="Dolgu Rengi" description="Seçili hücrelerin arka plan rengini değiştirir." color={fillColor} theme={palette} noneLabel="Dolgu Yok" onColorChange={setFillColor} onApply={(c) => F.setFill(ctl, c)} />
+            <ColorSplitButton icon={<TextColor20Regular />} tip="Yazı Tipi Rengi" color={fontColor} theme={palette} noneLabel="Otomatik" onColorChange={setFontColor} onApply={(c) => F.setColor(ctl, c)} />
           </RibbonRow>
         </RibbonStack>
       </RibbonGroup>
