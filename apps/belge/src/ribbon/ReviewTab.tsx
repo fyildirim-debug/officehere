@@ -12,19 +12,25 @@ import {
   LocalLanguage24Regular,
   TextGrammarCheckmark24Regular,
   TextWordCount20Regular,
+  TextEditStyle20Regular,
+  Eye20Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack } from "@officehere/ui";
 import { useBelge } from "../state/context";
 import { commentAnchors } from "../views/CommentsPane";
 import { listChanges, resolveChanges } from "../editor/trackChanges";
 
-export function ReviewTab({ spellcheck, setSpellcheck, lang, setLang, deleteComment, deleteAllComments }: { spellcheck: boolean; setSpellcheck: (v: boolean) => void; lang: string; setLang: (l: string) => void; deleteComment: (id: string) => void; deleteAllComments: () => void }) {
+const MARKUP_LABEL = { simple: "Basit İşaretleme", all: "Tüm İşaretlemeler", none: "İşaretleme Yok", original: "Özgün" } as const;
+
+export function ReviewTab({ lang, setLang, deleteComment, deleteAllComments }: { lang: string; setLang: (l: string) => void; deleteComment: (id: string) => void; deleteAllComments: () => void }) {
   const ctx = useBelge();
   const { editor } = ctx;
   const anchors = commentAnchors(editor);
   const pos = editor.state.selection.from;
   const current = anchors.find((a) => pos >= a.from && pos <= a.to);
   const changes = listChanges(editor.state.doc);
+  const markup = ctx.view.markup ?? "all";
+  const balloons = ctx.view.balloons ?? "revisions";
 
   const gotoComment = (dir: 1 | -1) => {
     if (!anchors.length) return;
@@ -59,7 +65,7 @@ export function ReviewTab({ spellcheck, setSpellcheck, lang, setLang, deleteComm
   return (
     <>
       <RibbonGroup label="Yazım Denetleme" icon={<TextGrammarCheckmark24Regular />}>
-        <RibbonButton size="large" icon={<TextGrammarCheckmark24Regular />} label="Yazım ve Dil Bilgisi" checked={spellcheck} description="Yazım hatalarının altını çizer (tarayıcının denetleyicisiyle)." onClick={() => setSpellcheck(!spellcheck)} />
+        <RibbonButton size="large" icon={<TextGrammarCheckmark24Regular />} label="Yazım ve Dil Bilgisi" shortcut="F7" description="Düzenleyici bölmesini açarak belgedeki yazım ve dil bilgisi önerilerini gözden geçirin." onClick={() => ctx.setView({ proofPane: true })} />
         <RibbonStack>
           <RibbonButton icon={<TextWordCount20Regular />} label="Sözcük Sayısı" shortcut="Ctrl+Shift+G" onClick={() => ctx.openDialog("wordCount")} />
         </RibbonStack>
@@ -102,6 +108,39 @@ export function ReviewTab({ spellcheck, setSpellcheck, lang, setLang, deleteComm
       </RibbonGroup>
       <RibbonGroup label="İzleme" icon={<DocumentEdit24Regular />}>
         <RibbonButton size="large" icon={<DocumentEdit24Regular />} label="Değişiklikleri İzle" shortcut="Ctrl+Shift+E" checked={ctx.tracking} description="Bu belgede yapılan tüm değişiklikleri izleyin." onClick={ctx.toggleTrack} />
+        <RibbonStack>
+          <RibbonMenuButton
+            icon={<TextEditStyle20Regular />}
+            label={MARKUP_LABEL[markup]}
+            tip="Görüntülenecek işaretleme"
+            menu={
+              <Menu width={220}>
+                {(Object.keys(MARKUP_LABEL) as (keyof typeof MARKUP_LABEL)[]).map((k) => (
+                  <MenuItem key={k} label={MARKUP_LABEL[k]} checked={markup === k} onClick={() => ctx.setView({ markup: k })} />
+                ))}
+              </Menu>
+            }
+          />
+          <RibbonMenuButton
+            icon={<Eye20Regular />}
+            label="İşaretlemeyi Göster"
+            menu={
+              <Menu width={300}>
+                <MenuItem label="Açıklamalar" checked={ctx.view.showComments} onClick={() => ctx.setView({ showComments: !ctx.view.showComments })} />
+                <MenuItem
+                  label="Balonlar"
+                  submenu={
+                    <Menu width={320}>
+                      <MenuItem label="Düzeltmeleri Balonlarda Göster" checked={balloons === "revisions"} onClick={() => ctx.setView({ balloons: "revisions" })} />
+                      <MenuItem label="Tüm Düzeltmeleri Satır İçinde Göster" checked={balloons === "inline"} onClick={() => ctx.setView({ balloons: "inline" })} />
+                      <MenuItem label="Yalnızca Açıklamaları ve Biçimlendirmeyi Balonlarda Göster" checked={balloons === "formatting"} onClick={() => ctx.setView({ balloons: "formatting" })} />
+                    </Menu>
+                  }
+                />
+              </Menu>
+            }
+          />
+        </RibbonStack>
       </RibbonGroup>
       <RibbonGroup label="Değişiklikler" icon={<CheckmarkCircle32Regular />}>
         <RibbonSplitButton

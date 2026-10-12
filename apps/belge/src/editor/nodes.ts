@@ -172,11 +172,23 @@ export const PageField = Node.create({
     return ["span", mergeAttributes(HTMLAttributes, { class: "bl-field" }), node.attrs.field === "NUMPAGES" ? NUMPAGES_TOKEN : PAGE_TOKEN];
   },
   addNodeView() {
-    return ({ node }) => {
+    return ({ node, editor, getPos }) => {
       const dom = document.createElement("span");
       dom.className = "bl-field is-editing";
-      dom.textContent = node.attrs.field === "NUMPAGES" ? "#" : "1";
-      return { dom };
+      const total = node.attrs.field === "NUMPAGES";
+      dom.textContent = total ? "#" : "1";
+      // Belge gövdesinde alan, bulunduğu sayfanın numarasını gösterir (sayfalama denetleyicisinden).
+      const ctrl = editor.extensionManager.extensions.find((e) => e.name === "belgePagination")?.options?.controller as
+        | { pageOf(pos: number): number; info: { pageCount: number }; subscribe(fn: () => void): () => void }
+        | undefined;
+      if (!ctrl) return { dom };
+      const update = () => {
+        const pos = typeof getPos === "function" ? getPos() : undefined;
+        dom.textContent = total ? String(ctrl.info.pageCount) : String(pos === undefined ? 1 : ctrl.pageOf(pos) + 1);
+      };
+      update();
+      const off = ctrl.subscribe(update);
+      return { dom, update: (n) => n.type.name === "pageField" && n.attrs.field === node.attrs.field && (update(), true), destroy: off };
     };
   },
   renderText({ node }) {

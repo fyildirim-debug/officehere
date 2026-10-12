@@ -138,7 +138,9 @@ test.describe("OfficeHere Belge senaryoları", () => {
   });
 
   test("bul ve değiştir: Ctrl+H, Tümünü Değiştir büyük harfi korur, geri al", async ({ page }) => {
+    // Otomatik Düzelt cümle başlarını büyük harfe çevirir (Word'deki gibi).
     await page.keyboard.type("elma armut Elma. elmalı turta");
+    await expect(body(page)).toHaveText("Elma armut Elma. Elmalı turta");
     await page.keyboard.press("Control+h");
     const dlg = page.locator(".oh-dialog");
     await expect(dlg).toBeVisible();
@@ -146,11 +148,11 @@ test.describe("OfficeHere Belge senaryoları", () => {
     await dlg.getByLabel("Yeni değer:").fill("ayva");
     await expect(dlg).toContainText("3 eşleşme");
     await dlg.getByRole("button", { name: "Tümünü Değiştir" }).click();
-    await expect(body(page)).toHaveText("ayva armut Ayva. ayvalı turta");
+    await expect(body(page)).toHaveText("Ayva armut Ayva. Ayvalı turta");
     await dlg.getByRole("button", { name: "İptal" }).click();
     await expect(dlg).toHaveCount(0);
     await page.keyboard.press("Control+z");
-    await expect(body(page)).toHaveText("elma armut Elma. elmalı turta");
+    await expect(body(page)).toHaveText("Elma armut Elma. Elmalı turta");
   });
 
   test("DOCX olarak kaydet, yeniden aç: içerik aynı", async ({ page, browser }, testInfo) => {
@@ -198,18 +200,22 @@ test.describe("OfficeHere Belge senaryoları", () => {
     // Geri alma geçmişi 500 ms'den uzun aradan sonra yeni adım başlatır (Word'deki gibi sözcük sözcük).
     await page.waitForTimeout(600);
     await page.keyboard.type(" iki");
-    await expect(body(page)).toHaveText("bir iki");
+    // Otomatik Düzelt cümle başını büyütür; düzeltme ayrı bir geri alma adımıdır.
+    await expect(body(page)).toHaveText("Bir iki");
+    await page.keyboard.press("Control+z");
+    await expect(body(page)).toHaveText("Bir");
     await page.keyboard.press("Control+z");
     await expect(body(page)).toHaveText("bir");
     await page.keyboard.press("Control+y");
-    await expect(body(page)).toHaveText("bir iki");
+    await page.keyboard.press("Control+y");
+    await expect(body(page)).toHaveText("Bir iki");
     await page.keyboard.press("Control+a");
     await page.keyboard.press("Control+u");
-    await expect(body(page).locator("u")).toHaveText("bir iki");
+    await expect(body(page).locator("u")).toHaveText("Bir iki");
     // Hızlı erişim araç çubuğundaki Geri Al düğmesi
     await page.locator(".oh-titlebar").getByRole("button", { name: /^Geri Al/ }).click();
     await expect(body(page).locator("u")).toHaveCount(0);
-    await expect(body(page)).toHaveText("bir iki");
+    await expect(body(page)).toHaveText("Bir iki");
   });
 
   test("yakınlaştırma: durum çubuğu, Ctrl+tekerlek ve Birden Çok Sayfa", async ({ page }) => {

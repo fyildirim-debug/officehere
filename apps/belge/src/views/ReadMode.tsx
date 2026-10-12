@@ -12,6 +12,8 @@ interface Props {
 
 type Bg = "none" | "sepia" | "inverse";
 
+const COL_W = { narrow: 400, default: 500, wide: 720 } as const;
+
 export function ReadMode({ html, title, onExit, onFind }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(0);
@@ -19,14 +21,32 @@ export function ReadMode({ html, title, onExit, onFind }: Props) {
   const [bg, setBg] = useState<Bg>("none");
   const [width, setWidth] = useState<"narrow" | "default" | "wide">("default");
 
+  const [step, setStep] = useState(1);
+  /**
+   * Word'deki gibi ekran, ortalanmış sabit genişlikte sütunlara bölünür: sütun sayısı pencere genişliğine
+   * göre (en çok 3), kenar boşlukları eşit; her ekran bir sütun grubudur.
+   */
   const measure = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    const w = el.clientWidth;
-    const n = Math.max(1, Math.round(el.scrollWidth / w));
-    setPages(n);
-    setPage((p) => Math.min(p, n - 1));
-  }, []);
+    const W = el.clientWidth;
+    const c = COL_W[width];
+    const n = Math.max(1, Math.min(3, Math.floor((W - 48) / (c + 80))));
+    const colW = Math.min(c, W - 64);
+    // Her sütun ekranın 1/n'lik diliminde ortalanır; ekran adımı tam pencere genişliğidir.
+    const g = (W - n * colW) / n;
+    const m = g / 2;
+    el.style.paddingLeft = `${m}px`;
+    el.style.paddingRight = `${m}px`;
+    el.style.columnWidth = `${colW}px`;
+    el.style.columnCount = String(n);
+    el.style.columnGap = `${g}px`;
+    setStep(W);
+    const total = Math.max(1, Math.round((el.scrollWidth - 2 * m + g) / (colW + g)));
+    const pg = Math.max(1, Math.ceil(total / n));
+    setPages(pg);
+    setPage((p) => Math.min(p, pg - 1));
+  }, [width]);
 
   useLayoutEffect(measure, [measure, html, width]);
   useEffect(() => {
@@ -36,8 +56,8 @@ export function ReadMode({ html, title, onExit, onFind }: Props) {
 
   useEffect(() => {
     const el = ref.current;
-    if (el) el.scrollTo({ left: page * el.clientWidth, behavior: "smooth" });
-  }, [page]);
+    if (el) el.scrollTo({ left: page * step, behavior: "smooth" });
+  }, [page, step]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

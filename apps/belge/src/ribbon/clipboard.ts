@@ -1,6 +1,6 @@
 // Pano işlemleri (Kes/Kopyala/Yapıştır ve yapıştırma seçenekleri).
 import type { Editor } from "@tiptap/core";
-import { cleanOfficeHtml } from "../editor/paste";
+import { cleanOfficeHtml, lastInternalCopy } from "../editor/paste";
 
 export function execClipboard(editor: Editor, cmd: "cut" | "copy"): boolean {
   editor.commands.focus();
@@ -47,6 +47,14 @@ export async function pasteFromClipboard(editor: Editor, mode: "keep" | "merge" 
     if (!text) return;
     editor.view.pasteText(text);
   } catch {
-    notify("Tarayıcı panoya erişim izni vermedi. Yapıştırmak için Ctrl+V tuşlarını kullanın.");
+    // Pano izni yok: Word'deki gibi bilgilendir; uygulama içinden kopyalanan son içerik yine de yapıştırılır.
+    const slice = lastInternalCopy();
+    if (slice && slice.size) {
+      const { state } = editor;
+      editor.view.dispatch(mode === "text" ? state.tr.insertText(slice.content.textBetween(0, slice.content.size, "\n")) : state.tr.replaceSelection(slice).scrollIntoView());
+      notify("Tarayıcı panoya doğrudan erişime izin vermiyor; son kopyalanan içerik yapıştırıldı. Başka uygulamalardan yapıştırmak için Ctrl+V kullanın.");
+      return;
+    }
+    notify("Tarayıcınız panoya doğrudan erişime izin vermiyor. Yapıştırmak için Ctrl+V tuşlarını kullanın.");
   }
 }

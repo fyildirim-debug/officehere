@@ -219,6 +219,8 @@ export class PartWriter {
       x += `<w:pBdr>${b.top ? borderXml("top", b.top) : ""}${b.left ? borderXml("left", b.left as BorderSpec) : ""}${b.bottom ? borderXml("bottom", b.bottom) : ""}${b.right ? borderXml("right", b.right as BorderSpec) : ""}</w:pBdr>`;
     }
     if (a.shading) x += `<w:shd w:val="clear" w:color="auto" w:fill="${hex6(a.shading as string) ?? "auto"}"/>`;
+    const tabs = a.tabs as { pos: number; align: string; leader: string }[] | null;
+    if (tabs?.length && !extra.includes("<w:tabs>")) x += `<w:tabs>${tabs.map((t) => `<w:tab w:val="${t.align}"${t.leader !== "none" ? ` w:leader="${t.leader}"` : ""} w:pos="${ptTw(t.pos)}"/>`).join("")}</w:tabs>`;
     x += extra;
     const sp: string[] = [];
     if (a.spaceBefore != null) sp.push(`w:before="${ptTw(a.spaceBefore as number)}"`);
@@ -240,6 +242,7 @@ export class PartWriter {
     if (ind.length) x += `<w:ind ${ind.join(" ")}/>`;
     const al = a.textAlign as string | null;
     if (al) x += `<w:jc w:val="${al === "justify" ? "both" : al === "left" ? "left" : al}"/>`;
+    if (a.outlineLevel && n.type !== "heading") x += `<w:outlineLvl w:val="${(a.outlineLevel as number) - 1}"/>`;
     if (n === this.sectTarget) x += this.sectXml;
     return x ? `<w:pPr>${x}</w:pPr>` : "";
   }

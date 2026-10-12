@@ -42,6 +42,8 @@ export interface StyleDef {
   /** Başlık düzeyi (Heading1 → 1). */
   level?: number;
   props: StyleProps;
+  /** Kullanıcı stili Stiller galerisinde gösterilsin mi. */
+  gallery?: boolean;
 }
 
 /** Word'ün tek satır aralığı yazı tipi yüksekliğinin ~1,2 katıdır; CSS'e bu katsayıyla çevrilir. */
@@ -72,6 +74,8 @@ export const STYLE_ORDER = [
   "IntenseReference",
   "BookTitle",
   "ListParagraph",
+  "Caption",
+  "Bibliography",
 ] as const;
 
 export type StyleId = (typeof STYLE_ORDER)[number];
@@ -138,6 +142,8 @@ function baseStyles(t: ThemeCtx): StyleDef[] {
     { id: "IntenseReference", name: "Belirgin Başvuru", type: "character", props: { bold: true, caps: true, color: t.heading, spacing: 0.25 } },
     { id: "BookTitle", name: "Kitap Başlığı", type: "character", props: { bold: true, italic: true, spacing: 0.25 } },
     { id: "ListParagraph", name: "Liste Paragrafı", type: "paragraph", basedOn: "Normal", props: { indentLeft: 36 } },
+    { id: "Caption", name: "Resim Yazısı", type: "paragraph", basedOn: "Normal", next: "Normal", props: { italic: true, size: 9, color: "#0E2841", spaceAfter: 10, line: 1 } },
+    { id: "Bibliography", name: "Kaynakça", type: "paragraph", basedOn: "Normal", next: "Normal", props: { indentLeft: 36, spaceAfter: 6 } },
   ];
 }
 
@@ -229,8 +235,8 @@ export const PARAGRAPH_SPACINGS: { id: string; label: string; desc: string; befo
   { id: "double", label: "Çift", desc: "Önce: 0 nk, Sonra: 8 nk, Satır: 2", before: 0, after: 8, line: 2 },
 ];
 
-/** Tema + stil kümesine göre çözülmüş stil tablosu. */
-export function resolveStyles(styleSet: string, themeName: string, fontTheme?: string | null, paragraphSpacing?: string): Record<string, StyleDef> {
+/** Tema + stil kümesine göre çözülmüş stil tablosu; `custom` kullanıcının yeni ya da değiştirilmiş stilleridir. */
+export function resolveStyles(styleSet: string, themeName: string, fontTheme?: string | null, paragraphSpacing?: string, custom?: Record<string, StyleDef> | null): Record<string, StyleDef> {
   const theme = themeByName(themeName);
   const fonts = fontTheme ? themeByName(fontTheme) : theme;
   const t = themeCtx({ ...theme, majorFont: fonts.majorFont, minorFont: fonts.minorFont });
@@ -239,7 +245,23 @@ export function resolveStyles(styleSet: string, themeName: string, fontTheme?: s
   (STYLE_SETS.find((x) => x.id === styleSet) ?? STYLE_SETS[0]).apply(out, t);
   const ps = PARAGRAPH_SPACINGS.find((x) => x.id === paragraphSpacing);
   if (ps && ps.id !== "default") patch(out, "Normal", { spaceBefore: ps.before, spaceAfter: ps.after, line: ps.line });
+  for (const [id, def] of Object.entries(custom ?? {})) out[id] = { ...def, id };
   return out;
+}
+
+/** Stil sırası: yerleşik stiller ve ardından kullanıcı stilleri. */
+export function styleIds(styles: Record<string, StyleDef>): string[] {
+  const builtin = new Set<string>(STYLE_ORDER);
+  return [...STYLE_ORDER.filter((id) => styles[id]), ...Object.keys(styles).filter((id) => !builtin.has(id))];
+}
+
+/** Yeni stil kimliği (adından; Türkçe karakterler sadeleştirilir). */
+export function styleIdFromName(name: string, taken: Record<string, unknown>): string {
+  const map: Record<string, string> = { ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u", Ç: "C", Ğ: "G", İ: "I", Ö: "O", Ş: "S", Ü: "U" };
+  const base = name.replace(/[çğıöşüÇĞİÖŞÜ]/g, (c) => map[c] ?? c).replace(/[^A-Za-z0-9]/g, "") || "Stil";
+  let id = base;
+  for (let i = 2; taken[id]; i++) id = `${base}${i}`;
+  return id;
 }
 
 /** basedOn zinciriyle birleşmiş özellikler. */
@@ -303,10 +325,11 @@ export function styleSheetCss(styles: Record<string, StyleDef>): string {
   const normal = styles.Normal.props;
   rules.push(`.bl-doc{${propsCss({ font: normal.font, size: normal.size }, false)};line-height:${+((normal.line ?? 1) * LINE_FACTOR).toFixed(4)}}`);
   rules.push(`.bl-doc p,.bl-doc h1,.bl-doc h2,.bl-doc h3,.bl-doc h4,.bl-doc h5,.bl-doc h6{${propsCss({ ...normal, font: undefined, size: undefined }, true)}}`);
-  for (const id of STYLE_ORDER) {
+  for (const id of styleIds(styles)) {
     const s = styles[id];
     if (!s || id === "Normal") continue;
-    const props = s.props;
+    // Kullanıcı stilleri temel aldıkları stilin özelliklerini devralır.
+    const props = s.basedOn && s.basedOn !== "Normal" && !(STYLE_ORDER as readonly string[]).includes(id) ? { ...effectiveProps(styles, s.basedOn), ...s.props } : s.props;
     if (s.type === "character") {
       rules.push(`.bl-doc [data-cstyle="${id}"]{${propsCss(props, false)}}`);
     } else if (s.level) {

@@ -53,6 +53,7 @@ export function ReferencesTab() {
           size="large"
           icon={<TextBulletListSquare32Regular />}
           label="İçindekiler"
+          disabled={!ctx.inBody}
           menu={
             <Menu width={260}>
               <MenuHeader>Yerleşik</MenuHeader>

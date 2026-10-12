@@ -69,6 +69,8 @@ export interface OfficeBackstageProps {
   extraOptions?: ReactNode;
   /** Yazdır sayfasında baskı önizlemesi. */
   printPreview?: ReactNode;
+  /** Yazdır sayfasının tüm içeriği (verilirse varsayılan Yazdır sayfasının yerine geçer). */
+  printPage?: ReactNode;
 }
 
 function greeting(): string {
@@ -83,7 +85,7 @@ const NEW_LABEL: Record<AppKind, string> = { belge: "Boş belge", tablo: "Boş �
 
 /** Üç uygulamada ortak "Dosya" görünümü: Giriş, Yeni, Aç, Bilgi, Kaydet, Yazdır, Dışarı Aktar, Seçenekler. */
 export function OfficeBackstage(props: OfficeBackstageProps) {
-  const { app, fileName, filePath, templates, templateShape = "portrait", onNew, onOpen, onOpenRecent, onSave, onSaveAs, onPrint, exports, onExport, onClose, onBack, info, initialPage = "home", extraOptions, printPreview } = props;
+  const { app, fileName, filePath, templates, templateShape = "portrait", onNew, onOpen, onOpenRecent, onSave, onSaveAs, onPrint, exports, onExport, onClose, onBack, info, initialPage = "home", extraOptions, printPreview, printPage } = props;
   const [page, setPage] = useState<OfficeBackstagePage>(initialPage);
   const [recent, setRecent] = useState<RecentFile[]>([]);
   const [theme, setTheme] = useUiTheme();
@@ -159,7 +161,7 @@ export function OfficeBackstage(props: OfficeBackstageProps) {
       );
       break;
     case "print":
-      content = (
+      content = printPage ?? (
         <>
           <BackstageHeading>Yazdır</BackstageHeading>
           <div className="oh-bs-print">

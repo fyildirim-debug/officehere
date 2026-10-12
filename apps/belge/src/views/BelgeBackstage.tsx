@@ -3,6 +3,11 @@ import { DocumentPdf24Regular, Code24Regular, DocumentText24Regular, Document24R
 import { getNative } from "@officehere/core";
 import { OfficeBackstage, getUserName, type OfficeBackstagePage } from "@officehere/ui";
 import type { DocSettings } from "../model/document";
+import type { PrintOptions } from "../print/printOptions";
+import { PrintPage } from "../print/PrintPage";
+import { usePreviewPages } from "../print/usePreviewPages";
+import { useBelge } from "../state/context";
+import { applyPageSetup, sectionInfo } from "../state/pageSetup";
 import type { useFileOps } from "../state/useFileOps";
 import { TEMPLATES } from "../templates/templates";
 
@@ -12,18 +17,26 @@ interface Props {
   settings: DocSettings;
   pageCount: number;
   stats: { words: number; chars: number };
-  previewHtml: string;
+  printOptions: PrintOptions;
+  setPrintOptions: (fn: (o: PrintOptions) => PrintOptions) => void;
   autosave: boolean;
   setAutosave: (v: boolean) => void;
   spellcheck: boolean;
   setSpellcheck: (v: boolean) => void;
-  onPrint: () => void;
-  onPdf: () => void;
+  onPrint: (o?: PrintOptions) => void;
+  onPdf: (o?: PrintOptions) => void;
   onClose: () => void;
+  /** Seçenekler sayfasından açılan iletişim kutuları. */
+  onDialog: (kind: "autocorrect") => void;
 }
 
-export function BelgeBackstage({ page, files, settings, pageCount, stats, previewHtml, autosave, setAutosave, spellcheck, setSpellcheck, onPrint, onPdf, onClose }: Props) {
+export function BelgeBackstage({ page, files, settings, pageCount, stats, printOptions, setPrintOptions, autosave, setAutosave, spellcheck, setSpellcheck, onPrint, onPdf, onClose, onDialog }: Props) {
   const nativePdf = !!getNative()?.exportPdf;
+  const ctx = useBelge();
+  const ed = ctx.mainEditor;
+  const preview = usePreviewPages(ctx.controller, true, settings.pageColor);
+  const currentPage = ctx.controller.pageOf(ed.state.selection.from);
+  const setProp = (k: "title" | "subject" | "keywords" | "author", v: string) => ctx.updateSettings((s) => ({ ...s, properties: { ...s.properties, [k]: v } }));
   return (
     <OfficeBackstage
       app="belge"
@@ -49,7 +62,22 @@ export function BelgeBackstage({ page, files, settings, pageCount, stats, previe
       onSaveAs={async () => {
         if (await files.saveAs()) onClose();
       }}
-      onPrint={onPrint}
+      onPrint={() => onPrint(printOptions)}
+      printPage={
+        <PrintPage
+          options={printOptions}
+          setOptions={setPrintOptions}
+          pageCount={pageCount}
+          currentPage={currentPage}
+          page={sectionInfo(ed, settings.page).page}
+          onPage={(fn) => applyPageSetup(ed, settings, ctx.updateSettings, fn)}
+          onPageSetupDialog={() => ctx.openDialog("pageSetup")}
+          onPrint={() => onPrint(printOptions)}
+          onPdf={() => onPdf(printOptions)}
+          nativePdf={nativePdf}
+          preview={preview}
+        />
+      }
       exports={[
         {
           id: "pdf",
@@ -75,12 +103,13 @@ export function BelgeBackstage({ page, files, settings, pageCount, stats, previe
         ["Sayfalar", String(pageCount)],
         ["Sözcükler", stats.words.toLocaleString("tr-TR")],
         ["Karakterler", stats.chars.toLocaleString("tr-TR")],
-        ["Başlık", settings.properties.title || "Başlık ekleyin"],
-        ["Yazar", settings.properties.author || getUserName()],
+        ["Başlık", <PropInput key="title" label="Başlık" value={settings.properties.title} placeholder="Başlık ekleyin" onChange={(v) => setProp("title", v)} />],
+        ["Konu", <PropInput key="subject" label="Konu" value={settings.properties.subject} placeholder="Konu belirtin" onChange={(v) => setProp("subject", v)} />],
+        ["Etiketler", <PropInput key="keywords" label="Etiketler" value={settings.properties.keywords} placeholder="Etiket ekleyin" onChange={(v) => setProp("keywords", v)} />],
+        ["Yazar", <PropInput key="author" label="Yazar" value={settings.properties.author} placeholder={getUserName()} onChange={(v) => setProp("author", v)} />],
         ["Oluşturulma", new Date(settings.properties.created).toLocaleString("tr-TR")],
         ["Son Değiştirme", new Date(settings.properties.modified).toLocaleString("tr-TR")],
       ]}
-      printPreview={<div className="bl-print-preview bl-doc" dangerouslySetInnerHTML={{ __html: previewHtml }} />}
       extraOptions={
         <>
           <label className="oh-field is-inline">
@@ -91,8 +120,19 @@ export function BelgeBackstage({ page, files, settings, pageCount, stats, previe
             <span className="oh-field-label">Yazarken yazım denetimi yap</span>
             <input type="checkbox" checked={spellcheck} onChange={(e) => setSpellcheck(e.target.checked)} />
           </label>
+          <div className="oh-field is-inline">
+            <span className="oh-field-label">Yazdıkça metnin nasıl düzeltileceğini ve biçimlendirileceğini değiştirin</span>
+            <button type="button" className="oh-btn" onClick={() => onDialog("autocorrect")}>
+              Otomatik Düzeltme Seçenekleri...
+            </button>
+          </div>
         </>
       }
     />
   );
+}
+
+/** Bilgi sayfasında düzenlenebilir belge özelliği (docProps/core.xml). */
+function PropInput({ label, value, placeholder, onChange }: { label: string; value: string; placeholder: string; onChange: (v: string) => void }) {
+  return <input type="text" className="bl-prop-input" aria-label={label} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />;
 }

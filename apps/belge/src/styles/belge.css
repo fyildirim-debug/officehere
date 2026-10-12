@@ -127,6 +127,24 @@
   height: auto !important;
 }
 
+/* Kaydırılabilir kutu sütunlar arasında bölünemez: tablo sayfa sınırında bölünebilsin. */
+.bl-body.is-tiled .tableWrapper {
+  overflow: visible;
+}
+
+.bl-body.is-tiled .bl-section > .bl-toc {
+  display: flow-root;
+}
+
+/* Paragraf aralıklarının birleşmesini önleyen ayraç (net yüksekliği sıfır). */
+.bl-tsp {
+  display: block;
+  height: 1px;
+  margin-bottom: -1px;
+  pointer-events: none;
+  user-select: none;
+}
+
 .bl-pg-tilerow,
 .bl-pg-fill {
   display: block;

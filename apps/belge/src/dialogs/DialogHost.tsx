@@ -1,5 +1,8 @@
 // Açık iletişim kutusunu çizer.
 import type { DialogState } from "../state/context";
+import { AutoCorrectDialog } from "./AutoCorrectDialog";
+import { StyleDialog } from "./StyleDialog";
+import { TabsDialog } from "./TabsDialog";
 import { FontDialog } from "./FontDialog";
 import { ParagraphDialog } from "./ParagraphDialog";
 import { FindReplaceDialog } from "./FindReplaceDialog";
@@ -59,6 +62,12 @@ export function DialogHost({ dialog, onClose, zoom, onZoom, pages }: Props) {
       return <AltTextDialog onClose={onClose} />;
     case "imageSize":
       return <ImageSizeDialog onClose={onClose} />;
+    case "autocorrect":
+      return <AutoCorrectDialog onClose={onClose} />;
+    case "tabs":
+      return <TabsDialog onClose={onClose} />;
+    case "style":
+      return <StyleDialog styleId={dialog.arg} onClose={onClose} />;
     default:
       return null;
   }

@@ -287,6 +287,19 @@ export interface SectionLayoutSource {
   /** Yazdırma Düzeni etkin mi (Web Düzeni'nde bölüm kenar boşlukları uygulanmaz). */
   enabled(): boolean;
   defaultPage(): PageSetup;
+  /** Birden Çok Sayfa (yan yana dizim) açık mı. */
+  tiled?(): boolean;
+}
+
+/**
+ * Yan yana dizimde bölümler blok düzenine geçer ve bitişik paragraf aralıkları (CSS kenar boşluğu
+ * birleşmesi) birleşirdi; bloklar arasına konan çok ince ayraçlar birleşmeyi önler. Böylece sayfalama
+ * %100 görünümdekiyle aynı kalır.
+ */
+function tileSpacer() {
+  const d = document.createElement("div");
+  d.className = "bl-tsp";
+  return d;
 }
 
 export const sectionLayoutKey = new PluginKey<DecorationSet>("belgeSectionLayout");
@@ -309,8 +322,24 @@ export function buildSectionDecos(doc: PMNode, src: SectionLayoutSource): Decora
   const geoms = sectionGeoms(doc, src.defaultPage());
   const decos: Decoration[] = [];
   const paged = src.enabled();
+  const tiled = paged && !!src.tiled?.();
   const bodyW = bodyWidth(geoms);
   geoms.forEach((g, i) => {
+    if (tiled && g.cols === 1) {
+      const sec = doc.nodeAt(g.pos);
+      if (sec) {
+        decos.push(Decoration.widget(g.pos + 1, tileSpacer, { side: -2, key: "tsp", ignoreSelection: true }));
+        sec.forEach((c, off) => {
+          const at = g.pos + 1 + off;
+          decos.push(Decoration.widget(at + c.nodeSize, tileSpacer, { side: -2, key: "tsp", ignoreSelection: true }));
+          // Liste kutusu da (esnek öğe gibi) iç paragrafların aralığını dışarı taşımamalı.
+          if (c.type.name === "bulletList" || c.type.name === "orderedList") {
+            decos.push(Decoration.widget(at + 1, tileSpacer, { side: -2, key: "tsp", ignoreSelection: true }));
+            decos.push(Decoration.widget(at + c.nodeSize - 1, tileSpacer, { side: 2, key: "tsp", ignoreSelection: true }));
+          }
+        });
+      }
+    }
     if (paged) {
       const { pl, pr } = sectionPadding(g, bodyW);
       let style = `padding-left:${pl.toFixed(2)}px;padding-right:${pr.toFixed(2)}px`;

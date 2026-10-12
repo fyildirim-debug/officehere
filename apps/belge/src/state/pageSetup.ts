@@ -60,7 +60,22 @@ export function applyPageSetup(
   const sec = doc.child(idx);
   const next = fn(own ?? settings.page);
   const page = samePage(next, settings.page) ? null : next;
-  editor.view.dispatch(editor.state.tr.setNodeMarkup(off, undefined, { ...(sec.attrs as SectionAttrs), page }));
+  const tr = editor.state.tr;
+  // Sürekli bölüm sonu farklı boyutta/yönde sayfaya geçemez: Word'deki gibi "Sonraki Sayfa"ya çevrilir.
+  const prevPage = idx > 0 ? ((doc.child(idx - 1).attrs.page as PageSetup | null) ?? settings.page) : null;
+  const kind = sec.attrs.kind === "continuous" && prevPage && !sameSize(prevPage, next) ? "nextPage" : sec.attrs.kind;
+  tr.setNodeMarkup(off, undefined, { ...(sec.attrs as SectionAttrs), kind, page });
+  if (idx + 1 < doc.childCount) {
+    const after = doc.child(idx + 1);
+    const afterPage = (after.attrs.page as PageSetup | null) ?? settings.page;
+    if (after.attrs.kind === "continuous" && !sameSize(afterPage, next)) tr.setNodeMarkup(off + sec.nodeSize, undefined, { ...(after.attrs as SectionAttrs), kind: "nextPage" });
+  }
+  editor.view.dispatch(tr);
+}
+
+/** Sayfa boyutu ve yönü aynı mı. */
+export function sameSize(a: PageSetup, b: PageSetup): boolean {
+  return Math.abs(a.width - b.width) < 20 && Math.abs(a.height - b.height) < 20;
 }
 
 /** İmleçteki bölümün metin sütunu genişliği (px): tablolar ve resimler buna sığdırılır. */

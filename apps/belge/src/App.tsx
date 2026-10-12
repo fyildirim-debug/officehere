@@ -4,9 +4,10 @@ import { useEditor, useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
 import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { ArrowRedo20Regular, ArrowUndo20Regular, Save20Regular, Print20Regular } from "@fluentui/react-icons";
-import { AppShell, MessageBar, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, useHotkeys, type OfficeBackstagePage } from "@officehere/ui";
+import { AppShell, MessageBar, QatButton, Ribbon, TitleBar, getUserName, useContextMenu, useDocumentLifecycle, useHotkeys, type OfficeBackstagePage } from "@officehere/ui";
 import { defaultSettings, emptyDoc, type DocSettings } from "./model/document";
 import { setActiveNoteEditor, useActiveNoteEditor } from "./state/activeNote";
+import { setTrackAuthorSource } from "./editor/trackChanges";
 import { columnWidthAt as colWidthAt } from "./state/pageSetup";
 import { renderNoteHtml } from "./views/noteHtml";
 import { resolveStyles, styleSheetCss } from "./model/styles";
@@ -15,14 +16,21 @@ import { PaginationController } from "./editor/pagination";
 import { computeFormat, sameFormat } from "./editor/formatState";
 import { collectHeadings, docStats } from "./editor/commands";
 import { setShowMarks } from "./editor/showMarks";
-import { readImageFile } from "./editor/image";
+import { readImageFile, selectInsertedImage } from "./editor/image";
 import { annotateNotesHtml } from "./editor/notes";
 import { BelgeContext, type BelgeCtx, type DialogKind, type DialogState, type ViewOptions } from "./state/context";
 import { clearDraft, readDraft, useFileOps, type Draft } from "./state/useFileOps";
-import { DocumentView, TILE_GAP } from "./views/DocumentView";
+import { DocumentView } from "./views/DocumentView";
 import { BelgeBackstage } from "./views/BelgeBackstage";
 import { DraftBar } from "./views/DraftBar";
+import { DuplexDialog } from "./print/DuplexDialog";
+import { MiniToolbarHost, type MiniBarAnchor } from "./views/MiniToolbar";
+import { ProofPane } from "./views/ProofPane";
+import { StylesPane } from "./views/StylesPane";
+import { ErrorBoundary, recovery, takeAutoRestore } from "./views/ErrorBoundary";
 import { usePrint } from "./state/usePrint";
+import { useFocusReturn, useVersionBump, useWindowFileDrop } from "./state/useShellEffects";
+import { useZoom } from "./state/useZoom";
 import { useComments } from "./state/useComments";
 import { useEditorClicks } from "./state/useEditorClicks";
 import { useFormatPainter } from "./state/useFormatPainter";
@@ -30,7 +38,6 @@ import { ReadMode } from "./views/ReadMode";
 import { BelgeStatusBar } from "./views/BelgeStatusBar";
 import { buildContextMenu } from "./views/contextMenu";
 import { DialogHost } from "./dialogs/DialogHost";
-import type { ZoomTarget } from "./dialogs/MiscDialogs";
 import { HomeTab } from "./ribbon/HomeTab";
 import { InsertTab } from "./ribbon/InsertTab";
 import { DesignTab } from "./ribbon/DesignTab";
@@ -43,8 +50,12 @@ import { PictureTab } from "./ribbon/PictureTab";
 import { ShapeTab } from "./ribbon/ShapeTab";
 import "./styles/belge.css";
 import "./styles/document.css";
+import "./styles/round3.css";
 
 type Note = { text: string; kind: "info" | "warning" | "error" | "success"; id: number };
+
+// Değişiklik izleme ve açıklamalar Seçenekler'deki kullanıcı adını kullanır.
+setTrackAuthorSource(getUserName);
 
 export function App() {
   const controller = useMemo(() => new PaginationController(), []);
@@ -74,8 +85,12 @@ export function App() {
   const imageInput = useRef<HTMLInputElement>(null);
   const openFileRef = useRef<(f: File) => Promise<void>>(async () => {});
   const ctxMenu = useContextMenu();
+  const miniBar = useRef<((a: MiniBarAnchor | null) => void) | null>(null);
 
-  const styles = useMemo(() => resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing), [settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing]);
+  const styles = useMemo(
+    () => resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing, settings.customStyles),
+    [settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing, settings.customStyles],
+  );
   const stylesRef = useRef(styles);
   stylesRef.current = styles;
 
@@ -91,7 +106,8 @@ export function App() {
     setDirty(true);
   }, []);
 
-  const setView = useCallback((patch: Partial<ViewOptions>) => setViewState((v) => ({ ...v, ...patch })), []);
+  // Yakınlaştırma değişince "Tek Sayfa" kipi biter (Word'deki gibi kaydırıcıyla yeniden yan yana dizilir).
+  const setView = useCallback((patch: Partial<ViewOptions>) => setViewState((v) => ({ ...v, ...(patch.zoom !== undefined && patch.onePage === undefined ? { onePage: false } : {}), ...patch })), []);
 
   // Kısayolların erişeceği güncel işleyiciler.
   const hooksRef = useRef({ openDialog: (_k: "font" | "paragraph" | "link") => {}, toggleShowMarks: () => {}, newComment: () => {}, toggleTrack: () => {}, insertNote: (_k: "footnote" | "endnote") => {} });
@@ -143,25 +159,7 @@ export function App() {
     if (import.meta.env.DEV) (window as unknown as { __belge: unknown }).__belge = { editor, controller };
   }, [editor, controller]);
 
-  // Pencereye bırakılan belge dosyası açılır (editör dışına bırakılsa da).
-  useEffect(() => {
-    const isFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
-    const over = (e: DragEvent) => {
-      if (isFiles(e)) e.preventDefault();
-    };
-    const drop = (e: DragEvent) => {
-      if (!isFiles(e) || (e.target as HTMLElement).closest?.(".ProseMirror")) return;
-      const f = Array.from(e.dataTransfer?.files ?? []).find((x) => /\.(docx|docm|dotx|html?|txt)$/i.test(x.name));
-      e.preventDefault();
-      if (f) void openFileRef.current(f);
-    };
-    window.addEventListener("dragover", over);
-    window.addEventListener("drop", drop);
-    return () => {
-      window.removeEventListener("dragover", over);
-      window.removeEventListener("drop", drop);
-    };
-  }, []);
+  useWindowFileDrop(openFileRef);
 
   // Açılışta belgeye hemen odaklan.
   useEffect(() => {
@@ -175,19 +173,7 @@ export function App() {
     editor.view.dom.setAttribute("lang", lang);
   }, [editor, spellcheck, lang]);
 
-  // Belge sürümü (gezinti, açıklamalar, sözcük sayısı için; seyreltilmiş).
-  useEffect(() => {
-    let t = 0;
-    const bump = () => {
-      window.clearTimeout(t);
-      t = window.setTimeout(() => setVersion((v) => v + 1), 200);
-    };
-    editor.on("update", bump);
-    return () => {
-      editor.off("update", bump);
-      window.clearTimeout(t);
-    };
-  }, [editor]);
+  useVersionBump(editor, useCallback(() => setVersion((v) => v + 1), []));
 
   // Şeridin hedefi: üst/alt bilgi, odaktaki not düzenleyicisi ya da belge gövdesi.
   const noteEditor = useActiveNoteEditor();
@@ -239,44 +225,19 @@ export function App() {
   });
   confirmRef.current = confirmDiscard;
 
-  // Şerit/menü etkileşiminden sonra odak boşta kalırsa belgeye dön (Word'deki gibi).
-  const activeRef = useRef(editor);
-  activeRef.current = active;
+  // Hata sınırları için güncel belge anlık görüntüsü ve kaydetme işlevi.
+  recovery.snapshot = () => (editor.isDestroyed ? null : { content: editor.getJSON(), settings, fileName: files.fileName, savedAt: Date.now() });
+  recovery.save = files.save;
+  // Kök hata sınırından "Belgeyi Kurtar": taslak açılışta kendiliğinden geri yüklenir.
   useEffect(() => {
-    const onUp = (e: PointerEvent) => {
-      const t = e.target as HTMLElement;
-      if (t.closest?.(".bl-body, .bl-hf-edit, input, textarea, select, .oh-dialog, .bl-nav, .bl-comments, .oh-titlebar, .oh-backstage, .bl-read")) return;
-      window.setTimeout(() => {
-        const ae = document.activeElement as HTMLElement | null;
-        // Şerit sekmesine tıklamak da klavye odağını belgeden almaz (Word'deki gibi).
-        const idle = !ae || ae === document.body || !!ae.closest?.(".oh-ribbon-tabs [role=tab]");
-        if (idle && !document.querySelector(".oh-dialog, [data-oh-popover]")) activeRef.current.view.focus();
-      }, 0);
-    };
-    // Menü öğesine fareyle basmak belgeden odağı almaz: komut sonrası ilk tuşlar belgeye gider.
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (t.closest?.('[data-oh-popover] [role="menuitem"]') && activeRef.current.view.hasFocus()) e.preventDefault();
-    };
-    document.addEventListener("pointerup", onUp, true);
-    document.addEventListener("mousedown", onDown, true);
-    return () => {
-      document.removeEventListener("pointerup", onUp, true);
-      document.removeEventListener("mousedown", onDown, true);
-    };
-  }, []);
+    const d = readDraft();
+    if (!d || !takeAutoRestore()) return;
+    files.load({ content: d.content, settings: { ...defaultSettings(), ...d.settings } }, d.fileName, null);
+    setDirty(true);
+    setDraft(null);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // İletişim kutusu kapanınca odak belgeye döner (kutuyu açan şerit düğmesinde kalmaz).
-  const hadDialog = useRef(false);
-  useEffect(() => {
-    if (hadDialog.current && !dialog) {
-      window.setTimeout(() => {
-        const ae = document.activeElement as HTMLElement | null;
-        if (!ae || !ae.closest?.(".ProseMirror, input, textarea, select, .oh-dialog, .oh-backstage, .bl-fn-text, .bl-note-text")) activeRef.current.view.focus();
-      }, 0);
-    }
-    hadDialog.current = !!dialog;
-  }, [dialog]);
+  useFocusReturn(active, !!dialog);
 
   const openDialog = useCallback((kind: DialogKind, arg?: string) => setDialog({ kind, arg }), []);
   const openFind = useCallback(() => {
@@ -337,34 +298,16 @@ export function App() {
 
   /* ---------------- Yakınlaştırma ve yazdırma ---------------- */
 
-  const zoomTo = useCallback(
-    (z: ZoomTarget | "100" | "onePage" | "multi" | "width") => {
-      const sc = scrollRef.current;
-      // İmleçteki sayfanın geometrisi (bölümler farklı boyutta olabilir).
-      const info = controller.info;
-      const pg = info.pages[Math.min(info.pages.length - 1, controller.pageOf(editor.state.selection.from))] ?? info.pages[0];
-      const w = info.bodyW || pg.w;
-      const availW = (sc?.clientWidth ?? 1000) - 48;
-      const availH = (sc?.clientHeight ?? 700) - 48;
-      let pct = view.zoom;
-      const target = typeof z === "string" ? (z === "100" ? { pct: 100 } : { fit: z === "onePage" ? "page" : z }) : z;
-      if ("pct" in target) pct = target.pct;
-      else if (target.fit === "width") pct = (availW / w) * 100;
-      else if (target.fit === "text") pct = (availW / (pg.w - pg.ml - pg.mr)) * 100;
-      else if (target.fit === "page") pct = Math.min(availW / w, availH / pg.h) * 100;
-      // Birden Çok Sayfa: iki sayfa yan yana tam görünür.
-      else if (target.fit === "multi") pct = Math.min(availW / (2 * w + TILE_GAP + 8), availH / pg.h) * 100;
-      setView({ zoom: Math.max(10, Math.min(500, Math.floor(pct))) });
-    },
-    [controller, editor, view.zoom, setView],
-  );
+  const zoomTo = useZoom(controller, editor, scrollRef, view.zoom, setView);
 
   const leaveModes = useCallback(() => {
     setBackstage(null);
     setHfEditing(null);
     setView({ mode: "print", focusMode: false });
   }, [setHfEditing, setView]);
-  const { printing, print } = usePrint({ controller, settings, zoom: view.zoom, fileName: files.fileName, leaveModes, notify });
+  const currentPage = useCallback(() => controller.pageOf(editor.state.selection.from), [controller, editor]);
+  const { printing, print, options: printOptions, setOptions: setPrintOptions, duplex } = usePrint({ controller, settings, zoom: view.zoom, fileName: files.fileName, currentPage, leaveModes, notify });
+  const offscreenRef = useRef<HTMLDivElement>(null);
 
   /* ---------------- Kısayollar ---------------- */
 
@@ -373,8 +316,11 @@ export function App() {
     F12: () => void files.saveAs(),
     "Mod+O": () => void files.openDialog(),
     "Mod+N": () => void files.newDocument("blank"),
-    "Mod+P": () => void print(),
+    // Word'deki gibi Ctrl+P, Dosya › Yazdır sayfasını (ayarlar ve önizleme) açar.
+    "Mod+P": () => setBackstage("print"),
     "Mod+F": openFind,
+    F7: () => setView({ proofPane: true }),
+    "Mod+Alt+Shift+S": () => setView({ stylesPane: !view.stylesPane }),
     "Mod+H": () => openDialog("findReplace", "replace"),
     "Mod+G": () => openDialog("findReplace", "goto"),
     "Mod+Shift+G": () => openDialog("wordCount"),
@@ -400,6 +346,8 @@ export function App() {
       }
     }
     ctxMenu.open(e, buildContextMenu({ editor: active, openDialog, newComment, notify, openLink }));
+    // Word'deki gibi bağlam menüsünün üstünde mini araç çubuğu.
+    if (t.closest(".ProseMirror")) miniBar.current?.({ x: e.clientX, y: e.clientY, context: true });
   };
 
   const editHeaderFooter = useCallback(
@@ -420,6 +368,7 @@ export function App() {
   const ctx: BelgeCtx = {
     editor: active,
     mainEditor: editor,
+    inBody: active === editor,
     fmt: fmt ?? computeFormat(active, styles),
     settings,
     updateSettings,
@@ -442,6 +391,7 @@ export function App() {
     insertNote,
     notify,
     openBackstage: (p) => setBackstage(p ?? "home"),
+    showTab: setTab,
   };
 
   const tabs = [
@@ -450,7 +400,7 @@ export function App() {
     { id: "design", label: "Tasarım", content: <DesignTab /> },
     { id: "layout", label: "Düzen", content: <LayoutTab /> },
     { id: "references", label: "Başvurular", content: <ReferencesTab /> },
-    { id: "review", label: "Gözden Geçir", content: <ReviewTab spellcheck={spellcheck} setSpellcheck={setSpellcheck} lang={lang} setLang={setLang} deleteComment={deleteComment} deleteAllComments={deleteAllComments} /> },
+    { id: "review", label: "Gözden Geçir", content: <ReviewTab lang={lang} setLang={setLang} deleteComment={deleteComment} deleteAllComments={deleteAllComments} /> },
     { id: "view", label: "Görünüm", content: <ViewTab zoomTo={zoomTo} /> },
     { id: "help", label: "Yardım", content: <HelpTab onFeedback={() => window.open("https://github.com/fyildirim-debug/officehere/issues", "_blank", "noopener")} /> },
     { id: "hf", label: "Üst Bilgi ve Alt Bilgi", content: <HeaderFooterTab />, contextual: true, hidden: !hfEditing },
@@ -460,11 +410,26 @@ export function App() {
     { id: "shape", label: "Şekil Biçimi", content: <ShapeTab />, contextual: true, hidden: !fmt?.textBox || !!hfEditing },
   ];
 
-  // Üst bilgi düzenlemesi başlayınca bağlamsal sekmeye geç.
+  // Üst bilgi düzenlemesi başlayınca bağlamsal sekmeye geç; kapanınca imleç gövdedeki eski yerine döner.
+  const hfReturn = useRef<{ from: number; to: number } | null>(null);
   useEffect(() => {
-    if (hfEditing) setTab("hf");
-    else setTab((t) => (t === "hf" ? "home" : t));
-  }, [hfEditing]);
+    if (hfEditing) {
+      setTab("hf");
+      hfReturn.current ??= { from: editor.state.selection.from, to: editor.state.selection.to };
+      return;
+    }
+    setTab((t) => (t === "hf" ? "home" : t));
+    const back = hfReturn.current;
+    hfReturn.current = null;
+    if (!back) return;
+    const size = editor.state.doc.content.size;
+    try {
+      editor.view.dispatch(editor.state.tr.setSelection(TextSelection.between(editor.state.doc.resolve(Math.min(back.from, size)), editor.state.doc.resolve(Math.min(back.to, size)))).setMeta("addToHistory", false));
+    } catch {
+      // konum geçersiz
+    }
+    requestAnimationFrame(() => editor.view.focus());
+  }, [hfEditing, editor]);
 
   /** Konumdaki bölümün sütun genişliği (resimler buna sığdırılır). */
   const columnWidthAt = (pos: number) => colWidthAt(editor, settings.page, pos);
@@ -473,8 +438,12 @@ export function App() {
     try {
       const img = await readImageFile(file, columnWidthAt(pos ?? view.state.selection.from));
       const node = view.state.schema.nodes.image.create({ src: img.src, width: img.width, height: img.height, alt: file.name.replace(/\.[^.]+$/, "") });
-      const at = pos ?? view.state.selection.from;
-      view.dispatch(view.state.tr.insert(Math.min(at, view.state.doc.content.size), node));
+      const at = Math.min(pos ?? view.state.selection.from, view.state.doc.content.size);
+      const tr = view.state.tr.insert(at, node);
+      // Eklenen resim seçili gelir ve Resim Biçimi sekmesi açılır (Word'deki gibi).
+      if (tr.doc.nodeAt(at)?.type.name === "image") tr.setSelection(NodeSelection.create(tr.doc, at));
+      view.dispatch(tr);
+      setTab("picture");
     } catch (err) {
       notify((err as Error).message, "error");
     }
@@ -505,6 +474,8 @@ export function App() {
     try {
       const img = await readImageFile(file, columnWidthAt(editor.state.selection.from));
       active.chain().focus().setImage({ src: img.src, width: img.width, height: img.height, alt: file.name.replace(/\.[^.]+$/, "") }).run();
+      selectInsertedImage(active);
+      setTab("picture");
     } catch (err) {
       notify((err as Error).message, "error");
     }
@@ -512,21 +483,25 @@ export function App() {
 
   const backstageEl =
     backstage !== null ? (
+      <ErrorBoundary name="backstage" label="Dosya görünümü" onReset={() => setBackstage(null)}>
       <BelgeBackstage
         page={backstage}
         files={files}
         settings={settings}
         pageCount={pageCount}
         stats={stats}
-        previewHtml={backstage === "print" ? editor.getHTML() : ""}
+        printOptions={printOptions}
+        setPrintOptions={setPrintOptions}
         autosave={autosave}
         setAutosave={setAutosave}
         spellcheck={spellcheck}
         setSpellcheck={setSpellcheck}
-        onPrint={() => void print()}
-        onPdf={() => void print("pdf")}
+        onPrint={(o) => void print("print", o)}
+        onPdf={(o) => void print("pdf", o)}
         onClose={() => setBackstage(null)}
+        onDialog={(k) => openDialog(k)}
       />
+      </ErrorBoundary>
     ) : undefined;
 
   const belowRibbon = (
@@ -594,15 +569,22 @@ export function App() {
                   <QatButton icon={<Save20Regular />} tip="Kaydet" shortcut="Ctrl+S" onClick={() => void files.save()} />
                   <QatButton icon={<ArrowUndo20Regular />} tip="Geri Al" shortcut="Ctrl+Z" disabled={!fmt?.canUndo} onClick={() => active.chain().focus().undo().run()} />
                   <QatButton icon={<ArrowRedo20Regular />} tip="Yinele" shortcut="Ctrl+Y" disabled={!fmt?.canRedo} onClick={() => active.chain().focus().redo().run()} />
-                  <QatButton icon={<Print20Regular />} tip="Yazdır" shortcut="Ctrl+P" onClick={() => void print()} />
+                  <QatButton icon={<Print20Regular />} tip="Baskı Önizleme ve Yazdır" shortcut="Ctrl+P" onClick={() => setBackstage("print")} />
                 </>
               }
             />
           }
-          ribbon={hideChrome ? undefined : <Ribbon tabs={tabs} activeTab={tab} onTabChange={setTab} onFileClick={() => setBackstage("home")} collapsed={ribbonCollapsed} onCollapsedChange={setRibbonCollapsed} />}
+          ribbon={
+            hideChrome ? undefined : (
+              <ErrorBoundary name="ribbon" label="Şerit">
+                <Ribbon tabs={tabs} activeTab={tab} onTabChange={setTab} onFileClick={() => setBackstage("home")} collapsed={ribbonCollapsed} onCollapsedChange={setRibbonCollapsed} />
+              </ErrorBoundary>
+            )
+          }
           belowRibbon={hideChrome ? undefined : belowRibbon}
           statusBar={
             hideChrome ? undefined : (
+              <ErrorBoundary name="status" label="Durum çubuğu">
               <BelgeStatusBar
                 editor={editor}
                 controller={controller}
@@ -618,10 +600,12 @@ export function App() {
                 onZoomClick={() => openDialog("zoom")}
                 lang={lang}
               />
+              </ErrorBoundary>
             )
           }
           backstage={backstageEl}
         >
+          <ErrorBoundary name="document" label="Belge görünümü">
           <DocumentView
             editor={editor}
             settings={settings}
@@ -643,10 +627,60 @@ export function App() {
             scrollRef={scrollRef}
             printing={false}
             formatPainter={painter.active}
+            rightPane={
+              <>
+                {view.stylesPane && (
+                  <ErrorBoundary name="styles" label="Stiller bölmesi" onReset={() => setView({ stylesPane: false })}>
+                    <StylesPane onClose={() => setView({ stylesPane: false })} onEdit={(id) => openDialog("style", id)} />
+                  </ErrorBoundary>
+                )}
+                {view.proofPane && (
+                  <ErrorBoundary name="proof" label="Düzenleyici" onReset={() => setView({ proofPane: false })}>
+                    <ProofPane editor={editor} version={version} spellcheck={spellcheck} setSpellcheck={setSpellcheck} onClose={() => setView({ proofPane: false })} />
+                  </ErrorBoundary>
+                )}
+              </>
+            }
           />
+          </ErrorBoundary>
         </AppShell>
       </div>
-      <DialogHost dialog={dialog} onClose={() => setDialog(null)} zoom={view.zoom} onZoom={zoomTo} pages={pageCount} />
+      <ErrorBoundary name="dialog" label="İletişim kutusu" onReset={() => setDialog(null)}>
+        <DialogHost dialog={dialog} onClose={() => setDialog(null)} zoom={view.zoom} onZoom={zoomTo} pages={pageCount} />
+      </ErrorBoundary>
+      {backstage !== null && (
+        // Dosya görünümü açıkken belge ekran dışında yazdırma düzeninde çizilir (Yazdır önizlemesi için).
+        <div className="bl-offscreen" aria-hidden="true">
+          <DocumentView
+            editor={editor}
+            settings={settings}
+            updateSettings={updateSettings}
+            controller={controller}
+            view={{ ...view, mode: "print", zoom: 100, focusMode: false, navPane: false, showComments: false, ruler: false, onePage: true }}
+            setView={setView}
+            hfEditing={null}
+            hfPage={0}
+            setHfEditing={setHfEditing}
+            onHfEditor={setHfEditor}
+            activeComment={null}
+            setActiveComment={setActiveComment}
+            deleteComment={deleteComment}
+            version={version}
+            navFocus={0}
+            onPageSetup={() => {}}
+            onContextMenu={() => {}}
+            scrollRef={offscreenRef}
+            printing
+            formatPainter={false}
+          />
+        </div>
+      )}
+      <DuplexDialog open={duplex.open} onNext={duplex.next} onCancel={duplex.cancel} />
+      {!backstage && !hideChrome && view.mode !== "read" && (
+        <ErrorBoundary name="minibar" label="Mini araç çubuğu">
+          <MiniToolbarHost controlRef={miniBar} />
+        </ErrorBoundary>
+      )}
       {ctxMenu.element}
       {lifecycleDialog}
       <input ref={imageInput} type="file" accept="image/*" className="oh-hidden-input" onChange={onImageFile} />

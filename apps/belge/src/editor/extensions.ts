@@ -1,5 +1,5 @@
 // Editör şeması ve eklenti listesi.
-import { Node, type AnyExtension } from "@tiptap/core";
+import { Extension, Node, type AnyExtension } from "@tiptap/core";
 import { fontStack } from "@officehere/core";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle, Color, FontFamily, FontSize, BackgroundColor } from "@tiptap/extension-text-style";
@@ -21,6 +21,9 @@ import { Note, Notes } from "./notes";
 import { PasteRules } from "./paste";
 import { TextBox } from "./textbox";
 import { BelgeDocument, ColumnBreak, Section, SectionKeys, createSectionLayout } from "./sections";
+import { AutoCorrect } from "./autocorrect";
+import { TableHandles } from "./tableHandles";
+import { TabStopsAttr } from "./tabStops";
 
 /** Yazı tipi adı yedek zinciriyle (yüklü olmayan yazı tiplerinde ölçü uyumlu açık yazı tipine düşer). */
 const BelgeFontFamily = FontFamily.extend({
@@ -83,6 +86,7 @@ function contentExtensions(): AnyExtension[] {
     Deletion,
     FormatChange,
     ParagraphFormat,
+    TabStopsAttr,
     ListStyles,
     PageBreak,
     TableOfContents,
@@ -106,6 +110,15 @@ export function schemaExtensions(): AnyExtension[] {
 /** Üst/alt bilgi kökü: bölümsüz blok dizisi. */
 const PlainDocument = Node.create({ name: "doc", topNode: true, content: "block+" });
 
+/** Üst/alt bilgi ve notlarda sayfa/sütun sonu eklenemez (Word'deki gibi Ctrl+Enter etkisizdir). */
+const NoBreakKeys = Extension.create({
+  name: "belgeNoBreakKeys",
+  priority: 1200,
+  addKeyboardShortcuts() {
+    return { "Mod-Enter": () => true, "Mod-Shift-Enter": () => true };
+  },
+});
+
 export function editorExtensions(controller: PaginationController, hooks: EditorHooks): AnyExtension[] {
   return [
     ...schemaExtensions(),
@@ -117,11 +130,13 @@ export function editorExtensions(controller: PaginationController, hooks: Editor
     createWordKeymap(hooks),
     SectionKeys,
     PasteRules,
-    createSectionLayout({ enabled: () => controller.geometry.enabled, defaultPage: () => controller.geometry.defaultPage }),
+    AutoCorrect,
+    TableHandles,
+    createSectionLayout({ enabled: () => controller.geometry.enabled, defaultPage: () => controller.geometry.defaultPage, tiled: () => controller.geometry.tiles > 0 }),
   ];
 }
 
 /** Üst/alt bilgi editörü: gövdeyle aynı biçimlendirme, sayfalama yok. */
 export function headerFooterExtensions(): AnyExtension[] {
-  return [...contentExtensions(), PlainDocument];
+  return [...contentExtensions(), PlainDocument, NoBreakKeys, AutoCorrect];
 }

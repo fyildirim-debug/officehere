@@ -142,6 +142,11 @@ export interface DocSettings {
   paragraphSpacing: string;
   comments: Record<string, CommentData>;
   properties: DocProperties;
+  /** Kullanıcının oluşturduğu ya da değiştirdiği stiller (Yeni Stil / Stili Değiştir). */
+  customStyles?: Record<string, import("./styles").StyleDef>;
+  /** Alıntılar ve Kaynakça: kaynaklar ve kaynakça stili. */
+  sources?: import("./sources").Source[];
+  bibStyle?: "apa" | "ieee";
 }
 
 export interface BelgeDocument {

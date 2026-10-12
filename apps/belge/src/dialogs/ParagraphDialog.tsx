@@ -18,7 +18,8 @@ const parse = (s: string) => {
 type LineKind = "single" | "onehalf" | "double" | "atLeast" | "exact" | "multiple";
 
 export function ParagraphDialog({ onClose }: { onClose: () => void }) {
-  const { editor, styles } = useBelge();
+  const ctx = useBelge();
+  const { editor, styles } = ctx;
   const p = currentPara(editor);
   const a = (p?.node.attrs ?? {}) as Record<string, unknown>;
   const st = effectiveProps(styles, p ? styleIdOf(p.node.type.name, p.node.attrs) : "Normal");
@@ -39,8 +40,10 @@ export function ParagraphDialog({ onClose }: { onClose: () => void }) {
   const [keepNext, setKeepNext] = useState(!!a.keepNext);
   const [keepLines, setKeepLines] = useState(!!a.keepLines);
   const [pbb, setPbb] = useState(!!a.pageBreakBefore);
+  const isHeading = p?.node.type.name === "heading";
+  const [outline, setOutline] = useState(String(isHeading ? (p?.node.attrs.level as number) : ((a.outlineLevel as number | null) ?? 0)));
 
-  const apply = () => {
+  const values = () => {
     const sv = special === "none" ? null : (special === "first" ? 1 : -1) * parse(specialVal) * PT_PER_CM;
     let lineRule: LineRule = "auto";
     let lineHeight = 1;
@@ -66,6 +69,11 @@ export function ParagraphDialog({ onClose }: { onClose: () => void }) {
         lineHeight = parse(lineVal) || 12;
         break;
     }
+    return { lineRule, lineHeight, sv };
+  };
+
+  const apply = () => {
+    const { lineRule, lineHeight, sv } = values();
     const l = parse(left) * PT_PER_CM;
     const r = parse(right) * PT_PER_CM;
     editor.chain().focus().setTextAlign(align).run();
@@ -80,8 +88,47 @@ export function ParagraphDialog({ onClose }: { onClose: () => void }) {
       keepNext,
       keepLines,
       pageBreakBefore: pbb,
+      ...(isHeading ? {} : { outlineLevel: Number(outline) || null }),
     });
     onClose();
+  };
+
+  /** Varsayılan Olarak Ayarla: bu belgedeki Normal stilin paragraf biçimi. */
+  const setDefault = () => {
+    const { lineHeight, lineRule } = values();
+    const normal = styles.Normal;
+    ctx.updateSettings((s) => ({
+      ...s,
+      customStyles: {
+        ...(s.customStyles ?? {}),
+        Normal: {
+          ...normal,
+          props: {
+            ...normal.props,
+            align: align as "left",
+            spaceBefore: parse(before),
+            spaceAfter: parse(after),
+            ...(lineRule === "auto" ? { line: lineHeight } : {}),
+            indentLeft: parse(left) * PT_PER_CM || undefined,
+            indentRight: parse(right) * PT_PER_CM || undefined,
+          },
+        },
+      },
+    }));
+    ctx.notify("Paragraf biçimi bu belgenin varsayılanı (Normal stili) olarak ayarlandı.", "success");
+    onClose();
+  };
+
+  // Önizleme: önceki/sonraki paragraflar arasında seçilen biçim.
+  const pv = values();
+  const previewStyle: React.CSSProperties = {
+    textAlign: align as React.CSSProperties["textAlign"],
+    paddingLeft: `${parse(left) * PT_PER_CM * 0.5}pt`,
+    paddingRight: `${parse(right) * PT_PER_CM * 0.5}pt`,
+    textIndent: pv.sv ? `${pv.sv * 0.5}pt` : undefined,
+    marginTop: `${parse(before) * 0.5}pt`,
+    marginBottom: `${parse(after) * 0.5}pt`,
+    lineHeight: pv.lineRule === "auto" ? pv.lineHeight * 1.2 : undefined,
   };
 
   return (
@@ -93,6 +140,15 @@ export function ParagraphDialog({ onClose }: { onClose: () => void }) {
       onSubmit={apply}
       footer={
         <>
+          <DialogButton
+            onClick={() => {
+              apply();
+              ctx.openDialog("tabs");
+            }}
+          >
+            Sekmeler...
+          </DialogButton>
+          <DialogButton onClick={setDefault}>Varsayılan Olarak Ayarla</DialogButton>
           <DialogButton primary onClick={apply}>
             Tamam
           </DialogButton>
@@ -118,6 +174,16 @@ export function ParagraphDialog({ onClose }: { onClose: () => void }) {
                 <option value="center">Ortalanmış</option>
                 <option value="right">Sağ</option>
                 <option value="justify">İki Yana Yaslanmış</option>
+              </select>
+            </Field>
+            <Field label="Anahat düzeyi:" inline>
+              <select aria-label="Anahat düzeyi" value={outline} disabled={isHeading} onChange={(e) => setOutline(e.target.value)}>
+                <option value="0">Gövde Metni</option>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                  <option key={n} value={String(n)}>
+                    Düzey {n}
+                  </option>
+                ))}
               </select>
             </Field>
           </FieldSet>
@@ -162,6 +228,13 @@ export function ParagraphDialog({ onClose }: { onClose: () => void }) {
               <Field label={lineKind === "exact" || lineKind === "atLeast" ? "Aralık (nk):" : "Aralık:"}>
                 <input value={lineVal} disabled={lineKind === "single" || lineKind === "onehalf" || lineKind === "double"} onChange={(e) => setLineVal(e.target.value)} />
               </Field>
+            </div>
+          </FieldSet>
+          <FieldSet legend="Önizleme">
+            <div className="bl-para-preview" aria-label="Önizleme">
+              <span className="bl-style-prev-dim">Önceki Paragraf Önceki Paragraf Önceki Paragraf Önceki Paragraf Önceki Paragraf</span>
+              <div style={previewStyle}>Örnek Metin Örnek Metin Örnek Metin Örnek Metin Örnek Metin Örnek Metin Örnek Metin Örnek Metin</div>
+              <span className="bl-style-prev-dim">Sonraki Paragraf Sonraki Paragraf Sonraki Paragraf Sonraki Paragraf</span>
             </div>
           </FieldSet>
         </>

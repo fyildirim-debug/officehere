@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { addRecentFile, baseName, downloadBlob, getNative, openFile, readPath, saveFile, saveFileAs, type FileRef } from "@officehere/core";
+import { getUserName } from "@officehere/ui";
 import { defaultSettings, normalizeDoc, type BelgeDocument, type DocSettings } from "../model/document";
 import { DOCX_FILTER, OPEN_FILTERS, docToText, htmlDocument, openDocument, writeDocx } from "../io";
 import { TEMPLATES } from "../templates/templates";
@@ -62,7 +63,11 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
-  const currentDoc = useCallback((): BelgeDocument => ({ content: editor.getJSON(), settings: { ...settingsRef.current, properties: { ...settingsRef.current.properties, modified: new Date().toISOString() } } }), [editor]);
+  // Yazar boşsa Seçenekler'deki kullanıcı adı yazılır (Word'deki gibi).
+  const currentDoc = useCallback(
+    (): BelgeDocument => ({ content: editor.getJSON(), settings: { ...settingsRef.current, properties: { ...settingsRef.current.properties, author: settingsRef.current.properties.author || getUserName(), modified: new Date().toISOString() } } }),
+    [editor],
+  );
 
   const load = useCallback(
     (doc: BelgeDocument, name: string, ref: FileRef | null) => {

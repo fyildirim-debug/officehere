@@ -25,9 +25,9 @@ import {
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonStack, TableGridPicker, useMenuClose } from "@officehere/ui";
 import { useBelge } from "../state/context";
 import { COMMON_SYMBOLS, COVER_PAGES, FOOTER_PRESETS, HEADER_PRESETS, pageNumberDoc, stripPageFields } from "../templates/parts";
-import { SHAPES, shapeSvg, svgToPng, type ShapeKind } from "../editor/image";
+import { SHAPES, selectInsertedImage, shapeSvg, svgToPng, type ShapeKind } from "../editor/image";
 import { insertTable } from "./tableUtil";
-import { columnWidthAt } from "../state/pageSetup";
+import { applyPageSetup, columnWidthAt } from "../state/pageSetup";
 
 function SymbolGrid({ onPick }: { onPick: (s: string) => void }) {
   const close = useMenuClose();
@@ -82,13 +82,16 @@ export function InsertTab() {
     const title = settings.properties.title || "Belge Başlığı";
     const author = settings.properties.author || "Yazar Adı";
     const date = new Date().toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" });
-    editor
+    // Kapak her zaman belge gövdesinin başına eklenir (not ya da üst bilgi odakta olsa bile).
+    ctx.mainEditor
       .chain()
       .focus()
       // İlk bölümün başına (konum 1: belge > bölüm içi).
       .insertContentAt(1, [...def.build(title, date, author), { type: "pageBreak" }])
       .setTextSelection(2)
       .run();
+    // Kapak sayfasında üst/alt bilgi görünmez: ilk bölümde "Farklı İlk Sayfa" açılır.
+    applyPageSetup(ctx.mainEditor, settings, updateSettings, (p) => (p.titlePage ? p : { ...p, titlePage: true }), "auto", 0);
   };
 
   const insertShape = async (k: ShapeKind) => {
@@ -96,6 +99,8 @@ export function InsertTab() {
     const h = k === "line" || k === "arrow" ? 60 : 110;
     const src = await svgToPng(shapeSvg(k, "#156082", "#0F4761", w, h), w, h);
     chain().setImage({ src, alt: SHAPES.find((s) => s.id === k)?.label, width: w, height: h }).run();
+    selectInsertedImage(editor);
+    ctx.showTab("picture");
   };
 
   const setHeader = (json: typeof settings.header) => {
@@ -126,8 +131,8 @@ export function InsertTab() {
           }
         />
         <RibbonStack>
-          <RibbonButton icon={<DocumentAdd24Regular />} label="Boş Sayfa" onClick={() => chain().setPageBreak().setPageBreak().run()} />
-          <RibbonButton icon={<DocumentPageBreak24Regular />} label="Sayfa Sonu" shortcut="Ctrl+Enter" onClick={() => chain().setPageBreak().run()} />
+          <RibbonButton icon={<DocumentAdd24Regular />} label="Boş Sayfa" disabled={!ctx.inBody} onClick={() => chain().setPageBreak().setPageBreak().run()} />
+          <RibbonButton icon={<DocumentPageBreak24Regular />} label="Sayfa Sonu" shortcut="Ctrl+Enter" disabled={!ctx.inBody} onClick={() => chain().setPageBreak().run()} />
         </RibbonStack>
       </RibbonGroup>
 
@@ -317,10 +322,7 @@ function PageNumberMenu() {
       />
       <MenuItem
         label="Geçerli Konum"
-        onClick={() => {
-          if (ctx.headerFooterEditing) ctx.editor.chain().focus().insertPageField("PAGE").run();
-          else ctx.notify("Sayfa numarası alanı üst bilgi ya da alt bilgi içine eklenebilir. Üst bilgiyi düzenlemek için sayfanın üst kenarına çift tıklayın.");
-        }}
+        onClick={() => ctx.editor.chain().focus().insertPageField("PAGE").run()}
       />
       <MenuSeparator />
       <MenuItem label="Sayfa Numaralarını Kaldır" onClick={() => ctx.updateSettings((s) => ({ ...s, header: stripPageFields(s.header), footer: stripPageFields(s.footer) }))} />

@@ -40,7 +40,51 @@ export function useEditorClicks(editor: Editor) {
       }
     };
     dom.addEventListener("click", onClick);
-    return () => dom.removeEventListener("click", onClick);
+    // Köprü üzerinde ipucu: adres ve "Ctrl tuşuna basıp tıklayın" (Word'deki gibi).
+    let tip: HTMLDivElement | null = null;
+    let timer = 0;
+    const hide = () => {
+      window.clearTimeout(timer);
+      tip?.remove();
+      tip = null;
+    };
+    const onOver = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement).closest("a[href], .bl-toc-entry");
+      if (!a) return hide();
+      if (tip?.dataset.for === (a.getAttribute("href") ?? "toc")) return;
+      hide();
+      timer = window.setTimeout(() => {
+        const href = a.getAttribute("href");
+        tip = document.createElement("div");
+        tip.className = "bl-linktip";
+        tip.setAttribute("role", "tooltip");
+        tip.dataset.for = href ?? "toc";
+        if (href) {
+          const u = document.createElement("div");
+          u.className = "bl-linktip-url";
+          u.textContent = href.startsWith("#") ? `Yer işareti: ${href.slice(1)}` : href;
+          tip.appendChild(u);
+        }
+        const hint = document.createElement("div");
+        hint.textContent = "Bağlantıyı izlemek için Ctrl tuşuna basıp tıklayın";
+        tip.appendChild(hint);
+        document.body.appendChild(tip);
+        const r = a.getBoundingClientRect();
+        const w = tip.offsetWidth;
+        tip.style.left = `${Math.max(4, Math.min(window.innerWidth - w - 4, e.clientX - w / 2))}px`;
+        tip.style.top = `${r.top - tip.offsetHeight - 6 < 4 ? r.bottom + 6 : r.top - tip.offsetHeight - 6}px`;
+      }, 350);
+    };
+    dom.addEventListener("mouseover", onOver);
+    dom.addEventListener("mouseleave", hide);
+    dom.addEventListener("keydown", hide);
+    return () => {
+      dom.removeEventListener("click", onClick);
+      dom.removeEventListener("mouseover", onOver);
+      dom.removeEventListener("mouseleave", hide);
+      dom.removeEventListener("keydown", hide);
+      hide();
+    };
   }, [editor, openLink]);
 
   return openLink;

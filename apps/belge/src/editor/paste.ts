@@ -110,12 +110,56 @@ export function cleanOfficeHtml(html: string): string {
   return body.innerHTML;
 }
 
+const BLOCK_SEL = "h1, h2, h3, h4, h5, h6, p, li, td, th, blockquote, div";
+const INHERIT = ["color", "font-family", "font-size", "font-weight", "font-style"] as const;
+
+/**
+ * Kaynak biçimlendirmesini koru: blok öğelerdeki (ör. başlık rengi) yazı tipi özellikleri metin işaretlerine
+ * aktarılabilsin diye içeriği saran bir span'e taşınır; <font> öğeleri span'e çevrilir.
+ */
+export function liftBlockStyles(html: string): string {
+  if (!/style=|<font/i.test(html)) return html;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  for (const f of Array.from(doc.body.querySelectorAll("font"))) {
+    const span = doc.createElement("span");
+    const c = f.getAttribute("color");
+    const face = f.getAttribute("face");
+    if (c) span.style.color = c;
+    if (face) span.style.fontFamily = face;
+    span.append(...Array.from(f.childNodes));
+    f.replaceWith(span);
+  }
+  for (const el of Array.from(doc.body.querySelectorAll<HTMLElement>(BLOCK_SEL))) {
+    const decl: string[] = [];
+    for (const k of INHERIT) {
+      const v = el.style.getPropertyValue(k);
+      if (!v || /inherit|initial|unset/.test(v)) continue;
+      // Başlıklar zaten kalın gösterilir; yalnız yazı tipi kalınlığı farklıysa taşınır.
+      if (k === "font-weight" && (/^h\d$/i.test(el.tagName) || !/bold|[6-9]00/.test(v))) continue;
+      if (k === "font-style" && v !== "italic") continue;
+      decl.push(`${k}:${v}`);
+    }
+    if (!decl.length || !el.firstChild || el.querySelector(BLOCK_SEL)) continue;
+    const span = doc.createElement("span");
+    span.setAttribute("style", decl.join(";"));
+    span.append(...Array.from(el.childNodes));
+    el.appendChild(span);
+  }
+  return doc.body.innerHTML;
+}
+
 /** Düz metin: her satır bir paragraf (boş satırlar korunur, sekmeler metinde kalır). */
 export function textToSlice(schema: Schema, text: string): Slice {
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
   const paras = lines.map((l) => schema.nodes.paragraph.create(null, l ? schema.text(l) : undefined));
   return new Slice(Fragment.from(paras), 1, 1);
+}
+
+/** Uygulama içinde son kopyalanan/kesilen içerik (pano izni olmayan tarayıcıda şerit Yapıştır'ı için). */
+let lastCopied: Slice | null = null;
+export function lastInternalCopy(): Slice | null {
+  return lastCopied;
 }
 
 export const PasteRules = Extension.create({
@@ -125,8 +169,18 @@ export const PasteRules = Extension.create({
       new Plugin({
         key: new PluginKey("belgePaste"),
         props: {
-          transformPastedHTML: (html) => cleanOfficeHtml(html),
+          transformPastedHTML: (html) => liftBlockStyles(cleanOfficeHtml(html)),
           clipboardTextParser: (text, _ctx, _plain, view) => textToSlice(view.state.schema, text),
+          handleDOMEvents: {
+            copy: (view) => {
+              if (!view.state.selection.empty) lastCopied = view.state.selection.content();
+              return false;
+            },
+            cut: (view) => {
+              if (!view.state.selection.empty) lastCopied = view.state.selection.content();
+              return false;
+            },
+          },
         },
       }),
     ];

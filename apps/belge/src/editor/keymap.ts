@@ -4,6 +4,8 @@ import { Selection, TextSelection } from "@tiptap/pm/state";
 import { CellSelection, TableMap, nextCell } from "@tiptap/pm/tables";
 import type { StyleDef } from "../model/styles";
 import { toggleList } from "./listApply";
+import { getAutoCorrect } from "./autocorrectRules";
+import { syncDomSelection } from "./pagination";
 import { applyStyle, changeIndent, clearCharFormatting, copyFormat, cycleCase, pasteFormat, setLineSpacing, setParaAttrs, stepFontSize, currentPara, type CopiedFormat } from "./commands";
 
 export interface EditorHooks {
@@ -69,6 +71,35 @@ function extendCellRows(editor: Editor, dir: -1 | 1): boolean {
 }
 
 const NEXT_NORMAL = new Set(["Title", "Subtitle", "Quote", "IntenseQuote"]);
+
+/** 1,25 cm (pt). */
+const TAB_STEP = 35.4;
+
+/**
+ * Word'ün "Sekme ve Geri Sil ile sol ve ilk satır girintisini ayarla" otomatik biçimi: dolu paragrafın
+ * başında Sekme ilk satır girintisi verir (varsa sol girintiyi artırır); Geri Sil / Shift+Sekme azaltır.
+ */
+function tabIndent(editor: Editor, dir: 1 | -1): boolean {
+  if (!getAutoCorrect().tabIndent) return false;
+  // Hemen önce basılan Home vb. ile değişen tarayıcı seçimi önce okunur.
+  syncDomSelection(editor.view);
+  const { selection } = editor.state;
+  const { $from } = selection;
+  if (!selection.empty || $from.parentOffset !== 0 || !$from.parent.isTextblock || editor.isActive("listItem")) return false;
+  const a = $from.parent.attrs;
+  const first = (a.indentFirst as number | null) ?? 0;
+  const left = (a.indentLeft as number | null) ?? 0;
+  if (dir > 0) {
+    if ($from.parent.content.size === 0) return false;
+    if (first < TAB_STEP - 0.5) setParaAttrs(editor, { indentFirst: TAB_STEP });
+    else setParaAttrs(editor, { indentLeft: +(left + TAB_STEP).toFixed(2) });
+    return true;
+  }
+  if (first > 0.5) setParaAttrs(editor, { indentFirst: null });
+  else if (left > 0.5) setParaAttrs(editor, { indentLeft: left - TAB_STEP > 0.5 ? +(left - TAB_STEP).toFixed(2) : null });
+  else return false;
+  return true;
+}
 
 export function createWordKeymap(hooks: EditorHooks) {
   return Extension.create({
@@ -166,8 +197,15 @@ export function createWordKeymap(hooks: EditorHooks) {
         Tab: () => {
           const e = ed();
           if (e.isActive("listItem") || e.isActive("table")) return false;
+          if (tabIndent(e, 1)) return true;
           return e.chain().focus().insertContent("\t").run();
         },
+        "Shift-Tab": () => {
+          const e = ed();
+          if (e.isActive("listItem") || e.isActive("table")) return false;
+          return tabIndent(e, -1);
+        },
+        Backspace: () => tabIndent(ed(), -1),
       };
     },
   });

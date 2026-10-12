@@ -218,7 +218,7 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
   const bg = settings.pageColor ? `<w:background w:color="${hex6(settings.pageColor)}"/>` : "";
   zip.file("word/document.xml", `${XML_HEAD}<w:document ${DOC_NS} mc:Ignorable="w14 wp14"><w:body>${bodyXml}${finalSect}</w:body></w:document>`.replace("<w:body>", `${bg}<w:body>`));
 
-  const styles = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing);
+  const styles = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing, settings.customStyles);
   zip.file("word/styles.xml", buildStylesXml(styles));
   zip.file("word/numbering.xml", numberingXml(ctx));
   zip.file(
@@ -280,7 +280,7 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
     "docProps/app.xml",
     `${XML_HEAD}<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>OfficeHere Belge</Application><DocSecurity>0</DocSecurity><AppVersion>01.0000</AppVersion></Properties>`,
   );
-  const custom = { styleSet: settings.styleSet, theme: settings.theme, fontTheme: settings.fontTheme, paragraphSpacing: settings.paragraphSpacing, watermark: settings.watermark };
+  const custom = { styleSet: settings.styleSet, theme: settings.theme, fontTheme: settings.fontTheme, paragraphSpacing: settings.paragraphSpacing, watermark: settings.watermark, customStyles: settings.customStyles, sources: settings.sources, bibStyle: settings.bibStyle };
   zip.file(
     "docProps/custom.xml",
     `${XML_HEAD}<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="OfficeHereBelge"><vt:lpwstr>${esc(JSON.stringify(custom))}</vt:lpwstr></property></Properties>`,

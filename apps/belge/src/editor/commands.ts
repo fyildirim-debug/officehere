@@ -342,7 +342,14 @@ export function collectHeadings(doc: PMNode): { level: number; text: string; pos
       if (text) out.push({ level: node.attrs.level as number, text, pos });
       return false;
     }
-    return node.type.name !== "paragraph";
+    // Anahat düzeyi verilmiş paragraflar da başlık gibi sayılır (Gezinti bölmesi, İçindekiler).
+    if (node.type.name === "paragraph") {
+      const lvl = node.attrs.outlineLevel as number | null;
+      const text = node.textContent.trim();
+      if (lvl && text) out.push({ level: lvl, text, pos });
+      return false;
+    }
+    return true;
   });
   return out;
 }

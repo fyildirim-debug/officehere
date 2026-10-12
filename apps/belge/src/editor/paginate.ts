@@ -279,7 +279,8 @@ export function layoutFlow(ctx: FlowCtx) {
     if (secForce) parityFix(g, start);
     return addPage(g, secForce, start);
   };
-  const sameGeom = (pg: PageInfo, g: SecGeom) => Math.abs(pg.w - g.w) < 0.5 && Math.abs(pg.h - g.h) < 0.5 && Math.abs(pg.mt - g.mt) < 0.5;
+  const sameSize = (pg: PageInfo, g: SecGeom) => Math.abs(pg.w - g.w) < 0.5 && Math.abs(pg.h - g.h) < 0.5;
+  const sameGeom = (pg: PageInfo, g: SecGeom) => sameSize(pg, g) && Math.abs(pg.mt - g.mt) < 0.5;
 
   for (let i = 0; i < units.length; i++) {
     const u = units[i];
@@ -290,7 +291,9 @@ export function layoutFlow(ctx: FlowCtx) {
     const bottom = u.bottom + S;
     // Önceki uzun birim sayfalar boyunca taşmışsa sayfa ekle.
     while (top > pages[p].top + pages[p].h + gap / 2) p = addPage(g, false, u.pos);
-    const secForce = u.secStart && u.sec > 0 && g.kind !== "continuous";
+    // Sürekli bölüm farklı boyutlu sayfaya geçemez: sonraki sayfada başlar.
+    const sizeChange = u.secStart && u.sec > 0 && !sameSize(pages[p], g);
+    const secForce = u.secStart && u.sec > 0 && (g.kind !== "continuous" || sizeChange);
     // Açık sayfa sonu her zaman sayfayı bitirir (sayfanın tek içeriği olsa bile; Word'deki gibi boş sayfa kalır).
     const hard = forceNext;
     const force = forceNext || u.breakBefore || secForce;
@@ -301,7 +304,7 @@ export function layoutFlow(ctx: FlowCtx) {
     const oTop = () => outerTop(u) + S;
     const atTop = () => oTop() <= pages[p].top + pages[p].mt + 1;
     // Zorunlu kesme ama birim zaten sayfanın başında: yeni sayfa gerekmez (bölüm başında geometri/parite uymalı).
-    const startHere = force && !hard && atTop() && (!secForce || (sameGeom(pages[p], g) && (g.kind === "nextPage" || (pages.length % 2 === 0) === (g.kind === "evenPage"))));
+    const startHere = force && !hard && atTop() && (!secForce || (sameGeom(pages[p], g) && (g.kind === "nextPage" || g.kind === "continuous" || (pages.length % 2 === 0) === (g.kind === "evenPage"))));
 
     if (u.kind === "section") {
       // Çok sütunlu bölüm
@@ -325,7 +328,7 @@ export function layoutFlow(ctx: FlowCtx) {
         contentEnd,
         nextPage: () => addPage(g, false, -1),
         pages,
-        endsPage: !nextSec || nextSec.kind !== "continuous",
+        endsPage: !nextSec || nextSec.kind !== "continuous" || Math.abs(nextSec.w - g.w) > 0.5 || Math.abs(nextSec.h - g.h) > 0.5,
       });
       for (const b of res.breaks) breaks.push(b);
       for (const st of res.starts) pageStarts[st.page] = st.pos;
@@ -336,11 +339,25 @@ export function layoutFlow(ctx: FlowCtx) {
     }
 
     const fits = !force && !inMargin && bottom <= end + 0.5;
+    const textUnit = !u.notes.length && u.kind === "block" && u.node.isTextblock && u.node.content.size > 0;
+    const splittable = textUnit && !u.node.attrs.keepLines;
     if (fits || startHere || (!force && atTop())) {
       if (startHere && secForce) {
         pages[p].first = true;
         pages[p].section = u.sec;
         pages[p].titlePage = g.titlePage;
+      }
+      // Sayfa başında başlayan ve sayfadan uzun paragraf satır sınırından bölünür.
+      // (Satırları birlikte tut sayfadan uzun paragrafta uygulanamaz.)
+      if (!fits && textUnit && bottom > end + 0.5) {
+        const split = splitParagraph(ctx, u, S, p, pages, contentEnd, () => addPage(g, false, -1));
+        if (split) {
+          for (const b of split.breaks) breaks.push(b);
+          split.breaks.forEach((b, k) => (pageStarts[p + 1 + k] = b.pos));
+          S += split.added;
+          record(i, p);
+          continue;
+        }
       }
       record(i, p);
       // Sayfadan uzun birim: kapsadığı sayfalar eklenir.
@@ -349,7 +366,7 @@ export function layoutFlow(ctx: FlowCtx) {
     }
 
     // Paragrafı satır düzeyinde bölmeyi dene (dipnot içermeyenlerde).
-    if (!force && !inMargin && !u.notes.length && u.kind === "block" && u.node.isTextblock && !u.node.attrs.keepLines && u.node.content.size > 0) {
+    if (!force && !inMargin && splittable) {
       const split = splitParagraph(ctx, u, S, p, pages, contentEnd, () => addPage(g, false, -1));
       if (split) {
         for (const b of split.breaks) breaks.push(b);

@@ -1,6 +1,7 @@
 // Yatay cetvel: kenar boşlukları ve girinti işaretleri sürüklenebilir.
 import { useRef, useState } from "react";
 import { tipProps } from "@officehere/ui";
+import { TAB_ALIGN_LABEL, normalizeTabs, type TabStop } from "../editor/tabStops";
 
 const PX_PER_CM = 96 / 2.54;
 const PT_TO_PX = 4 / 3;
@@ -21,11 +22,14 @@ interface Props {
   onIndent: (v: { indentLeft?: number; indentRight?: number; indentFirst?: number }) => void;
   onMargins: (v: { left?: number; right?: number }) => void;
   onDoubleClick: () => void;
+  /** İmleçteki paragrafın sekme durakları; tıklayınca sol durak eklenir, sürükleyince taşınır/kaldırılır. */
+  tabs?: TabStop[];
+  onTabs?: (tabs: TabStop[] | null) => void;
 }
 
 type DragKind = "first" | "hanging" | "left" | "right" | "marginL" | "marginR";
 
-export function Ruler({ offset, scale, pageW, ml, mr, indentLeft, indentRight, indentFirst, columns, column = 0, onIndent, onMargins, onDoubleClick }: Props) {
+export function Ruler({ offset, scale, pageW, ml, mr, indentLeft, indentRight, indentFirst, columns, column = 0, onIndent, onMargins, onDoubleClick, tabs = [], onTabs }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ kind: DragKind; x: number } | null>(null);
   const X = (px: number) => offset + px * scale;
@@ -83,6 +87,40 @@ export function Ruler({ offset, scale, pageW, ml, mr, indentLeft, indentRight, i
     window.addEventListener("pointerup", up);
   };
 
+  /** Cetvelin alt kısmına tıklama sol sekme durağı ekler; durak sürüklenince taşınır, cetvelden çekilince kaldırılır. */
+  const tabDown = (index: number | null) => (e: React.PointerEvent) => {
+    if (!onTabs || e.button !== 0) return;
+    const host = ref.current;
+    if (!host) return;
+    if (index === null && (e.target as HTMLElement).closest(".bl-ind, .bl-ruler-mhandle, .bl-ruler-tab")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = host.getBoundingClientRect();
+    const toPt = (cx: number) => +((Math.round((cx - rect.left - offset) / scale / (PX_PER_CM / 4)) * (PX_PER_CM / 4) - cl) / PT_TO_PX).toFixed(1);
+    if (index === null) {
+      const pt = toPt(e.clientX);
+      if (pt <= 0 || cl + pt * PT_TO_PX >= pageW - cr) return;
+      onTabs(normalizeTabs([...tabs, { pos: pt, align: "left", leader: "none" }]));
+      return;
+    }
+    const orig = tabs[index];
+    let last = tabs;
+    const move = (ev: PointerEvent) => {
+      const off = Math.abs(ev.clientY - rect.top - rect.height / 2) > 24;
+      const rest = tabs.filter((_, i) => i !== index);
+      last = off ? rest : normalizeTabs([...rest, { ...orig, pos: Math.max(0.5, toPt(ev.clientX)) }]);
+      setDrag({ kind: "first", x: ev.clientX - rect.left });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setDrag(null);
+      onTabs(last.length ? last : null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+
   // Ölçek çizgileri: her 0,25 cm; sol kenar boşluğu 0 noktasıdır.
   const ticks = [];
   const step = PX_PER_CM / 4;
@@ -109,7 +147,7 @@ export function Ruler({ offset, scale, pageW, ml, mr, indentLeft, indentRight, i
   }
 
   return (
-    <div className="bl-ruler" ref={ref} onDoubleClick={onDoubleClick}>
+    <div className="bl-ruler" ref={ref} onDoubleClick={onDoubleClick} onPointerDown={tabDown(null)}>
       <div className="bl-ruler-track" style={{ left: X(0), width: pageW * scale }}>
         <div className="bl-ruler-margin" style={{ left: 0, width: ml * scale }} />
         <div className="bl-ruler-margin" style={{ right: 0, width: mr * scale }} />
@@ -124,6 +162,9 @@ export function Ruler({ offset, scale, pageW, ml, mr, indentLeft, indentRight, i
       <div className="bl-ind bl-ind-hanging" style={{ left: X(leftX) }} onPointerDown={start("hanging")} {...tipProps("Asılı Girinti")} />
       <div className="bl-ind bl-ind-left" style={{ left: X(leftX) }} onPointerDown={start("left")} {...tipProps("Sol Girinti")} />
       <div className="bl-ind bl-ind-right" style={{ left: X(rightX) }} onPointerDown={start("right")} {...tipProps("Sağ Girinti")} />
+      {tabs.map((t, i) => (
+        <div key={`${t.pos}-${t.align}`} className={`bl-ruler-tab is-${t.align}`} style={{ left: X(cl + t.pos * PT_TO_PX) }} onPointerDown={tabDown(i)} {...tipProps(`${TAB_ALIGN_LABEL[t.align]} Sekme`)} />
+      ))}
       {drag && <div className="bl-ruler-guide" style={{ left: drag.x }} />}
     </div>
   );

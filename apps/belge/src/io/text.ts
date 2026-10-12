@@ -102,7 +102,7 @@ export function docToText(doc: JSONContent, eol = "\r\n"): string {
 
 /** Bağımsız HTML belgesi (stiller ve sayfa ayarlarıyla). */
 export function htmlDocument(bodyHtml: string, settings: DocSettings, title: string): string {
-  const styles = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing);
+  const styles = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing, settings.customStyles);
   const m = pageMetrics(settings.page);
   const css = `
 @page { size: ${(settings.page.width / 1440) * 2.54}cm ${(settings.page.height / 1440) * 2.54}cm; margin: ${(settings.page.margin.top / 1440) * 2.54}cm ${(settings.page.margin.right / 1440) * 2.54}cm ${(settings.page.margin.bottom / 1440) * 2.54}cm ${(settings.page.margin.left / 1440) * 2.54}cm; }

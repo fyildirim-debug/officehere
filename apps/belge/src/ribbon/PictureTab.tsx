@@ -14,6 +14,7 @@ import {
 import { ColorPalette, Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonStack } from "@officehere/ui";
 import { useBelge } from "../state/context";
 import { IMAGE_STYLES } from "../editor/image";
+import { ArrangeGroup } from "./ArrangeGroup";
 
 const CM = 96 / 2.54;
 
@@ -66,7 +67,8 @@ export function PictureTab() {
       <RibbonGroup label="Erişilebilirlik" icon={<ImageAltText20Regular />}>
         <RibbonButton size="large" icon={<ImageAltText20Regular />} label="Alternatif Metin" onClick={() => ctx.openDialog("altText")} />
       </RibbonGroup>
-      <RibbonGroup label="Yerleştir" icon={<ArrowRotateClockwise20Regular />}>
+      <ArrangeGroup
+        extra={
         <RibbonStack>
           <RibbonMenuButton
             icon={<ArrowRotateClockwise20Regular />}
@@ -94,7 +96,8 @@ export function PictureTab() {
             }
           />
         </RibbonStack>
-      </RibbonGroup>
+        }
+      />
       <RibbonGroup label="Boyut" onLauncher={() => ctx.openDialog("imageSize")}>
         <RibbonStack>
           <RibbonSpinner label="Yükseklik:" value={h / CM} step={0.1} min={0.1} max={60} unit="cm" decimals={2} width={78} onChange={(v) => update({ height: Math.round(v * CM), width: Math.round((v * CM * w) / h) })} />

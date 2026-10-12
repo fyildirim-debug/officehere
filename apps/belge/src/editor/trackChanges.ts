@@ -16,6 +16,12 @@ export const trackKey = new PluginKey<TrackState>("belgeTrack");
 
 let lastKey = "";
 
+/** Değişikliklerin yazarı: Seçenekler'deki kullanıcı adı (her değişiklikte güncel değer okunur). */
+let authorSource: (() => string) | null = null;
+export function setTrackAuthorSource(fn: () => string) {
+  authorSource = fn;
+}
+
 function nowIso() {
   return new Date().toISOString().replace(/\.\d+Z$/, "Z");
 }
@@ -140,7 +146,8 @@ export const TrackChanges = Extension.create({
           const insType = schema.marks.insertion;
           const delType = schema.marks.deletion;
           if (!insType || !delType) return null;
-          const attrs = { author: st.author, date: nowIso() };
+          const author = authorSource?.() || st.author;
+          const attrs = { author, date: nowIso() };
           const fmt = formatRanges(t);
           if (fmt) return trackFormat(t, fmt, newState, attrs);
           const ins = insType.create(attrs);
@@ -161,7 +168,7 @@ export const TrackChanges = Extension.create({
               if (b > a) {
                 // Aynı yazarın bitişik eklemesi sürer: tek değişiklik olarak kalır (her tuşta yeni tarih yok).
                 const $a = out.doc.resolve(a);
-                const near = [$a.nodeBefore, out.doc.resolve(b).nodeAfter].flatMap((n) => n?.marks ?? []).find((m) => m.type === insType && m.attrs.author === st.author);
+                const near = [$a.nodeBefore, out.doc.resolve(b).nodeAfter].flatMap((n) => n?.marks ?? []).find((m) => m.type === insType && m.attrs.author === author);
                 out.addMark(a, b, near ?? ins);
                 out.removeMark(a, b, delType);
                 touched = true;

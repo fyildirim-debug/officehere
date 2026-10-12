@@ -143,7 +143,7 @@ export class PartReader {
     // Liste: doğrudan numPr ya da stil üzerinden.
     const stylePP = this.r.sheet.effective(styleId).p;
     const numId = direct.numId ?? stylePP.numId;
-    const ilvl = direct.ilvl ?? stylePP.ilvl ?? 0;
+    const ilvl = direct.ilvl ?? stylePP.ilvl ?? (numId ? listStyleLevel(this.r.numbering.styleLevel(numId, styleId), this.r.sheet.styles.get(styleId ?? "")?.name) : 0);
     const list = numId ? this.r.numbering.resolve(numId, ilvl) : null;
     const pp: ParaProps = { ...styleDiff.p, ...stripUndef(direct) };
     const attrs: Record<string, unknown> = {};
@@ -163,6 +163,8 @@ export class PartReader {
     }
     if (pp.shading) attrs.shading = pp.shading;
     if (pp.borders) attrs.borders = pp.borders;
+    if (direct.tabs?.length) attrs.tabs = direct.tabs;
+    if (direct.outlineLevel && mapped.type !== "heading") attrs.outlineLevel = direct.outlineLevel;
     if (direct.keepNext) attrs.keepNext = true;
     if (direct.keepLines) attrs.keepLines = true;
     if (direct.pageBreakBefore) attrs.pageBreakBefore = true;
@@ -678,4 +680,14 @@ function mergeText(nodes: JSONContent[]): JSONContent[] {
     else if (n.type !== "text" || n.text) out.push({ ...n });
   }
   return out;
+}
+
+/**
+ * Stilden gelen liste düzeyi. "List Bullet 2" / "Liste Madde İşareti 3" gibi stiller kendi numaralandırma
+ * tanımlarında 0. düzeyde olsa da Word'de bir alt düzey gibi girintili görünür: adındaki sayıdan düzey çıkarılır.
+ */
+export function listStyleLevel(level: number | null, name: string | undefined): number {
+  if (level && level > 0) return level;
+  const m = /^(?:list|liste)\b.*?\s(\d)$/i.exec((name ?? "").trim());
+  return m ? Math.max(0, Math.min(8, Number(m[1]) - 1)) : (level ?? 0);
 }

@@ -2,6 +2,8 @@
 import Image from "@tiptap/extension-image";
 import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
+import type { Node as PMNode } from "@tiptap/pm/model";
+import { applyWrap, enableFloatingDrag, wrapAttributes, wrapStyle, type WrapAttrs } from "./imageWrap";
 
 /** Tutamaçla boyutlandırma bitince resim seçili kalır (Word'deki gibi). */
 function keepImageSelectedPlugin() {
@@ -70,6 +72,7 @@ export const BelgeImage = Image.extend({
         renderHTML: (a) => (a.rotate ? { "data-rotate": String(a.rotate) } : {}),
       },
       flipH: { default: false, parseHTML: (el) => el.hasAttribute("data-flip-h"), renderHTML: (a) => (a.flipH ? { "data-flip-h": "" } : {}) },
+      ...wrapAttributes,
       flipV: {
         default: false,
         parseHTML: (el) => el.hasAttribute("data-flip-v"),
@@ -83,6 +86,9 @@ export const BelgeImage = Image.extend({
           const style: string[] = [];
           if (t.length) style.push(`transform:${t.join(" ")}`);
           if (a.border) style.push(`outline:${a.border}`);
+          // Metni kaydırma (dışa aktarma ve okuma modu; düzenleyicide kapsayıcıya uygulanır).
+          const ws = wrapStyle(a as Partial<WrapAttrs>);
+          for (const [k, v] of Object.entries(ws)) if (v) style.push(`${k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}:${v}`);
           if (style.length) out.style = style.join(";");
           return out;
         },
@@ -92,11 +98,37 @@ export const BelgeImage = Image.extend({
   addProseMirrorPlugins() {
     return [...(this.parent?.() ?? []), keepImageSelectedPlugin()];
   },
+  addNodeView() {
+    const parent = this.parent?.();
+    if (!parent) return null;
+    return (props) => {
+      const nv = parent(props) as { dom: HTMLElement; update?: (...a: unknown[]) => boolean };
+      const img = nv.dom.querySelector("img") as HTMLElement | null;
+      const sync = (n: PMNode) => img && applyWrap(nv.dom, img, n.attrs as Partial<WrapAttrs>);
+      sync(props.node);
+      enableFloatingDrag(nv.dom, props.view, props.getPos as () => number | undefined);
+      const orig = nv.update?.bind(nv);
+      if (orig)
+        nv.update = (...args: unknown[]) => {
+          const ok = orig(...args);
+          if (ok) sync(args[0] as PMNode);
+          return ok;
+        };
+      return nv as never;
+    };
+  },
 }).configure({
   inline: true,
   allowBase64: true,
   resize: { enabled: true, directions: ["top-left", "top-right", "bottom-left", "bottom-right"], minWidth: 16, minHeight: 16, alwaysPreserveAspectRatio: true },
 });
+
+/** setImage sonrası imlecin hemen önündeki resmi seçer (Word'deki gibi eklenen resim seçili gelir). */
+export function selectInsertedImage(editor: { state: import("@tiptap/pm/state").EditorState; view: EditorView }) {
+  const { state } = editor;
+  const pos = state.selection.from - 1;
+  if (pos >= 0 && state.doc.nodeAt(pos)?.type.name === "image") editor.view.dispatch(state.tr.setSelection(NodeSelection.create(state.doc, pos)));
+}
 
 /** Dosyadan resim okuyup doğal boyutunu (en fazla verilen genişlikte) döner. */
 export function readImageFile(file: File, maxWidth: number): Promise<{ src: string; width: number; height: number }> {

@@ -27,6 +27,10 @@ export interface ParagraphAttrs {
   keepNext: boolean;
   keepLines: boolean;
   pageBreakBefore: boolean;
+  /** Özel sekme durakları (tabStops eklentisi). */
+  tabs?: import("./tabStops").TabStop[] | null;
+  /** Anahat düzeyi 1-9 (null: gövde metni). */
+  outlineLevel?: number | null;
 }
 
 export const PARA_TYPES = ["paragraph", "heading"];

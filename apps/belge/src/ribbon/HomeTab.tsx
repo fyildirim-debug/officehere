@@ -42,6 +42,7 @@ import {
   TextLineSpacing20Regular,
   ArrowUp20Regular,
   ArrowDown20Regular,
+  TextEditStyle20Regular,
 } from "@fluentui/react-icons";
 import { FONT_LIST, FONT_SIZES, fontStack } from "@officehere/core";
 import {
@@ -331,7 +332,7 @@ export function HomeTab() {
         </RibbonStack>
       </RibbonGroup>
 
-      <RibbonGroup label="Stiller" icon={<TextFontSize20Regular />}>
+      <RibbonGroup label="Stiller" icon={<TextFontSize20Regular />} onLauncher={() => ctx.setView({ stylesPane: !ctx.view.stylesPane })} launcherTip="Stiller (Alt+Ctrl+Shift+S)">
         <RibbonGallery
           columns={6}
           itemWidth={76}
@@ -339,7 +340,7 @@ export function HomeTab() {
           expandedColumns={6}
           selectedId={fmt.charStyle ?? fmt.styleId}
           onSelect={(id) => applyStyle(editor, styles, id)}
-          items={GALLERY_STYLES.filter((id) => styles[id]).map((id) => ({
+          items={[...GALLERY_STYLES.filter((id) => styles[id]), ...Object.values(ctx.settings.customStyles ?? {}).filter((s) => s.gallery !== false && !GALLERY_STYLES.includes(s.id)).map((s) => s.id)].filter((id) => styles[id]).map((id) => ({
             id,
             label: styles[id].name,
             preview: (
@@ -354,7 +355,9 @@ export function HomeTab() {
           footer={
             <>
               <MenuSeparator />
+              <MenuItem icon={<TextEditStyle20Regular />} label="Stil Oluştur" onClick={() => ctx.openDialog("style")} />
               <MenuItem icon={<TextClearFormatting20Regular />} label="Biçimlendirmeyi Temizle" onClick={() => clearFormatting(editor)} />
+              <MenuItem label="Stilleri Uygula..." onClick={() => ctx.setView({ stylesPane: true })} />
             </>
           }
         />

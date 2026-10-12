@@ -18,8 +18,19 @@ import { setParaAttrs } from "../editor/commands";
 import { collectNotes, setNoteContent } from "../editor/notes";
 import { sectionGeoms, type SecGeom } from "../editor/sections";
 import { applyPageSetup } from "../state/pageSetup";
+import { ChangeBars, revisionBalloons } from "./revisions";
+import type { TabStop } from "../editor/tabStops";
+import { resolveChanges } from "../editor/trackChanges";
+
+/** Belgede izlenen değişiklik var mı. */
+function hasRevisions(editor: Editor): boolean {
+  const { doc, schema } = editor.state;
+  const types = [schema.marks.insertion, schema.marks.deletion, schema.marks.formatChange].filter(Boolean);
+  return types.some((t) => doc.rangeHasMark(0, doc.content.size, t));
+}
 
 export const PAGE_GAP = 16;
+const NO_TABS: TabStop[] = [];
 const CANVAS_PAD = 20;
 const COMMENTS_W = 270;
 /** Yan yana sayfalar arası yatay boşluk. */
@@ -46,6 +57,8 @@ interface Props {
   scrollRef: React.RefObject<HTMLDivElement | null>;
   printing: boolean;
   formatPainter: boolean;
+  /** Sağ kenar bölmesi (Düzenleyici, Stiller). */
+  rightPane?: React.ReactNode;
 }
 
 /** Sayfanın sayfa kapsayıcısındaki dikdörtgeni (yan yana dizimde satır/sütun konumu). */
@@ -84,7 +97,7 @@ export function DocumentView(props: Props) {
 
   // Birden Çok Sayfa: sayfa boyları eşitse ve pencereye en az iki sayfa sığıyorsa yan yana dizilir.
   const perRowFit = Math.floor((scrollW / scale - 2 * CANVAS_PAD + TILE_GAP) / (bodyW + TILE_GAP));
-  const tiled = print && !printing && !hfEditing && !view.focusMode && pages.length > 1 && perRowFit >= 2;
+  const tiled = print && !printing && !hfEditing && !view.focusMode && !view.onePage && pages.length > 1 && perRowFit >= 2;
   // Satır kaydırılamıyorsa (tablo satırı ya da çok sütunlu bölüm sınırı) sayfalar tek satırda dizilir.
   const perRow = tiled ? (tileOk ? Math.min(perRowFit, pageCount) : pageCount) : 1;
   // Yan yana dizimde her sayfa en yüksek sayfa kadar bir yuvaya yerleşir.
@@ -115,9 +128,17 @@ export function DocumentView(props: Props) {
   );
 
   const anchors = commentAnchors(editor);
+  const markup = view.markup ?? "all";
+  const revisions = markup === "all" && print && !printing ? revisionBalloons(editor, view.balloons ?? "revisions") : [];
+  const hasChanges = print && !printing && (markup === "all" || markup === "simple") && hasRevisions(editor);
+  const pageAt = useCallback((pos: number) => controller.pageOf(pos), [controller]);
+  // İşaretleme görünümü değişince (silinen metin gizlenir/gösterilir) yeniden sayfala.
+  useEffect(() => {
+    controller.request();
+  }, [controller, markup, view.balloons]);
   const notes = useMemo(() => new Map(collectNotes(doc).map((n) => [n.id, { label: n.label, text: n.text, content: n.content }])), [doc]);
   const onNoteChange = useCallback((id: string, json: JSONContent) => setNoteContent(editor.view, id, (json.content ?? []) as JSONContent[]), [editor]);
-  const showComments = view.showComments && anchors.length > 0 && print && !tiled;
+  const showComments = view.showComments && anchors.length + revisions.length > 0 && print && !tiled;
 
   // Cetvelleri sayfayla hizala.
   const syncRuler = useCallback(() => {
@@ -250,7 +271,7 @@ export function DocumentView(props: Props) {
   const hfPg = hfEditing ? (pages[hfPage] ?? pages[0]) : null;
 
   return (
-    <div className={`bl-workspace is-${view.mode}${hfEditing ? " is-hf-editing" : ""}${props.formatPainter ? " is-painter" : ""}${tiled ? " is-tiled" : ""}`}>
+    <div className={`bl-workspace is-${view.mode}${hfEditing ? " is-hf-editing" : ""}${props.formatPainter ? " is-painter" : ""}${tiled ? " is-tiled" : ""} is-markup-${markup} is-balloons-${view.balloons ?? "revisions"}`}>
       {view.navPane && !printing && (
         <NavigationPane editor={editor} controller={controller} pageCount={pageCount} version={version} focusSearch={props.navFocus} onClose={() => setView({ navPane: false })} />
       )}
@@ -264,7 +285,7 @@ export function DocumentView(props: Props) {
         <div className="bl-scroll-row">
           {rulerVisible && (
             <div className="bl-vruler-host" ref={vrulerHostRef}>
-              <VRulerBar editor={editor} controller={controller} pages={pages} rectOf={rectOf} offset={vOffset} scale={scale} setMargins={setMargins} onPageSetup={props.onPageSetup} />
+              <VRulerBar editor={editor} controller={controller} pages={pages} rectOf={rectOf} offset={vOffset} scale={scale} setMargins={setMargins} onPageSetup={props.onPageSetup} viewH={vrulerHostRef.current?.clientHeight ?? 0} />
             </div>
           )}
           <div className={`bl-scroll oh-scroll${view.gridlines ? " has-grid" : ""}`} ref={scrollRef}>
@@ -333,13 +354,17 @@ export function DocumentView(props: Props) {
                     onDelete={props.deleteComment}
                     onResolve={(id) => updateSettings((s) => ({ ...s, comments: { ...s.comments, [id]: { ...s.comments[id], resolved: !s.comments[id].resolved } } }))}
                     version={version + pageCount}
+                    revisions={revisions}
+                    onRevision={(r, accept) => editor.view.dispatch(resolveChanges(editor.state, r.from, r.to, accept))}
                   />
                 )}
+                {hasChanges && !tiled && <ChangeBars editor={editor} container={pagesRef.current} pages={pages} rectOf={rectOf} pageAt={pageAt} scale={scale} version={version + pageCount} />}
               </div>
             </div>
           </div>
         </div>
       </div>
+      {!printing && props.rightPane}
     </div>
   );
 }
@@ -397,11 +422,11 @@ function HRulerBar({ editor, controller, pages, geoms, rectOf, offset, scale, pa
       for (let d = $from.depth; d >= 0; d--) {
         const n = $from.node(d);
         if (n.type.name === "paragraph" || n.type.name === "heading")
-          return { l: (n.attrs.indentLeft as number | null) ?? 0, r: (n.attrs.indentRight as number | null) ?? 0, f: (n.attrs.indentFirst as number | null) ?? 0 };
+          return { l: (n.attrs.indentLeft as number | null) ?? 0, r: (n.attrs.indentRight as number | null) ?? 0, f: (n.attrs.indentFirst as number | null) ?? 0, t: (n.attrs.tabs as TabStop[] | null) ?? NO_TABS };
       }
-      return { l: 0, r: 0, f: 0 };
+      return { l: 0, r: 0, f: 0, t: NO_TABS };
     },
-    equalityFn: (a, b) => !!a && !!b && a.l === b.l && a.r === b.r && a.f === b.f,
+    equalityFn: (a, b) => !!a && !!b && a.l === b.l && a.r === b.r && a.f === b.f && JSON.stringify(a.t) === JSON.stringify(b.t),
   });
   if (!cur || !sec) return null;
   const columns = sec && sec.cols > 1 ? Array.from({ length: sec.cols }, (_, i) => ({ left: sec.ml + i * (sec.colW + sec.colGap), width: sec.colW })) : undefined;
@@ -423,12 +448,31 @@ function HRulerBar({ editor, controller, pages, geoms, rectOf, offset, scale, pa
       }}
       onMargins={setMargins(cur.section)}
       onDoubleClick={onPageSetup}
+      tabs={ind?.t ?? NO_TABS}
+      onTabs={(t) => setParaAttrs(editor, { tabs: t })}
     />
   );
 }
 
-function VRulerBar({ editor, controller, pages, rectOf, offset, scale, setMargins, onPageSetup }: BarProps) {
-  const { page } = useCaretPage(editor, controller, pages.length);
+function VRulerBar({ editor, controller, pages, rectOf, offset, scale, setMargins, onPageSetup, viewH }: BarProps & { viewH: number }) {
+  const { page: caretPage } = useCaretPage(editor, controller, pages.length);
+  // İmleçteki sayfa görünmüyorsa (belge kaydırıldıysa) görünen sayfanın cetveli gösterilir.
+  const overlap = (i: number) => {
+    const y = offset + rectOf(i).y * scale;
+    const h = (pages[i]?.h ?? 0) * scale;
+    return Math.max(0, Math.min(viewH, y + h) - Math.max(0, y));
+  };
+  let page = caretPage;
+  if (viewH > 0 && overlap(caretPage) <= 0) {
+    let best = -1;
+    for (let i = 0; i < pages.length; i++) {
+      const o = overlap(i);
+      if (o > best) {
+        best = o;
+        page = i;
+      }
+    }
+  }
   const cur = pages[page];
   if (!cur) return null;
   return <VRuler offset={offset + rectOf(page).y * scale} scale={scale} pageH={cur.h} mt={cur.mt} mb={cur.mb} onMargins={setMargins(cur.section)} onDoubleClick={onPageSetup} />;

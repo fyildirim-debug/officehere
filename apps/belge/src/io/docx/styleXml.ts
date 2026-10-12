@@ -1,6 +1,6 @@
 // styles.xml üretimi: belge stilleri, tablo stilleri ve özellik dönüşümleri.
 import type { BorderSpec, StyleDef, StyleProps } from "../../model/styles";
-import { STYLE_ORDER } from "../../model/styles";
+import { styleIds } from "../../model/styles";
 import { TABLE_STYLES } from "../../editor/table";
 import { NS, XML_HEAD, esc, hex6 } from "./xml";
 
@@ -26,6 +26,8 @@ export const BUILTIN_NAMES: Record<string, string> = {
   IntenseReference: "Intense Reference",
   BookTitle: "Book Title",
   ListParagraph: "List Paragraph",
+  Caption: "caption",
+  Bibliography: "Bibliography",
 };
 
 export const BORDER_VAL: Record<BorderSpec["style"], string> = { single: "single", double: "double", dotted: "dotted", dashed: "dashed", thick: "thick" };
@@ -106,7 +108,7 @@ export function buildStylesXml(styles: Record<string, StyleDef>): string {
   parts.push(
     `<w:docDefaults><w:rPrDefault><w:rPr>${fontsXml(normal.font ?? "Aptos")}<w:kern w:val="2"/><w:sz w:val="${Math.round((normal.size ?? 11) * 2)}"/><w:szCs w:val="${Math.round((normal.size ?? 11) * 2)}"/><w:lang w:val="tr-TR" w:eastAsia="en-US" w:bidi="ar-SA"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="${Math.round((normal.spaceAfter ?? 8) * 20)}" w:line="${Math.round((normal.line ?? 1.08) * 240)}" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>`,
   );
-  for (const id of STYLE_ORDER) {
+  for (const id of styleIds(styles)) {
     const s = styles[id];
     if (!s) continue;
     const name = BUILTIN_NAMES[id] ?? s.name;

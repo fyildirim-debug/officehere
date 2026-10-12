@@ -2,6 +2,7 @@
 // Böylece tarayıcının kendi sayfa bölme davranışından bağımsız olarak ekranla birebir çıktı alınır.
 // Farklı boyuttaki sayfalar (yatay bölümler) adlandırılmış @page kurallarıyla basılır.
 import type { PageInfo } from "../editor/pagination";
+import { sheetGrid } from "../print/printOptions";
 
 export interface PrintGeometry {
   pages: PageInfo[];
@@ -28,9 +29,11 @@ interface FlowItem {
   bottom: number;
 }
 
-/** Canlı sayfa kapsayıcısından (".bl-pages") yazdırma kökünü kurar. */
-export function buildPrintRoot(pagesEl: HTMLElement, g: PrintGeometry): HTMLElement | null {
-  removePrintRoot();
+/**
+ * Canlı sayfa kapsayıcısından (".bl-pages") her sayfanın bağımsız kopyasını kurar (belgeye eklenmez).
+ * Yazdırma kökü ve Dosya › Yazdır önizlemesi bu kopyaları kullanır.
+ */
+export function renderPages(pagesEl: HTMLElement, g: PrintGeometry): HTMLElement[] | null {
   const body = pagesEl.querySelector<HTMLElement>(".bl-body");
   const pm = body?.querySelector<HTMLElement>(".ProseMirror");
   if (!body || !pm || !g.pages.length) return null;
@@ -52,24 +55,7 @@ export function buildPrintRoot(pagesEl: HTMLElement, g: PrintGeometry): HTMLElem
     } else box(child, null);
   }
 
-  // Sayfa boyutları için adlandırılmış @page kuralları.
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
-  const seen = new Set<string>();
-  let css = "";
-  for (const p of g.pages) {
-    const name = pageName(p);
-    if (seen.has(name)) continue;
-    seen.add(name);
-    css += `@page ${name} { size: ${p.w}px ${p.h}px; margin: 0; }\n`;
-  }
-  css += `@page { size: ${g.pages[0].w}px ${g.pages[0].h}px; margin: 0; }\n`;
-  style.textContent = css;
-  document.head.appendChild(style);
-
-  const root = document.createElement("div");
-  root.id = ROOT_ID;
-  root.className = "bl-print-root";
+  const out: HTMLElement[] = [];
   g.pages.forEach((pg, i) => {
     const pTop = pg.top;
     const pBottom = pTop + pg.h;
@@ -132,12 +118,102 @@ export function buildPrintRoot(pagesEl: HTMLElement, g: PrintGeometry): HTMLElem
     }
     bodyClone.appendChild(pmClone);
     page.appendChild(bodyClone);
-    root.appendChild(page);
+    // Seçim ve düzenleme işaretlerini temizle.
+    page.querySelectorAll(".ProseMirror-selectednode").forEach((e) => e.classList.remove("ProseMirror-selectednode"));
+    page.querySelectorAll("[data-resize-handle], .bl-tb-handles, .bl-tsp, .bl-pg-tilerow").forEach((e) => e.remove());
+    page.querySelectorAll("[contenteditable]").forEach((e) => e.removeAttribute("contenteditable"));
+    page.querySelectorAll("[id]").forEach((e) => e.removeAttribute("id"));
+    out.push(page);
   });
-  // Seçim ve düzenleme işaretlerini temizle.
-  root.querySelectorAll(".ProseMirror-selectednode").forEach((e) => e.classList.remove("ProseMirror-selectednode"));
-  root.querySelectorAll("[data-resize-handle], .bl-tb-handles").forEach((e) => e.remove());
-  root.querySelectorAll("[contenteditable]").forEach((e) => e.removeAttribute("contenteditable"));
+  return out;
+}
+
+/** Yaprak: birden çok sayfa küçültülerek ızgaraya dizilir (yaprak başına sayfa). */
+export function buildSheet(pages: HTMLElement[], infos: PageInfo[], perSheet: number): HTMLElement {
+  const first = infos[0];
+  const base = sheetGrid(perSheet);
+  const pad = 12;
+  // Kağıt (ilk sayfanın boyutu ya da döndürülmüşü) ve ızgara yönü, sayfalar en büyük görünecek biçimde seçilir.
+  let best = { W: first.w, H: first.h, cols: base.cols, rows: base.rows, sc: 0 };
+  for (const [W, H] of [
+    [first.w, first.h],
+    [first.h, first.w],
+  ]) {
+    for (const [cols, rows] of [
+      [base.cols, base.rows],
+      [base.rows, base.cols],
+    ]) {
+      const sc = Math.min((W - pad * (cols + 1)) / cols / first.w, (H - pad * (rows + 1)) / rows / first.h);
+      if (sc > best.sc + 1e-6) best = { W, H, cols, rows, sc };
+    }
+  }
+  const { W, H } = best;
+  const grid = { cols: best.cols, rows: best.rows };
+  const sheet = document.createElement("div");
+  sheet.className = "bl-print-page bl-print-sheet";
+  sheet.style.width = `${W}px`;
+  sheet.style.height = `${H}px`;
+  const name = `bl-${Math.round(W)}x${Math.round(H)}`;
+  sheet.style.setProperty("page", name);
+  const cw = (W - pad * (grid.cols + 1)) / grid.cols;
+  const ch = (H - pad * (grid.rows + 1)) / grid.rows;
+  pages.forEach((pg, k) => {
+    const info = infos[k];
+    const sc = Math.min(cw / info.w, ch / info.h);
+    const col = k % grid.cols;
+    const row = Math.floor(k / grid.cols);
+    const cell = document.createElement("div");
+    cell.className = "bl-print-cell";
+    cell.style.left = `${pad + col * (cw + pad) + (cw - info.w * sc) / 2}px`;
+    cell.style.top = `${pad + row * (ch + pad) + (ch - info.h * sc) / 2}px`;
+    cell.style.width = `${info.w}px`;
+    cell.style.height = `${info.h}px`;
+    cell.style.transform = `scale(${sc})`;
+    pg.style.removeProperty("page");
+    cell.appendChild(pg);
+    sheet.appendChild(cell);
+  });
+  return sheet;
+}
+
+/** Yapraklar (sayfa sıraları) için yazdırma sayfa öğeleri. */
+export function assembleSheets(pages: HTMLElement[], infos: PageInfo[], sheets: number[][], perSheet: number): HTMLElement[] {
+  return sheets.map((list) => {
+    if (perSheet <= 1) return pages[list[0]].cloneNode(true) as HTMLElement;
+    return buildSheet(
+      list.map((i) => pages[i].cloneNode(true) as HTMLElement),
+      list.map((i) => infos[i]),
+      perSheet,
+    );
+  });
+}
+
+/** Canlı sayfa kapsayıcısından yazdırma kökünü kurar; `sheets` verilirse yalnız o yapraklar basılır. */
+export function buildPrintRoot(pagesEl: HTMLElement, g: PrintGeometry, layout?: { sheets: number[][]; perSheet: number }): HTMLElement | null {
+  removePrintRoot();
+  const pages = renderPages(pagesEl, g);
+  if (!pages) return null;
+  const sheets = layout?.sheets ?? pages.map((_, i) => [i]);
+  const items = assembleSheets(pages, g.pages, sheets, layout?.perSheet ?? 1);
+  if (!items.length) return null;
+  // Sayfa boyutları için adlandırılmış @page kuralları.
+  const style = document.createElement("style");
+  style.id = STYLE_ID;
+  const sizes = new Map<string, string>();
+  for (const el of items) {
+    const name = el.style.getPropertyValue("page") || `bl-${Math.round(parseFloat(el.style.width))}x${Math.round(parseFloat(el.style.height))}`;
+    el.style.setProperty("page", name);
+    sizes.set(name, `${el.style.width} ${el.style.height}`);
+  }
+  let css = "";
+  for (const [name, size] of sizes) css += `@page ${name} { size: ${size}; margin: 0; }\n`;
+  css += `@page { size: ${items[0].style.width} ${items[0].style.height}; margin: 0; }\n`;
+  style.textContent = css;
+  document.head.appendChild(style);
+  const root = document.createElement("div");
+  root.id = ROOT_ID;
+  root.className = "bl-print-root";
+  for (const el of items) root.appendChild(el);
   document.body.appendChild(root);
   return root;
 }

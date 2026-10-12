@@ -28,7 +28,10 @@ export type DialogKind =
   | "columns"
   | "imageSize"
   | "altText"
-  | "about";
+  | "about"
+  | "autocorrect"
+  | "style"
+  | "tabs";
 
 export interface DialogState {
   kind: DialogKind;
@@ -49,6 +52,16 @@ export interface ViewOptions {
   showMarks: boolean;
   /** Açıklamalar kenar bölmesi. */
   showComments: boolean;
+  /** Görünüm > Tek Sayfa: sığsa da sayfalar yan yana dizilmez. */
+  onePage?: boolean;
+  /** Düzenleyici bölmesi (Yazım ve Dil Bilgisi, F7). */
+  proofPane?: boolean;
+  /** Stiller bölmesi. */
+  stylesPane?: boolean;
+  /** Gözden Geçir > İşaretleme görünümü. */
+  markup?: "all" | "simple" | "none" | "original";
+  /** Gözden Geçir > İşaretlemeyi Göster > Balonlar. */
+  balloons?: "revisions" | "inline" | "formatting";
 }
 
 export interface BelgeCtx {
@@ -56,6 +69,8 @@ export interface BelgeCtx {
   editor: Editor;
   /** Belge gövdesi düzenleyicisi (bölümler, sayfa yapısı). */
   mainEditor: Editor;
+  /** Şeridin hedefi belge gövdesi mi (üst/alt bilgi ya da not düzenlenmiyor). */
+  inBody: boolean;
   fmt: FormatState;
   settings: DocSettings;
   updateSettings: (fn: (s: DocSettings) => DocSettings) => void;
@@ -82,6 +97,8 @@ export interface BelgeCtx {
   notify: (text: string, kind?: "info" | "warning" | "error" | "success") => void;
   /** Dosya > Hakkında'yı açar. */
   openBackstage: (page?: "about" | "info" | "new" | "open" | "export" | "print") => void;
+  /** Şerit sekmesine geçer (ör. resim eklenince Resim Biçimi). */
+  showTab: (id: string) => void;
 }
 
 export const BelgeContext = createContext<BelgeCtx | null>(null);

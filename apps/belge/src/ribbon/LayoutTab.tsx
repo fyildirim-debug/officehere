@@ -18,6 +18,7 @@ import { MARGIN_PRESETS, PAGE_SIZE_LIST, fmtCm, marginPresetId, pageSizeId, same
 import { setParaAttrs } from "../editor/commands";
 import { isolateSelection } from "../editor/sections";
 import { applyPageSetup, sectionPageAt } from "../state/pageSetup";
+import { ArrangeGroup } from "./ArrangeGroup";
 
 const PT_PER_CM = 72 / 2.54;
 
@@ -57,7 +58,7 @@ export function applyColumns(editor: Editor, settings: DocSettings, updateSettin
 
 export function LayoutTab() {
   const ctx = useBelge();
-  const { settings, updateSettings, fmt, editor } = ctx;
+  const { settings, updateSettings, fmt, mainEditor: editor } = ctx;
   // İmleçteki bölümün etkin sayfa yapısı (fmt.sectionKey değişince yenilenir).
   void fmt.sectionKey;
   const page = sectionPageAt(editor, settings.page, fmt.section);
@@ -140,14 +141,14 @@ export function LayoutTab() {
             menu={
               <Menu width={330}>
                 <MenuHeader>Sayfa Sonları</MenuHeader>
-                <MenuItem label="Sayfa" description="Bir sayfanın nerede bitip sonraki sayfanın nerede başladığını işaretleyin." shortcut="Ctrl+Enter" onClick={() => chain().setPageBreak().run()} />
-                <MenuItem label="Sütun" description="Sütun sonundan sonraki metin sonraki sütunun başlangıcında yer alır." shortcut="Ctrl+Shift+Enter" onClick={() => chain().insertColumnBreak().run()} />
-                <MenuItem label="Metin Kaydırma" description="Web sayfalarındaki nesnelerin etrafındaki metni ayırın (satır sonu, Shift+Enter)." onClick={() => chain().setHardBreak().run()} />
+                <MenuItem label="Sayfa" description="Bir sayfanın nerede bitip sonraki sayfanın nerede başladığını işaretleyin." shortcut="Ctrl+Enter" disabled={!ctx.inBody} onClick={() => chain().setPageBreak().run()} />
+                <MenuItem label="Sütun" description="Sütun sonundan sonraki metin sonraki sütunun başlangıcında yer alır." shortcut="Ctrl+Shift+Enter" disabled={!ctx.inBody} onClick={() => chain().insertColumnBreak().run()} />
+                <MenuItem label="Metin Kaydırma" description="Web sayfalarındaki nesnelerin etrafındaki metni ayırın (satır sonu, Shift+Enter)." onClick={() => ctx.editor.chain().focus().setHardBreak().run()} />
                 <MenuHeader>Bölüm Sonları</MenuHeader>
-                <MenuItem label="Sonraki Sayfa" description="Bölüm sonu ekleyin ve yeni bölümü sonraki sayfada başlatın." onClick={() => sectionBreak("nextPage")} />
-                <MenuItem label="Sürekli" description="Bölüm sonu ekleyin ve yeni bölümü aynı sayfada başlatın." onClick={() => sectionBreak("continuous")} />
-                <MenuItem label="Çift Sayfa" description="Bölüm sonu ekleyin ve yeni bölümü sonraki çift numaralı sayfada başlatın." onClick={() => sectionBreak("evenPage")} />
-                <MenuItem label="Tek Sayfa" description="Bölüm sonu ekleyin ve yeni bölümü sonraki tek numaralı sayfada başlatın." onClick={() => sectionBreak("oddPage")} />
+                <MenuItem label="Sonraki Sayfa" description="Bölüm sonu ekleyin ve yeni bölümü sonraki sayfada başlatın." disabled={!ctx.inBody} onClick={() => sectionBreak("nextPage")} />
+                <MenuItem label="Sürekli" description="Bölüm sonu ekleyin ve yeni bölümü aynı sayfada başlatın." disabled={!ctx.inBody} onClick={() => sectionBreak("continuous")} />
+                <MenuItem label="Çift Sayfa" description="Bölüm sonu ekleyin ve yeni bölümü sonraki çift numaralı sayfada başlatın." disabled={!ctx.inBody} onClick={() => sectionBreak("evenPage")} />
+                <MenuItem label="Tek Sayfa" description="Bölüm sonu ekleyin ve yeni bölümü sonraki tek numaralı sayfada başlatın." disabled={!ctx.inBody} onClick={() => sectionBreak("oddPage")} />
               </Menu>
             }
           />
@@ -157,15 +158,16 @@ export function LayoutTab() {
       <RibbonGroup label="Paragraf" onLauncher={() => ctx.openDialog("paragraph")} launcherTip="Paragraf Ayarları">
         <RibbonStack>
           <RibbonLabel>Girinti</RibbonLabel>
-          <RibbonSpinner icon={<TextIndentIncreaseLtr20Regular />} label="Sol:" value={fmt.indentLeft / PT_PER_CM} step={0.1} min={-20} max={50} unit="cm" decimals={2} width={76} onChange={(v) => setParaAttrs(editor, { indentLeft: v ? +(v * PT_PER_CM).toFixed(2) : null })} />
-          <RibbonSpinner icon={<TextIndentDecreaseLtr20Regular />} label="Sağ:" value={fmt.indentRight / PT_PER_CM} step={0.1} min={-20} max={50} unit="cm" decimals={2} width={76} onChange={(v) => setParaAttrs(editor, { indentRight: v ? +(v * PT_PER_CM).toFixed(2) : null })} />
+          <RibbonSpinner icon={<TextIndentIncreaseLtr20Regular />} label="Sol:" value={fmt.indentLeft / PT_PER_CM} step={0.1} min={-20} max={50} unit="cm" decimals={2} width={76} onChange={(v) => setParaAttrs(ctx.editor, { indentLeft: v ? +(v * PT_PER_CM).toFixed(2) : null })} />
+          <RibbonSpinner icon={<TextIndentDecreaseLtr20Regular />} label="Sağ:" value={fmt.indentRight / PT_PER_CM} step={0.1} min={-20} max={50} unit="cm" decimals={2} width={76} onChange={(v) => setParaAttrs(ctx.editor, { indentRight: v ? +(v * PT_PER_CM).toFixed(2) : null })} />
         </RibbonStack>
         <RibbonStack>
           <RibbonLabel>Aralık</RibbonLabel>
-          <RibbonSpinner icon={<TextAddSpaceBefore20Regular />} label="Önce:" value={fmt.spaceBefore ?? 0} step={6} min={0} max={1584} unit="nk" decimals={1} width={70} onChange={(v) => setParaAttrs(editor, { spaceBefore: v })} />
-          <RibbonSpinner icon={<TextAddSpaceAfter20Regular />} label="Sonra:" value={fmt.spaceAfter ?? (fmt.styleId === "NoSpacing" ? 0 : 8)} step={6} min={0} max={1584} unit="nk" decimals={1} width={70} onChange={(v) => setParaAttrs(editor, { spaceAfter: v })} />
+          <RibbonSpinner icon={<TextAddSpaceBefore20Regular />} label="Önce:" value={fmt.spaceBefore ?? 0} step={6} min={0} max={1584} unit="nk" decimals={1} width={70} onChange={(v) => setParaAttrs(ctx.editor, { spaceBefore: v })} />
+          <RibbonSpinner icon={<TextAddSpaceAfter20Regular />} label="Sonra:" value={fmt.spaceAfter ?? (fmt.styleId === "NoSpacing" ? 0 : 8)} step={6} min={0} max={1584} unit="nk" decimals={1} width={70} onChange={(v) => setParaAttrs(ctx.editor, { spaceAfter: v })} />
         </RibbonStack>
       </RibbonGroup>
+      <ArrangeGroup />
     </>
   );
 }

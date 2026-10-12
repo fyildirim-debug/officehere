@@ -23,6 +23,8 @@ const KNOWN_BY_NAME: Record<string, string> = {
   "subtle reference": "SubtleReference",
   "intense reference": "IntenseReference",
   "book title": "BookTitle",
+  caption: "Caption",
+  bibliography: "Bibliography",
 };
 
 const MIME: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", bmp: "image/bmp", svg: "image/svg+xml", webp: "image/webp", tif: "image/tiff", tiff: "image/tiff", emf: "image/emf", wmf: "image/wmf" };
@@ -176,13 +178,16 @@ export class DocxReader {
             if (j.theme) settings.theme = j.theme;
             if (j.fontTheme !== undefined) settings.fontTheme = j.fontTheme ?? null;
             if (j.paragraphSpacing) settings.paragraphSpacing = j.paragraphSpacing;
+            if (j.customStyles && typeof j.customStyles === "object") settings.customStyles = j.customStyles;
+            if (Array.isArray(j.sources)) settings.sources = j.sources;
+            if (j.bibStyle === "apa" || j.bibStyle === "ieee") settings.bibStyle = j.bibStyle;
           } catch {
             // yok say
           }
         }
       }
     }
-    this.ours = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing);
+    this.ours = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing, settings.customStyles);
     this.theme = parseTheme(await loadXml(relOf("/theme")));
     this.sheet = new StyleSheet(await loadXml(relOf("/styles")), this.theme);
     this.numbering = new Numbering(await loadXml(relOf("/numbering")));

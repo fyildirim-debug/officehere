@@ -2,8 +2,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
-import { Delete16Regular, Checkmark16Regular } from "@fluentui/react-icons";
+import { Delete16Regular, Checkmark16Regular, Dismiss16Regular } from "@fluentui/react-icons";
 import type { CommentData } from "../model/document";
+import { visibleCoords, type RevisionBalloon } from "./revisions";
 
 export interface CommentAnchor {
   id: string;
@@ -40,6 +41,9 @@ interface Props {
   onDelete: (id: string) => void;
   onResolve: (id: string) => void;
   version: number;
+  /** Düzeltme balonları (silinen metin, biçim değişiklikleri). */
+  revisions?: RevisionBalloon[];
+  onRevision?: (r: RevisionBalloon, accept: boolean) => void;
 }
 
 function fmtDate(iso: string) {
@@ -50,7 +54,7 @@ function fmtDate(iso: string) {
   }
 }
 
-export function CommentsPane({ editor, comments, anchors, container, scale, left, activeId, onActivate, onChange, onDelete, onResolve, version }: Props) {
+export function CommentsPane({ editor, comments, anchors, container, scale, left, activeId, onActivate, onChange, onDelete, onResolve, version, revisions = [], onRevision }: Props) {
   const [tops, setTops] = useState<Record<string, number>>({});
   const refs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -58,13 +62,9 @@ export function CommentsPane({ editor, comments, anchors, container, scale, left
     if (!container) return;
     const base = container.getBoundingClientRect().top;
     const want: { id: string; y: number }[] = [];
-    for (const a of anchors) {
-      try {
-        const c = editor.view.coordsAtPos(Math.min(a.from + 1, a.to));
-        want.push({ id: a.id, y: (c.top - base) / scale });
-      } catch {
-        // konum çözümlenemedi
-      }
+    for (const a of [...anchors, ...revisions].sort((x, y) => x.from - y.from)) {
+      const c = visibleCoords(editor.view, Math.min(a.from + 1, a.to));
+      if (c) want.push({ id: a.id, y: (c.top - base) / scale });
     }
     // Çakışmayı önlemek için aşağı it.
     const out: Record<string, number> = {};
@@ -76,10 +76,45 @@ export function CommentsPane({ editor, comments, anchors, container, scale, left
       floor = y + h;
     }
     setTops((prev) => (JSON.stringify(prev) === JSON.stringify(out) ? prev : out));
-  }, [anchors, container, scale, editor, version, comments]);
+  }, [anchors, container, scale, editor, version, comments, revisions]);
 
   return (
     <div className="bl-comments" style={{ left }}>
+      {revisions.map((r) => (
+        <div
+          key={r.id}
+          ref={(el) => {
+            refs.current[r.id] = el;
+          }}
+          className={`bl-balloon is-revision is-${r.kind}`}
+          style={{ top: tops[r.id] ?? 0 }}
+          onMouseDown={(e) => {
+            if ((e.target as HTMLElement).closest("button")) return;
+            e.preventDefault();
+            editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, r.from, Math.min(r.to, editor.state.doc.content.size))).scrollIntoView());
+            editor.view.focus();
+          }}
+        >
+          <div className="bl-balloon-head">
+            <span className="bl-balloon-author">{r.author || "Yazar"}</span>
+            <span className="bl-balloon-date">{fmtDate(r.date)}</span>
+            {onRevision && (
+              <>
+                <button type="button" className="bl-balloon-btn" title="Kabul Et" onClick={() => onRevision(r, true)}>
+                  <Checkmark16Regular />
+                </button>
+                <button type="button" className="bl-balloon-btn" title="Reddet" onClick={() => onRevision(r, false)}>
+                  <Dismiss16Regular />
+                </button>
+              </>
+            )}
+          </div>
+          <div className="bl-balloon-rev">
+            <b>{r.label}</b>
+            {r.text && <span className="bl-balloon-deleted">{r.text}</span>}
+          </div>
+        </div>
+      ))}
       {anchors.map((a) => {
         const c = comments[a.id];
         if (!c) return null;

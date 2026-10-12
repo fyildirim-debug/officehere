@@ -37,6 +37,9 @@ export interface ParaProps {
   borders?: { top?: BorderSpec; bottom?: BorderSpec; left?: BorderSpec; right?: BorderSpec } | null;
   numId?: string;
   ilvl?: number;
+  /** Sekme durakları (pt) ve anahat düzeyi (1-9). */
+  tabs?: { pos: number; align: "left" | "center" | "right" | "decimal" | "bar"; leader: "none" | "dot" | "hyphen" | "underscore" }[];
+  outlineLevel?: number;
 }
 
 export interface StyleInfo {
@@ -213,6 +216,25 @@ export function parsePPr(pPr: Element | null): ParaProps {
         p.borders = borders.top || borders.bottom || borders.left || borders.right ? borders : null;
         break;
       }
+      case "tabs": {
+        const out: NonNullable<ParaProps["tabs"]> = [];
+        for (const t of kids(c, "tab")) {
+          const val = attr(t, "val") ?? "left";
+          const pos = attrNum(t, "pos");
+          if (pos === null || val === "clear" || val === "num") continue;
+          const align = val === "center" ? "center" : val === "right" || val === "end" ? "right" : val === "decimal" ? "decimal" : val === "bar" ? "bar" : "left";
+          const ld = attr(t, "leader");
+          const leader = ld === "dot" || ld === "middleDot" ? "dot" : ld === "hyphen" ? "hyphen" : ld === "underscore" || ld === "heavy" ? "underscore" : "none";
+          out.push({ pos: pos / 20, align, leader });
+        }
+        if (out.length) p.tabs = out;
+        break;
+      }
+      case "outlineLvl": {
+        const v = attrNum(c, "val");
+        if (v !== null && v >= 0 && v < 9) p.outlineLevel = v + 1;
+        break;
+      }
       case "numPr": {
         const id = attr(kid(c, "numId"), "val");
         if (id !== null) p.numId = id;
@@ -315,6 +337,8 @@ interface LevelInfo {
   numFmt: string;
   lvlText: string;
   start: number;
+  /** Düzeye bağlı paragraf stili (w:lvl/w:pStyle). */
+  pStyle?: string;
 }
 
 export class Numbering {
@@ -328,7 +352,7 @@ export class Numbering {
       const levels: LevelInfo[] = [];
       for (const l of kids(a, "lvl")) {
         const i = attrNum(l, "ilvl") ?? levels.length;
-        levels[i] = { numFmt: attr(kid(l, "numFmt"), "val") ?? "decimal", lvlText: attr(kid(l, "lvlText"), "val") ?? "%1.", start: attrNum(kid(l, "start"), "val") ?? 1 };
+        levels[i] = { numFmt: attr(kid(l, "numFmt"), "val") ?? "decimal", lvlText: attr(kid(l, "lvlText"), "val") ?? "%1.", start: attrNum(kid(l, "start"), "val") ?? 1, pStyle: attr(kid(l, "pStyle"), "val") ?? undefined };
       }
       this.abstracts.set(attr(a, "abstractNumId") ?? "", levels);
     }
@@ -340,6 +364,14 @@ export class Numbering {
       }
       this.nums.set(attr(n, "numId") ?? "", { abstractId: attr(kid(n, "abstractNumId"), "val") ?? "", starts });
     }
+  }
+
+  /** Stil üzerinden gelen numaralandırmada düzey: soyut tanımda stile bağlı düzey (w:lvl/w:pStyle). */
+  styleLevel(numId: string, styleId: string | null): number | null {
+    const n = this.nums.get(numId);
+    if (!n || !styleId) return null;
+    const i = (this.abstracts.get(n.abstractId) ?? []).findIndex((l) => l?.pStyle === styleId);
+    return i >= 0 ? i : null;
   }
 
   /** numId + düzey → liste imzası ve başlangıç. numId 0 = liste yok. */
