@@ -50,6 +50,19 @@ for (const c of cases) {
       expect(text).not.toMatch(/\b(Microsoft|Word|Excel|PowerPoint)\b/);
     });
 
+    test("Hakkında üçüncü taraf lisans bildirimini açar", async ({ page }) => {
+      await page.goto(c.url);
+      await page.locator(".oh-ribbon-file").click();
+      await page.locator(".oh-bs-item", { hasText: "Hakkında" }).first().click();
+      const link = page.getByRole("link", { name: "Üçüncü taraf yazılım bildirimleri" });
+      await expect(link).toBeVisible();
+      const res = await page.request.get(new globalThis.URL((await link.getAttribute("href")) ?? "", page.url()).toString());
+      expect(res.ok()).toBe(true);
+      const body = await res.text();
+      expect(body).toContain("Third-Party Software Notices");
+      for (const pkg of ["react", "@fluentui/react-icons"]) expect(body).toMatch(new RegExp(`^${pkg.replace(/[/.]/g, "\\$&")} \\S+ — MIT$`, "m"));
+    });
+
     test("koyu tema uygulanır", async ({ page }) => {
       await page.goto(c.url);
       await page.evaluate(() => document.documentElement.setAttribute("data-oh-theme", "dark"));

@@ -44,6 +44,15 @@ test("başlangıç ekranı açılır ve yerel köprü hazırdır", async () => {
   await app.close();
 });
 
+test("üçüncü taraf lisans bildirimi uygulama içinde açılır", async () => {
+  const { app, win } = await launch();
+  await win.locator(".oh-bs-item", { hasText: "Seçenekler" }).click();
+  const [notices] = await Promise.all([app.waitForEvent("window"), win.getByRole("link", { name: "Üçüncü taraf yazılım bildirimleri" }).click()]);
+  await notices.waitForURL(/^file:.*\/THIRD_PARTY_NOTICES\.txt$/);
+  await expect(notices.locator("body")).toContainText("Third-Party Software Notices");
+  await app.close();
+});
+
 test("başlangıçtan yeni belge penceresi açılır", async () => {
   const { app, win } = await launch();
   const [belge] = await Promise.all([app.waitForEvent("window"), win.locator(".ohl-app", { hasText: "Belge" }).click()]);

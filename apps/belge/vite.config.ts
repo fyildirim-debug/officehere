@@ -1,8 +1,9 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import { lisansBildirimi } from "../../scripts/lisans-bildirimi.mjs";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), lisansBildirimi()],
   // Masaüstü kabuğu dosyaları file:// ile yüklediği için göreli yol.
   base: "./",
   server: { port: 5173, strictPort: true },

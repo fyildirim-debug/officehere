@@ -691,10 +691,10 @@ test.describe("OfficeHere Sunum — sağlamlık ve yeni özellikler", () => {
     expect(xml).toMatch(/<a:normAutofit fontScale="\d+"/);
   });
 
-  test("O5: Office teması Dosya › Seçenekler'den Koyu Gri yapılır; bölmeler koyu ve okunur", async ({ page }) => {
+  test("O5: Arayüz teması Dosya › Seçenekler'den Koyu Gri yapılır; bölmeler koyu ve okunur", async ({ page }) => {
     await page.locator(".oh-ribbon-file").click();
     await page.getByText("Seçenekler", { exact: true }).click();
-    await page.getByLabel("Office teması").selectOption({ label: "Koyu Gri" });
+    await page.getByLabel("Arayüz teması").selectOption({ label: "Koyu Gri" });
     await expect(page.locator("html")).toHaveAttribute("data-oh-theme", "dark");
     await page.locator(".oh-bs-back").click();
     // Rengin parlaklığı (0 koyu … 1 açık).

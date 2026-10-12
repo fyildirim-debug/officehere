@@ -91,6 +91,19 @@ function createWindow(kind: WindowKind, filePath?: string): BrowserWindow {
 
   // Bağlantılar sistem tarayıcısında açılır; uygulama içinde gezinme engellenir.
   win.webContents.setWindowOpenHandler(({ url }) => {
+    // Paketle gelen üçüncü taraf lisans bildirimi uygulama içinde, salt metin olarak açılır.
+    if (url.startsWith("file:") && url.endsWith("/THIRD_PARTY_NOTICES.txt")) {
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: {
+          width: 820,
+          height: 720,
+          autoHideMenuBar: true,
+          title: "Üçüncü taraf yazılım bildirimleri",
+          webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+        },
+      };
+    }
     if (/^https?:|^mailto:/.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });

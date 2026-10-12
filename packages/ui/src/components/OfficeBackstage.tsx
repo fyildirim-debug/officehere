@@ -191,7 +191,7 @@ export function OfficeBackstage(props: OfficeBackstageProps) {
           <BackstageSubheading>Genel</BackstageSubheading>
           <div className="oh-bs-options">
             <label className="oh-field is-inline">
-              <span className="oh-field-label">Office teması</span>
+              <span className="oh-field-label">Arayüz teması</span>
               <select value={theme} onChange={(e) => setTheme(e.target.value as typeof theme)}>
                 {UI_THEMES.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -213,7 +213,18 @@ export function OfficeBackstage(props: OfficeBackstageProps) {
           <p>
             <strong>{APP_NAMES[app]}</strong> — OfficeHere açık kaynak ofis paketinin parçasıdır.
           </p>
-          <p>MIT lisansıyla dağıtılır. Kaynak kodu: github.com/fyildirim-debug/officehere</p>
+          <p>
+            MIT lisansıyla dağıtılır. Kaynak kodu:{" "}
+            <a href="https://github.com/fyildirim-debug/officehere" target="_blank" rel="noopener noreferrer">
+              github.com/fyildirim-debug/officehere
+            </a>
+          </p>
+          <p>
+            Kullanılan açık kaynak bileşenlerin lisansları:{" "}
+            <a href="./THIRD_PARTY_NOTICES.txt" target="_blank" rel="noopener noreferrer">
+              Üçüncü taraf yazılım bildirimleri
+            </a>
+          </p>
           <p className="oh-bs-note">
             OfficeHere bağımsız bir projedir; Microsoft Corporation ile bağlantılı değildir, onun tarafından desteklenmez. Microsoft, Word, Excel ve PowerPoint,
             Microsoft Corporation'ın ticari markalarıdır. Dosya biçimi desteği açık ECMA-376 / ISO/IEC 29500 (Office Open XML) standardına dayanır.

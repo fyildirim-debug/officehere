@@ -25,7 +25,7 @@ export function applyUiTheme(theme: UiTheme) {
   document.documentElement.setAttribute("data-oh-theme", theme);
 }
 
-/** Office teması (Renkli / Beyaz / Koyu Gri / Siyah); tüm uygulamalarda ortaktır. */
+/** Arayüz teması (Renkli / Beyaz / Koyu Gri / Siyah); tüm uygulamalarda ortaktır. */
 export function useUiTheme(): [UiTheme, (t: UiTheme) => void] {
   const [theme, setTheme] = useState<UiTheme>(read);
   useEffect(() => {

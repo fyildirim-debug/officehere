@@ -18,4 +18,6 @@ await cp(path.join(root, "apps/desktop/dist-electron/launcher"), out, { recursiv
 for (const app of ["belge", "tablo", "sunum"]) {
   await cp(path.join(root, `apps/${app}/dist`), path.join(out, app), { recursive: true });
 }
+// OfficeHere lisansı; üçüncü taraf bildirimleri her dizindeki THIRD_PARTY_NOTICES.txt dosyasındadır.
+await cp(path.join(root, "LICENSE"), path.join(out, "LICENSE.txt"));
 console.log(`Web sürümü hazır: ${out}`);

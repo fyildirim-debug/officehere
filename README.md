@@ -124,9 +124,14 @@ Ayrıntılar: [MIMARI.md](MIMARI.md), [KATKI.md](KATKI.md).
 
 OfficeHere bağımsız bir projedir; Microsoft Corporation ile bağlantılı değildir
 ve onun tarafından desteklenmez. Microsoft, Word, Excel ve PowerPoint, Microsoft
-Corporation'ın ticari markalarıdır. Hiçbir Microsoft kodu, simgesi, şablonu ya
-da yazı tipi kullanılmaz. Ayrıntılar: [HUKUKI.md](HUKUKI.md).
+Corporation'ın ticari markalarıdır. Office uygulamalarının kodu, logoları,
+şablonları ya da yazı tipleri kullanılmaz; arayüz simgeleri Microsoft'un MIT
+lisansıyla herkese açtığı Fluent UI System Icons setidir. Dosya biçimi desteği
+açık ECMA-376 / ISO/IEC 29500 standardına dayanır. Ayrıntılar: [HUKUKI.md](HUKUKI.md).
 
 ## Lisans
 
 [MIT](LICENSE) © 2026 Furkan YILDIRIM
+
+Kullanılan açık kaynak bileşenlerin lisans metinleri her derlemede otomatik
+üretilen `THIRD_PARTY_NOTICES.txt` dosyasındadır (uygulamalarda Dosya → Hakkında).

@@ -162,7 +162,7 @@ export interface AppShellProps {
 
 /** Başlık çubuğu + şerit + çalışma alanı + durum çubuğu iskeleti. */
 export function AppShell({ app, titleBar, ribbon, belowRibbon, statusBar, backstage, children }: AppShellProps) {
-  // Kayıtlı Office temasını (Renkli/Beyaz/Koyu Gri/Siyah/Sistem) açılışta uygula ve pencereler arası eşitle.
+  // Kayıtlı arayüz temasını (Renkli/Beyaz/Koyu Gri/Siyah/Sistem) açılışta uygula ve pencereler arası eşitle.
   useUiTheme();
   useEffect(() => {
     document.documentElement.setAttribute("data-app", app);

@@ -35,7 +35,7 @@ export function extraCommands(a: Actions, h: FileCommandHandlers, previewTransit
     entry("file:new", "Yeni Sunu", "Dosya", "", h.newDoc, { shortcut: "Ctrl+N", desc: "Yeni boş sunu" }),
     entry("file:open", "Aç", "Dosya", "", h.open, { shortcut: "Ctrl+O" }),
     entry("file:info", "Bilgi", "Dosya", "", () => h.backstage("info"), { desc: "Sunu özellikleri" }),
-    entry("file:options", "Seçenekler", "Dosya", "", () => h.backstage("options"), { desc: "Office teması, yazım denetimi" }),
+    entry("file:options", "Seçenekler", "Dosya", "", () => h.backstage("options"), { desc: "Arayüz teması, yazım denetimi" }),
     entry("pic:compress", "Resimleri Sıkıştır", "Resim Biçimi", "Ayarla", () => h.dialog("compress"), { desc: "Resimlerin çözünürlüğünü düşür, kırpılan alanları sil" }),
   ];
   const trans = TRANSITIONS.filter((t) => t.type !== "none").map((t) =>

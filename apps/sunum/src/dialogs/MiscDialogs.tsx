@@ -380,6 +380,15 @@ export function AboutDialog({ open, onClose }: { open: boolean; onClose: () => v
         <strong>OfficeHere Sunum</strong> — OfficeHere açık kaynak ofis paketinin sunu uygulaması.
       </p>
       <p>MIT lisansıyla dağıtılır. Dosya biçimi desteği açık ECMA-376 / ISO/IEC 29500 (Office Open XML) standardına dayanır.</p>
+      <p>
+        <a href="./THIRD_PARTY_NOTICES.txt" target="_blank" rel="noopener noreferrer">
+          Üçüncü taraf yazılım bildirimleri
+        </a>
+      </p>
+      <p style={{ fontSize: 12, opacity: 0.8 }}>
+        OfficeHere bağımsız bir projedir; Microsoft Corporation ile bağlantılı değildir, onun tarafından desteklenmez. Microsoft ve PowerPoint, Microsoft
+        Corporation'ın ticari markalarıdır.
+      </p>
     </Dialog>
   );
 }

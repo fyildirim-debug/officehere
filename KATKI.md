@@ -26,7 +26,9 @@ pnpm build
 
 - **Hukuk:** [HUKUKI.md](HUKUKI.md) içindeki temiz oda kurallarına uyun. Microsoft
   kodu, simgesi, şablonu ya da yazı tipi kopyalanmaz; yalnız MIT/BSD/Apache-2.0/ISC
-  lisanslı bağımlılık eklenir.
+  gibi izin verici lisanslı bağımlılık eklenir. Lisans bildirimi derlemede
+  otomatik üretilir; derleme "Lisans metni bulunamadı" diye durursa
+  `node scripts/lisans-onbellek.mjs <paket>` çalıştırıp çıkan dosyayı ekleyin.
 - **Dil:** Arayüz metinleri ve kod yorumları Türkçedir. Arayüz terimleri Türkçe
   ofis yazılımlarında yerleşik karşılıklarıyla yazılır (Giriş, Ekle, Düzen,
   Görünüm, Yapıştır, Biçim Boyacısı…).

@@ -34,6 +34,9 @@ extraResources:
     to: apps/baslangic
   - from: build/icon.png
     to: icon.png
+  # OfficeHere lisansı; üçüncü taraf bildirimleri her uygulamanın THIRD_PARTY_NOTICES.txt dosyasındadır.
+  - from: ../../LICENSE
+    to: LICENSE.txt
 
 fileAssociations:
   - ext: docx

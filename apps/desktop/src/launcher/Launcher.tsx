@@ -152,7 +152,7 @@ export function Launcher() {
       <>
         <BackstageHeading>Seçenekler</BackstageHeading>
         <label className="oh-field is-inline" style={{ maxWidth: 420 }}>
-          <span className="oh-field-label">Office teması</span>
+          <span className="oh-field-label">Arayüz teması</span>
           <select value={theme} onChange={(e) => setTheme(e.target.value as typeof theme)}>
             {UI_THEMES.map((t) => (
               <option key={t.id} value={t.id}>
@@ -164,6 +164,11 @@ export function Launcher() {
         <p className="oh-bs-note">
           OfficeHere açık kaynaklı (MIT) bağımsız bir projedir; Microsoft Corporation ile bağlantılı değildir. Microsoft, Word, Excel ve PowerPoint, Microsoft
           Corporation'ın ticari markalarıdır.
+        </p>
+        <p className="oh-bs-note">
+          <a href="./THIRD_PARTY_NOTICES.txt" target="_blank" rel="noopener noreferrer">
+            Üçüncü taraf yazılım bildirimleri
+          </a>
         </p>
       </>
     );

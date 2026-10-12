@@ -19,9 +19,12 @@ sınırlar içinde geliştirildiğini ve katkıcıların uyması gereken kuralla
 ## Dosya biçimleri
 
 - `.docx`, `.xlsx`, `.pptx` desteği **Office Open XML** standardına (ECMA-376 /
-  ISO/IEC 29500) dayanır. Bu belirtimler Microsoft'un *Open Specification Promise*
-  kapsamındadır: Microsoft, belirtimi uygulayan yazılımlara karşı bu
-  belirtimlerden doğan patent iddialarında bulunmayacağını taahhüt eder.
+  ISO/IEC 29500) dayanır. Bu belirtimler ve Microsoft'un uzantı belirtimleri
+  ([MS-DOCX], [MS-XLSX], [MS-PPTX], [MS-OI29500]) Microsoft'un *Open
+  Specification Promise* kapsamındadır: Microsoft, belirtimi uygulayan
+  yazılımlara karşı bu belirtimlerden doğan patent iddialarında bulunmayacağını
+  taahhüt eder. Uzantı öğeleri (ör. `x14:dataBar`, `p14:sectionLst`) yalnız bu
+  yayımlanmış belirtimlere göre yazılır.
 - Formül sözdizimi ve fonksiyon adları birlikte çalışabilirlik için gereklidir ve
   standardın parçasıdır. Türkçe fonksiyon adları (TOPLA, EĞER, DÜŞEYARA…) kısa,
   betimleyici sözcüklerdir; başka açık kaynak tablolama yazılımlarında da kullanılır.
@@ -37,13 +40,25 @@ sınırlar içinde geliştirildiğini ve katkıcıların uyması gereken kuralla
   bu başvuruların büyük bölümünün süresi dolmuş olmalıdır. Ticari dağıtımdan
   önce güncel durumu bir avukatla doğrulayın.
 - Simgeler: **Fluent UI System Icons** — Microsoft'un MIT lisansıyla herkesin
-  kullanımına açtığı açık kaynak simge setidir (`@fluentui/react-icons`).
+  kullanımına açtığı açık kaynak simge setidir (`@fluentui/react-icons`); lisans
+  metni üçüncü taraf bildirimlerinde yer alır. Office uygulamalarının kendi
+  simgeleri (Word/Excel/PowerPoint logoları, şerit simgeleri) kullanılmaz.
   Uygulama ve dosya türü simgeleri bu projeye özgüdür.
+- Arayüz metinleri bu projede yazılmıştır. Uzun yardım ve hata metinleri
+  Microsoft ürünlerinden kopyalanmaz; komut adları Türkçe ofis yazılımlarında
+  yerleşik, kısa ve betimleyici terimlerdir (Kes, Kopyala, Yapıştır…). Microsoft'a
+  özgü özellik adları yerine genel adlar kullanılır: *Özet Tablo* (PivotTable),
+  *Sanatsal Metin* (WordArt), *Akıllı Doldurma* (Flash Fill), *Mini Grafik*
+  (Sparklines), *Arayüz teması*.
 
 ## Markalar
 
 - Ürün adları **OfficeHere Belge**, **OfficeHere Tablo**, **OfficeHere Sunum**'dur.
-  Arayüzde "Word", "Excel", "PowerPoint" adları kullanılmaz.
+  Arayüzde "Word", "Excel", "PowerPoint" adları kullanılmaz; yalnız Hakkında
+  sayfasındaki marka notunda geçer.
+- "OfficeHere" adı genel "office" sözcüğünü içerir (LibreOffice, OpenOffice,
+  ONLYOFFICE, WPS Office gibi). Ad ticari olarak kullanılacaksa önce TÜRKPATENT,
+  EUIPO ve USPTO'da benzer marka araştırması yapılması önerilir.
 - Uyumluluğu anlatırken bu adlar yalnız betimleyici (nominatif) olarak ve marka
   notuyla birlikte geçer: *Microsoft, Word, Excel ve PowerPoint, Microsoft
   Corporation'ın ticari markalarıdır. OfficeHere, Microsoft Corporation ile
@@ -51,29 +66,76 @@ sınırlar içinde geliştirildiğini ve katkıcıların uyması gereken kuralla
 
 ## Yazı tipleri
 
-Microsoft yazı tipleri dağıtılmaz. Belge bir Microsoft yazı tipi istiyorsa ve bu
-yazı tipi kullanıcının sisteminde yoksa, ölçü uyumlu açık yazı tiplerine düşülür:
-Carlito (Calibri), Caladea (Cambria), Liberation Sans/Serif/Mono (Arial, Times New
-Roman, Courier New).
+Pakette hiçbir yazı tipi dosyası yoktur; Microsoft yazı tipleri dağıtılmaz ve
+harici yazı tipi sunucularından (ör. Google Fonts) yükleme yapılmaz. Yazı tipi
+adları (Calibri, Aptos…) yalnız belgedeki biçim bilgisi olarak okunup yazılır.
+İstenen yazı tipi kullanıcının sisteminde yoksa, kuruluysa ölçü uyumlu açık yazı
+tiplerine düşülür: Carlito (Calibri), Caladea (Cambria), Liberation
+Sans/Serif/Mono (Arial, Times New Roman, Courier New).
 
 ## Bağımlılıkların lisansları
 
-Projeye yalnız MIT, BSD, Apache-2.0 ve ISC lisanslı bağımlılıklar eklenir;
-GPL/LGPL/AGPL bağımlılık eklenmez. Başlıca bağımlılıklar:
+Projeye yalnız izin verici (permissive) lisanslı bağımlılıklar eklenir: MIT, ISC,
+BSD-2/3-Clause, 0BSD, Apache-2.0, Zlib, BlueOak-1.0.0, Unlicense. GPL/LGPL/AGPL
+gibi karşılıklılık (copyleft) şartı taşıyan bağımlılık eklenmez. Başlıca
+bağımlılıklar:
 
 | Paket | Kullanım | Lisans |
 | --- | --- | --- |
 | React | Arayüz | MIT |
-| Electron | Masaüstü kabuğu | MIT |
+| Electron | Masaüstü kabuğu | MIT (Chromium: BSD-3-Clause ve diğerleri) |
 | Tiptap, ProseMirror | Belge editörü | MIT |
 | ExcelJS | XLSX okuma/yazma | MIT |
-| PptxGenJS | PPTX yazma | MIT |
 | JSZip | OOXML paketleri | MIT (MIT/GPLv3 çift lisanstan MIT seçilir) |
-| docx | DOCX yazma | MIT |
+| pako (JSZip içinde) | ZIP sıkıştırma | MIT ve Zlib |
 | mammoth | DOCX içe aktarma yedeği | BSD-2-Clause |
 | @fluentui/react-icons | Simgeler | MIT |
 
-Tam liste için `pnpm licenses list` komutunu kullanın.
+Denetim notları (2026-10):
+
+- `pnpm licenses list --prod` ile 260+ üretim bağımlılığı tarandı; GPL-only,
+  LGPL, AGPL ya da ticari kısıtlı lisans yoktur.
+- `buffers@0.1.1` (ExcelJS → unzipper → binary) pakette lisans bildirmez. Yalnız
+  ExcelJS'in Node.js akış okuyucusunda kullanılır; tarayıcı paketine
+  (`exceljs.min.js`) girmez, dolayısıyla dağıtılmaz. Derleme eklentisi bunu
+  pakete giren modüllerden doğrular.
+- Kullanılmayan `docx` bağımlılığı kaldırıldı.
+
+## Üçüncü taraf bildirimleri
+
+MIT, BSD, ISC ve Apache lisansları, dağıtılan her kopyada telif notunun ve lisans
+metninin bulunmasını şart koşar. Bu şart otomatik karşılanır:
+
+- `scripts/lisans-bildirimi.mjs` Vite eklentisi, her derlemede pakete gerçekten
+  giren modülleri tarar ve her uygulamanın çıktısına `THIRD_PARTY_NOTICES.txt`
+  yazar (bileşen adı, sürüm, lisans, kaynak ve tam lisans metni).
+- Önceden derlenmiş paketlerin içine gömülü bileşenler de listelenir:
+  `exceljs.min.js` için kaynak haritasından (crypto-browserify, core-js…),
+  `jszip.min.js` için incelenerek belirlenen listeden (pako, lie…).
+- Yerelde lisans dosyası bulunmayan bileşenlerin metinleri `scripts/lisanslar/`
+  altında tutulur (`node scripts/lisans-onbellek.mjs <paket>` ile npm'den
+  indirilir; npm paketinde lisans dosyası yoksa metin kaynak deposundan ya da
+  README'deki lisans bölümünden birebir alınır).
+- Lisans metni bulunamayan bir bileşen pakete girerse **derleme durur**; böylece
+  bildirimsiz bileşen dağıtılamaz.
+- Bildirim, her uygulamanın Hakkında sayfasından ve başlangıç ekranının
+  Seçenekler sayfasından açılır. Masaüstü paketinde ayrıca `LICENSE.txt`
+  (OfficeHere), `LICENSE.electron.txt` ve `LICENSES.chromium.html` bulunur;
+  web sürümünde `LICENSE.txt` site kökündedir.
+
+## Kalan riskler
+
+Aşağıdakiler yazılımla çözülemez; ticari dağıtımdan önce bir avukatla
+değerlendirilmelidir:
+
+- **Patentler:** Komut şeridi arayüzüne ilişkin Microsoft patent başvuruları
+  2004–2006 dönemindedir; 20 yıllık koruma süresinin büyük ölçüde dolduğu
+  varsayılmıştır. Dosya biçimleri Open Specification Promise kapsamındadır.
+  Tek tek özellikler (ör. bir hesaplama ya da düzen davranışı) için patent
+  araştırması yapılmamıştır.
+- **Görünüm (trade dress):** Arayüz, Office'e benzer bir düzen kullanır ancak
+  logo, simge ve adlar farklıdır ve her yerde bağımsızlık notu bulunur.
+- **Marka:** "OfficeHere" adı için tescil araştırması yapılmamıştır.
 
 ## Katkıcılar için
 
