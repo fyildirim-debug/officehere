@@ -1,6 +1,6 @@
 /** Sayfa Düzeni sekmesi: Sayfa Yapısı, Sığdırmak İçin Ölçeklendir, Sayfa Seçenekleri, Yerleştir. */
-import { ArrowStepIn24Regular, DocumentLandscape24Regular, DocumentMargins24Regular, DocumentPageBreak24Regular, OrientationPortrait20Regular, DocumentLandscape20Regular, Print24Regular, PageFit24Regular, Layer24Regular, Layer20Regular, ArrowUp20Regular, ArrowDown20Regular, Grid24Regular, DocumentSplitHint24Regular } from "@fluentui/react-icons";
-import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonStack, RibbonLabel } from "@officehere/ui";
+import { ArrowStepIn24Regular, DocumentLandscape24Regular, DocumentMargins24Regular, DocumentPageBreak24Regular, OrientationPortrait20Regular, DocumentLandscape20Regular, Print24Regular, PageFit24Regular, Layer24Regular, Layer20Regular, Grid24Regular, DocumentSplitHint24Regular } from "@fluentui/react-icons";
+import { LayerIcon, Menu, MenuItem, MenuSeparator, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonStack, RibbonLabel } from "@officehere/ui";
 import type { Controller } from "../controller";
 import { MARGIN_PRESETS, PAPERS, setPage } from "../dialogs/PageSetupDialog";
 import { reorderObject } from "../actions/objects";
@@ -122,8 +122,8 @@ export function PageLayoutTab({ ctl }: { ctl: Controller }) {
       </RibbonGroup>
       <RibbonGroup label="Yerleştir" icon={<Layer24Regular />}>
         <RibbonStack>
-          <RibbonButton icon={<ArrowUp20Regular />} label="Öne Getir" disabled={!sel} onClick={() => sel && reorderObject(ctl, sel.kind, sel.id, true)} />
-          <RibbonButton icon={<ArrowDown20Regular />} label="Arkaya Gönder" disabled={!sel} onClick={() => sel && reorderObject(ctl, sel.kind, sel.id, false)} />
+          <RibbonButton icon={<LayerIcon kind="forward" size={20} />} label="Öne Getir" disabled={!sel} onClick={() => sel && reorderObject(ctl, sel.kind, sel.id, true)} />
+          <RibbonButton icon={<LayerIcon kind="backward" size={20} />} label="Arkaya Gönder" disabled={!sel} onClick={() => sel && reorderObject(ctl, sel.kind, sel.id, false)} />
           <RibbonButton icon={<Layer20Regular />} label="Seçim Bölmesi" checked={ctl.formatPane === "selection"} onClick={() => ((ctl.formatPane = ctl.formatPane === "selection" ? null : "selection"), ctl.emit())} />
         </RibbonStack>
       </RibbonGroup>

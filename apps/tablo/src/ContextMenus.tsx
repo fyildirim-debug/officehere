@@ -15,7 +15,7 @@ import {
   TableInsertColumn20Regular,
   TableInsertRow20Regular,
 } from "@fluentui/react-icons";
-import { ColorPalette, Menu, MenuHeader, MenuItem, MenuSeparator } from "@officehere/ui";
+import { ColorPalette, LayerIcon, Menu, MenuHeader, MenuItem, MenuSeparator } from "@officehere/ui";
 import { paletteOf } from "./model/theme";
 import type { Controller } from "./controller";
 import * as E from "./actions/edit";
@@ -293,8 +293,8 @@ export function ObjectMenu({ ctl, kind, id }: { ctl: Controller; kind: "chart" |
         </>
       )}
       {kind === "shape" && <MenuItem label="Metni Düzenle" onClick={() => startShapeEdit(ctl, id, "")} />}
-      <MenuItem label="Öne Getir" onClick={() => reorderObject(ctl, kind, id, true)} />
-      <MenuItem label="Arkaya Gönder" onClick={() => reorderObject(ctl, kind, id, false)} />
+      <MenuItem icon={<LayerIcon kind="forward" />} label="Öne Getir" onClick={() => reorderObject(ctl, kind, id, true)} />
+      <MenuItem icon={<LayerIcon kind="backward" />} label="Arkaya Gönder" onClick={() => reorderObject(ctl, kind, id, false)} />
       <MenuSeparator />
       <MenuItem icon={<Delete20Regular />} label="Sil" onClick={() => deleteObject(ctl, kind, id)} />
     </Menu>

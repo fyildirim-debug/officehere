@@ -1,7 +1,7 @@
 /** Bağlamsal grafik sekmeleri: Grafik Tasarımı ve Biçim. */
 import { useEffect, useState } from "react";
-import { ArrowSwap24Regular, ArrowUp20Regular, ArrowDown20Regular, Color24Regular, DataBarVerticalAdd24Regular, DataBarVerticalEdit24Regular, ArrowMove24Regular, TableEdit24Regular, Delete20Regular, TextT24Regular, Layer24Regular, ResizeLarge24Regular } from "@fluentui/react-icons";
-import { Menu, MenuHeader, MenuItem, RibbonButton, RibbonGallery, RibbonGroup, RibbonLabel, RibbonMenuButton, RibbonSpinner, RibbonStack } from "@officehere/ui";
+import { ArrowSwap24Regular, Color24Regular, DataBarVerticalAdd24Regular, DataBarVerticalEdit24Regular, ArrowMove24Regular, TableEdit24Regular, Delete20Regular, TextT24Regular, Layer24Regular, ResizeLarge24Regular } from "@fluentui/react-icons";
+import { LayerIcon, Menu, MenuHeader, MenuItem, RibbonButton, RibbonGallery, RibbonGroup, RibbonLabel, RibbonMenuButton, RibbonSpinner, RibbonStack } from "@officehere/ui";
 import type { Controller } from "../controller";
 import { reorderObject, updateChart } from "../actions/objects";
 import { deleteObject } from "../charts/FloatingLayer";
@@ -154,8 +154,8 @@ export function ChartFormatTab({ ctl, chart }: { ctl: Controller; chart: ChartDe
       </RibbonGroup>
       <RibbonGroup label="Yerleştir" icon={<Layer24Regular />}>
         <RibbonStack>
-          <RibbonButton icon={<ArrowUp20Regular />} label="Öne Getir" onClick={() => reorderObject(ctl, "chart", chart.id, true)} />
-          <RibbonButton icon={<ArrowDown20Regular />} label="Arkaya Gönder" onClick={() => reorderObject(ctl, "chart", chart.id, false)} />
+          <RibbonButton icon={<LayerIcon kind="forward" size={20} />} label="Öne Getir" onClick={() => reorderObject(ctl, "chart", chart.id, true)} />
+          <RibbonButton icon={<LayerIcon kind="backward" size={20} />} label="Arkaya Gönder" onClick={() => reorderObject(ctl, "chart", chart.id, false)} />
           <RibbonButton icon={<Delete20Regular />} label="Grafiği Sil" onClick={() => deleteObject(ctl, "chart", chart.id)} />
         </RibbonStack>
       </RibbonGroup>
