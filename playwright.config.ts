@@ -2,11 +2,13 @@ import { defineConfig, devices } from "@playwright/test";
 
 // Uçtan uca testler derlenmiş uygulamalar üzerinde çalışır (pnpm build sonrası).
 // Önizleme sunucuları geliştirme portlarıyla çakışmasın diye 417x portlarını kullanır.
+// OH_E2E_APPS=belge,tablo ile yalnız istenen uygulamaların sunucuları başlatılır.
+const only = process.env.OH_E2E_APPS?.split(",").map((s) => s.trim()).filter(Boolean);
 const apps = [
   { name: "belge", port: 4173 },
   { name: "tablo", port: 4174 },
   { name: "sunum", port: 4175 },
-];
+].filter((a) => !only?.length || only.includes(a.name));
 
 export default defineConfig({
   testDir: "e2e",
