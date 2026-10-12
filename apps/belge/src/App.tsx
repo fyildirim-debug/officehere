@@ -519,7 +519,32 @@ export function App() {
       <div className={`bl-app${hideChrome ? " is-focus" : ""}${printing ? " is-printing" : ""}${view.mode === "read" ? " is-read" : ""}${merge.highlight ? " is-merge-hl" : ""}`}>
         <AppShell
           app="belge"
-          titleBar={<AppTitleBar title={files.fileName} dirty={dirty} active={active} canUndo={!!fmt?.canUndo} canRedo={!!fmt?.canRedo} onSave={() => void files.save()} onPrint={() => setBackstage("print")} onFind={openFind} />}
+          titleBar={
+            <AppTitleBar
+              title={files.fileName}
+              dirty={dirty}
+              active={active}
+              canUndo={!!fmt?.canUndo}
+              canRedo={!!fmt?.canRedo}
+              onSave={() => void files.save()}
+              onPrint={() => setBackstage("print")}
+              onFind={openFind}
+              search={{
+                tabs,
+                collapsed: ribbonCollapsed,
+                onExpand: () => setRibbonCollapsed(false),
+                onTab: (id) => {
+                  setBackstage(null);
+                  setTab(id);
+                },
+                onBackstage: setBackstage,
+                onNew: () => void files.newDocument("blank"),
+                onOpen: () => void files.openDialog(),
+                onSaveAs: () => void files.saveAs(),
+                onPdf: () => void print("pdf", printOptions),
+              }}
+            />
+          }
           ribbon={
             hideChrome ? undefined : (
               <ErrorBoundary name="ribbon" label="Şerit">

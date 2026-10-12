@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { CommitGuard, currentStep, pickShrinkStep, SHRINK_STEPS } from "../editor/autofitFit";
 import { draftsToPrune, pickDraft } from "../app/draftStore";
-import { fold, rankCommands, type CommandEntry } from "../app/commandIndex";
+import { foldText as fold, rankCommands, type CommandEntry } from "@officehere/ui";
 import { showOrder, stepInOrder, uniqueShowName } from "../show/settings";
 import { SLIDE_FONT_SIZES, stepFontSize } from "../state/textActions";
 import { makeChart, seriesColor, stackedValues, switchRowColumn, valueRange } from "./chart";

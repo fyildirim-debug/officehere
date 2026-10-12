@@ -1,0 +1,202 @@
+/* Komut araması: başlık çubuğundaki "Ara (Alt+Q)" kutusu ve sonuç listesi.
+   Liste, yüzen yüzeylerin cam zeminini (material.css) kullanır. */
+
+:root {
+  --oh-cmd-active: color-mix(in srgb, var(--oh-accent) 12%, transparent);
+  --oh-cmd-pill: var(--oh-accent);
+}
+
+:root[data-oh-theme="dark"],
+:root[data-oh-theme="black"] {
+  --oh-cmd-active: color-mix(in srgb, var(--oh-accent) 34%, transparent);
+  --oh-cmd-pill: color-mix(in srgb, var(--oh-accent) 55%, white);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-oh-theme="system"] {
+    --oh-cmd-active: color-mix(in srgb, var(--oh-accent) 34%, transparent);
+    --oh-cmd-pill: color-mix(in srgb, var(--oh-accent) 55%, white);
+  }
+}
+
+/* Odaktaki kutu belirginleşir; liste açıkken alt köşeler listeye bağlanır gibi düzleşmez, ayrı yüzer. */
+.oh-cmd-search {
+  position: relative;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.oh-cmd-search:focus-within {
+  background: var(--oh-menu-bg);
+  color: var(--oh-text);
+  box-shadow:
+    0 0 0 1px var(--oh-glass-edge),
+    0 2px 8px -3px rgba(0, 0, 0, 0.25);
+}
+
+.oh-cmd-pop {
+  position: fixed;
+  z-index: 1001;
+  box-sizing: border-box;
+  padding: 4px;
+  border-radius: var(--oh-float-radius);
+  background: var(--oh-menu-bg);
+  box-shadow: var(--oh-float-shadow);
+  color: var(--oh-text);
+  font-size: 12px;
+  user-select: none;
+  transform-origin: top center;
+  animation: oh-float-in 0.16s var(--oh-ease-out);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .oh-cmd-pop {
+    background: var(--oh-glass-bg);
+    -webkit-backdrop-filter: var(--oh-glass-filter);
+    backdrop-filter: var(--oh-glass-filter);
+  }
+}
+
+.oh-cmd-list {
+  max-height: min(440px, calc(100vh - 72px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.oh-cmd-head {
+  padding: 6px 8px 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--oh-text-muted);
+}
+
+.oh-cmd-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--oh-separator);
+}
+
+.oh-cmd-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 3px 8px;
+  border-radius: var(--oh-float-item-radius);
+  cursor: default;
+}
+
+.oh-cmd-item.is-active {
+  background: var(--oh-cmd-active);
+}
+
+/* Seçili satırın solunda vurgu çubuğu (renk tek başına bilgi taşımasın diye aria-selected de var). */
+.oh-cmd-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 2px;
+  background: var(--oh-cmd-pill);
+}
+
+.oh-cmd-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--oh-icon);
+}
+
+.oh-cmd-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.oh-cmd-svg {
+  display: contents;
+}
+
+.oh-cmd-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.oh-cmd-title,
+.oh-cmd-path {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.oh-cmd-title {
+  font-size: 13px;
+  color: var(--oh-text);
+}
+
+.oh-cmd-path {
+  font-size: 11px;
+  color: var(--oh-text-muted);
+}
+
+.oh-cmd-key {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--oh-text) 7%, transparent);
+  color: var(--oh-text-muted);
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.oh-cmd-empty {
+  padding: 8px;
+  color: var(--oh-text-muted);
+}
+
+/* Dizin çıkarmak için sekmelerin bir kez çizildiği görünmez kap. */
+.oh-cmd-index {
+  position: fixed;
+  left: -20000px;
+  top: 0;
+  width: 1600px;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oh-cmd-pop {
+    animation-name: oh-fade-in;
+  }
+
+  .oh-cmd-search {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .oh-cmd-pop {
+    background: var(--oh-menu-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .oh-cmd-item.is-active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}

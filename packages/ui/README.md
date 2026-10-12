@@ -74,3 +74,14 @@ odağı editörden çalmaz.
   "Değişiklikler kaydedilsin mi?" sorar, `?file=<yol>` ve dosya ilişkilendirme
   isteklerini `onOpenPath`'e iletir; tarayıcıda sayfadan ayrılma uyarısı verir.
   `confirmDiscard()` "Yeni" / "Aç" / "Kapat" öncesinde çağrılır.
+
+## Komut araması
+
+`CommandSearch` başlık çubuğunun arama yuvasına (`.oh-titlebar-search`; `TitleBar`'a
+`onSearch` verilmez) yerleşir. `tabs` şerit sekmeleridir: içerikleri görünmeyen bir
+kapta bir kez çizilip ipuçlu (`data-tip`) öğelerden dizin çıkarılır; seçilen komutun
+sekmesine geçilip düğmesine tıklanır. `extra` şeritte olmayan komutları verir
+(`fileCommands(...)` Yeni, Aç, Kaydet, Farklı Kaydet, PDF, Yazdır, Seçenekler…), `find`
+listenin sonundaki "bul" satırıdır; `findOnEnter` ile seçim yokken Enter onu çalıştırır.
+Son kullanılan 5 komut `localStorage`'da uygulama başına (`oh-cmd-recent:<app>`) tutulur
+ve kutu boşken listelenir. Alt+Q kutuya odaklanır.
