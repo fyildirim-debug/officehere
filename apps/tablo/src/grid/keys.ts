@@ -1,0 +1,275 @@
+/** Düzenleme yokken ızgara klavye kısayolları (Excel ile aynı). */
+import type { Controller } from "../controller";
+import * as F from "../actions/format";
+import * as E from "../actions/edit";
+import { MAX_COLS, MAX_ROWS } from "../model/rect";
+import { validationList } from "../controller";
+
+export interface GridKeyContext {
+  pageRows: () => number;
+  pageCols: () => number;
+}
+
+export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.KeyboardEvent, kc: GridKeyContext): boolean {
+  const ctrl = ev.ctrlKey || ev.metaKey;
+  const shift = ev.shiftKey;
+  const alt = ev.altKey;
+  const key = ev.key;
+  const code = (ev as KeyboardEvent).code ?? "";
+  const sheet = ctl.sheet;
+
+  switch (key) {
+    case "ArrowUp":
+    case "ArrowDown":
+    case "ArrowLeft":
+    case "ArrowRight": {
+      if (alt && key === "ArrowDown") {
+        const { row, col } = ctl.sel.active;
+        const v = sheet.validations.find((x) => x.rule.type === "list" && x.ranges.some((r) => row >= r.r1 && row <= r.r2 && col >= r.c1 && col <= r.c2));
+        if (v) ctl.openDialog("validationList", { items: validationList(ctl.wb, sheet, v.rule.formula1 ?? "", row, col) });
+        else ctl.openDialog("pickList");
+        return true;
+      }
+      const dr = key === "ArrowDown" ? 1 : key === "ArrowUp" ? -1 : 0;
+      const dc = key === "ArrowRight" ? 1 : key === "ArrowLeft" ? -1 : 0;
+      ctl.move(dr, dc, shift, ctrl);
+      return true;
+    }
+    case "Enter":
+      if (alt) return false;
+      ctl.advance(shift ? "up" : "down");
+      if (ctl.clip) {
+        E.pasteData(ctl, "", undefined);
+        ctl.clip = null;
+        ctl.status = "";
+        ctl.emit();
+      }
+      return true;
+    case "Tab":
+      ctl.advance(shift ? "left" : "right");
+      return true;
+    case "F2":
+      if (shift) {
+        ctl.openDialog("note");
+        return true;
+      }
+      ctl.startEdit(undefined);
+      return true;
+    case "Delete":
+      E.clearContents(ctl);
+      return true;
+    case "Backspace":
+      E.clearContents(ctl);
+      ctl.startEdit("");
+      return true;
+    case "Escape":
+      ctl.cancelModes();
+      return true;
+    case "PageDown":
+    case "PageUp": {
+      const d = key === "PageDown" ? 1 : -1;
+      if (alt) ctl.move(0, d * kc.pageCols(), shift, false);
+      else if (ctrl) {
+        const i = ctl.wb.activeIndex + d;
+        if (i >= 0 && i < ctl.wb.sheets.length) ctl.activateSheet(i);
+      } else ctl.move(d * kc.pageRows(), 0, shift, false);
+      return true;
+    }
+    case "Home":
+      if (ctrl) {
+        const fr = sheet.frozen.rows;
+        const fc = sheet.frozen.cols;
+        if (shift) {
+          ctl.corner = { row: fr, col: fc };
+          ctl.setSelection({ ...ctl.sel, ranges: [...ctl.sel.ranges.slice(0, -1), { r1: Math.min(fr, ctl.sel.anchor.row), c1: Math.min(fc, ctl.sel.anchor.col), r2: Math.max(fr, ctl.sel.anchor.row), c2: Math.max(fc, ctl.sel.anchor.col) }] });
+        } else ctl.selectCell(fr, fc);
+      } else ctl.selectCell(ctl.sel.active.row, sheet.frozen.cols);
+      return true;
+    case "End":
+      if (ctrl) {
+        const u = ctl.wb.usedRange(sheet);
+        if (u) ctl.selectCell(u.r2, u.c2);
+        return true;
+      }
+      return false;
+    case "F4":
+      if (ctrl) return false;
+      ctl.ops.redo();
+      return true;
+    case "F5":
+      ctl.openDialog("goto");
+      return true;
+    case "F9":
+      ctl.wb.engine.recalc(true);
+      ctl.emit();
+      return true;
+    case "F3":
+      if (shift) {
+        ctl.openDialog("insertFunction");
+        return true;
+      }
+      return false;
+    case "F11":
+      if (shift) {
+        ctl.ops.addSheet(ctl.wb.activeIndex);
+        return true;
+      }
+      return false;
+    case "F10":
+      if (shift) return false;
+      return false;
+    case "ContextMenu":
+      return false;
+  }
+
+  if (ctrl) {
+    const k = code.startsWith("Key") ? code.slice(3) : code.startsWith("Digit") ? code.slice(5) : key.toUpperCase();
+    switch (k) {
+      case "A":
+        if (shift) return false;
+        E.selectAllSmart(ctl);
+        return true;
+      case "B":
+      case "2":
+        F.toggle(ctl, "bold");
+        return true;
+      case "I":
+      case "3":
+        if (shift && k === "3") {
+          F.setNumFmt(ctl, "dd.mm.yyyy");
+          return true;
+        }
+        F.toggle(ctl, "italic");
+        return true;
+      case "U":
+      case "4":
+        if (shift && k === "4") {
+          F.setNumFmt(ctl, '#,##0.00 "₺"');
+          return true;
+        }
+        F.toggleUnderline(ctl);
+        return true;
+      case "5":
+        if (shift) {
+          F.percent(ctl);
+          return true;
+        }
+        F.toggle(ctl, "strike");
+        return true;
+      case "1":
+        if (shift) {
+          F.setNumFmt(ctl, "#,##0.00");
+          return true;
+        }
+        ctl.openDialog("formatCells");
+        return true;
+      case "6":
+        if (shift) {
+          F.setNumFmt(ctl, "0.00E+00");
+          return true;
+        }
+        return false;
+      case "9":
+        hideSelection(ctl, "row", !shift);
+        return true;
+      case "0":
+        hideSelection(ctl, "col", !shift);
+        return true;
+      case "D":
+        E.fillDirection(ctl, "down");
+        return true;
+      case "R":
+        E.fillDirection(ctl, "right");
+        return true;
+      case "Z":
+        E.undo(ctl);
+        return true;
+      case "Y":
+        E.redo(ctl);
+        return true;
+      case "F":
+        ctl.openDialog("find");
+        return true;
+      case "H":
+        ctl.openDialog("replace");
+        return true;
+      case "G":
+        ctl.openDialog("goto");
+        return true;
+      case "K":
+        ctl.openDialog("hyperlink");
+        return true;
+      case "L":
+        if (shift) {
+          ctl.openDialog("toggleFilter");
+          return true;
+        }
+        ctl.openDialog("createTable");
+        return true;
+      case "T":
+        ctl.openDialog("createTable");
+        return true;
+      case "Backquote":
+      case "`":
+      case '"':
+        sheet.showFormulas = !sheet.showFormulas;
+        ctl.emit();
+        return true;
+      case "Semicolon":
+      case ";":
+      case ",":
+      case "Comma":
+        E.insertNow(ctl, shift ? "time" : "date");
+        return true;
+      case "Minus":
+      case "-":
+        E.deleteCellsSmart(ctl);
+        return true;
+      case "Equal":
+      case "+":
+      case "=":
+        if (shift || key === "+") {
+          E.insertCellsSmart(ctl);
+          return true;
+        }
+        return false;
+      case "Space":
+      case " ":
+        if (shift) ctl.selectAll();
+        else ctl.selectColumns(ctl.range.c1, ctl.range.c2);
+        return true;
+    }
+    if (key === " ") {
+      ctl.selectColumns(ctl.range.c1, ctl.range.c2);
+      return true;
+    }
+    return false;
+  }
+  if (shift && key === " ") {
+    ctl.selectRows(ctl.range.r1, ctl.range.r2);
+    return true;
+  }
+  if (alt && (key === "=" || code === "Equal")) {
+    E.autoSum(ctl);
+    return true;
+  }
+  return false;
+}
+
+function hideSelection(ctl: Controller, axis: "row" | "col", hidden: boolean): void {
+  const items: number[] = [];
+  for (const r of ctl.sel.ranges) {
+    const [a, b] = axis === "row" ? [r.r1, Math.min(r.r2, r.r1 + 100000)] : [r.c1, r.c2];
+    for (let i = a; i <= b; i++) items.push(i);
+  }
+  if (!hidden) {
+    // Göster: seçimin içindeki gizli öğeler
+    const ax = axis === "row" ? ctl.sheet.rows : ctl.sheet.cols;
+    const hiddenItems = ax.hiddenItems().filter((i) => ctl.sel.ranges.some((r) => (axis === "row" ? i >= r.r1 && i <= r.r2 : i >= r.c1 && i <= r.c2)));
+    ctl.ops.setHidden(ctl.sheet, axis, hiddenItems, false);
+    return;
+  }
+  ctl.ops.setHidden(ctl.sheet, axis, items, true);
+  void MAX_ROWS;
+  void MAX_COLS;
+}

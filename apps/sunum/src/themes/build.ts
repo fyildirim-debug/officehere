@@ -22,6 +22,8 @@ export interface ThemeStyle {
   titleSlideSubColor?: Color;
   /** Yer tutucu alanı kenar boşlukları (1280×720 tabanında px). */
   area?: { l?: number; r?: number; t?: number };
+  /** Bölüm üst bilgisi başlık slaytı görünümü yerine asıl slayt görünümünü kullansın. */
+  secHeadUsesMaster?: boolean;
 }
 
 const BULLET: LevelStyle["para"]["bullet"] = { type: "char", char: "•", font: "Arial" };
@@ -118,7 +120,7 @@ export function buildMasterAndLayouts(w: number, h: number, st: ThemeStyle): { m
     id: uid("L"),
     type,
     name: LAYOUT_NAMES[type],
-    shapes: [...shapes, ...footers(sx, sy, area, type === "title" || type === "secHead" ? subCol : undefined)],
+    shapes: [...shapes, ...footers(sx, sy, area, type === "title" || (type === "secHead" && !st.secHeadUsesMaster) ? subCol : undefined)],
     showMasterShapes: true,
     ...extra,
   });
@@ -148,11 +150,11 @@ export function buildMasterAndLayouts(w: number, h: number, st: ThemeStyle): { m
     mk(
       "secHead",
       [
-        ...(titleDeco ?? []),
-        ph("title", undefined, "Başlık 1", L, 180 * sy, W, 300 * sy, { anchor: "b", levels: [{ run: { size: 60, color: titleCol } }] }),
-        ph("body", 1, "Metin Yer Tutucusu 2", L, 482 * sy, W, 158 * sy, { levels: [noBullet(24, { color: subCol ?? { scheme: "dk1", lumMod: 0.75, lumOff: 0.25 } })] }),
+        ...(st.secHeadUsesMaster ? [] : (titleDeco ?? [])),
+        ph("title", undefined, "Başlık 1", L, 180 * sy, W, 300 * sy, { anchor: "b", levels: [{ run: { size: 60, color: st.secHeadUsesMaster ? undefined : titleCol } }] }),
+        ph("body", 1, "Metin Yer Tutucusu 2", L, 482 * sy, W, 158 * sy, { levels: [noBullet(24, { color: (st.secHeadUsesMaster ? undefined : subCol) ?? { scheme: "dk1", lumMod: 0.75, lumOff: 0.25 } })] }),
       ],
-      titleExtra,
+      st.secHeadUsesMaster ? {} : titleExtra,
     ),
     mk("twoObj", [
       ph("title", undefined, "Başlık 1", L, titleY, W, titleH),

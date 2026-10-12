@@ -200,6 +200,17 @@ export function tokenize(src: string, syntax: SyntaxLocale = EN_SYNTAX): Token[]
       push("string", i, j + 1, { value: s });
       continue;
     }
+    // Dizi sabiti ayırıcıları
+    if (braceDepth > 0) {
+      if (ch === syntax.arrayRow) {
+        push("arrayRow", i, i + 1);
+        continue;
+      }
+      if (ch === syntax.arrayCol || (syntax.decimal === "," && (ch === "." || ch === "\\")) || (syntax.decimal === "." && ch === ",")) {
+        push("arrayCol", i, i + 1);
+        continue;
+      }
+    }
     // Hata değerleri
     if (ch === "#") {
       const rest = src.slice(i).toLocaleUpperCase("tr-TR");

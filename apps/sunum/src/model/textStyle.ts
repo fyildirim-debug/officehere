@@ -3,7 +3,7 @@
  * (başlık/gövde/diğer) → asıl yer tutucu → düzen yer tutucusu → şekil
  * düzey stili → paragraf/çalıştırma biçimi (ECMA-376 §19.3.1.x / §21.1.2).
  */
-import type { Layout, LevelStyle, Paragraph, ParaProps, Placeholder, Presentation, RunProps, Shape, Slide, SpShape, TextBody, Theme } from "./types";
+import type { Layout, LevelStyle, Master, Paragraph, ParaProps, Placeholder, Presentation, RunProps, Shape, Slide, SpShape, TextBody, Theme } from "./types";
 
 export type TextKind = "title" | "body" | "other";
 
@@ -41,7 +41,7 @@ export function layoutOf(pres: Presentation, slide: Slide | undefined): Layout |
 }
 
 export interface TextContext {
-  pres: Presentation;
+  master: Master;
   layout?: Layout;
 }
 
@@ -49,7 +49,7 @@ export interface TextContext {
 export function placeholderChain(shape: SpShape, ctx: TextContext): SpShape[] {
   if (!shape.ph) return [];
   const chain: SpShape[] = [];
-  const m = findPlaceholder(ctx.pres.master.shapes, { type: shape.ph.type });
+  const m = findPlaceholder(ctx.master.shapes, { type: shape.ph.type });
   if (m && m !== shape) chain.push(m);
   if (ctx.layout) {
     const l = findPlaceholder(ctx.layout.shapes, shape.ph);
@@ -83,7 +83,7 @@ export function levelResolver(shape: SpShape | { text?: TextBody; ph?: Placehold
     const hit = cache.get(l);
     if (hit) return hit;
     const st: LevelStyle = { para: { ...BASE.para }, run: { ...BASE.run } };
-    const styles = ctx.pres.master.textStyles[kind];
+    const styles = ctx.master.textStyles[kind];
     mergeLevel(st, styles[l] ?? styles[styles.length - 1]);
     for (const c of chain) mergeLevel(st, c.text?.levels?.[l]);
     mergeLevel(st, sp.text?.levels?.[l]);
@@ -129,7 +129,9 @@ export function effectiveRun(props: RunProps, p: Paragraph, lvl: (n: number) => 
 export function promptText(shape: SpShape, ctx: TextContext): string | undefined {
   if (!shape.ph) return undefined;
   if (shape.text?.prompt) return shape.text.prompt;
-  for (const c of placeholderChain(shape, ctx).reverse()) if (c.text?.prompt) return c.text.prompt;
+  // Yalnız düzendeki özel istem metni (custPrompt) slaytta gösterilir.
+  const l = ctx.layout ? findPlaceholder(ctx.layout.shapes, shape.ph) : undefined;
+  if (l?.text?.prompt) return l.text.prompt;
   return defaultPrompt(shape.ph.type);
 }
 

@@ -1,0 +1,202 @@
+/* Slayt çizimi (düzenleyici, küçük resim, gösteri, yazdırma) */
+
+.sv {
+  position: relative;
+  overflow: hidden;
+  flex: none;
+  color: #000;
+  -webkit-font-smoothing: antialiased;
+  font-kerning: normal;
+  contain: layout;
+}
+
+.sv-edit {
+  overflow: visible;
+}
+
+.sv-bg {
+  position: absolute;
+  inset: 0;
+}
+
+.sh {
+  position: absolute;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+}
+
+.sh-geom {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  transform-origin: 50% 50%;
+}
+
+.sh-geom path,
+.sh-geom rect {
+  pointer-events: none;
+}
+
+.sv-edit .sh-path.is-filled {
+  pointer-events: visiblePainted;
+}
+
+.sv-edit .sh-path {
+  pointer-events: visibleStroke;
+}
+
+.sv-edit .sh-hit {
+  pointer-events: all;
+}
+
+.sv-edit .sh-hitline {
+  pointer-events: stroke;
+}
+
+.sv-edit .tb.is-hit,
+.sv-edit .pic-clip,
+.sv-edit .tbl,
+.sv-edit .ph-icon {
+  pointer-events: auto;
+}
+
+.sv-edit .is-deco,
+.sv-edit .is-deco * {
+  pointer-events: none !important;
+}
+
+.ph-outline {
+  stroke: #8a8a8a;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+.tb {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  tab-size: 96px;
+  cursor: text;
+}
+
+.tb-c {
+  outline: none;
+  min-width: 1px;
+  cursor: text;
+}
+
+.tb-edit {
+  caret-color: currentColor;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.tb-edit::selection,
+.tb-edit *::selection {
+  background: rgba(70, 120, 220, 0.35);
+}
+
+.tb-p {
+  margin: 0;
+  position: relative;
+}
+
+.tb-p[data-bullet]::before {
+  content: attr(data-bullet);
+  display: inline-block;
+  min-width: var(--bu-w, 0);
+  font-family: var(--bu-font);
+  font-size: var(--bu-size);
+  color: var(--bu-color);
+  opacity: var(--bu-op, 1);
+  text-indent: 0;
+  white-space: pre;
+  font-style: normal;
+  font-weight: normal;
+  text-decoration: none;
+  vertical-align: baseline;
+}
+
+.tb-p.is-prompt {
+  white-space: pre-wrap;
+}
+
+.sv:not(.sv-edit) .tb {
+  cursor: default;
+}
+
+.ph-icons {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  pointer-events: none;
+  margin-top: 30px;
+}
+
+.ph-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #9a9a9a;
+  cursor: pointer;
+}
+
+.ph-icon:hover {
+  color: var(--oh-accent);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.pic-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.pic-clip img {
+  position: absolute;
+  max-width: none;
+  user-select: none;
+}
+
+.pic-missing {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(45deg, #eee, #eee 8px, #f8f8f8 8px, #f8f8f8 16px);
+  border: 1px solid #ccc;
+}
+
+.tbl {
+  position: absolute;
+  left: 0;
+  top: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.tbl td {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  cursor: text;
+}
+
+.sv-scaled {
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.sv-scaled > .sv {
+  position: absolute;
+  left: 0;
+  top: 0;
+}

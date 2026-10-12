@@ -90,6 +90,10 @@ export interface RunProps {
   spacing?: number;
   /** Üst simge (+) / alt simge (-) yüzdesi. */
   baseline?: number;
+  /** Metin anahattı (WordArt). */
+  outline?: Color;
+  /** Metin parlaması (WordArt). */
+  glow?: Color;
   /** Alan (slayt numarası, tarih). */
   field?: "slidenum" | "datetime";
   link?: string;

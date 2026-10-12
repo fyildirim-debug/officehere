@@ -1,0 +1,40 @@
+/* Yazdırma: her slayt yatay bir sayfa */
+
+.print-root {
+  display: none;
+}
+
+@media print {
+  html.is-printing,
+  html.is-printing body,
+  html.is-printing #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  html.is-printing body > *:not(.print-root) {
+    display: none !important;
+  }
+
+  html.is-printing .print-root {
+    display: block !important;
+  }
+
+  .print-page {
+    position: relative;
+    overflow: hidden;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .print-root * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

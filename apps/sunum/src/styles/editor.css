@@ -1,0 +1,389 @@
+/* Normal görünüm çalışma alanı */
+
+.canvas-wrap {
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--oh-canvas-bg);
+  overflow: hidden;
+}
+
+.canvas-scroll {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  overflow: auto;
+  outline: none;
+}
+
+.canvas-content {
+  position: relative;
+}
+
+.stage {
+  position: absolute;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.16);
+}
+
+.stage-slide {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+.stage-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--oh-surface);
+  color: var(--oh-text-muted);
+  font-size: 20px;
+  border: 1px dashed var(--oh-border-strong);
+  cursor: pointer;
+}
+
+.sel-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.sel-frame {
+  position: absolute;
+  border: 1px solid #7d7d7d;
+  transform-origin: 50% 50%;
+  box-sizing: border-box;
+}
+
+.sel-frame::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+
+.sel-frame.is-editing {
+  border: 1px dashed #6d6d6d;
+}
+
+.sel-frame.is-group {
+  border: 1px dashed #9a9a9a;
+}
+
+.sel-frame.is-group::after {
+  display: none;
+}
+
+.sel-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -5px 0 0 -5px;
+  background: #ffffff;
+  border: 1px solid #646464;
+  border-radius: 50%;
+  pointer-events: auto;
+  box-shadow: 0 0 1px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+}
+
+.sel-handle.is-edge {
+  width: 8px;
+  height: 8px;
+  margin: -4.5px 0 0 -4.5px;
+}
+
+.sel-handle.is-end {
+  width: 10px;
+  height: 10px;
+  margin: -5.5px 0 0 -5.5px;
+}
+
+.sel-handle:hover {
+  background: #e8e8e8;
+}
+
+.sel-rot {
+  position: absolute;
+  top: -27px;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4b4b4b;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  pointer-events: auto;
+  cursor: grab;
+  z-index: 2;
+}
+
+.sel-adj {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -5px 0 0 -5px;
+  background: #ffd23f;
+  border: 1px solid #8a6d00;
+  border-radius: 50%;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.sel-move {
+  position: absolute;
+  pointer-events: auto;
+  cursor: move;
+}
+
+.sel-move.is-t {
+  left: 0;
+  right: 0;
+  top: -5px;
+  height: 7px;
+}
+
+.sel-move.is-b {
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 7px;
+}
+
+.sel-move.is-l {
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  width: 7px;
+}
+
+.sel-move.is-r {
+  top: 0;
+  bottom: 0;
+  right: -5px;
+  width: 7px;
+}
+
+.sel-line {
+  display: none;
+}
+
+.smart-guide {
+  position: absolute;
+  pointer-events: none;
+}
+
+.smart-guide.is-v {
+  width: 0;
+  border-left: 1px dashed #e3341c;
+}
+
+.smart-guide.is-h {
+  height: 0;
+  border-top: 1px dashed #e3341c;
+}
+
+.lasso {
+  position: absolute;
+  border: 1px solid rgba(80, 120, 200, 0.9);
+  background: rgba(120, 160, 230, 0.15);
+}
+
+.insert-preview {
+  position: absolute;
+  border: 1px solid #555;
+  background: rgba(150, 150, 150, 0.15);
+}
+
+.insert-preview-line {
+  position: absolute;
+  overflow: visible;
+}
+
+.insert-preview-line line {
+  stroke: #555;
+  stroke-width: 1.5;
+}
+
+.rot-info {
+  position: absolute;
+  padding: 2px 6px;
+  background: var(--oh-menu-bg);
+  border: 1px solid var(--oh-border);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--oh-text);
+  white-space: nowrap;
+  box-shadow: var(--oh-menu-shadow);
+}
+
+.cell-sel {
+  position: absolute;
+  background: rgba(90, 130, 220, 0.25);
+  outline: 1px solid rgba(60, 100, 200, 0.6);
+}
+
+.anim-badges {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transform: translateX(-100%);
+}
+
+.anim-badge {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+  background: #f2f2f2;
+  color: #333;
+  border: 1px solid #8a8a8a;
+}
+
+.grid-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.drawing-guide {
+  position: absolute;
+  pointer-events: auto;
+  z-index: 4;
+}
+
+.drawing-guide.is-v {
+  top: 0;
+  width: 7px;
+  cursor: ew-resize;
+  background: linear-gradient(to right, transparent 3px, rgba(110, 110, 110, 0.85) 3px, rgba(110, 110, 110, 0.85) 4px, transparent 4px);
+  background-size: 7px 6px;
+}
+
+.drawing-guide.is-h {
+  left: 0;
+  height: 7px;
+  cursor: ns-resize;
+  background: linear-gradient(to bottom, transparent 3px, rgba(110, 110, 110, 0.85) 3px, rgba(110, 110, 110, 0.85) 4px, transparent 4px);
+  background-size: 6px 7px;
+}
+
+/* Cetvel */
+
+.ruler {
+  position: absolute;
+  overflow: hidden;
+  background: var(--oh-surface-2);
+  color: var(--oh-text-muted);
+  font-size: 9px;
+  z-index: 3;
+}
+
+.ruler.is-h {
+  top: 0;
+  border-bottom: 1px solid var(--oh-border);
+}
+
+.ruler.is-v {
+  left: 0;
+  border-right: 1px solid var(--oh-border);
+}
+
+.ruler-slide {
+  position: absolute;
+  background: var(--oh-surface);
+}
+
+.ruler.is-h .ruler-slide {
+  top: 0;
+  bottom: 0;
+}
+
+.ruler.is-v .ruler-slide {
+  left: 0;
+  right: 0;
+}
+
+.ruler-tick {
+  position: absolute;
+}
+
+.ruler.is-h .ruler-tick {
+  bottom: 0;
+  height: 3px;
+  border-left: 1px solid var(--oh-text-disabled);
+}
+
+.ruler.is-h .ruler-tick.is-major {
+  height: 5px;
+}
+
+.ruler.is-v .ruler-tick {
+  right: 0;
+  width: 3px;
+  border-top: 1px solid var(--oh-text-disabled);
+}
+
+.ruler.is-v .ruler-tick.is-major {
+  width: 5px;
+}
+
+.ruler-tick em {
+  position: absolute;
+  font-style: normal;
+}
+
+.ruler.is-h .ruler-tick em {
+  bottom: 5px;
+  transform: translateX(-50%);
+}
+
+.ruler.is-v .ruler-tick em {
+  right: 6px;
+  transform: translateY(-50%) rotate(-90deg);
+}
+
+.ruler-corner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: var(--oh-surface-2);
+  z-index: 3;
+}
+
+.crop-ghost {
+  position: absolute;
+  opacity: 0.35;
+  pointer-events: none;
+  outline: 1px dashed #555;
+}
+
+.comment-marker {
+  position: absolute;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 3px 3px 3px 0;
+  background: #f8d34f;
+  border: 1px solid #b38b00;
+  color: #333;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: auto;
+  cursor: pointer;
+  transform: translateY(-100%);
+}

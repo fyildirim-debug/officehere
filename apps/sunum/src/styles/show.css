@@ -1,0 +1,215 @@
+/* Slayt gösterisi, Okuma Görünümü, Sunucu Görünümü */
+
+.show-root {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  color: #fff;
+  outline: none;
+  user-select: none;
+}
+
+.show-root.is-window {
+  position: absolute;
+  z-index: 50;
+  background: #1f1f1f;
+}
+
+.show-root.no-cursor,
+.show-root.no-cursor * {
+  cursor: none !important;
+}
+
+.show-area {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.show-stage {
+  position: relative;
+  overflow: hidden;
+  flex: none;
+}
+
+.show-scale {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+.show-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.anim-init-hidden {
+  visibility: hidden;
+}
+
+.show-end {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  color: #fff;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 4%;
+  font-size: 20px;
+  font-family: var(--oh-font-ui);
+  z-index: 5;
+}
+
+.show-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+}
+
+.show-screen.is-black {
+  background: #000;
+}
+
+.show-screen.is-white {
+  background: #fff;
+}
+
+.show-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 8px;
+  background: var(--oh-statusbar-bg);
+  color: var(--oh-statusbar-fg);
+  border-top: 1px solid var(--oh-border);
+  font-size: 12px;
+}
+
+.show-bar .grow {
+  flex: 1;
+}
+
+.show-bar-btn {
+  min-width: 28px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--oh-radius);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 6px;
+}
+
+.show-bar-btn:hover {
+  background: var(--oh-hover);
+}
+
+.presenter {
+  background: #262626;
+  font-family: var(--oh-font-ui);
+}
+
+.presenter-top,
+.presenter-bottom {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: #1b1b1b;
+  font-size: 14px;
+}
+
+.presenter-timer {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.presenter-top .presenter-btn:last-child {
+  margin-left: auto;
+}
+
+.presenter-bottom {
+  justify-content: center;
+}
+
+.presenter-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+}
+
+.presenter-current {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.presenter-side {
+  width: 360px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.presenter-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #ccc;
+  font-size: 13px;
+}
+
+.presenter-notes {
+  flex: 1;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  background: #1e1e1e;
+  padding: 10px;
+  border-radius: 4px;
+  color: #f2f2f2;
+}
+
+.presenter-endbox {
+  height: 191px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #555;
+  color: #aaa;
+}
+
+.presenter-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #333;
+  color: #fff;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.presenter-btn:hover {
+  background: #444;
+}
