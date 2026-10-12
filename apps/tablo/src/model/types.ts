@@ -177,6 +177,69 @@ export interface PageSetup {
   fitToWidth?: boolean;
 }
 
+export type PivotFn = "sum" | "count" | "average" | "max" | "min" | "product" | "countNums";
+
+export interface PivotValueField {
+  /** Kaynak sütun dizini (kaynak aralığın içinde, 0 tabanlı). */
+  field: number;
+  fn: PivotFn;
+  /** Özel ad ("Toplam Satış" gibi); yoksa "Toplam: <alan>". */
+  name?: string;
+  numFmt?: string;
+}
+
+export interface PivotFilter {
+  field: number;
+  /** Seçili öğeler (metin anahtarları); null = tümü. */
+  selected: string[] | null;
+}
+
+export interface PivotDef {
+  id: string;
+  name: string;
+  /** Kaynak: sayfa kimliği ve aralık (başlık satırı dahil). */
+  sourceSheet: number;
+  source: Rect;
+  /** Raporun sol üst hücresi (filtreler bunun üstünde gösterilir). */
+  anchor: CellPos;
+  rows: number[];
+  cols: number[];
+  values: PivotValueField[];
+  filters: PivotFilter[];
+  /** Satır/sütun alanlarındaki öğe filtreleri (alan → gizli öğeler). */
+  hidden?: Record<number, string[]>;
+  /** Birden çok değer alanı varken "Σ Değerler" satırlarda mı. */
+  valuesOnRows?: boolean;
+  subtotals: "top" | "bottom" | "none";
+  grandRows: boolean;
+  grandCols: boolean;
+  layout: "compact" | "outline" | "tabular";
+  /** Öğe etiketlerini yinele (tablo/anahat formu). */
+  repeatLabels?: boolean;
+  blankRows?: boolean;
+  style: string;
+  rowHeaders: boolean;
+  colHeaders: boolean;
+  bandedRows: boolean;
+  bandedCols: boolean;
+  /** Son çizilen çıktı aralığı (filtre satırları dahil). */
+  output?: Rect;
+  /** Sıralama: alan → azalan mı. */
+  sort?: Record<number, boolean>;
+}
+
+export interface SparklineGroup {
+  id: string;
+  type: "line" | "column" | "winLoss";
+  /** Her mini grafik: hedef hücre ve veri aralığı ("Sayfa1!A1:F1" ya da "A1:F1"). */
+  items: { row: number; col: number; range: string }[];
+  color: string;
+  negativeColor?: string;
+  markers?: boolean;
+  highPoint?: boolean;
+  lowPoint?: boolean;
+}
+
 export type ViewMode = "normal" | "pageLayout" | "pageBreak";
 
 export interface Selection {

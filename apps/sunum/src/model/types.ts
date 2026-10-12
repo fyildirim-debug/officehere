@@ -98,6 +98,7 @@ export interface RunProps {
   glow?: Color;
   /** Alan (slayt numarası, tarih). */
   field?: "slidenum" | "datetime";
+  /** Köprü: dış adres (http, mailto…) ya da "#slide:<kimlik>", "#next", "#prev", "#first", "#last". */
   link?: string;
 }
 
@@ -192,6 +193,11 @@ export interface ShapeBase {
   flipV?: boolean;
   hidden?: boolean;
   descr?: string;
+  /**
+   * Şekle tıklanınca izlenecek köprü (gösteride). Dış adres ya da
+   * "#slide:<kimlik>", "#next", "#prev", "#first", "#last".
+   */
+  link?: string;
 }
 
 export interface PathCmd {

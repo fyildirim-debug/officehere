@@ -15,6 +15,9 @@ interface Props {
   indentLeft: number;
   indentRight: number;
   indentFirst: number;
+  /** Çok sütunlu bölümde sütunlar (sayfa koordinatı) ve imlecin sütunu. */
+  columns?: { left: number; width: number }[];
+  column?: number;
   onIndent: (v: { indentLeft?: number; indentRight?: number; indentFirst?: number }) => void;
   onMargins: (v: { left?: number; right?: number }) => void;
   onDoubleClick: () => void;
@@ -22,14 +25,18 @@ interface Props {
 
 type DragKind = "first" | "hanging" | "left" | "right" | "marginL" | "marginR";
 
-export function Ruler({ offset, scale, pageW, ml, mr, indentLeft, indentRight, indentFirst, onIndent, onMargins, onDoubleClick }: Props) {
+export function Ruler({ offset, scale, pageW, ml, mr, indentLeft, indentRight, indentFirst, columns, column = 0, onIndent, onMargins, onDoubleClick }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ kind: DragKind; x: number } | null>(null);
   const X = (px: number) => offset + px * scale;
 
-  const firstX = ml + (indentLeft + indentFirst) * PT_TO_PX;
-  const leftX = ml + indentLeft * PT_TO_PX;
-  const rightX = pageW - mr - indentRight * PT_TO_PX;
+  // Girintiler imlecin bulunduğu sütuna göredir.
+  const col = columns?.[Math.min(column, columns.length - 1)];
+  const cl = col ? col.left : ml;
+  const cr = col ? pageW - col.left - col.width : mr;
+  const firstX = cl + (indentLeft + indentFirst) * PT_TO_PX;
+  const leftX = cl + indentLeft * PT_TO_PX;
+  const rightX = pageW - cr - indentRight * PT_TO_PX;
 
   const start = (kind: DragKind) => (e: React.PointerEvent) => {
     e.preventDefault();
@@ -46,18 +53,18 @@ export function Ruler({ offset, scale, pageW, ml, mr, indentLeft, indentRight, i
       const rel = (v: number) => +(snap(v, fine) / PT_TO_PX).toFixed(2);
       switch (kind) {
         case "first":
-          onIndent({ indentFirst: rel(Math.max(0, Math.min(pageW - mr, p)) - ml) - indentLeft });
+          onIndent({ indentFirst: rel(Math.max(0, Math.min(pageW - cr, p)) - cl) - indentLeft });
           break;
         case "hanging": {
-          const nl = rel(Math.max(0, Math.min(pageW - mr, p)) - ml);
+          const nl = rel(Math.max(0, Math.min(pageW - cr, p)) - cl);
           onIndent({ indentLeft: nl, indentFirst: +(indentLeft + indentFirst - nl).toFixed(2) });
           break;
         }
         case "left":
-          onIndent({ indentLeft: rel(Math.max(0, Math.min(pageW - mr, p)) - ml) });
+          onIndent({ indentLeft: rel(Math.max(0, Math.min(pageW - cr, p)) - cl) });
           break;
         case "right":
-          onIndent({ indentRight: rel(pageW - mr - Math.max(ml, Math.min(pageW, p))) });
+          onIndent({ indentRight: rel(pageW - cr - Math.max(cl, Math.min(pageW, p))) });
           break;
         case "marginL":
           onMargins({ left: Math.max(0, Math.min(pageW - mr - PX_PER_CM, snap(p, fine))) });
@@ -106,6 +113,9 @@ export function Ruler({ offset, scale, pageW, ml, mr, indentLeft, indentRight, i
       <div className="bl-ruler-track" style={{ left: X(0), width: pageW * scale }}>
         <div className="bl-ruler-margin" style={{ left: 0, width: ml * scale }} />
         <div className="bl-ruler-margin" style={{ right: 0, width: mr * scale }} />
+        {columns?.slice(0, -1).map((c, i) => (
+          <div key={i} className="bl-ruler-margin is-colgap" style={{ left: (c.left + c.width) * scale, width: (columns[i + 1].left - c.left - c.width) * scale }} />
+        ))}
       </div>
       {ticks}
       <div className="bl-ruler-mhandle" style={{ left: X(ml) - 3 }} onPointerDown={start("marginL")} {...tipProps("Sol Kenar Boşluğu")} />

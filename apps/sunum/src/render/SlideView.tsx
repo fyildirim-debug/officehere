@@ -120,6 +120,7 @@ export const ShapeView = memo(function ShapeView({ shape, ctx, override, overrid
   const common = {
     className: `sh sh-${shape.kind}${deco ? " is-deco" : ""}${extraClass ? ` ${extraClass}` : ""}`,
     "data-shape-id": deco ? undefined : shape.id,
+    "data-link": shape.link && ctx.mode === "show" ? shape.link : undefined,
     style,
   };
   const flipH = override?.flipH ?? shape.flipH;

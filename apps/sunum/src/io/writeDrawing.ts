@@ -36,6 +36,31 @@ export interface WriteCtx {
   idMap: Map<string, number>;
   /** Slayt içeriği mi (tx1/bg1 adlandırması). */
   slideContent: boolean;
+  /** Slayt kimliği → slayt numarası (1 tabanlı), sunu içi köprüler için. */
+  slideNumbers?: Map<string, number>;
+}
+
+const JUMP_ACTIONS: Record<string, string> = {
+  "#next": "nextslide",
+  "#prev": "previousslide",
+  "#first": "firstslide",
+  "#last": "lastslide",
+};
+
+/** a:hlinkClick (ECMA-376 §21.1.2.3.5); sunu içi hedefler ppaction ile yazılır. */
+export function hlinkXml(link: string | undefined, ctx: WriteCtx, tag = "a:hlinkClick"): string {
+  if (!link) return "";
+  const jump = JUMP_ACTIONS[link];
+  if (jump) return `<${tag} r:id="" action="ppaction://hlinkshowjump?jump=${jump}"/>`;
+  if (link.startsWith("#slide:")) {
+    const n = ctx.slideNumbers?.get(link.slice(7));
+    if (!n) return "";
+    const rid = ctx.rels.add(REL.slide, ctx.part.startsWith("ppt/slides/") ? `slide${n}.xml` : `../slides/slide${n}.xml`);
+    return `<${tag} r:id="${rid}" action="ppaction://hlinksldjump"/>`;
+  }
+  if (link.startsWith("#")) return "";
+  const rid = ctx.rels.add(REL.hyperlink, link, true);
+  return `<${tag} r:id="${rid}"/>`;
 }
 
 const SCHEME_OUT: Record<string, string> = { dk1: "tx1", lt1: "bg1", dk2: "tx2", lt2: "bg2" };
@@ -177,10 +202,7 @@ export function rPrXml(tag: string, p: RunProps, ctx: WriteCtx, lang = true): st
   }
   if (p.highlight) inner += `<a:highlight>${colorXml(p.highlight, ctx)}</a:highlight>`;
   inner += fontXml(p.font);
-  if (p.link) {
-    const rid = ctx.rels.add(REL.hyperlink, p.link, true);
-    inner += `<a:hlinkClick r:id="${rid}"/>`;
-  }
+  inner += hlinkXml(p.link, ctx);
   return inner ? `<${tag}${a}>${inner}</${tag}>` : `<${tag}${a}/>`;
 }
 
@@ -283,7 +305,9 @@ export function txBodyXml(tag: string, b: TextBody, ctx: WriteCtx, promptText?: 
 function cNvPr(s: Shape, ctx: WriteCtx): string {
   const id = ctx.nextId();
   ctx.idMap.set(s.id, id);
-  return `<p:cNvPr${attrs({ id, name: s.name || `Şekil ${id}`, descr: s.descr, hidden: s.hidden ? "1" : undefined })}/>`;
+  const a = attrs({ id, name: s.name || `Şekil ${id}`, descr: s.descr, hidden: s.hidden ? "1" : undefined });
+  const link = hlinkXml(s.link, ctx);
+  return link ? `<p:cNvPr${a}>${link}</p:cNvPr>` : `<p:cNvPr${a}/>`;
 }
 
 function phXml(s: { ph?: { type: string; idx?: number; sz?: string; orient?: string } }): string {

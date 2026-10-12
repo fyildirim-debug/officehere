@@ -207,6 +207,15 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
       if (p.x !== s.x || p.y !== s.y) setScroll(p.x, p.y);
     };
     ctl.focusGrid = () => inputRef.current?.focus({ preventScroll: true });
+    ctl.cellClientRect = (row, col) => {
+      const L = layoutRef.current;
+      const w = wrapRef.current;
+      if (!L || !w) return null;
+      const m = sheet.mergeAt(row, col);
+      const rc = m ? L.cellRect(m.r1, m.c1, m.r2, m.c2) : L.cellRect(row, col);
+      const b = w.getBoundingClientRect();
+      return { x: b.left + rc.x, y: b.top + rc.y, w: rc.w, h: rc.h };
+    };
   });
 
   // Sayfa değişince odak

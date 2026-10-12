@@ -4,10 +4,11 @@ import type { Presentation, Slide } from "../model/types";
 import { ScaledSlide } from "../render/SlideView";
 import type { Actions } from "../state/actions";
 import type { AppState } from "../state/store";
+import { sameThumb } from "../panes/ThumbnailPane";
 
 const Thumb = memo(function Thumb({ pres, slide, index, width }: { pres: Presentation; slide: Slide; index: number; width: number }) {
   return <ScaledSlide pres={pres} slide={slide} slideNumber={index + 1} width={width} />;
-});
+}, sameThumb);
 
 export function SorterView({ state, actions: a, onOpenSlide, onContextMenu }: { state: AppState; actions: Actions; onOpenSlide: (i: number) => void; onContextMenu: (e: React.MouseEvent) => void }) {
   const pres = state.pres;

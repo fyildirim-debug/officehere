@@ -84,9 +84,9 @@ class Media implements MediaStore {
   }
 }
 
-function makeCtx(part: string, media: Media, slideContent: boolean): WriteCtx {
+function makeCtx(part: string, media: Media, slideContent: boolean, slideNumbers?: Map<string, number>): WriteCtx {
   let id = 1;
-  return { rels: new RelsBuilder(), media, part, nextId: () => ++id, idMap: new Map(), slideContent };
+  return { rels: new RelsBuilder(), media, part, nextId: () => ++id, idMap: new Map(), slideContent, slideNumbers };
 }
 
 function tableStyleIds(shapes: Shape[], out: Set<string>) {
@@ -153,9 +153,10 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
 
   // Slaytlar
   const tableStyles = new Set<string>();
+  const slideNumbers = new Map(pres.slides.map((s, i) => [s.id, i + 1]));
   pres.slides.forEach((slide, i) => {
     const path = `ppt/slides/slide${i + 1}.xml`;
-    const ctx = makeCtx(path, media, true);
+    const ctx = makeCtx(path, media, true, slideNumbers);
     const li = Math.max(0, pres.layouts.findIndex((l) => l.id === slide.layoutId));
     ctx.rels.add(REL.slideLayout, `../slideLayouts/slideLayout${li + 1}.xml`);
     tableStyleIds(slide.shapes, tableStyles);

@@ -366,7 +366,7 @@ export function IconsDialog({ open, onClose, actions: a }: { open: boolean; onCl
         </>
       }
     >
-      <input type="text" placeholder="Simge ara (İngilizce ad)" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", height: 28, marginBottom: 8 }} onKeyDown={(e) => e.stopPropagation()} />
+      <input type="text" placeholder="Simgeleri ara (İngilizce ad)" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: "100%", height: 28, marginBottom: 8 }} onKeyDown={(e) => e.key !== "Escape" && e.stopPropagation()} />
       <div ref={gridRef} style={{ display: "grid", gridTemplateColumns: "repeat(10, 46px)", gap: 4, maxHeight: 320, overflowY: "auto" }}>
         {names.map((n) => {
           const C = ICON_LIB[n];

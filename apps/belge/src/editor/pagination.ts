@@ -19,6 +19,8 @@ export interface PageGeometry {
   gap: number;
   /** Belge varsayılan sayfa yapısı (kendi yapısı olmayan bölümler için). */
   defaultPage: PageSetup;
+  /** Birden Çok Sayfa: satır başına sayfa (0 = kapalı). */
+  tiles: number;
 }
 
 interface PagState {
@@ -46,7 +48,7 @@ const pagesKey = (pages: PageInfo[]) => pages.map((p) => `${p.top.toFixed(1)}:${
 
 /** React tarafıyla paylaşılan denetleyici: geometri ve düzen bilgisi. */
 export class PaginationController {
-  geometry: PageGeometry = { enabled: false, gap: 16, defaultPage: defaultPage() };
+  geometry: PageGeometry = { enabled: false, gap: 16, defaultPage: defaultPage(), tiles: 0 };
   info: LayoutInfo = singlePageInfo(defaultPage());
   view: EditorView | null = null;
   private listeners = new Set<(i: LayoutInfo) => void>();
@@ -75,7 +77,7 @@ export class PaginationController {
   publish(info: LayoutInfo) {
     const sameNotes = JSON.stringify(info.footnotes) === JSON.stringify(this.info.footnotes);
     const samePages = info.bodyW === this.info.bodyW && pagesKey(info.pages) === pagesKey(this.info.pages);
-    if (info.pageCount === this.info.pageCount && info.pageStarts.join() === this.info.pageStarts.join() && sameNotes && samePages) return;
+    if (info.pageCount === this.info.pageCount && info.pageStarts.join() === this.info.pageStarts.join() && sameNotes && samePages && info.tileOk === this.info.tileOk) return;
     // Değişmeyen parçaların başvurusu korunur (abone bileşenler gereksiz yere yeniden çizilmesin).
     if (sameNotes) info.footnotes = this.info.footnotes;
     if (samePages) info.pages = this.info.pages;
@@ -121,6 +123,7 @@ function makeWidget(b: PageBreakMark) {
       const s = document.createElement("span");
       s.className = b.kind === "line" ? "bl-pg bl-pg-line" : "bl-pg bl-pg-line bl-pg-span";
       s.style.height = `${b.h}px`;
+      if (b.tileRow) s.appendChild(Object.assign(document.createElement("span"), { className: "bl-pg-tilerow" }));
       return s;
     };
   }
@@ -128,6 +131,7 @@ function makeWidget(b: PageBreakMark) {
     const d = document.createElement("div");
     d.className = b.kind === "span" ? "bl-pg bl-pg-span" : "bl-pg";
     d.style.height = `${b.h}px`;
+    if (b.tileRow) d.appendChild(Object.assign(document.createElement("div"), { className: "bl-pg-tilerow" }));
     return d;
   };
 }
@@ -136,7 +140,7 @@ function buildDeco(doc: PMNode, breaks: PageBreakMark[], styles: SectionStyle[])
   const decos: Decoration[] = [];
   for (const b of breaks) {
     if (b.pos <= 0 || b.pos > doc.content.size) continue;
-    decos.push(Decoration.widget(b.pos, makeWidget(b), { side: -1, key: `pg:${b.kind}:${b.pos}:${b.h.toFixed(1)}`, ignoreSelection: true }));
+    decos.push(Decoration.widget(b.pos, makeWidget(b), { side: -1, key: `pg:${b.kind}:${b.pos}:${b.h.toFixed(2)}${b.tileRow ? ":t" : ""}`, ignoreSelection: true }));
   }
   for (const s of styles) {
     const node = doc.nodeAt(s.pos);
@@ -149,7 +153,8 @@ function buildDeco(doc: PMNode, breaks: PageBreakMark[], styles: SectionStyle[])
 function sameBreaks(a: PageBreakMark[], b: PageBreakMark[]) {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
-    if (a[i].pos !== b[i].pos || a[i].kind !== b[i].kind || Math.abs(a[i].h - b[i].h) > 0.5) return false;
+    const tol = a[i].kind === "span" || a[i].kind === "spanline" ? 0.05 : 0.5;
+    if (a[i].pos !== b[i].pos || a[i].kind !== b[i].kind || Math.abs(a[i].h - b[i].h) > tol || !!a[i].tileRow !== !!b[i].tileRow) return false;
   }
   return true;
 }
@@ -168,8 +173,8 @@ class PaginationView {
   private spanFix = new Map<number, number>();
   private tailFix = new Map<number, number>();
   private refineRounds = 0;
-  private spanTargets: { pos: number; target: number; page: number }[] = [];
-  private tailPredict: { pos: number; bottom: number; fill: boolean }[] = [];
+  private spanTargets: { pos: number; target: number; page: number; sec: number }[] = [];
+  private tailPredict: { pos: number; bottom: number; fill: boolean; sec: number }[] = [];
 
   constructor(
     private view: EditorView,
@@ -278,7 +283,9 @@ class PaginationView {
     }
     const t0 = performance.now();
     const dom = view.dom as HTMLElement;
+    const body = dom.closest(".bl-body");
     dom.classList.add("bl-measuring");
+    body?.classList.add("bl-measuring-body");
     let breaks: PageBreakMark[] = [];
     let styles: SectionStyle[] = [];
     let info: LayoutInfo | null = null;
@@ -304,11 +311,30 @@ class PaginationView {
       info = res.info;
     } finally {
       dom.classList.remove("bl-measuring");
+      body?.classList.remove("bl-measuring-body");
     }
+    if (info) this.markTileRows(breaks, info, g.tiles);
     this.slow = performance.now() - t0 > 12;
     if (!sameBreaks(breaks, old.breaks) || !sameStyles(styles, old.styles)) this.apply(breaks, styles);
     if (info) this.ctrl.publish(info);
     if ((this.spanTargets.length || this.tailPredict.some((t) => !t.fill)) && this.refineRounds < 3) requestAnimationFrame(() => this.refine());
+  }
+
+  /** Birden Çok Sayfa: her satırın ilk sayfasını başlatan kesmeyi satır başı olarak işaretler. */
+  private markTileRows(breaks: PageBreakMark[], info: LayoutInfo, tiles: number) {
+    info.tileOk = true;
+    if (tiles < 2 || info.pageCount <= tiles) return;
+    const marks: PageBreakMark[] = [];
+    for (let k = tiles; k < info.pageCount; k += tiles) {
+      const pos = info.pageStarts[k];
+      const b = breaks.find((x) => x.pos === pos && (x.kind === "block" || x.kind === "line"));
+      if (!b || info.pages[k]?.blank || info.pages[k - 1]?.blank) {
+        info.tileOk = false;
+        return;
+      }
+      marks.push(b);
+    }
+    for (const b of marks) b.tileRow = true;
   }
 
   /**
@@ -326,7 +352,7 @@ class PaginationView {
     if (realBottom <= c.contentEnd(p) + 0.5) {
       const end = c.contentEnd(p);
       if (c.endsPage) {
-        this.tailPredict.push({ pos: u.pos, bottom: end, fill: true });
+        this.tailPredict.push({ pos: u.pos, bottom: end, fill: true, sec: u.pos });
         return { breaks, bottom: end, page: p, style: { pos: u.pos, height: Math.max(0, end - c.top) }, starts };
       }
       return { breaks, bottom: realBottom, page: p, starts };
@@ -379,7 +405,7 @@ class PaginationView {
           const target = c.pages[np].top + c.pages[np].mt;
           const est = target - (setTop + used) + (this.spanFix.get(at) ?? 0);
           breaks.push({ pos: at, kind, h: Math.max(1, est) });
-          this.spanTargets.push({ pos: at, target, page: np });
+          this.spanTargets.push({ pos: at, target, page: np, sec: u.pos });
           starts.push({ page: np, pos: at });
           p = np;
           setTop = target;
@@ -392,11 +418,11 @@ class PaginationView {
       const R = last ? last.bottom - n0 + last.mb - A : 0;
       if (c.endsPage) {
         const end = c.contentEnd(p);
-        this.tailPredict.push({ pos: u.pos, bottom: end, fill: true });
+        this.tailPredict.push({ pos: u.pos, bottom: end, fill: true, sec: u.pos });
         return { breaks, bottom: end, page: p, style: { pos: u.pos, height: Math.max(0, end - c.top) }, starts };
       }
       const bottom = setTop + R / cols + (this.tailFix.get(u.pos) ?? 0);
-      this.tailPredict.push({ pos: u.pos, bottom, fill: false });
+      this.tailPredict.push({ pos: u.pos, bottom, fill: false, sec: u.pos });
       return { breaks, bottom, page: p, starts };
     } finally {
       el.classList.remove("bl-narrow");
@@ -413,12 +439,18 @@ class PaginationView {
     const originY = host.getBoundingClientRect().top;
     const Y = (sy: number) => (sy - originY) / scale;
     let changed = false;
+    // Zincirdeki her ara parçanın yalnız kendi hatası düzeltilir (öncekinin düzeltmesi sonrakini zaten kaydırır).
+    const upstream = new Map<number, number>();
+    const errs: number[] = [];
     for (const s of this.spanTargets) {
       const el = findWidget(view, s.pos);
       if (!el) continue;
-      const delta = s.target - Y(el.getBoundingClientRect().bottom);
-      if (Math.abs(delta) > 0.5) {
-        this.spanFix.set(s.pos, (this.spanFix.get(s.pos) ?? 0) + delta);
+      const err = s.target - Y(el.getBoundingClientRect().bottom);
+      errs.push(err);
+      const local = err - (upstream.get(s.sec) ?? 0);
+      upstream.set(s.sec, err);
+      if (Math.abs(err) > 0.25 && Math.abs(local) > 0.05) {
+        this.spanFix.set(s.pos, (this.spanFix.get(s.pos) ?? 0) + local);
         changed = true;
       }
     }
@@ -426,12 +458,14 @@ class PaginationView {
       if (t.fill) continue;
       const el = view.nodeDOM(t.pos);
       if (!(el instanceof HTMLElement)) continue;
-      const delta = Y(el.getBoundingClientRect().bottom) - t.bottom;
-      if (Math.abs(delta) > 0.5) {
-        this.tailFix.set(t.pos, (this.tailFix.get(t.pos) ?? 0) + delta);
+      const err = Y(el.getBoundingClientRect().bottom) - t.bottom;
+      const local = err + (upstream.get(t.sec) ?? 0);
+      if (Math.abs(local) > 0.25) {
+        this.tailFix.set(t.pos, (this.tailFix.get(t.pos) ?? 0) + local);
         changed = true;
       }
     }
+    if (import.meta.env.DEV) (window as unknown as { __pgdbg?: unknown[] }).__pgdbg = [...((window as unknown as { __pgdbg?: unknown[] }).__pgdbg ?? []), { round: this.refineRounds, changed, errs, fix: [...this.spanFix.entries()] }];
     if (changed) {
       this.refineRounds++;
       this.measure();

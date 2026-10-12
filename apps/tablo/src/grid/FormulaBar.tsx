@@ -49,12 +49,16 @@ export function FormulaBar({ ctl }: { ctl: Controller }) {
           onFocus={(ev) => {
             setNameFocus(true);
             setNameText(ctl.nameBoxText());
-            requestAnimationFrame(() => ev.target.select());
+            const el = ev.target;
+            // select() Chromium'da odağı geri alır: yalnız hâlâ odaktaysa seç
+            requestAnimationFrame(() => document.activeElement === el && el.select());
           }}
           onBlur={() => setNameFocus(false)}
           onChange={(ev) => setNameText(ev.target.value)}
           onKeyDown={(ev) => {
             if (ev.key === "Enter") {
+              // Odak ızgaraya geçince Enter'ın düzenleyiciye satır sonu eklemesini önle
+              ev.preventDefault();
               const t = nameText.trim();
               if (!ctl.goTo(t)) {
                 // Geçerli bir ad ise seçim için tanımla (Excel davranışı)
@@ -65,6 +69,7 @@ export function FormulaBar({ ctl }: { ctl: Controller }) {
               setNameFocus(false);
               ctl.focusGrid();
             } else if (ev.key === "Escape") {
+              ev.preventDefault();
               setNameFocus(false);
               ctl.focusGrid();
             }

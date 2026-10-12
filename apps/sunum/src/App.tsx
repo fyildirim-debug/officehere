@@ -37,6 +37,8 @@ import { FontDialog, ParagraphDialog } from "./dialogs/TextDialogs";
 import { DateTimeDialog, HeaderFooterDialog, IconsDialog, InsertTableDialog, SymbolDialog } from "./dialogs/InsertDialogs";
 import { AboutDialog, FindDialog, ReplaceFontsDialog, ShortcutsDialog, ShowSetupDialog, SizePosDialog, SlideSizeDialog, ZoomDialog, type ShowSettings } from "./dialogs/MiscDialogs";
 import { downloadBlob } from "@officehere/core";
+import { LinkDialog } from "./dialogs/LinkDialog";
+import { applyLink, currentLink, followLink, linkContext, removeLink, type LinkContext } from "./state/linkActions";
 import "./styles/slide.css";
 import "./styles/editor.css";
 import "./styles/app.css";
@@ -110,10 +112,11 @@ export function App() {
   const [printing, setPrinting] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [guides, setGuides] = useState({ h: [360], v: [640] });
+  const [linkCtx, setLinkCtx] = useState<LinkContext | null>(null);
   const [showSettings, setShowSettings] = useState<ShowSettings>({ loop: false, noAnimations: false, presenter: false });
   const ctxMenu = useContextMenu();
   const blockedRef = useRef(false);
-  blockedRef.current = !!dialog || backstage || !!show;
+  blockedRef.current = !!dialog || !!linkCtx || backstage || (!!show && !show.preview);
 
   const lifecycle = useDocumentLifecycle({
     title: state.fileName,
@@ -209,6 +212,12 @@ export function App() {
         a.store.set({ spellcheck: on, message: { text: on ? "Yazım denetimi açık: hatalı sözcükler metin düzenlenirken kırmızı dalgalı çizgiyle gösterilir." : "Yazım denetimi kapatıldı.", kind: "info" } });
       },
       zoomTo: (z, fit) => a.store.set({ zoom: Math.max(10, Math.min(400, z)), fit: !!fit }),
+      insertLink: () => setLinkCtx(linkContext(a)),
+      openLink: () => {
+        const l = currentLink(a);
+        if (l) followLink(a, l);
+      },
+      removeLink: () => removeLink(a),
     }),
     [a, store, showSettings.presenter],
   );
@@ -231,6 +240,7 @@ export function App() {
     showFromCurrent: () => cmd.startShow("current"),
     find: () => setDialog("find"),
     replace: () => setDialog("replace"),
+    link: () => cmd.insertLink(),
     isBlocked: () => blockedRef.current,
   });
   useClipboard(a, useCallback(() => blockedRef.current, []));
@@ -527,6 +537,7 @@ export function App() {
       <ShowSetupDialog open={dialog === "showSetup"} onClose={closeDialog} value={showSettings} onChange={setShowSettings} />
       <ShortcutsDialog open={dialog === "shortcuts"} onClose={closeDialog} />
       <AboutDialog open={dialog === "about"} onClose={closeDialog} />
+      <LinkDialog context={linkCtx} pres={state.pres} onApply={(c, l, t) => applyLink(a, c, l, t)} onClose={() => setLinkCtx(null)} />
     </>
   );
 }

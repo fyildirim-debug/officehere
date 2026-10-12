@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ArrowRedo20Regular, ArrowUndo20Regular, Save20Regular } from "@fluentui/react-icons";
 import { AppShell, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, useHotkeys, type RibbonTabDef } from "@officehere/ui";
+import { baseName } from "@officehere/core";
 import { Controller } from "./controller";
 import { Grid } from "./grid/Grid";
 import { FormulaBar } from "./grid/FormulaBar";
@@ -22,9 +23,11 @@ import { ChartDesignTab, ChartFormatTab } from "./ribbon/ChartTabs";
 import { FileView, useFileActions } from "./FileView";
 import { FilterMenu } from "./grid/FilterMenu";
 import { PageLayoutView } from "./grid/PageLayoutView";
+import { installTestHook } from "./testHook";
 
 export function App() {
   const ctl = useMemo(() => new Controller(), []);
+  useEffect(() => installTestHook(ctl), [ctl]);
   // Geliştirme kipinde tarayıcı testleri için erişim
   if (import.meta.env.DEV) (window as unknown as { __tablo?: Controller }).__tablo = ctl;
   useSyncExternalStore(ctl.subscribe, ctl.getVersion);
@@ -37,7 +40,7 @@ export function App() {
   const files = useFileActions(ctl);
 
   const lifecycle = useDocumentLifecycle({
-    title: ctl.fileName,
+    title: baseName(ctl.fileName),
     dirty: ctl.dirty,
     onOpenPath: (p) => void files.openPath(p),
     onSave: () => files.save(),
@@ -135,7 +138,7 @@ export function App() {
       titleBar={
         <TitleBar
           app="tablo"
-          title={ctl.fileName}
+          title={baseName(ctl.fileName)}
           dirty={ctl.dirty}
           onSearch={(q) => {
             if (q.trim()) setDialog({ id: "find", arg: { query: q } });

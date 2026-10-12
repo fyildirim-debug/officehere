@@ -213,3 +213,8 @@
 .presenter-btn:hover {
   background: #444;
 }
+
+/* Gösteri sırasında açılan bağlam menüleri gösterinin üstünde görünsün. */
+html:has(.show-root) .oh-popover {
+  z-index: 3100;
+}

@@ -114,7 +114,7 @@ export function HomeTab({ ctx }: { ctx: RibbonCtx }) {
 
   return (
     <>
-      <RibbonGroup label="Pano" icon={<ClipboardPaste24Regular />} onLauncher={() => cmd.paste()} launcherTip="Pano">
+      <RibbonGroup label="Pano" icon={<ClipboardPaste24Regular />}>
         <RibbonSplitButton
           size="large"
           icon={<ClipboardPaste32Regular />}

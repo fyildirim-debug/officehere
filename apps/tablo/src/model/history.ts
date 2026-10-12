@@ -62,6 +62,10 @@ export class UndoManager {
     return e;
   }
 
+  get undoCount(): number {
+    return this.past.length;
+  }
+
   get canUndo(): boolean {
     return this.past.length > 0;
   }

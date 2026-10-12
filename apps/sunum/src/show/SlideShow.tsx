@@ -7,6 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Menu, MenuItem, MenuSeparator, useContextMenu } from "@officehere/ui";
 import type { Presentation, Shape, Slide } from "../model/types";
 import { findShape } from "../model/ops";
+import { linkSlideIndex } from "../model/links";
 import { ScaledSlide, SlideView } from "../render/SlideView";
 import { animationKeyframes, buildSteps, initiallyHidden, transitionPlan, type StepEffect } from "./effects";
 
@@ -385,9 +386,24 @@ export function SlideShow({ pres, startIndex, mode, onExit, loop, noAnimations, 
     }
   };
 
+  /** Gösteride köprüye tıklanınca: dış adres yeni sekmede, sunu içi hedef slayta gidilir. */
+  const followShowLink = (link: string) => {
+    const i = linkSlideIndex(link, pres, index);
+    if (i === null) {
+      window.open(link, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (i >= 0 && i < pres.slides.length) goTo(i);
+  };
+
   const onClick = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
     if ((e.target as Element).closest("button, .show-bar, .presenter-side")) return;
+    const linkEl = (e.target as Element).closest("[data-link]") as HTMLElement | null;
+    if (linkEl?.dataset.link && screen === "none") {
+      followShowLink(linkEl.dataset.link);
+      return;
+    }
     if (screen !== "none") {
       setScreen("none");
       return;

@@ -1,4 +1,4 @@
-// Düzen sekmesi: Sayfa Yapısı ve Paragraf (girinti/aralık).
+// Düzen sekmesi: Sayfa Yapısı (bölüm başına), Kesmeler (sayfa/sütun/bölüm sonları) ve Paragraf.
 import {
   DocumentMargins24Regular,
   DocumentLandscape24Regular,
@@ -12,9 +12,12 @@ import {
   Orientation24Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator, MenuHeader, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonStack, RibbonLabel } from "@officehere/ui";
+import type { Editor } from "@tiptap/core";
 import { useBelge } from "../state/context";
-import { MARGIN_PRESETS, PAGE_SIZE_LIST, fmtCm, marginPresetId, pageSizeId, type PageSetup } from "../model/document";
+import { MARGIN_PRESETS, PAGE_SIZE_LIST, fmtCm, marginPresetId, pageSizeId, samePage, type DocSettings, type PageSetup, type SectionAttrs } from "../model/document";
 import { setParaAttrs } from "../editor/commands";
+import { isolateSelection } from "../editor/sections";
+import { applyPageSetup, sectionPageAt } from "../state/pageSetup";
 
 const PT_PER_CM = 72 / 2.54;
 
@@ -29,13 +32,40 @@ export function setPaperSize(p: PageSetup, id: string): PageSetup {
   return p.orientation === "landscape" ? { ...p, width: s.h, height: s.w } : { ...p, width: s.w, height: s.h };
 }
 
+/**
+ * Sütun sayısını uygular. Metin seçiliyse Word'deki gibi seçim sürekli bölüm sonlarıyla ayrı
+ * bir bölüme alınır ve yalnız ona uygulanır; değilse imleçteki bölüme (tek bölümde tüm belgeye).
+ */
+export function applyColumns(editor: Editor, settings: DocSettings, updateSettings: (fn: (s: DocSettings) => DocSettings) => void, fn: (p: PageSetup) => PageSetup) {
+  const { selection, doc } = editor.state;
+  if (!selection.empty && doc.textBetween(selection.from, selection.to).trim()) {
+    const secIdx = selection.$from.index(0);
+    const own = (doc.child(secIdx).attrs.page as PageSetup | null) ?? null;
+    const mid = isolateSelection(editor.state, editor.view.dispatch, own);
+    if (mid !== null) {
+      const d = editor.state.doc;
+      const node = d.nodeAt(mid);
+      if (node) {
+        const next = fn((node.attrs.page as PageSetup | null) ?? settings.page);
+        editor.view.dispatch(editor.state.tr.setNodeMarkup(mid, undefined, { ...(node.attrs as SectionAttrs), page: samePage(next, settings.page) ? null : next }));
+      }
+      return;
+    }
+  }
+  applyPageSetup(editor, settings, updateSettings, fn);
+}
+
 export function LayoutTab() {
   const ctx = useBelge();
   const { settings, updateSettings, fmt, editor } = ctx;
-  const page = settings.page;
-  const setPage = (fn: (p: PageSetup) => PageSetup) => updateSettings((s) => ({ ...s, page: fn(s.page) }));
+  // İmleçteki bölümün etkin sayfa yapısı (fmt.sectionKey değişince yenilenir).
+  void fmt.sectionKey;
+  const page = sectionPageAt(editor, settings.page, fmt.section);
+  const setPage = (fn: (p: PageSetup) => PageSetup) => applyPageSetup(editor, settings, updateSettings, fn);
   const mp = marginPresetId(page);
   const sz = pageSizeId(page);
+  const chain = () => editor.chain().focus();
+  const sectionBreak = (kind: SectionAttrs["kind"]) => chain().insertSectionBreak(kind).run();
 
   return (
     <>
@@ -96,7 +126,7 @@ export function LayoutTab() {
                 [2, "İki"],
                 [3, "Üç"],
               ].map(([n, label]) => (
-                <MenuItem key={n} label={label as string} checked={page.columns === n} onClick={() => setPage((p) => ({ ...p, columns: n as number }))} />
+                <MenuItem key={n} label={label as string} checked={page.columns === n} onClick={() => applyColumns(editor, settings, updateSettings, (p) => ({ ...p, columns: n as number }))} />
               ))}
               <MenuSeparator />
               <MenuItem label="Diğer Sütunlar..." onClick={() => ctx.openDialog("columns")} />
@@ -108,10 +138,16 @@ export function LayoutTab() {
             icon={<DocumentPageBreak24Regular />}
             label="Kesmeler"
             menu={
-              <Menu width={300}>
+              <Menu width={330}>
                 <MenuHeader>Sayfa Sonları</MenuHeader>
-                <MenuItem label="Sayfa" description="Bir sayfanın nerede bitip sonraki sayfanın nerede başladığını işaretleyin." shortcut="Ctrl+Enter" onClick={() => editor.chain().focus().setPageBreak().run()} />
-                <MenuItem label="Metin Kaydırma" description="Satır sonu (Shift+Enter)." onClick={() => editor.chain().focus().setHardBreak().run()} />
+                <MenuItem label="Sayfa" description="Bir sayfanın nerede bitip sonraki sayfanın nerede başladığını işaretleyin." shortcut="Ctrl+Enter" onClick={() => chain().setPageBreak().run()} />
+                <MenuItem label="Sütun" description="Sütun sonundan sonraki metin sonraki sütunun başlangıcında yer alır." shortcut="Ctrl+Shift+Enter" onClick={() => chain().insertColumnBreak().run()} />
+                <MenuItem label="Metin Kaydırma" description="Web sayfalarındaki nesnelerin etrafındaki metni ayırın (satır sonu, Shift+Enter)." onClick={() => chain().setHardBreak().run()} />
+                <MenuHeader>Bölüm Sonları</MenuHeader>
+                <MenuItem label="Sonraki Sayfa" description="Bölüm sonu ekleyin ve yeni bölümü sonraki sayfada başlatın." onClick={() => sectionBreak("nextPage")} />
+                <MenuItem label="Sürekli" description="Bölüm sonu ekleyin ve yeni bölümü aynı sayfada başlatın." onClick={() => sectionBreak("continuous")} />
+                <MenuItem label="Çift Sayfa" description="Bölüm sonu ekleyin ve yeni bölümü sonraki çift numaralı sayfada başlatın." onClick={() => sectionBreak("evenPage")} />
+                <MenuItem label="Tek Sayfa" description="Bölüm sonu ekleyin ve yeni bölümü sonraki tek numaralı sayfada başlatın." onClick={() => sectionBreak("oddPage")} />
               </Menu>
             }
           />

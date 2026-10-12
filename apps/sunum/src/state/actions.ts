@@ -322,7 +322,17 @@ export class Actions {
     const empty = (x: Shape): x is SpShape => x.kind === "sp" && !!x.ph && types.includes(x.ph.type) && (!x.text || x.text.paragraphs.every((pp) => pp.runs.every((r) => !r.text)));
     const selected = this.selectedShapes().find(empty);
     if (selected) return selected;
-    return this.pendingPlaceholder ? (sl.shapes.find((x) => x.id === this.pendingPlaceholder && empty(x)) as SpShape | undefined) : undefined;
+    if (this.pendingPlaceholder) {
+      const pending = sl.shapes.find((x) => x.id === this.pendingPlaceholder && empty(x)) as SpShape | undefined;
+      if (pending) return pending;
+    }
+    // Hiçbir şey seçili değilse ilk boş uygun yer tutucu kullanılır (ör. "Başlık ve İçerik" slaytında içerik alanı).
+    if (this.s.sel.length) return undefined;
+    for (const t of types) {
+      const hit = sl.shapes.find((x): x is SpShape => empty(x) && (x as SpShape).ph!.type === t);
+      if (hit) return hit;
+    }
+    return undefined;
   }
 
   /** Yer tutucu simgesinden ekleme yapılırken hedef. */

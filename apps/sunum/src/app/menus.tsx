@@ -15,17 +15,23 @@ import {
   SlideLayout20Regular,
   SlideMultiple20Regular,
   Ruler20Regular,
+  Link20Regular,
+  LinkDismiss20Regular,
+  LinkEdit20Regular,
+  Open20Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator } from "@officehere/ui";
 import { LayoutGallery } from "../ribbon/common";
 import type { Actions } from "../state/actions";
 import type { AppCommands } from "../ribbon/types";
+import { currentLink } from "../state/linkActions";
 
 
 export function shapeMenu(a: Actions, cmd: AppCommands, openDialog: (d: "sizePos") => void) {
   const shapes = a.selectedShapes();
   const sp = shapes.length === 1 && shapes[0].kind === "sp" ? shapes[0] : undefined;
   const isPic = shapes.length === 1 && shapes[0].kind === "pic";
+  const link = currentLink(a);
   return (
     <Menu>
       <MenuItem icon={<Cut20Regular />} label="Kes" shortcut="Ctrl+X" onClick={cmd.cut} />
@@ -63,6 +69,16 @@ export function shapeMenu(a: Actions, cmd: AppCommands, openDialog: (d: "sizePos
           </Menu>
         }
       />
+      <MenuSeparator />
+      {link ? (
+        <>
+          <MenuItem icon={<LinkEdit20Regular />} label="Bağlantıyı Düzenle..." onClick={cmd.insertLink} />
+          <MenuItem icon={<Open20Regular />} label="Bağlantıyı Aç" onClick={cmd.openLink} />
+          <MenuItem icon={<LinkDismiss20Regular />} label="Bağlantıyı Kaldır" onClick={cmd.removeLink} />
+        </>
+      ) : (
+        <MenuItem icon={<Link20Regular />} label="Bağlantı..." shortcut="Ctrl+K" onClick={cmd.insertLink} />
+      )}
       <MenuSeparator />
       <MenuItem label="Boyut ve Konum..." onClick={() => openDialog("sizePos")} />
       <MenuItem icon={<PaintBucket20Regular />} label={isPic ? "Resmi Biçimlendir..." : "Şekli Biçimlendir..."} onClick={() => cmd.togglePane("shape")} />

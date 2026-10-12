@@ -154,7 +154,7 @@ export function insertSectionBreak(state: EditorState, dispatch: ((tr: Transacti
   // Yeni bölümün türünü (bölünen ilk parçaya değil ikinciye) ayarla.
   const $c = tr.doc.resolve(Math.min(cursor, tr.doc.content.size));
   if ($c.depth >= 1 && $c.node(1).type.name === "section") tr.setNodeMarkup($c.before(1), undefined, attrs);
-  tr.setSelection(TextSelection.near($c));
+  tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(cursor, tr.doc.content.size))));
   if (dispatch) dispatch(tr.scrollIntoView());
   return true;
 }
@@ -297,7 +297,9 @@ function secMark(label: string) {
     d.className = "bl-secmark";
     d.contentEditable = "false";
     const s = document.createElement("span");
-    s.textContent = `Bölüm Sonu (${label})`;
+    const b = document.createElement("b");
+    b.textContent = `Bölüm Sonu (${label})`;
+    s.appendChild(b);
     d.appendChild(s);
     return d;
   };
@@ -349,4 +351,29 @@ export function createSectionLayout(src: SectionLayoutSource) {
       ];
     },
   });
+}
+
+/**
+ * Seçili metne sütun uygulanırken (Word gibi) seçimin önüne ve arkasına sürekli bölüm sonu
+ * eklenir; ortadaki yeni bölümün konumu döner. Seçim tek bölüm içinde değilse null.
+ */
+export function isolateSelection(state: EditorState, dispatch: (tr: Transaction) => void, page: PageSetup | null): number | null {
+  const { $from, $to, empty } = state.selection;
+  if (empty || $from.depth < 2 || $to.depth < 2 || $from.index(0) !== $to.index(0)) return null;
+  const secPos = $from.before(1);
+  const sec = $from.node(1);
+  const start = $from.before(2);
+  const end = $to.after(2);
+  const tr = state.tr;
+  const attrs = { kind: "continuous" as SectionKind, page };
+  // Önce son (konumlar kaymasın), sonra baş.
+  if (end < secPos + sec.nodeSize - 1) tr.split(end, 1, [{ type: state.schema.nodes.section, attrs: { kind: "continuous", page: sec.attrs.page } }]);
+  let mid = secPos;
+  if (start > secPos + 1) {
+    tr.split(start, 1, [{ type: state.schema.nodes.section, attrs }]);
+    mid = start + 1;
+  }
+  tr.setSelection(state.selection.map(tr.doc, tr.mapping));
+  dispatch(tr);
+  return mid;
 }

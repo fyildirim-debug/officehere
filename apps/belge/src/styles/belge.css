@@ -67,8 +67,67 @@
 }
 
 .is-print .bl-body .ProseMirror {
-  padding: 0 var(--bl-mr) 0 var(--bl-ml);
   min-height: var(--bl-minh);
+}
+
+/* Bölümler: kenar boşlukları ve sütunlar bölüm kutusuna dekorasyonla uygulanır. */
+.bl-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bl-section > * {
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+/* Çok sütunlu bölüm: metin CSS sütunları arasında satır satır akar. */
+.bl-section.is-cols {
+  display: block;
+}
+
+.is-web .bl-section {
+  padding: 0 !important;
+  column-count: auto !important;
+  height: auto !important;
+}
+
+.bl-measuring .bl-section {
+  height: auto !important;
+}
+
+/* Dar ölçüm: çok sütunlu bölüm tek ve sütun genişliğinde bir akışa döner. */
+.bl-section.is-cols.bl-narrow {
+  column-count: auto !important;
+  padding-right: var(--bl-npr) !important;
+  height: auto !important;
+}
+
+/* Sayfa sınırında tüm sütunları kesen ara parça. */
+.bl-pg-span {
+  column-span: all;
+}
+
+/* Birden Çok Sayfa: sayfalar yan yana (gövde CSS sütunlarıyla sayfa sayfa bölünür). */
+.bl-body.is-tiled .ProseMirror {
+  width: var(--bl-bodyw);
+  min-height: 0 !important;
+}
+
+.bl-body.is-tiled.bl-measuring-body {
+  column-count: auto !important;
+  height: auto !important;
+}
+
+.bl-pg-tilerow {
+  display: block;
+  column-span: all;
+  height: 0;
+}
+
+.is-tiled .bl-scroll {
+  overflow-x: auto;
 }
 
 /* Web Düzeni: sayfa sınırı yok, metin pencereye sarılır. */
@@ -321,6 +380,116 @@
 /* ------------------------------------------------------------------ */
 /* Cetvel                                                               */
 /* ------------------------------------------------------------------ */
+
+.bl-scroll-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.bl-scroll-row > .bl-scroll {
+  flex: 1;
+  min-width: 0;
+}
+
+.bl-ruler-corner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 25px;
+  background: var(--oh-canvas-bg);
+  z-index: 3;
+}
+
+/* Dikey cetvel */
+.bl-vruler-host {
+  width: 25px;
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  background: var(--oh-canvas-bg);
+  border-right: 1px solid var(--oh-separator);
+  user-select: none;
+}
+
+.bl-vruler {
+  position: absolute;
+  inset: 0;
+  font: 9px var(--oh-font-ui);
+  color: #555;
+}
+
+.bl-vruler-track {
+  position: absolute;
+  left: 4px;
+  width: 16px;
+  background: #fff;
+  border: 1px solid #c8c8c8;
+  box-sizing: border-box;
+}
+
+.bl-vruler-margin {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: #d6d6d6;
+}
+
+:root[data-oh-theme="dark"] .bl-vruler-track,
+:root[data-oh-theme="black"] .bl-vruler-track {
+  background: #4a4a4a;
+  border-color: #555;
+}
+
+:root[data-oh-theme="dark"] .bl-vruler-margin,
+:root[data-oh-theme="black"] .bl-vruler-margin {
+  background: #333;
+}
+
+:root[data-oh-theme="dark"] .bl-vruler,
+:root[data-oh-theme="black"] .bl-vruler {
+  color: #ccc;
+}
+
+.bl-vruler-tick {
+  position: absolute;
+  left: 10.5px;
+  width: 3px;
+  height: 1px;
+  background: #777;
+}
+
+.bl-vruler-tick.is-half {
+  left: 8.5px;
+  width: 6px;
+}
+
+.bl-vruler-num {
+  position: absolute;
+  left: 4px;
+  width: 16px;
+  text-align: center;
+  transform: translateY(-50%);
+  line-height: 10px;
+}
+
+.bl-vruler-mhandle {
+  position: absolute;
+  left: 4px;
+  height: 7px;
+  width: 16px;
+  cursor: ns-resize;
+  z-index: 1;
+}
+
+.bl-vruler-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dotted #000;
+  pointer-events: none;
+}
 
 .bl-ruler-host {
   height: 25px;

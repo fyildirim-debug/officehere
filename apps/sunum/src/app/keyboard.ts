@@ -14,6 +14,7 @@ export interface KeyHandlers {
   showFromCurrent: () => void;
   find: () => void;
   replace: () => void;
+  link: () => void;
   isBlocked: () => boolean;
 }
 
@@ -59,6 +60,7 @@ export function useKeyboard(actions: Actions, h: KeyHandlers) {
         if (k === "M") return run(() => actions.newSlide());
         if (k === "F") return run(() => hd.find());
         if (k === "H") return run(() => hd.replace());
+        if (k === "K") return run(() => hd.link());
         if (k === "B") return run(() => applyRun(actions, (p, _pp, eff) => ({ ...p, bold: !eff.bold })));
         if (k === "I") return run(() => applyRun(actions, (p, _pp, eff) => ({ ...p, italic: !eff.italic })));
         if (k === "U") return run(() => applyRun(actions, (p, _pp, eff) => ({ ...p, underline: !eff.underline })));

@@ -12,9 +12,25 @@ export interface ThumbnailPaneProps {
   onContextMenu: (e: React.MouseEvent, onSlide: boolean) => void;
 }
 
-const Thumb = memo(function Thumb({ pres, slide, index, width }: { pres: Presentation; slide: Slide; index: number; width: number }) {
+type ThumbProps = { pres: Presentation; slide: Slide; index: number; width: number };
+
+/** Küçük resim yalnız kendi slaydı ya da ortak görünüm (tema, asıl slayt, düzenler) değişince yeniden çizilir. */
+export function sameThumb(a: ThumbProps, b: ThumbProps): boolean {
+  return (
+    a.slide === b.slide &&
+    a.index === b.index &&
+    a.width === b.width &&
+    a.pres.theme === b.pres.theme &&
+    a.pres.master === b.pres.master &&
+    a.pres.layouts === b.pres.layouts &&
+    a.pres.width === b.pres.width &&
+    a.pres.height === b.pres.height
+  );
+}
+
+const Thumb = memo(function Thumb({ pres, slide, index, width }: ThumbProps) {
   return <ScaledSlide pres={pres} slide={slide} slideNumber={index + 1} width={width} />;
-});
+}, sameThumb);
 
 export function ThumbnailPane({ state, actions, width, onContextMenu }: ThumbnailPaneProps) {
   const pres = state.pres;

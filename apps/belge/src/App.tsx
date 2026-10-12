@@ -7,6 +7,9 @@ import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { ArrowRedo20Regular, ArrowUndo20Regular, Save20Regular, Print20Regular, DocumentPdf24Regular, Code24Regular, DocumentText24Regular, Document24Regular } from "@fluentui/react-icons";
 import { AppShell, MessageBar, OfficeBackstage, QatButton, Ribbon, TitleBar, getUserName, useContextMenu, useDocumentLifecycle, useHotkeys, type OfficeBackstagePage } from "@officehere/ui";
 import { defaultSettings, emptyDoc, pageMetrics, type DocSettings } from "./model/document";
+import { setActiveNoteEditor, useActiveNoteEditor } from "./state/activeNote";
+import { sectionAt, sectionGeoms } from "./editor/sections";
+import { renderNoteHtml } from "./views/noteHtml";
 import { resolveStyles, styleSheetCss } from "./model/styles";
 import { editorExtensions } from "./editor/extensions";
 import { PaginationController } from "./editor/pagination";
@@ -18,7 +21,7 @@ import { readImageFile } from "./editor/image";
 import { annotateNotesHtml } from "./editor/notes";
 import { BelgeContext, type BelgeCtx, type DialogKind, type DialogState, type ViewOptions } from "./state/context";
 import { clearDraft, readDraft, useFileOps, type Draft } from "./state/useFileOps";
-import { DocumentView, PAGE_GAP } from "./views/DocumentView";
+import { DocumentView, TILE_GAP } from "./views/DocumentView";
 import { buildPrintRoot, removePrintRoot } from "./views/printRender";
 import { ReadMode } from "./views/ReadMode";
 import { BelgeStatusBar } from "./views/BelgeStatusBar";
@@ -50,7 +53,12 @@ export function App() {
   const [ribbonCollapsed, setRibbonCollapsed] = useState(false);
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [backstage, setBackstage] = useState<OfficeBackstagePage | null>(null);
-  const [hfEditing, setHfEditing] = useState<"header" | "footer" | null>(null);
+  const [hfEditing, setHfEditingState] = useState<"header" | "footer" | null>(null);
+  const [hfPage, setHfPage] = useState(0);
+  const setHfEditing = useCallback((w: "header" | "footer" | null, page?: number) => {
+    if (page !== undefined) setHfPage(page);
+    setHfEditingState(w);
+  }, []);
   const [hfEditor, setHfEditor] = useState<Editor | null>(null);
   const [activeComment, setActiveComment] = useState<string | null>(null);
   const [note, setNote] = useState<Note | null>(null);
@@ -154,7 +162,16 @@ export function App() {
     };
   }, [editor]);
 
-  const active = hfEditing && hfEditor ? hfEditor : editor;
+  // Şeridin hedefi: üst/alt bilgi, odaktaki not düzenleyicisi ya da belge gövdesi.
+  const noteEditor = useActiveNoteEditor();
+  const active = hfEditing && hfEditor ? hfEditor : (noteEditor ?? editor);
+  useEffect(() => {
+    const off = () => setActiveNoteEditor(null);
+    editor.on("focus", off);
+    return () => {
+      editor.off("focus", off);
+    };
+  }, [editor]);
   const fmt = useEditorState({
     editor: active,
     selector: ({ editor: ed }) => computeFormat(ed, stylesRef.current),
@@ -194,7 +211,7 @@ export function App() {
 
   // Şerit/menü etkileşiminden sonra odak boşta kalırsa belgeye dön (Word'deki gibi).
   const activeRef = useRef(editor);
-  activeRef.current = hfEditing && hfEditor ? hfEditor : editor;
+  activeRef.current = active;
   useEffect(() => {
     const onUp = (e: PointerEvent) => {
       const t = e.target as HTMLElement;
@@ -334,7 +351,7 @@ export function App() {
       // Not metni alanı sayfalama sonrası çizilir; hazır olunca odaklan.
       let tries = 0;
       const focus = () => {
-        const el = document.querySelector<HTMLTextAreaElement>(`textarea[data-note-id="${id}"]`);
+        const el = document.querySelector<HTMLElement>(`.ProseMirror[data-note-id="${id}"]`);
         if (el) el.focus();
         else if (tries++ < 90) requestAnimationFrame(focus);
       };
@@ -350,39 +367,33 @@ export function App() {
   const zoomTo = useCallback(
     (z: ZoomTarget | "100" | "onePage" | "multi" | "width") => {
       const sc = scrollRef.current;
-      const m = pageMetrics(settings.page);
+      // İmleçteki sayfanın geometrisi (bölümler farklı boyutta olabilir).
+      const info = controller.info;
+      const pg = info.pages[Math.min(info.pages.length - 1, controller.pageOf(editor.state.selection.from))] ?? info.pages[0];
+      const w = info.bodyW || pg.w;
       const availW = (sc?.clientWidth ?? 1000) - 48;
       const availH = (sc?.clientHeight ?? 700) - 48;
       let pct = view.zoom;
       const target = typeof z === "string" ? (z === "100" ? { pct: 100 } : { fit: z === "onePage" ? "page" : z }) : z;
       if ("pct" in target) pct = target.pct;
-      else if (target.fit === "width") pct = (availW / m.w) * 100;
-      else if (target.fit === "text") pct = (availW / m.contentW) * 100;
-      else if (target.fit === "page") pct = Math.min(availW / m.w, availH / m.h) * 100;
-      else if (target.fit === "multi") pct = Math.min(availW / m.w, availH / (m.h * 2 + 16)) * 100;
-      setView({ zoom: Math.max(10, Math.min(500, Math.round(pct))) });
+      else if (target.fit === "width") pct = (availW / w) * 100;
+      else if (target.fit === "text") pct = (availW / (pg.w - pg.ml - pg.mr)) * 100;
+      else if (target.fit === "page") pct = Math.min(availW / w, availH / pg.h) * 100;
+      // Birden Çok Sayfa: iki sayfa yan yana tam görünür.
+      else if (target.fit === "multi") pct = Math.min(availW / (2 * w + TILE_GAP + 8), availH / pg.h) * 100;
+      setView({ zoom: Math.max(10, Math.min(500, Math.floor(pct))) });
     },
-    [settings.page, view.zoom, setView],
+    [controller, editor, view.zoom, setView],
   );
 
   const preparePrint = useCallback(() => {
     const pagesEl = document.querySelector<HTMLElement>(".bl-pages");
     if (!pagesEl) return false;
-    const m = pageMetrics(settings.page);
-    let style = document.getElementById("bl-page-style");
-    if (!style) {
-      style = document.createElement("style");
-      style.id = "bl-page-style";
-      document.head.appendChild(style);
-    }
-    style.textContent = `@page { size: ${m.w}px ${m.h}px; margin: 0; }`;
-    const info = controller.info;
-    return !!buildPrintRoot(pagesEl, { pageCount: info.pageCount, pageH: m.h, pageW: m.w, stride: m.h + PAGE_GAP, scale: view.zoom / 100, columns: settings.page.columns, pageColor: settings.pageColor });
-  }, [settings.page, settings.pageColor, controller, view.zoom]);
+    return !!buildPrintRoot(pagesEl, { pages: controller.info.pages, scale: view.zoom / 100, pageColor: settings.pageColor });
+  }, [settings.pageColor, controller, view.zoom]);
 
   const finishPrint = useCallback(() => {
     removePrintRoot();
-    document.getElementById("bl-page-style")?.remove();
   }, []);
 
   const print = useCallback(async () => {
@@ -497,10 +508,12 @@ export function App() {
       setHfEditing(null);
       if (which) {
         setView({ mode: "print" });
-        requestAnimationFrame(() => setHfEditing(which));
+        // İmleçteki sayfanın üst/alt bilgisi açılır.
+        const page = controller.pageOf(editor.state.selection.from);
+        requestAnimationFrame(() => setHfEditing(which, page));
       }
     },
-    [setView],
+    [setView, setHfEditing, controller, editor],
   );
 
   const ctx: BelgeCtx = {
@@ -516,6 +529,7 @@ export function App() {
     openFind,
     editHeaderFooter,
     headerFooterEditing: hfEditing,
+    headerFooterPage: hfPage,
     newComment,
     toggleTrack,
     tracking: fmt?.tracking ?? false,
@@ -549,10 +563,15 @@ export function App() {
     else setTab((t) => (t === "hf" ? "home" : t));
   }, [hfEditing]);
 
+  /** Konumdaki bölümün sütun genişliği (resimler buna sığdırılır). */
+  const columnWidthAt = (pos: number) => {
+    const at = sectionAt(editor.state.doc, pos);
+    return sectionGeoms(editor.state.doc, settings.page)[at?.index ?? 0]?.colW ?? pageMetrics(settings.page).contentW;
+  };
+
   insertImageFileRef.current = async (file, pos, view) => {
     try {
-      const m = pageMetrics(settings.page);
-      const img = await readImageFile(file, m.contentW);
+      const img = await readImageFile(file, columnWidthAt(pos ?? view.state.selection.from));
       const node = view.state.schema.nodes.image.create({ src: img.src, width: img.width, height: img.height, alt: file.name.replace(/\.[^.]+$/, "") });
       const at = pos ?? view.state.selection.from;
       view.dispatch(view.state.tr.insert(Math.min(at, view.state.doc.content.size), node));
@@ -566,8 +585,7 @@ export function App() {
     e.target.value = "";
     if (!file) return;
     try {
-      const m = pageMetrics(settings.page);
-      const img = await readImageFile(file, m.contentW);
+      const img = await readImageFile(file, columnWidthAt(editor.state.selection.from));
       active.chain().focus().setImage({ src: img.src, width: img.width, height: img.height, alt: file.name.replace(/\.[^.]+$/, "") }).run();
     } catch (err) {
       notify((err as Error).message, "error");
@@ -695,7 +713,7 @@ export function App() {
       <style>{styleSheetCss(styles)}</style>
       {view.mode === "read" && !printing && (
         <ReadMode
-          html={annotateNotesHtml(editor.getHTML())}
+          html={annotateNotesHtml(editor.getHTML(), renderNoteHtml)}
           title={files.fileName}
           onExit={() => setView({ mode: "print" })}
           onFind={() => {
@@ -765,6 +783,7 @@ export function App() {
             view={view}
             setView={setView}
             hfEditing={hfEditing}
+            hfPage={hfPage}
             setHfEditing={setHfEditing}
             onHfEditor={setHfEditor}
             activeComment={activeComment}

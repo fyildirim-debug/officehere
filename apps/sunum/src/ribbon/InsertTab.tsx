@@ -16,8 +16,11 @@ import {
   SlideAdd24Regular,
   Table24Regular,
   Textbox24Regular,
+  CommentAdd24Regular,
+  Link24Regular,
+  Link32Regular,
 } from "@fluentui/react-icons";
-import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack, TableGridPicker, useMenuClose } from "@officehere/ui";
+import { getUserName, Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack, TableGridPicker, useMenuClose } from "@officehere/ui";
 import { cssColor } from "../model/color";
 import { LayoutGallery, ShapeGalleryMenu } from "./common";
 import { WORDART_PRESETS } from "./presets";
@@ -98,6 +101,12 @@ export function InsertTab({ ctx }: { ctx: RibbonCtx }) {
       <RibbonGroup label="Çizimler" icon={<Shapes24Regular />}>
         <RibbonMenuButton size="large" icon={<Shapes32Regular />} label="Şekiller" description="Hazır şekiller ekleyin: dikdörtgen, daire, ok, çizgi, belirtme çizgisi…" menu={<ShapeGalleryMenu onPick={cmd.pickShape} />} />
         <RibbonButton size="large" icon={<Icons24Regular />} label="Simgeler" description="Simge kitaplığından vektörel simge ekleyin." onClick={() => ctx.openDialog("icons")} />
+      </RibbonGroup>
+      <RibbonGroup label="Bağlantılar" icon={<Link24Regular />}>
+        <RibbonButton size="large" icon={<Link32Regular />} label="Bağlantı" shortcut="Ctrl+K" description="Web sayfasına, e-posta adresine ya da sunudaki başka bir slayta köprü ekleyin." disabled={!state.pres.slides.length} onClick={cmd.insertLink} />
+      </RibbonGroup>
+      <RibbonGroup label="Açıklamalar" icon={<CommentAdd24Regular />}>
+        <RibbonButton size="large" icon={<CommentAdd24Regular />} label="Açıklama" description="Seçili içerik hakkında açıklama ekleyin." disabled={!state.pres.slides.length} onClick={() => a.addComment(getUserName())} />
       </RibbonGroup>
       <RibbonGroup label="Metin" icon={<Textbox24Regular />}>
         <RibbonMenuButton

@@ -193,11 +193,14 @@ export function paragraphsHtml(body: TextBody, ctx: TextRenderCtx): string {
     } else {
       for (const r of p.runs) {
         if (!r.text) continue;
-        const rp = effectiveRun(r.props, p, ctx.lvl);
+        const rp0 = effectiveRun(r.props, p, ctx.lvl);
+        // Köprüler tema köprü rengiyle ve altı çizili gösterilir.
+        const rp: RunProps = r.props.link ? { ...rp0, color: { scheme: "hlink" }, underline: true } : rp0;
+        const linkAttr = r.props.link ? ` data-link="${escHtml(r.props.link)}"` : "";
         if (r.props.field) {
           inner += `<span data-r="1" data-field="1" data-len="${r.text.length}" contenteditable="false" style="${runCss(rp, ctx)}">${escHtml(fieldText(r.props, r.text, ctx))}</span>`;
         } else {
-          inner += `<span data-r="1" style="${runCss(rp, ctx)}">${textToHtml(r.text)}</span>`;
+          inner += `<span data-r="1"${linkAttr} style="${runCss(rp, ctx)}">${textToHtml(r.text)}</span>`;
         }
       }
       const lastText = p.runs[p.runs.length - 1]?.text ?? "";

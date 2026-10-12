@@ -64,6 +64,8 @@ export interface BelgeCtx {
   openFind: () => void;
   editHeaderFooter: (which: "header" | "footer" | null) => void;
   headerFooterEditing: "header" | "footer" | null;
+  /** Üst/alt bilgisi düzenlenen sayfa (0 tabanlı). */
+  headerFooterPage: number;
   newComment: () => void;
   toggleTrack: () => void;
   tracking: boolean;

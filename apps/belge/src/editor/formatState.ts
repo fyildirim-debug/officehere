@@ -39,6 +39,10 @@ export interface FormatState {
   tracking: boolean;
   caps: boolean;
   smallCaps: boolean;
+  /** İmleçteki bölüm, bölüm sayısı ve bölümün kendi sayfa yapısının anahtarı (değişimi izlemek için). */
+  section: number;
+  sectionCount: number;
+  sectionKey: string;
 }
 
 export function computeFormat(editor: Editor, styles: Record<string, StyleDef>): FormatState {
@@ -103,6 +107,12 @@ export function computeFormat(editor: Editor, styles: Record<string, StyleDef>):
     tracking: isTracking(state),
     caps: !!ts.caps,
     smallCaps: !!ts.smallCaps,
+    section: sel.$from.depth >= 1 ? sel.$from.index(0) : 0,
+    sectionCount: state.doc.childCount,
+    sectionKey: (() => {
+      const sec = state.doc.maybeChild(sel.$from.depth >= 1 ? sel.$from.index(0) : 0);
+      return sec ? `${sec.attrs.kind}|${sec.attrs.page ? JSON.stringify(sec.attrs.page) : ""}` : "";
+    })(),
   };
 }
 

@@ -888,3 +888,104 @@
   z-index: 30;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
+
+/* Dosya > Yazdır önizlemesi */
+.print-prev {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.print-prev-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  align-self: center;
+  font-size: 13px;
+  color: var(--oh-text);
+}
+
+.print-prev-nav button {
+  border: 1px solid var(--oh-border, #c8c8c8);
+  background: var(--oh-surface, #fff);
+  color: var(--oh-text);
+  border-radius: 3px;
+  width: 28px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.print-prev-nav button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.print-prev-empty {
+  color: var(--oh-text-muted);
+  padding: 24px;
+}
+
+/* Köprü iletişim kutusu */
+.link-dlg {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  min-height: 230px;
+}
+
+.link-dlg-nav {
+  width: 150px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.link-dlg-cap {
+  font-size: 12px;
+  color: var(--oh-text-muted);
+  margin-bottom: 4px;
+}
+
+.link-dlg-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--oh-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.link-dlg-tab:hover {
+  background: var(--oh-hover, rgba(0, 0, 0, 0.05));
+}
+
+.link-dlg-tab.is-active {
+  border-color: var(--oh-accent);
+  background: var(--oh-accent-soft);
+}
+
+.link-dlg-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.link-dlg-list {
+  flex: 1;
+  min-height: 180px;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--oh-border);
+  padding: 2px;
+}

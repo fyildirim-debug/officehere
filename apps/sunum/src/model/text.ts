@@ -86,10 +86,18 @@ export function propsAt(body: TextBody, pos: Pos): RunProps {
     const r = p.runs[i];
     acc += r.text.length;
     if (pos.o <= acc && (pos.o > acc - r.text.length || (pos.o === 0 && i === 0))) {
-      return stripField(r.props);
+      // Köprünün sonunda yazılan metin köprüye katılmaz.
+      return pos.o === acc ? stripLink(stripField(r.props)) : stripField(r.props);
     }
   }
-  return stripField(p.runs[p.runs.length - 1].props);
+  return stripLink(stripField(p.runs[p.runs.length - 1].props));
+}
+
+function stripLink(p: RunProps): RunProps {
+  if (!p.link) return p;
+  const { link: _l, ...rest } = p;
+  void _l;
+  return rest;
 }
 
 function stripField(p: RunProps): RunProps {

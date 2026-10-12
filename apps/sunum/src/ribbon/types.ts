@@ -40,6 +40,10 @@ export interface AppCommands {
   insertSlideNumber: () => void;
   spelling: () => void;
   zoomTo: (z: number, fit?: boolean) => void;
+  /** Ekle > Bağlantı (Ctrl+K). */
+  insertLink: () => void;
+  openLink: () => void;
+  removeLink: () => void;
 }
 
 export interface RibbonCtx {

@@ -158,7 +158,7 @@ export function FindDialog({ open, onClose, actions: a, replaceMode }: { open: b
         </>
       }
     >
-      <div className="find-bar" onKeyDown={(e) => e.stopPropagation()}>
+      <div className="find-bar" onKeyDown={(e) => e.key !== "Escape" && e.stopPropagation()}>
         <Field label="Aranan:">
           <input
             type="text"

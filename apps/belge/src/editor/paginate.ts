@@ -37,12 +37,16 @@ export interface LayoutInfo {
   pages: PageInfo[];
   /** Gövde genişliği (en geniş sayfa). */
   bodyW: number;
+  /** Yan yana dizimde satır kaydırma mümkün mü (false: tek satır). */
+  tileOk?: boolean;
 }
 
 export interface PageBreakMark {
   pos: number;
   kind: "block" | "row" | "line" | "span" | "spanline";
   h: number;
+  /** Yan yana sayfa diziminde yeni satır başlatır (tüm sütunları kesen sıfır yükseklikli parça). */
+  tileRow?: boolean;
 }
 
 /** Bölüm düğümüne uygulanacak ek biçim (son sayfada sıralı sütun doldurma). */
@@ -305,7 +309,8 @@ export function layoutFlow(ctx: FlowCtx) {
         sp = sectionPage(g, u.pos, secForce);
         const h = pages[sp].top + pages[sp].mt - oTop();
         if (h > 0) {
-          breaks.push({ pos: u.breakPos, kind: "block", h });
+          // Sütun kümesi bu parçadan sonra başlasın diye tüm sütunları keser.
+          breaks.push({ pos: u.breakPos, kind: "span", h });
           S += h;
         }
       }

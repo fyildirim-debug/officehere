@@ -420,6 +420,76 @@ table[data-table-style="light-purple"][data-banded-rows="true"] tr:nth-child(eve
   font: 9pt var(--oh-font-ui);
 }
 
+/* Sütun sonu */
+.bl-doc .bl-colbreak {
+  height: 0;
+  overflow: visible;
+  margin: 0;
+  position: relative;
+  user-select: none;
+  break-after: column;
+}
+
+.bl-doc .bl-colbreak span {
+  display: none;
+}
+
+.bl-show-marks .bl-colbreak,
+.is-web .bl-colbreak {
+  height: auto;
+  border-top: 1px dotted #6b8fd6;
+  margin: 4px 0;
+  text-align: center;
+  line-height: 1;
+}
+
+.bl-show-marks .bl-colbreak span,
+.is-web .bl-colbreak span {
+  display: inline-block;
+  position: relative;
+  top: -0.6em;
+  padding: 0 6px;
+  background: #fff;
+  color: #6b8fd6;
+  font: 9pt var(--oh-font-ui);
+}
+
+.bl-colbreak.ProseMirror-selectednode {
+  outline: 2px solid #4a90e2;
+  height: 4px;
+}
+
+/* Bölüm sonu işareti (Tümünü Göster) */
+.bl-secmark {
+  display: none;
+}
+
+.bl-show-marks .bl-secmark {
+  display: block;
+  height: auto;
+  margin: 4px 0;
+  border-top: 3px double #6b8fd6;
+  text-align: center;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  column-span: all;
+}
+
+.bl-show-marks .bl-secmark span {
+  display: block;
+}
+
+.bl-show-marks .bl-secmark b {
+  display: inline-block;
+  position: relative;
+  top: -0.65em;
+  padding: 0 6px;
+  background: #fff;
+  color: #6b8fd6;
+  font: 400 9pt var(--oh-font-ui);
+}
+
 .bl-pagebreak.ProseMirror-selectednode {
   outline: 2px solid #4a90e2;
   height: 4px;

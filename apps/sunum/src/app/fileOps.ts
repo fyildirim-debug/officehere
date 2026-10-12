@@ -32,6 +32,8 @@ export function loadPresentation(a: Actions, pres: Presentation, fileName: strin
     cropId: null,
     ink: null,
     fit: true,
+    message: null,
+    ribbonTab: "home",
   });
   a.store.resetHistory();
 }

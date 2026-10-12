@@ -7,7 +7,7 @@ import { FormulaEngine, cellKey, keyCol, keyRow, toLocalFormula, numberToText, i
 import { AxisSizes } from "./axis";
 import { MAX_COLS, MAX_ROWS, contains, intersects, shiftIndex, shiftRect } from "./rect";
 import { StyleTable, type CellStyle } from "./styles";
-import type { AutoFilter, ChartDef, CondRule, ImageDef, Note, PageSetup, Rect, Selection, ShapeDef, TableDef, Validation, ViewMode } from "./types";
+import type { AutoFilter, ChartDef, CondRule, ImageDef, Note, PageSetup, PivotDef, Rect, Selection, ShapeDef, SparklineGroup, TableDef, Validation, ViewMode } from "./types";
 
 export type CellInput = Scalar | { formula: string };
 
@@ -40,6 +40,8 @@ export class SheetModel {
   charts: ChartDef[] = [];
   images: ImageDef[] = [];
   shapes: ShapeDef[] = [];
+  pivots: PivotDef[] = [];
+  sparklines: SparklineGroup[] = [];
   frozen = { rows: 0, cols: 0 };
   showGridlines = true;
   showHeadings = true;
@@ -102,6 +104,8 @@ export class SheetModel {
       charts: structuredClone(this.charts),
       images: this.images.map((i) => ({ ...i, anchor: { ...i.anchor } })),
       shapes: structuredClone(this.shapes),
+      pivots: structuredClone(this.pivots),
+      sparklines: structuredClone(this.sparklines),
       frozen: { ...this.frozen },
       page: structuredClone(this.page),
     };
@@ -126,6 +130,8 @@ export class SheetModel {
     this.charts = structuredClone(d.charts);
     this.images = d.images.map((i) => ({ ...i, anchor: { ...i.anchor } }));
     this.shapes = structuredClone(d.shapes);
+    this.pivots = structuredClone(d.pivots);
+    this.sparklines = structuredClone(d.sparklines);
     this.frozen = { ...d.frozen };
     this.page = structuredClone(d.page);
   }
@@ -214,6 +220,8 @@ export interface SheetData {
   charts: ChartDef[];
   images: ImageDef[];
   shapes: ShapeDef[];
+  pivots: PivotDef[];
+  sparklines: SparklineGroup[];
   frozen: { rows: number; cols: number };
   page: PageSetup;
 }

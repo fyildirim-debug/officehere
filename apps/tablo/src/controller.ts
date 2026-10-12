@@ -69,6 +69,8 @@ export class Controller {
   focusGrid: () => void = () => {};
   /** Izgarada bir hücreyi görünür yap. */
   scrollIntoView: (row: number, col: number) => void = () => {};
+  /** Hücrenin ekran (istemci) dikdörtgeni; ızgara çizilmemişse null. */
+  cellClientRect: (row: number, col: number) => { x: number; y: number; w: number; h: number } | null = () => null;
   /** İletişim kutusu açma isteği (App tarafından ayarlanır). */
   openDialog: (id: string, arg?: unknown) => void = () => {};
   /** Uyarı/hata mesajı göster. */

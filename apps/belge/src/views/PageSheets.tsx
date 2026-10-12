@@ -51,6 +51,8 @@ export function hfLabel(which: "header" | "footer", v: HfVariant, oddEven: boole
 
 interface Props {
   pages: PageInfo[];
+  /** Yan yana dizimde sayfa konumları (null: düzen bilgisindeki konumlar). */
+  rects: { x: number; y: number }[] | null;
   /** Sayfa başına dipnot kimlikleri ve kimlik → içerik eşlemesi. */
   footnotes: string[][];
   notes: Map<string, FootnoteView>;
@@ -63,7 +65,7 @@ interface Props {
   sectionCount: number;
 }
 
-export const PageSheets = memo(function PageSheets({ pages, settings, gridlines, editing, editingPage, footnotes, notes, onNoteChange, sectionCount }: Props) {
+export const PageSheets = memo(function PageSheets({ pages, rects, settings, gridlines, editing, editingPage, footnotes, notes, onNoteChange, sectionCount }: Props) {
   const html = useMemo(() => {
     const m = new Map<string, string>();
     for (const k of ["header", "footer", "headerFirst", "footerFirst", "headerEven", "footerEven"] as const) {
@@ -75,7 +77,6 @@ export const PageSheets = memo(function PageSheets({ pages, settings, gridlines,
   const wm = settings.watermark;
   const pb = settings.pageBorder;
   const count = pages.length;
-  const editVariant = editing ? hfVariantOf(pages[editingPage], editingPage, settings) : null;
   const out = [];
   for (let i = 0; i < count; i++) {
     const g = pages[i];
@@ -87,7 +88,7 @@ export const PageSheets = memo(function PageSheets({ pages, settings, gridlines,
     const hideHeader = editing === "header" && i === editingPage;
     const hideFooter = editing === "footer" && i === editingPage;
     out.push(
-      <div key={i} className={`bl-page${g.blank ? " is-blank" : ""}`} data-page={i} data-section={g.section} style={{ top: g.top, left: g.left, width: g.w, height: g.h, background: settings.pageColor ?? undefined }}>
+      <div key={i} className={`bl-page${g.blank ? " is-blank" : ""}`} data-page={i} data-section={g.section} style={{ top: rects?.[i]?.y ?? g.top, left: rects?.[i]?.x ?? g.left, width: g.w, height: g.h, background: settings.pageColor ?? undefined }}>
         {wm && (
           <div className="bl-watermark" aria-hidden="true">
             <span
@@ -136,7 +137,6 @@ export const PageSheets = memo(function PageSheets({ pages, settings, gridlines,
             </div>
           </>
         )}
-        {editing && editVariant !== null && v !== editVariant && <div className="bl-hf-dim" />}
       </div>,
     );
   }

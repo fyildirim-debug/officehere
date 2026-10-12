@@ -207,3 +207,10 @@
   left: 0;
   top: 0;
 }
+
+/* Köprüler: gösteride tıklanabilir */
+.sv-show .sh[data-link],
+.sv-show span[data-link] {
+  pointer-events: auto;
+  cursor: pointer;
+}
