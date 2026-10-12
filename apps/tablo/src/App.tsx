@@ -40,6 +40,7 @@ import { recoveryHandlers } from "./app/recovery";
 import { useAutoRecover } from "./app/useAutoRecover";
 import { installInputGuard, refocusGridSoon } from "./app/inputGuard";
 import { UndoDropdown } from "./app/UndoDropdown";
+import { TabloSearch } from "./app/TabloSearch";
 import { installWindowSync, windowTitle } from "./app/windowSync";
 import { copyObject, objectClipMarker, pasteObject } from "./actions/objectClip";
 import { paletteOf } from "./model/theme";
@@ -233,14 +234,11 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
     <AppShell
       app="tablo"
       titleBar={
+        <>
         <TitleBar
           app="tablo"
           title={windowTitle(ctl, baseName(ctl.fileName))}
           dirty={ctl.dirty}
-          onSearch={(q) => {
-            if (q.trim()) pushDialog({ id: "find", arg: { query: q } });
-          }}
-          searchPlaceholder="Ara (Alt+Q)"
           quickAccess={
             <>
               <QatButton icon={<Save20Regular />} tip="Kaydet" shortcut="Ctrl+S" onClick={() => void files.save()} />
@@ -251,6 +249,8 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
             </>
           }
         />
+        <TabloSearch ctl={ctl} files={files} tabs={tabs} collapsed={collapsed} onExpand={() => setCollapsed(false)} onTab={(id) => (setBackstage(null), setTab(id))} onBackstage={setBackstage} />
+        </>
       }
       ribbon={
         <ErrorBoundary region="Şerit" compact recovery={recovery}>

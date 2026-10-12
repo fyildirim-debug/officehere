@@ -5,7 +5,7 @@
  */
 import { ANIMATIONS, CLASS_LABELS, TRANSITIONS, transitionDef } from "../show/catalog";
 import type { Actions } from "../state/actions";
-import type { CommandEntry } from "./commandIndex";
+import type { CommandEntry } from "@officehere/ui";
 
 export interface FileCommandHandlers {
   save: () => void;

@@ -1,7 +1,7 @@
 /** OfficeHere Sunum — uygulama kökü. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRedo20Regular, ArrowUndo20Regular, Save20Regular, SlidePlay20Regular } from "@fluentui/react-icons";
-import { AppShell, MessageBar, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, type OfficeBackstagePage } from "@officehere/ui";
+import { AppShell, CommandSearch, MessageBar, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, type OfficeBackstagePage } from "@officehere/ui";
 import { downloadBlob } from "@officehere/core";
 import { blankPresentation } from "./model/presentation";
 import { Canvas } from "./editor/Canvas";
@@ -36,7 +36,6 @@ import { useAppCommands } from "./app/useAppCommands";
 import { buildRibbonTabs } from "./app/ribbonTabs";
 import { ErrorBoundary } from "./app/ErrorBoundary";
 import { useAutoRecover } from "./app/useAutoRecover";
-import { CommandSearch } from "./app/CommandSearch";
 import { extraCommands } from "./app/extraCommands";
 import "./styles/slide.css";
 import "./styles/editor.css";
@@ -415,7 +414,19 @@ export function App() {
           {editView && sidePane && bound("Görev bölmesi", sidePane, () => a.store.set({ pane: null }))}
         </div>
       </AppShell>
-      <CommandSearch ctx={ctx} tabs={tabs} collapsed={collapsed} onExpand={() => setCollapsed(false)} extra={searchExtra} />
+      <CommandSearch
+        app="sunum"
+        tabs={tabs}
+        collapsed={collapsed}
+        onExpand={() => setCollapsed(false)}
+        onTabChange={(id) => {
+          setBackstage(false);
+          a.store.set({ ribbonTab: id });
+        }}
+        extra={searchExtra}
+        find={{ heading: "Sunuda bul", label: (q) => `“${q}” için Bul`, path: "Giriş › Düzenleme", shortcut: "Ctrl+F", run: (q) => cmd.find(q) }}
+        onMessage={(t) => a.message(t, "info")}
+      />
       {show &&
         !show.preview &&
         bound(
