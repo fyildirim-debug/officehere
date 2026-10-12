@@ -16,7 +16,12 @@ export interface FileCommandHandlers {
   open: () => void;
   /** Dosya menüsünü belirli sayfada açar. */
   backstage: (page: "info" | "export" | "options" | "print" | "new" | "open") => void;
+  /** İletişim kutusu açar (bağlamsal sekmelerdeki komutlar için). */
+  dialog: (kind: "compress") => void;
 }
+
+/** Arama eş anlamlıları (ör. geçişin başka adlarla da bulunması). */
+const SYNONYMS: Record<string, string> = { morph: "dönüşüm geçişi şekil dönüştürme", zoom: "yakınlaştırma geçişi" };
 
 const entry = (id: string, title: string, tabLabel: string, group: string, run: () => void, extra: Partial<CommandEntry> = {}): CommandEntry => ({ id, title, tabId: "", tabLabel, group, nth: 0, run, ...extra });
 
@@ -31,13 +36,14 @@ export function extraCommands(a: Actions, h: FileCommandHandlers, previewTransit
     entry("file:open", "Aç", "Dosya", "", h.open, { shortcut: "Ctrl+O" }),
     entry("file:info", "Bilgi", "Dosya", "", () => h.backstage("info"), { desc: "Sunu özellikleri" }),
     entry("file:options", "Seçenekler", "Dosya", "", () => h.backstage("options"), { desc: "Office teması, yazım denetimi" }),
+    entry("pic:compress", "Resimleri Sıkıştır", "Resim Biçimi", "Ayarla", () => h.dialog("compress"), { desc: "Resimlerin çözünürlüğünü düşür, kırpılan alanları sil" }),
   ];
   const trans = TRANSITIONS.filter((t) => t.type !== "none").map((t) =>
     entry(`tr:${t.type}`, t.label, "Geçişler", "Bu Slayda Geçiş", () => {
       const d = transitionDef(t.type);
       a.setTransition({ type: d.type, option: d.defaultOption, duration: d.type === "cut" ? 0.1 : 1 });
       window.setTimeout(previewTransition, 50);
-    }, { desc: "geçiş efekti" }),
+    }, { desc: `geçiş efekti ${SYNONYMS[t.type] ?? ""}`.trim() }),
   );
   const anims = ANIMATIONS.map((d) =>
     entry(`an:${d.id}`, d.label, "Animasyonlar", `Animasyon › ${CLASS_LABELS[d.cls]}`, () => {

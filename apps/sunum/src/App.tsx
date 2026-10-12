@@ -129,6 +129,7 @@ export function App() {
             a.stopEditing();
             setBackstage(page);
           },
+          dialog: (k) => setDialog(k),
         },
         cmd.previewTransition,
       ),

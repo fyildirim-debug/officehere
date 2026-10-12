@@ -1,36 +1,58 @@
 import { readFileSync } from "node:fs";
+import { inflateRawSync } from "node:zlib";
 import { expect, test, type Page } from "@playwright/test";
 import { URL, collectErrors } from "./ortak";
 
 // OfficeHere Sunum: gerçek bir kullanıcı gibi uçtan uca senaryolar.
+
+const shapes = (page: Page) => page.locator(".stage .sv [data-shape-id]");
+const thumbs = (page: Page) => page.locator(".thumb-pane .thumb-item");
+const ribbon = (page: Page) => page.locator(".oh-ribbon-body");
+const tab = (page: Page, name: string) => page.getByRole("tab", { name, exact: true }).click();
+const leaveText = async (page: Page) => {
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+};
+/** Uygulamayı açar; tarayıcı dosya seçicileri yerine indirme / <input type=file> yolu kullanılır. */
+async function openApp(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown>;
+    delete w.showSaveFilePicker;
+    delete w.showOpenFilePicker;
+  });
+  await page.goto(URL.sunum);
+  await expect(page.locator(".stage .sv")).toBeVisible();
+}
+/** Tuş adları basılır, diğer dizgeler yazılır. */
+const keys = async (page: Page, ...ks: string[]) => {
+  for (const k of ks) await (/^(Enter|Home|End|Backspace|Delete|Escape|Arrow|Control\+|Shift\+)/.test(k) ? page.keyboard.press(k) : page.keyboard.type(k));
+};
+/** Düzenlenen metnin paragrafları. */
+const editParas = (page: Page) => page.locator(".tb-edit .tb-p").allTextContents();
+
+/** PPTX (zip) içinden bir parçayı okur (merkezi dizin + inflateRaw). */
+function zipEntry(b: Buffer, name: string): string | null {
+  const e = b.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  for (let i = 0, p = b.readUInt32LE(e + 16), n = b.readUInt16LE(e + 10); i < n; i++, p += 46 + b.readUInt16LE(p + 28) + b.readUInt16LE(p + 30) + b.readUInt16LE(p + 32)) {
+    if (b.toString("utf8", p + 46, p + 46 + b.readUInt16LE(p + 28)) !== name) continue;
+    const l = b.readUInt32LE(p + 42), start = l + 30 + b.readUInt16LE(l + 26) + b.readUInt16LE(l + 28), data = b.subarray(start, start + b.readUInt32LE(p + 20));
+    return (b.readUInt16LE(p + 10) === 8 ? inflateRawSync(data) : data).toString("utf8");
+  }
+  return null;
+}
 
 test.describe("OfficeHere Sunum senaryoları", () => {
   let errors: string[] = [];
 
   test.beforeEach(async ({ page }) => {
     errors = collectErrors(page);
-    // Tarayıcı dosya seçicileri yerine indirme / <input type=file> yolu kullanılsın.
-    await page.addInitScript(() => {
-      const w = window as unknown as Record<string, unknown>;
-      delete w.showSaveFilePicker;
-      delete w.showOpenFilePicker;
-    });
-    await page.goto(URL.sunum);
-    await expect(page.locator(".stage .sv")).toBeVisible();
+    await openApp(page);
   });
 
   test.afterEach(() => {
     expect(errors).toEqual([]);
   });
 
-  const shapes = (page: Page) => page.locator(".stage .sv [data-shape-id]");
-  const thumbs = (page: Page) => page.locator(".thumb-pane .thumb-item");
-  const ribbon = (page: Page) => page.locator(".oh-ribbon-body");
-  const tab = (page: Page, name: string) => page.getByRole("tab", { name, exact: true }).click();
-  const leaveText = async (page: Page) => {
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
-  };
   const typeTitle = async (page: Page, text: string) => {
     await shapes(page).first().click();
     await page.keyboard.type(text);
@@ -273,13 +295,7 @@ test.describe("OfficeHere Sunum — sağlamlık ve yeni özellikler", () => {
 
   test.beforeEach(async ({ page }) => {
     errors = collectErrors(page);
-    await page.addInitScript(() => {
-      const w = window as unknown as Record<string, unknown>;
-      delete w.showSaveFilePicker;
-      delete w.showOpenFilePicker;
-    });
-    await page.goto(URL.sunum);
-    await expect(page.locator(".stage .sv")).toBeVisible();
+    await openApp(page);
   });
 
   test.afterEach(() => {
@@ -287,14 +303,6 @@ test.describe("OfficeHere Sunum — sağlamlık ve yeni özellikler", () => {
     expect(errors.filter((e) => !e.includes("Tanılama amaçlı çökme"))).toEqual([]);
   });
 
-  const shapes = (page: Page) => page.locator(".stage .sv [data-shape-id]");
-  const thumbs = (page: Page) => page.locator(".thumb-pane .thumb-item");
-  const ribbon = (page: Page) => page.locator(".oh-ribbon-body");
-  const tab = (page: Page, name: string) => page.getByRole("tab", { name, exact: true }).click();
-  const leaveText = async (page: Page) => {
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
-  };
   const alive = async (page: Page) => {
     await expect(page.locator(".oh-statusbar")).toBeVisible();
     await expect(page.locator(".stage .sv")).toBeVisible();
@@ -630,5 +638,73 @@ test.describe("OfficeHere Sunum — sağlamlık ve yeni özellikler", () => {
     await page.getByRole("menuitem", { name: "Eksen Başlıkları" }).hover();
     await page.getByRole("menuitem", { name: "Birincil Dikey" }).click();
     await expect(chart).toContainText("Eksen Başlığı");
+  });
+
+  test("K1: boş son paragrafta ve paragraf başında Backspace önceki metni silmez; Delete birleştirir", async ({ page }) => {
+    await newSlideWithLayout(page, "Başlık ve İçerik");
+    await shapes(page).nth(1).click();
+    await keys(page, "Madde 1", "Enter", "Madde 2", "Enter", "Backspace");
+    await expect.poll(() => editParas(page)).toEqual(["Madde 1", "Madde 2"]);
+    await keys(page, "Backspace");
+    await expect.poll(() => editParas(page)).toEqual(["Madde 1", "Madde "]);
+    // Çok paragraflı seçimin üzerine yazmak baş ve son kısmı korur.
+    await keys(page, "Control+Home", "ArrowRight", "ArrowRight", ...Array<string>(8).fill("Shift+ArrowRight"), "X");
+    await expect.poll(() => editParas(page)).toEqual(["MaXdde "]);
+    await leaveText(page);
+    await newSlideWithLayout(page, "Başlık ve İçerik");
+    await shapes(page).nth(1).click();
+    await keys(page, "Alpha", "Enter", "Beta", "Home", "Backspace");
+    await expect.poll(() => editParas(page)).toEqual(["AlphaBeta"]);
+    await keys(page, "Control+z");
+    await expect.poll(() => editParas(page)).toEqual(["Alpha", "Beta"]);
+    await keys(page, "ArrowUp", "End", "Delete");
+    await expect.poll(() => editParas(page)).toEqual(["AlphaBeta"]);
+  });
+
+  test("Y1: metin düzenlerken Ctrl+A (sağ tıktan sonra da) tüm metni seçer, şekilleri değil", async ({ page }) => {
+    await newSlideWithLayout(page, "Başlık ve İçerik");
+    await shapes(page).nth(1).click();
+    await keys(page, "Bir", "Enter", "İki");
+    // Şeklin metin dışı alanında sağ tık: metin menüsü açılır, düzenleme sürer.
+    const box = (await shapes(page).nth(1).boundingBox())!;
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height - 20, { button: "right" });
+    await expect(page.getByRole("menuitem", { name: /Paragraf/ })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Control+a");
+    await expect(page.locator(".tb-edit")).toHaveCount(1);
+    expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("Bir\nİki");
+    await page.keyboard.press("Control+b");
+    await expect(page.locator(".tb-edit span[data-r]").first()).toHaveCSS("font-weight", "700");
+    await expect(page.locator(".tb-edit span[data-r]").last()).toHaveCSS("font-weight", "700");
+  });
+
+  test("Y2: küçültülmüş metin indirilen PPTX'e normAutofit fontScale olarak yazılır", async ({ page }) => {
+    await newSlideWithLayout(page, "Başlık ve İçerik");
+    await shapes(page).nth(1).click();
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.insertText(`${i + 1}. Bu satır otomatik sığdırmayı tetiklemek için eklenmiş uzun bir madde metnidir`);
+      if (i < 11) await page.keyboard.press("Enter");
+    }
+    await leaveText(page);
+    const [download] = await Promise.all([page.waitForEvent("download"), page.keyboard.press("Control+s")]);
+    const xml = zipEntry(readFileSync((await download.path())!), "ppt/slides/slide2.xml") ?? "";
+    expect(xml).toMatch(/<a:normAutofit fontScale="\d+"/);
+  });
+
+  test("O5: Office teması Dosya › Seçenekler'den Koyu Gri yapılır; bölmeler koyu ve okunur", async ({ page }) => {
+    await page.locator(".oh-ribbon-file").click();
+    await page.getByText("Seçenekler", { exact: true }).click();
+    await page.getByLabel("Office teması").selectOption({ label: "Koyu Gri" });
+    await expect(page.locator("html")).toHaveAttribute("data-oh-theme", "dark");
+    await page.locator(".oh-bs-back").click();
+    // Rengin parlaklığı (0 koyu … 1 açık).
+    const lum = (sel: string, prop: "backgroundColor" | "color") =>
+      page.locator(sel).first().evaluate((el, p) => getComputedStyle(el)[p as "color"].match(/\d+(\.\d+)?/g)!.map(Number).reduce((t, v, i) => t + v * [0.299, 0.587, 0.114, 0][i] / 255, 0), prop);
+    for (const sel of [".thumb-pane", ".notes-pane textarea", ".oh-statusbar"]) expect(await lum(sel, "backgroundColor")).toBeLessThan(0.3);
+    expect(await lum(".notes-pane textarea", "color")).toBeGreaterThan(0.7);
+    await tab(page, "Görünüm");
+    await ribbon(page).getByRole("button", { name: /Ana Hat/ }).first().click();
+    expect(await lum(".outline-pane", "backgroundColor")).toBeLessThan(0.3);
+    expect(await lum(".outline-title", "color")).toBeGreaterThan(0.7);
   });
 });

@@ -725,3 +725,17 @@
 .oh-gallery-grid .oh-gallery-item {
   height: auto;
 }
+
+/* Koyu temalarda bağlamsal sekme zemini: açık pastel yerine yarı saydam vurgu */
+:root[data-oh-theme="dark"] .oh-ribbon-tab.is-contextual,
+:root[data-oh-theme="black"] .oh-ribbon-tab.is-contextual {
+  background: color-mix(in srgb, var(--oh-accent) 28%, transparent);
+  color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-oh-theme="system"] .oh-ribbon-tab.is-contextual {
+    background: color-mix(in srgb, var(--oh-accent) 28%, transparent);
+    color: #ffffff;
+  }
+}

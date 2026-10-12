@@ -28,7 +28,7 @@ async function snapshot(pres: Presentation, index: number): Promise<string> {
   } catch {
     // tuval kullanılamıyorsa boş resim
   }
-  return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+  return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==";
 }
 
 /** Izgara yerleşimi: n kutu slaydın orta bölgesine sığdırılır. */

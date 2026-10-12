@@ -104,10 +104,7 @@ export function Canvas(props: CanvasProps) {
     actions.store.set({ focus: "canvas" });
     if (e.button === 2) {
       // Düzenlenen şeklin içinde sağ tık: odak metin düzenleyicide kalır.
-      if (isInEditedShape(target, st, slideRef.current)) {
-        e.preventDefault();
-        return;
-      }
+      if (isInEditedShape(target, st, slideRef.current)) return e.preventDefault();
       const shapeEl = target.closest("[data-shape-id]") as HTMLElement | null;
       if (shapeEl) {
         const top = topLevelOf(slide.shapes, shapeEl.dataset.shapeId!);
@@ -659,9 +656,7 @@ export function Canvas(props: CanvasProps) {
         onPointerCancel={onPointerUp}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
-        onMouseDown={(e) => {
-          if (e.button === 2 && isInEditedShape(e.target as Element, propsRef.current.state, slideRef.current)) e.preventDefault();
-        }}
+        onMouseDown={(e) => e.button === 2 && isInEditedShape(e.target as Element, propsRef.current.state, slideRef.current) && e.preventDefault()}
         tabIndex={-1}
       >
         <div className="canvas-content" style={{ width: contentW, height: contentH }}>

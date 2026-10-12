@@ -146,7 +146,7 @@ describe("4. tur özellikleri gidiş-dönüş", () => {
   it("yakınlaştırma resmi slayt köprüsü ve uzantısıyla gidip gelir; hedef kimliği çözülür", async () => {
     const p = deck(2);
     const target = p.slides[2];
-    p.slides[0].shapes.push({ kind: "pic", id: "z1", name: "Slayt Yakınlaştırma 1", x: 100, y: 100, w: 320, h: 180, rot: 0, src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", line: { fill: { type: "none" }, width: 1, dash: "solid" }, link: `#slide:${target.id}`, zoom: { slideId: target.id, ret: true } });
+    p.slides[0].shapes.push({ kind: "pic", id: "z1", name: "Slayt Yakınlaştırma 1", x: 100, y: 100, w: 320, h: 180, rot: 0, src: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4////fwAJ+wP9KobjigAAAABJRU5ErkJggg==", line: { fill: { type: "none" }, width: 1, dash: "solid" }, link: `#slide:${target.id}`, zoom: { slideId: target.id, ret: true } });
     const bytes = await writePptx(p);
     const xml = await slideXml(bytes, 1);
     expect(xml).toContain('action="ppaction://hlinksldjump"');

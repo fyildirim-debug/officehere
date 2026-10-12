@@ -97,6 +97,12 @@ export function CommandSearch({ ctx, tabs, collapsed, onExpand, extra }: { ctx: 
     if (!indexing || !hiddenRef.current) return;
     const scraped = scrape(hiddenRef.current, tabs);
     // Şeritteki komutlar önce; aynı adlı ek komutlar (galeri öğesi ile şerit düğmesi) tekrarlanmaz.
+    const byName = new Map((extra ?? []).map((c) => [`${c.tabLabel}|${c.title}`, c]));
+    // Şeritte de görünen ek komutların açıklaması (eş anlamlılar) şerit girdisine katılır.
+    for (const c of scraped) {
+      const x = byName.get(`${c.tabLabel}|${c.title}`);
+      if (x?.desc && !c.desc) c.desc = x.desc;
+    }
     const names = new Set(scraped.map((c) => `${c.tabLabel}|${c.title}`));
     setIndex([...scraped, ...(extra ?? []).filter((c) => !names.has(`${c.tabLabel}|${c.title}`))]);
     setIndexing(false);
