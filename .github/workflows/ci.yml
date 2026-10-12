@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   denetim:
-    name: Tip denetimi, test, derleme
+    name: Tip denetimi, test, derleme, uçtan uca
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +26,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm web
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: officehere-web

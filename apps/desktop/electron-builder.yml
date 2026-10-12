@@ -15,6 +15,13 @@ files:
 
 asar: true
 
+# Sürümler GitHub'a yüklenir (CI'da --publish never ile yalnız paket üretilir).
+publish:
+  provider: github
+  owner: fyildirim-debug
+  repo: officehere
+  releaseType: release
+
 # Web uygulamaları kaynak dizinine kopyalanır; ana süreç resources/apps/<uygulama> altından yükler.
 extraResources:
   - from: ../belge/dist
