@@ -36,7 +36,7 @@ export async function writeSystemClipboard(data: { tsv: string; html: string }):
 
 /** Pano olayından ya da düğmeden gelen veriyi yapıştırır. */
 export function pasteData(ctl: Controller, text: string, html: string | undefined, opts?: PasteOptions): void {
-  if (ctl.edit) return;
+  if (ctl.edit || !ctl.guardSelection()) return;
   const internal = getInternalClipboard();
   const id = html ? clipIdFromHtml(html) : null;
   const useInternal = internal && ((id && id === internal.id) || (!text && !html) || (!id && !html && text.replace(/\r\n$/, "") === internalTsv(internal)));
@@ -88,6 +88,7 @@ export async function pasteFromButton(ctl: Controller, opts?: PasteOptions): Pro
 /* ------------------------------ Temizleme ------------------------------ */
 
 export function clearContents(ctl: Controller): void {
+  if (!ctl.guardSelection()) return;
   ctl.ops.clear(ctl.sheet, ctl.sel.ranges, "contents");
 }
 

@@ -2,7 +2,7 @@
 import { generateJSON, getSchema, type JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { extensionOf } from "@officehere/core";
-import { defaultSettings, type BelgeDocument } from "../model/document";
+import { defaultSettings, normalizeDoc, type BelgeDocument } from "../model/document";
 import { schemaExtensions } from "../editor/extensions";
 import { readDocx } from "./docx/reader";
 import { writeDocx } from "./docx/writer";
@@ -18,13 +18,13 @@ export function belgeSchema() {
 
 /** JSON içeriği şemaya karşı doğrular; geçersizse hatayı fırlatır. */
 export function validateContent(json: JSONContent): PMNode {
-  const node = PMNode.fromJSON(belgeSchema(), json);
+  const node = PMNode.fromJSON(belgeSchema(), normalizeDoc(json));
   node.check();
   return node;
 }
 
 export function htmlToDoc(html: string): JSONContent {
-  return generateJSON(extractHtmlBody(html), schemaExtensions());
+  return normalizeDoc(generateJSON(extractHtmlBody(html), schemaExtensions()));
 }
 
 export const OPEN_FILTERS = [

@@ -146,9 +146,10 @@ export function chartXml(wb: WorkbookModel, def: ChartDef): string {
   const axPos = def.type === "bar" || def.type === "barStacked" ? ["l", "b"] : ["b", "l"];
   let axes = "";
   if (!isPie) {
+    const xTitle = def.xTitle ? `<c:title><c:tx><c:rich><a:bodyPr/><a:p><a:r><a:t>${esc(def.xTitle)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>` : "";
     const firstAx = scatter
-      ? `<c:valAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>${txPr}<c:crossAx val="222222222"/><c:crosses val="autoZero"/><c:crossBetween val="midCat"/></c:valAx>`
-      : `<c:catAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${axPos[0]}"/><c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr>${txPr}<c:crossAx val="222222222"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>`;
+      ? `<c:valAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/>${xTitle}<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>${txPr}<c:crossAx val="222222222"/><c:crosses val="autoZero"/><c:crossBetween val="midCat"/></c:valAx>`
+      : `<c:catAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${axPos[0]}"/>${xTitle}<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr>${txPr}<c:crossAx val="222222222"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>`;
     const yTitle = def.yTitle ? `<c:title><c:tx><c:rich><a:bodyPr rot="-5400000" vert="horz"/><a:p><a:r><a:t>${esc(def.yTitle)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>` : "";
     axes = `${firstAx}<c:valAx><c:axId val="222222222"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${axPos[1]}"/>${grid}${yTitle}<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln><a:noFill/></a:ln></c:spPr>${txPr}<c:crossAx val="111111111"/><c:crosses val="autoZero"/><c:crossBetween val="${scatter ? "midCat" : "between"}"/></c:valAx>`;
   }
@@ -351,7 +352,12 @@ export async function readCharts(data: ArrayBuffer, wb: WorkbookModel): Promise<
         bbox = bbox ? { r1: Math.min(bbox.r1, q.range.r1), c1: Math.min(bbox.c1, q.range.c1), r2: Math.max(bbox.r2, q.range.r2), c2: Math.max(bbox.c2, q.range.c2) } : { ...q.range };
       }
       if (!bbox) continue;
-      const title = [...(/<c:title>([\s\S]*?)<\/c:title>/.exec(cXml)?.[1] ?? "").matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => unescapeXml(m[1])).join("");
+      const titleText = (xml: string) => [...(/<c:title>([\s\S]*?)<\/c:title>/.exec(xml)?.[1] ?? "").matchAll(/<a:t>([^<]*)<\/a:t>/g)].map((m) => unescapeXml(m[1])).join("");
+      const head = cXml.split("<c:plotArea>")[0];
+      const title = titleText(head);
+      const catAx = /<c:(?:catAx|dateAx)>[\s\S]*?<\/c:(?:catAx|dateAx)>/.exec(cXml)?.[0] ?? /<c:valAx>[\s\S]*?<\/c:valAx>/.exec(cXml)?.[0] ?? "";
+      const valAxes = [...cXml.matchAll(/<c:valAx>[\s\S]*?<\/c:valAx>/g)].map((m) => m[0]);
+      const valAx = valAxes.length > 1 ? valAxes[1] : catAx.startsWith("<c:valAx") ? "" : (valAxes[0] ?? "");
       const legendPos = /<c:legendPos val="(\w)"/.exec(cXml)?.[1];
       const def: ChartDef = {
         id: wb.newId("chart"),
@@ -359,7 +365,7 @@ export async function readCharts(data: ArrayBuffer, wb: WorkbookModel): Promise<
         range: formatQualifiedRange(sheetName, bbox),
         seriesInRows: valsHorizontal > valsVertical,
         title,
-        showTitle: /<c:title>/.test(cXml) && !/<c:autoTitleDeleted val="1"\/>/.test(cXml),
+        showTitle: /<c:title>/.test(head) && !/<c:autoTitleDeleted val="1"\/>/.test(cXml),
         showLegend: /<c:legend>/.test(cXml),
         legendPos: legendPos === "b" ? "bottom" : legendPos === "t" ? "top" : legendPos === "l" ? "left" : "right",
         showDataLabels: /<c:showVal val="1"\/>|<c:showPercent val="1"\/>/.test(cXml),
@@ -371,6 +377,10 @@ export async function readCharts(data: ArrayBuffer, wb: WorkbookModel): Promise<
         height,
       };
       if (!def.title && def.showTitle) def.title = "";
+      const xt = titleText(catAx);
+      const yt = titleText(valAx);
+      if (xt) def.xTitle = xt;
+      if (yt) def.yTitle = yt;
       sheet.charts.push(def);
     }
   }

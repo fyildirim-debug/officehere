@@ -36,6 +36,8 @@ export type TokenType =
   | "arrayCol"
   | "arrayRow"
   | "ws"
+  /** Ayrıştırıcının boşluktan ürettiği kesişim işleci. */
+  | "isect"
   | "unknown";
 
 export interface RefPart {

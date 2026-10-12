@@ -164,3 +164,24 @@ function applyDateStep(base: number, step: DateStep, k: number): number {
   m = ((m % 12) + 12) % 12;
   return dateToSerial(y, m + 1, Math.min(p.d, daysInMonth(y, m + 1))) + (base - Math.floor(base));
 }
+
+/** Seri numarasına tarih birimi ekler. */
+export function addDate(serial: number, unit: "day" | "weekday" | "month" | "year", n: number): number {
+  if (unit === "day") return serial + n;
+  if (unit === "weekday") {
+    let s = serial;
+    let left = Math.abs(n);
+    const d = n >= 0 ? 1 : -1;
+    while (left > 0) {
+      s += d;
+      const wd = (((Math.floor(s) - 1) % 7) + 7) % 7; // 0=Pazar (1900 sistemi)
+      if (wd !== 0 && wd !== 6) left--;
+    }
+    return s;
+  }
+  const p = serialToDate(serial);
+  const tm = unit === "month" ? p.m - 1 + n : p.m - 1;
+  const ty = unit === "year" ? p.y + n : p.y + Math.floor(tm / 12);
+  const mm = ((tm % 12) + 12) % 12;
+  return dateToSerial(ty, mm + 1, Math.min(p.d, daysInMonth(ty, mm + 1))) + (serial - Math.floor(serial));
+}

@@ -165,6 +165,9 @@ export class FormulaEngine implements EvalHost {
   private nextSheetId = 1;
   private names = new Map<string, DefinedName>();
   private cellDependents = new Map<number, Set<number>>();
+  /** Küçük aralıklar: (sütun bloğu, satır bloğu) ızgarası. */
+  private gridIndex = new Map<number, Map<number, Set<RangeDep>>>();
+  /** Uzun aralıklar: sütun bloğuna göre. */
   private rangeIndex = new Map<number, Map<number, Set<RangeDep>>>();
   private wideRanges = new Map<number, Set<RangeDep>>();
   private volatiles = new Set<number>();
@@ -632,34 +635,54 @@ export class FormulaEngine implements EvalHost {
     if (usesNames) this.nameUsers.add(g);
   }
 
+  /** Aralığın dizindeki yeri: ızgara blokları, sütun blokları ya da geniş liste. */
+  private rangeSlots(rd: RangeDep): { kind: "grid" | "col" | "wide"; keys: number[] } {
+    const cb1 = rd.c1 >> 4;
+    const cb2 = rd.c2 >> 4;
+    if (cb2 - cb1 > 32) return { kind: "wide", keys: [] };
+    const rb1 = rd.r1 >> 6;
+    const rb2 = rd.r2 >> 6;
+    const keys: number[] = [];
+    if ((cb2 - cb1 + 1) * (rb2 - rb1 + 1) <= 64) {
+      for (let cb = cb1; cb <= cb2; cb++) for (let rb = rb1; rb <= rb2; rb++) keys.push(cb * 16384 + rb);
+      return { kind: "grid", keys };
+    }
+    for (let cb = cb1; cb <= cb2; cb++) keys.push(cb);
+    return { kind: "col", keys };
+  }
+
   private addRangeDep(rd: RangeDep): void {
-    const b1 = rd.c1 >> 4;
-    const b2 = rd.c2 >> 4;
-    if (b2 - b1 > 32) {
+    const slot = this.rangeSlots(rd);
+    if (slot.kind === "wide") {
       let set = this.wideRanges.get(rd.sheet);
       if (!set) this.wideRanges.set(rd.sheet, (set = new Set()));
       set.add(rd);
       return;
     }
-    let idx = this.rangeIndex.get(rd.sheet);
-    if (!idx) this.rangeIndex.set(rd.sheet, (idx = new Map()));
-    for (let b = b1; b <= b2; b++) {
-      let set = idx.get(b);
-      if (!set) idx.set(b, (set = new Set()));
+    const map = slot.kind === "grid" ? this.gridIndex : this.rangeIndex;
+    let idx = map.get(rd.sheet);
+    if (!idx) map.set(rd.sheet, (idx = new Map()));
+    for (const k of slot.keys) {
+      let set = idx.get(k);
+      if (!set) idx.set(k, (set = new Set()));
       set.add(rd);
     }
   }
 
   private removeRangeDep(rd: RangeDep): void {
-    const b1 = rd.c1 >> 4;
-    const b2 = rd.c2 >> 4;
-    if (b2 - b1 > 32) {
+    const slot = this.rangeSlots(rd);
+    if (slot.kind === "wide") {
       this.wideRanges.get(rd.sheet)?.delete(rd);
       return;
     }
-    const idx = this.rangeIndex.get(rd.sheet);
+    const idx = (slot.kind === "grid" ? this.gridIndex : this.rangeIndex).get(rd.sheet);
     if (!idx) return;
-    for (let b = b1; b <= b2; b++) idx.get(b)?.delete(rd);
+    for (const k of slot.keys) {
+      const set = idx.get(k);
+      if (!set) continue;
+      set.delete(rd);
+      if (!set.size) idx.delete(k);
+    }
   }
 
   private unregister(g: number): void {
@@ -680,6 +703,7 @@ export class FormulaEngine implements EvalHost {
 
   private reregisterAll(): void {
     this.cellDependents.clear();
+    this.gridIndex.clear();
     this.rangeIndex.clear();
     this.wideRanges.clear();
     this.volatiles.clear();
@@ -698,6 +722,8 @@ export class FormulaEngine implements EvalHost {
     const local = gkLocal(g);
     const row = keyRow(local);
     const col = keyCol(local);
+    const cell = this.gridIndex.get(sheet)?.get((col >> 4) * 16384 + (row >> 6));
+    if (cell) for (const rd of cell) if (row >= rd.r1 && row <= rd.r2 && col >= rd.c1 && col <= rd.c2) out(rd.f);
     const idx = this.rangeIndex.get(sheet);
     const bucket = idx?.get(col >> 4);
     if (bucket) for (const rd of bucket) if (row >= rd.r1 && row <= rd.r2 && col >= rd.c1 && col <= rd.c2) out(rd.f);

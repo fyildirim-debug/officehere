@@ -58,7 +58,30 @@ export interface PageSetup {
   columns: number;
   /** Sütun aralığı (twip). */
   columnSpace: number;
+  /** Sütunlar arasına çizgi (w:cols w:sep). */
+  columnLine?: boolean;
+  /** İlk sayfada farklı üst/alt bilgi (w:titlePg). */
+  titlePage?: boolean;
 }
+
+/** Bölümün nasıl başladığı (OOXML sectPr/w:type). */
+export type SectionKind = "nextPage" | "continuous" | "evenPage" | "oddPage";
+
+export const SECTION_KIND_LABEL: Record<SectionKind, string> = {
+  nextPage: "Sonraki Sayfa",
+  continuous: "Sürekli",
+  evenPage: "Çift Sayfa",
+  oddPage: "Tek Sayfa",
+};
+
+/** Bölüm düğümü öznitelikleri: page null ise belge varsayılanı (settings.page) geçerlidir. */
+export interface SectionAttrs {
+  kind: SectionKind;
+  page: PageSetup | null;
+}
+
+/** Üst/alt bilgi türü: varsayılan (tek sayfalar), ilk sayfa, çift sayfalar. */
+export type HfVariant = "default" | "first" | "even";
 
 export interface CommentData {
   id: string;
@@ -94,9 +117,18 @@ export interface DocProperties {
 }
 
 export interface DocSettings {
+  /** Belge varsayılan sayfa yapısı (kendi sayfa yapısı olmayan bölümler bunu kullanır). */
   page: PageSetup;
   header: JSONContent | null;
   footer: JSONContent | null;
+  /** İlk sayfa üst/alt bilgisi (bölümün titlePage özelliği açıkken). */
+  headerFirst: JSONContent | null;
+  footerFirst: JSONContent | null;
+  /** Çift sayfa üst/alt bilgisi (oddEven açıkken). */
+  headerEven: JSONContent | null;
+  footerEven: JSONContent | null;
+  /** Tek ve çift sayfalarda farklı (w:evenAndOddHeaders). */
+  oddEven: boolean;
   watermark: Watermark | null;
   pageColor: string | null;
   pageBorder: PageBorder | null;
@@ -134,6 +166,11 @@ export function defaultSettings(): DocSettings {
     page: defaultPage(),
     header: null,
     footer: null,
+    headerFirst: null,
+    footerFirst: null,
+    headerEven: null,
+    footerEven: null,
+    oddEven: false,
     watermark: null,
     pageColor: null,
     pageBorder: null,
@@ -147,7 +184,47 @@ export function defaultSettings(): DocSettings {
 }
 
 export function emptyDoc(): JSONContent {
-  return { type: "doc", content: [{ type: "paragraph" }] };
+  return { type: "doc", content: [{ type: "section", content: [{ type: "paragraph" }] }] };
+}
+
+const BLOCK_END_OK = new Set(["paragraph", "heading", "bulletList", "orderedList"]);
+
+/**
+ * İçeriği bölüm yapısına getirir: doc > section+ > blok+. Bölümsüz (eski/düz) içerik tek
+ * bölüme sarılır; her bölüm Word'deki gibi bir paragrafla biter.
+ */
+export function normalizeDoc(json: JSONContent): JSONContent {
+  const kids = json.content ?? [];
+  const sections: JSONContent[] = [];
+  let loose: JSONContent[] = [];
+  const flush = () => {
+    if (loose.length) sections.push({ type: "section", content: loose });
+    loose = [];
+  };
+  for (const k of kids) {
+    if (k.type === "section") {
+      flush();
+      sections.push({ ...k, content: k.content?.length ? k.content : [{ type: "paragraph" }] });
+    } else loose.push(k);
+  }
+  flush();
+  if (!sections.length) sections.push({ type: "section", content: [{ type: "paragraph" }] });
+  for (const sec of sections) {
+    const last = sec.content![sec.content!.length - 1];
+    if (!last || !BLOCK_END_OK.has(last.type ?? "")) sec.content = [...sec.content!, { type: "paragraph" }];
+  }
+  return { ...json, type: "doc", content: sections };
+}
+
+/** Bölümün etkin sayfa yapısı. */
+export function sectionPage(attrs: { page?: PageSetup | null } | null | undefined, def: PageSetup): PageSetup {
+  return attrs?.page ?? def;
+}
+
+/** İki sayfa yapısı aynı mı (bölüm sayfa yapısını belge varsayılanına indirgemek için). */
+export function samePage(a: PageSetup, b: PageSetup): boolean {
+  const m = (x: PageSetup) => [x.width, x.height, x.orientation, x.margin.top, x.margin.bottom, x.margin.left, x.margin.right, x.margin.header, x.margin.footer, x.margin.gutter, x.columns, x.columnSpace, !!x.columnLine, !!x.titlePage].join();
+  return m(a) === m(b);
 }
 
 /** Sayfa boyutunun adını bulur (yönlendirmeden bağımsız). */

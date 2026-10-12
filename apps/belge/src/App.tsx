@@ -11,7 +11,7 @@ import { resolveStyles, styleSheetCss } from "./model/styles";
 import { editorExtensions } from "./editor/extensions";
 import { PaginationController } from "./editor/pagination";
 import { computeFormat, sameFormat } from "./editor/formatState";
-import { collectHeadings, copyFormat, countWords, docStats, pasteFormat, wordAt, type CopiedFormat } from "./editor/commands";
+import { collectHeadings, copyFormat, docStats, pasteFormat, wordAt, type CopiedFormat } from "./editor/commands";
 import { setShowMarks } from "./editor/showMarks";
 import { isTracking, setTracking } from "./editor/trackChanges";
 import { readImageFile } from "./editor/image";
@@ -98,7 +98,8 @@ export function App() {
       insertNote: (k) => hooksRef.current.insertNote(k),
     }),
     content: emptyDoc(),
-    autofocus: "start",
+    // Otomatik odak aşağıdaki etkide yapılır (tiptap'in gecikmeli "start" odağı imleci başa atabiliyor).
+    autofocus: false,
     editorProps: {
       attributes: { class: "bl-editor", spellcheck: "true", lang: "tr", "aria-label": "Belge gövdesi" },
       // Resim dosyalarını sürükle-bırak ve panodan yapıştırma.
@@ -127,6 +128,12 @@ export function App() {
     if (import.meta.env.DEV) (window as unknown as { __belge: unknown }).__belge = { editor, controller };
   }, [editor, controller]);
 
+  // Açılışta belgeye hemen odaklan.
+  useEffect(() => {
+    const ae = document.activeElement;
+    if (!ae || ae === document.body) editor.view.focus();
+  }, [editor]);
+
   // Yazım denetimi ve dil özniteliği
   useEffect(() => {
     editor.view.dom.setAttribute("spellcheck", String(spellcheck));
@@ -154,19 +161,11 @@ export function App() {
     equalityFn: (a, b) => !!a && !!b && sameFormat(a, b),
   });
 
-  const sel = useEditorState({
-    editor,
-    selector: ({ editor: ed }) => {
-      const { from, to, empty } = ed.state.selection;
-      return { from, words: empty ? -1 : countWords(ed.state.doc.textBetween(from, to, "\n", " ")) };
-    },
-    equalityFn: (a, b) => !!a && !!b && a.from === b.from && a.words === b.words,
-  });
-
   const stats = useMemo(() => docStats(editor.state.doc), [editor, version]); // eslint-disable-line react-hooks/exhaustive-deps
-  const layout = useSyncExternalStore(
+  // Yalnız sayfa sayısı izlenir (sayfa başlangıç konumları her tuşta kayar; tüm kabuğu yeniden çizmeye gerek yok).
+  const pageCount = useSyncExternalStore(
     useCallback((cb: () => void) => controller.subscribe(cb), [controller]),
-    () => controller.info,
+    () => controller.info.pageCount,
   );
 
   // Tümünü Göster
@@ -207,6 +206,18 @@ export function App() {
     document.addEventListener("pointerup", onUp, true);
     return () => document.removeEventListener("pointerup", onUp, true);
   }, []);
+
+  // İletişim kutusu kapanınca odak belgeye döner (kutuyu açan şerit düğmesinde kalmaz).
+  const hadDialog = useRef(false);
+  useEffect(() => {
+    if (hadDialog.current && !dialog) {
+      window.setTimeout(() => {
+        const ae = document.activeElement as HTMLElement | null;
+        if (!ae || !ae.closest?.(".ProseMirror, input, textarea, select, .oh-dialog, .oh-backstage, .bl-fn-text, .bl-note-text")) activeRef.current.view.focus();
+      }, 0);
+    }
+    hadDialog.current = !!dialog;
+  }, [dialog]);
 
   /* ---------------- Açıklamalar ve değişiklik izleme ---------------- */
 
@@ -607,7 +618,7 @@ export function App() {
         }}
         onBack={() => setBackstage(null)}
         info={[
-          ["Sayfalar", String(layout.pageCount)],
+          ["Sayfalar", String(pageCount)],
           ["Sözcükler", stats.words.toLocaleString("tr-TR")],
           ["Karakterler", stats.chars.toLocaleString("tr-TR")],
           ["Başlık", settings.properties.title || "Başlık ekleyin"],
@@ -728,10 +739,10 @@ export function App() {
           statusBar={
             hideChrome ? undefined : (
               <BelgeStatusBar
-                page={view.mode === "print" ? controller.pageOf(sel?.from ?? 0) + 1 : 1}
-                pages={view.mode === "print" ? layout.pageCount : 1}
+                editor={editor}
+                controller={controller}
+                paged={view.mode === "print"}
                 words={stats.words}
-                selWords={sel?.words ?? -1}
                 tracking={fmt?.tracking ?? false}
                 view={view}
                 setView={setView}
@@ -769,7 +780,7 @@ export function App() {
           />
         </AppShell>
       </div>
-      <DialogHost dialog={dialog} onClose={() => setDialog(null)} zoom={view.zoom} onZoom={zoomTo} pages={layout.pageCount} />
+      <DialogHost dialog={dialog} onClose={() => setDialog(null)} zoom={view.zoom} onZoom={zoomTo} pages={pageCount} />
       {ctxMenu.element}
       {lifecycleDialog}
       <input ref={imageInput} type="file" accept="image/*" className="oh-hidden-input" onChange={onImageFile} />

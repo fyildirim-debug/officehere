@@ -67,7 +67,7 @@ export function SizeDialog({ ctl, onClose, arg }: P & { arg: "rowHeight" | "colW
   return (
     <SimpleDialog title={title} onClose={onClose} onOk={ok} width={300}>
       <Field label={isRow ? "Satır yüksekliği:" : arg === "colWidth" ? "Sütun genişliği:" : "Standart sütun genişliği:"} inline>
-        <input type="text" value={v} onChange={(e) => setV(e.target.value)} autoFocus />
+        <input type="text" value={v} onChange={(e) => setV(e.target.value)} data-autofocus="true" />
       </Field>
     </SimpleDialog>
   );
@@ -224,18 +224,18 @@ export function HyperlinkDialog({ ctl, onClose }: P) {
           </Field>
           {kind === "web" && (
             <Field label="Adres:">
-              <input type="text" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" autoFocus />
+              <input type="text" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" data-autofocus="true" />
             </Field>
           )}
           {kind === "mail" && (
             <Field label="E-posta adresi:">
-              <input type="text" value={mail} onChange={(e) => setMail(e.target.value)} autoFocus />
+              <input type="text" value={mail} onChange={(e) => setMail(e.target.value)} data-autofocus="true" />
             </Field>
           )}
           {kind === "place" && (
             <>
               <Field label="Hücre başvurusunu yazın:">
-                <input type="text" value={target} onChange={(e) => setTarget(e.target.value)} autoFocus />
+                <input type="text" value={target} onChange={(e) => setTarget(e.target.value)} data-autofocus="true" />
               </Field>
               <Field label="Ya da bu belgede bir yer seçin:">
                 <select value={targetSheet} onChange={(e) => setTargetSheet(e.target.value)} size={5}>
@@ -276,7 +276,7 @@ export function NoteDialog({ ctl, onClose }: P) {
       }
     >
       <div style={{ fontWeight: 600, marginBottom: 4 }}>{author}:</div>
-      <textarea className="tb-note-input" value={text} onChange={(e) => setText(e.target.value)} rows={6} autoFocus style={{ width: "100%", background: "#FFFFE1", border: "1px solid #c8c8a0", padding: 6 }} />
+      <textarea className="tb-note-input" value={text} onChange={(e) => setText(e.target.value)} rows={6} data-autofocus="true" style={{ width: "100%", background: "#FFFFE1", border: "1px solid #c8c8a0", padding: 6 }} />
     </Dialog>
   );
 }
@@ -387,7 +387,7 @@ export function CreateTableDialog({ ctl, onClose, arg }: P) {
   return (
     <SimpleDialog title={style ? "Tablo Olarak Biçimlendir" : "Tablo Oluştur"} onClose={onClose} onOk={ok} width={320}>
       <Field label="Tablonuzun verileri nerede?">
-        <input type="text" value={ref} onChange={(e) => setRef(e.target.value)} autoFocus />
+        <input type="text" value={ref} onChange={(e) => setRef(e.target.value)} data-autofocus="true" />
       </Field>
       <Check checked={header} onChange={setHeader}>
         Tablomda üst bilgi var
@@ -399,21 +399,46 @@ export function CreateTableDialog({ ctl, onClose, arg }: P) {
 export function ProtectDialog({ ctl, onClose }: P) {
   const sheet = ctl.sheet;
   const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [step, setStep] = useState<1 | 2>(1);
   const on = !sheet.protected;
+  const ok = () => {
+    if (on && pw && step === 1) return setStep(2);
+    if (on && pw && pw !== pw2) {
+      ctl.alert("Onay parolası aynı değil.");
+      setStep(1);
+      setPw2("");
+      return;
+    }
+    if (!on && sheet.protectPassword && pw !== sheet.protectPassword) {
+      ctl.alert("Girdiğiniz parola doğru değil. CAPS LOCK tuşunun kapalı olduğundan ve doğru büyük/küçük harf kullandığınızdan emin olun.");
+      return;
+    }
+    ctl.ops.sheetOp(sheet, on ? "Sayfayı Koru" : "Korumayı Kaldır", () => {
+      sheet.protected = on;
+      sheet.protectPassword = on && pw ? pw : undefined;
+    });
+    onClose();
+  };
+  if (!on && !sheet.protectPassword) {
+    queueMicrotask(() => {
+      ctl.ops.sheetOp(sheet, "Korumayı Kaldır", () => (sheet.protected = false));
+      onClose();
+    });
+    return null;
+  }
   return (
-    <SimpleDialog
-      title={on ? "Sayfayı Koru" : "Sayfanın Korumasını Kaldır"}
-      onClose={onClose}
-      onOk={() => {
-        ctl.ops.sheetOp(sheet, on ? "Sayfayı Koru" : "Korumayı Kaldır", () => (sheet.protected = on));
-        onClose();
-      }}
-      width={340}
-    >
-      <Field label={on ? "Sayfa korumasını kaldırmak için parola (isteğe bağlı):" : "Parola:"}>
-        <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus />
-      </Field>
-      {on && <p className="oh-bs-note">Korumalı sayfada kilitli hücreler düzenlenemez. Not: Parola dosyaya yazılmaz.</p>}
+    <SimpleDialog title={on ? (step === 2 ? "Parolayı Onayla" : "Sayfayı Koru") : "Sayfanın Korumasını Kaldır"} onClose={onClose} onOk={ok} width={360}>
+      {step === 1 ? (
+        <Field label={on ? "Sayfa korumasını kaldırmak için parola (isteğe bağlı):" : "Parola:"}>
+          <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} data-autofocus="true" />
+        </Field>
+      ) : (
+        <Field label="Parolayı yeniden girin:">
+          <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} data-autofocus="true" />
+        </Field>
+      )}
+      {on && <p className="oh-bs-note">Korumalı sayfada kilitli hücreler düzenlenemez. Hücrelerin kilidini Hücreleri Biçimlendir &gt; Koruma sekmesinden açabilirsiniz. Parola yalnız bu oturumda geçerlidir ve dosyaya yazılmaz.</p>}
     </SimpleDialog>
   );
 }
@@ -504,7 +529,7 @@ export function PickListDialog({ ctl, onClose, arg }: P) {
   };
   return (
     <Dialog open title="Listeden Seç" onClose={onClose} width={260} onSubmit={() => items[sel] && pick(items[sel])} footer={<OkCancel onOk={() => items[sel] && pick(items[sel])} onCancel={onClose} />}>
-      <div className="tb-list" style={{ height: 180 }} tabIndex={0} onKeyDown={(e) => {
+      <div className="tb-list" style={{ height: 180 }} tabIndex={0} data-autofocus="true" onKeyDown={(e) => {
         if (e.key === "ArrowDown") setSel((s) => Math.min(items.length - 1, s + 1));
         if (e.key === "ArrowUp") setSel((s) => Math.max(0, s - 1));
       }}>
@@ -540,7 +565,7 @@ export function ShapeTextDialog({ ctl, onClose, arg }: P) {
       }}
     >
       <Field label="Metin:">
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} autoFocus />
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} data-autofocus="true" />
       </Field>
       <Field label="Dolgu rengi:" inline>
         <input type="color" value={fill} onChange={(e) => setFill(e.target.value)} />
@@ -570,7 +595,7 @@ export function GoToDialog({ ctl, onClose }: P) {
         ))}
       </div>
       <Field label="Başvuru:">
-        <input type="text" value={ref} onChange={(e) => setRef(e.target.value)} autoFocus />
+        <input type="text" value={ref} onChange={(e) => setRef(e.target.value)} data-autofocus="true" />
       </Field>
     </SimpleDialog>
   );

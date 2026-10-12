@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Editor } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { schemaExtensions } from "../extensions";
-import { Search, findMatches, foldTr, getSearch, replaceAll, setSearch } from "../search";
+import { Search, adaptCase, findMatches, foldTr, getSearch, replaceAll, setSearch } from "../search";
 import { TrackChanges, listChanges, resolveChanges, setTracking } from "../trackChanges";
 import { applyStyle, changeCase, changeIndent, clearFormatting, countWords, docStats, setLineSpacing, sortParagraphs, stepFontSize, transformCase, effectiveFontSize } from "../commands";
 import { resolveStyles, styleSheetCss, STYLE_SETS } from "../../model/styles";
@@ -63,7 +63,16 @@ describe("arama", () => {
     setSearch(ed.view, { query: "elma", caseSensitive: false, wholeWord: true });
     expect(getSearch(ed.state)?.matches.length).toBe(3);
     expect(replaceAll(ed.view, "ayva")).toBe(3);
-    expect(ed.state.doc.textContent).toBe("ayva armut ayvaayva");
+    // Word gibi: büyük/küçük harf eşleştirme kapalıyken yeni metin bulunanın biçimine uyar.
+    expect(ed.state.doc.textContent).toBe("ayva armut ayvaAyva");
+  });
+  it("değiştirmede harf biçimi uyarlaması", () => {
+    expect(adaptCase("ELMA", "ayva", false)).toBe("AYVA");
+    expect(adaptCase("Elma", "ayva", false)).toBe("Ayva");
+    expect(adaptCase("elma", "ayva", false)).toBe("ayva");
+    expect(adaptCase("Elma", "ayva", true)).toBe("ayva");
+    expect(adaptCase("ELMA", "Ayva", false)).toBe("Ayva");
+    expect(adaptCase("İNCİR", "ıhlamur", false)).toBe("IHLAMUR");
   });
 });
 

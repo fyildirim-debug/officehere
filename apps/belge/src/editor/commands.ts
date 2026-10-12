@@ -70,8 +70,10 @@ export function changeCase(editor: Editor, mode: CaseMode) {
     const t = transformCase(s.text, mode, prefixStart);
     if (t !== s.text) tr.replaceWith(s.pos, s.pos + s.text.length, state.schema.text(t, s.marks));
   }
+  // Seçim (Tümünü Seç dahil) aynı türüyle korunur; metin boyu değişse de eşleme ile kayar.
   const end = from + (tr.doc.content.size - state.doc.content.size) + (to - from);
-  tr.setSelection(TextSelection.create(tr.doc, from, Math.max(from, end)));
+  if (state.selection.empty) tr.setSelection(TextSelection.between(tr.doc.resolve(from), tr.doc.resolve(Math.max(from, end))));
+  else tr.setSelection(state.selection.map(tr.doc, tr.mapping));
   view.dispatch(tr);
 }
 

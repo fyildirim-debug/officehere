@@ -153,6 +153,20 @@ export function gotoMatchIndex(view: EditorView, idx: number) {
   selectMatch(view, st.matches[idx], idx);
 }
 
+/**
+ * Büyük/küçük harf eşleştirme kapalıyken küçük harfli yeni metin bulunan metnin
+ * biçimine uyar (Word davranışı): "ELMA" → "AYVA", "Elma" → "Ayva".
+ */
+export function adaptCase(found: string, replacement: string, caseSensitive: boolean): string {
+  if (caseSensitive || !replacement || replacement !== replacement.toLocaleLowerCase("tr-TR")) return replacement;
+  const letters = found.replace(/[^\p{L}]/gu, "");
+  if (!letters) return replacement;
+  if (letters.length > 1 && letters === letters.toLocaleUpperCase("tr-TR") && letters !== letters.toLocaleLowerCase("tr-TR")) return replacement.toLocaleUpperCase("tr-TR");
+  const first = letters[0];
+  if (first !== first.toLocaleLowerCase("tr-TR")) return replacement.charAt(0).toLocaleUpperCase("tr-TR") + replacement.slice(1);
+  return replacement;
+}
+
 /** Seçili eşleşmeyi değiştirir ve sonrakine geçer. */
 export function replaceCurrent(view: EditorView, replacement: string): boolean {
   const st = getSearch(view.state);
@@ -162,9 +176,10 @@ export function replaceCurrent(view: EditorView, replacement: string): boolean {
   if (!hit) return gotoMatch(view, 1);
   const marks = view.state.doc.resolve(from).marksAcross(view.state.doc.resolve(to)) ?? undefined;
   const tr = view.state.tr;
-  if (replacement) tr.replaceWith(from, to, view.state.schema.text(replacement, marks));
+  const text = adaptCase(view.state.doc.textBetween(from, to), replacement, st.caseSensitive);
+  if (text) tr.replaceWith(from, to, view.state.schema.text(text, marks));
   else tr.delete(from, to);
-  tr.setSelection(TextSelection.create(tr.doc, from + replacement.length));
+  tr.setSelection(TextSelection.create(tr.doc, from + text.length));
   view.dispatch(tr);
   gotoMatch(view, 1);
   return true;
@@ -178,7 +193,8 @@ export function replaceAll(view: EditorView, replacement: string): number {
   for (let i = st.matches.length - 1; i >= 0; i--) {
     const m = st.matches[i];
     const marks = tr.doc.resolve(m.from).marksAcross(tr.doc.resolve(m.to)) ?? undefined;
-    if (replacement) tr.replaceWith(m.from, m.to, view.state.schema.text(replacement, marks));
+    const text = adaptCase(tr.doc.textBetween(m.from, m.to), replacement, st.caseSensitive);
+    if (text) tr.replaceWith(m.from, m.to, view.state.schema.text(text, marks));
     else tr.delete(m.from, m.to);
   }
   const n = st.matches.length;

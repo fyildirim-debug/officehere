@@ -1,7 +1,7 @@
 import type { ErrorCode } from "./values";
 import type { RefToken } from "./lexer";
 
-export type BinaryOp = "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | ">" | "<=" | ">=" | ":";
+export type BinaryOp = "+" | "-" | "*" | "/" | "^" | "&" | "=" | "<>" | "<" | ">" | "<=" | ">=" | ":" | " ";
 
 export type Node =
   | { type: "num"; value: number }

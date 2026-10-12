@@ -1,9 +1,15 @@
 /** Tarih ve saat fonksiyonları (1900 tarih sistemi). */
 import type { FnContext } from "../context";
-import { dateToSerial, daysInMonth, isLeapYear, parseDateTime, serialToDate, serialToTime, weekdayOf } from "../dates";
+import { dateToSerial, daysInMonth, isLeapYear, parseDateTime, serialToDate, weekdayOf } from "../dates";
 import { Errors, type Value } from "../values";
 import { collectNumbers, num, optNum, scalar, text } from "./helpers";
 import { fn, type FnDef } from "./registry";
+
+/** Gün içindeki saniye (Excel gibi en yakın saniyeye yuvarlanır). */
+function wholeSeconds(serial: number): number {
+  const secs = Math.round((serial - Math.floor(serial)) * 86400);
+  return secs >= 86400 ? 0 : secs;
+}
 
 function serialArg(v: Value, c: FnContext): number {
   const n = num(v, c);
@@ -203,9 +209,9 @@ export const dateFunctions: FnDef[] = [
   fn("YEAR", "YIL", "date", "seri_no", "Tarihin yılını verir.", 1, 1, (a, c) => serialToDate(serialArg(a[0], c)).y, { lift: true }),
   fn("MONTH", "AY", "date", "seri_no", "Tarihin ayını (1–12) verir.", 1, 1, (a, c) => serialToDate(serialArg(a[0], c)).m, { lift: true }),
   fn("DAY", "GÜN", "date", "seri_no", "Tarihin gününü (1–31) verir.", 1, 1, (a, c) => serialToDate(serialArg(a[0], c)).d, { lift: true }),
-  fn("HOUR", "SAAT", "date", "seri_no", "Saati (0–23) verir.", 1, 1, (a, c) => serialToTime(serialArg(a[0], c)).h, { lift: true }),
-  fn("MINUTE", "DAKİKA", "date", "seri_no", "Dakikayı (0–59) verir.", 1, 1, (a, c) => serialToTime(serialArg(a[0], c)).mi, { lift: true }),
-  fn("SECOND", "SANİYE", "date", "seri_no", "Saniyeyi (0–59) verir.", 1, 1, (a, c) => serialToTime(serialArg(a[0], c)).s, { lift: true }),
+  fn("HOUR", "SAAT", "date", "seri_no", "Saati (0–23) verir.", 1, 1, (a, c) => Math.floor(wholeSeconds(serialArg(a[0], c)) / 3600), { lift: true }),
+  fn("MINUTE", "DAKİKA", "date", "seri_no", "Dakikayı (0–59) verir.", 1, 1, (a, c) => Math.floor(wholeSeconds(serialArg(a[0], c)) / 60) % 60, { lift: true }),
+  fn("SECOND", "SANİYE", "date", "seri_no", "Saniyeyi (0–59) verir.", 1, 1, (a, c) => wholeSeconds(serialArg(a[0], c)) % 60, { lift: true }),
   fn("WEEKDAY", "HAFTANINGÜNÜ", "date", "seri_no; [döndür_tür]", "Haftanın gününü gösteren sayıyı verir.", 1, 2, (a, c) => {
     const s = dateArg(a[0], c);
     const t = Math.trunc(optNum(a[1], 1, c));

@@ -59,8 +59,7 @@ export function FormulaBar({ ctl }: { ctl: Controller }) {
               if (!ctl.goTo(t)) {
                 // Geçerli bir ad ise seçim için tanımla (Excel davranışı)
                 if (/^[\p{L}_][\p{L}\p{N}_.]*$/u.test(t) && !/^[A-Za-z]{1,3}\d+$/.test(t)) {
-                  ctl.wb.engine.defineName(t, `=${quote(sheet.name)}!${absRange(ctl)}`);
-                  ctl.emit();
+                  ctl.ops.namesOp("Ad Tanımla", () => ctl.wb.engine.defineName(t, `=${quote(sheet.name)}!${absRange(ctl)}`));
                 } else ctl.alert("Geçersiz bir başvuru ya da ad girdiniz.");
               }
               setNameFocus(false);

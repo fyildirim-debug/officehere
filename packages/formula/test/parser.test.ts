@@ -163,3 +163,19 @@ describe("işleçler ve zorlama", () => {
     expect(calc("=ROWS({1;2;3}+{1,2})")).toBe(3);
   });
 });
+
+describe("kesişim işleci (boşluk)", () => {
+  const cells = { A1: 1, B1: 2, A2: 3, B2: 4, C2: 5 };
+  it("iki aralığın ortak alanını verir", () => {
+    expect(calc("=SUM(A1:B2 B1:C2)", cells)).toBe(6);
+    expect(calc("=A1:C2 B1:B5", cells)).toBe(2);
+  });
+  it("ortak alan yoksa #NULL!", () => {
+    expect(err(calc("=SUM(A1:A2 C1:C2)", cells))).toBe("#NULL!");
+  });
+  it("işleç boşlukları kesişim sayılmaz", () => {
+    expect(calc("=A1 + B1", cells)).toBe(3);
+    expect(calc("=SUM( A1:B2 )", cells)).toBe(10);
+    expect(calc("=SUM(A1, B1)", cells)).toBe(3);
+  });
+});

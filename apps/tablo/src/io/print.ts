@@ -14,7 +14,7 @@ export function printRange(wb: WorkbookModel, sheet: SheetModel): Rect | null {
   return { r1: 0, c1: 0, r2: u.r2, c2: u.c2 };
 }
 
-function pageInner(sheet: SheetModel): { w: number; h: number } {
+export function pageInner(sheet: SheetModel): { w: number; h: number } {
   const p = PAGE_SIZES[sheet.page.paper] ?? PAGE_SIZES.A4;
   const land = sheet.page.orientation === "landscape";
   const m = sheet.page.margins;
@@ -27,13 +27,16 @@ function pageInner(sheet: SheetModel): { w: number; h: number } {
 export function computePageBreaks(wb: WorkbookModel, sheet: SheetModel): { rows: number[]; cols: number[] } {
   const r = printRange(wb, sheet);
   if (!r) return { rows: [], cols: [] };
-  const { w, h } = pageInner(sheet);
+  const inner = pageInner(sheet);
+  const scale = fitScale(sheet, r);
+  const w = inner.w / scale;
+  const h = inner.h / scale;
   const rows: number[] = [];
   const cols: number[] = [];
   let acc = 0;
   for (let c = r.c1; c <= r.c2; c++) {
     const cw = sheet.cols.size(c);
-    if (acc + cw > w && acc > 0) {
+    if (acc + cw > w + 0.5 && acc > 0) {
       cols.push(c);
       acc = 0;
     }
@@ -53,12 +56,20 @@ export function computePageBreaks(wb: WorkbookModel, sheet: SheetModel): { rows:
   return { rows, cols };
 }
 
+/** "Tek sayfaya sığdır" ölçeği (1 = ölçeksiz). */
+export function fitScale(sheet: SheetModel, r: Rect): number {
+  if (!sheet.page.fitToWidth) return 1;
+  let total = sheet.page.printHeadings ? 32 : 0;
+  for (let c = r.c1; c <= r.c2; c++) total += sheet.cols.size(c);
+  return total > 0 ? Math.min(1, pageInner(sheet).w / total) : 1;
+}
+
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Aralığı HTML tablosuna çevirir (yazdırma, PDF ve HTML dışa aktarma). */
-export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts: { gridlines?: boolean; headings?: boolean } = {}): string {
+export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts: { gridlines?: boolean; headings?: boolean; cellAttrs?: boolean } = {}): string {
   const cf = new CondFormatter(wb);
   const covered = new Set<string>();
   const cols: string[] = [];
@@ -86,7 +97,8 @@ export function rangeToHtml(wb: WorkbookModel, sheet: SheetModel, r: Rect, opts:
       }
       const v = computeView(wb, sheet, row, c, cf);
       const css = styleToCss({ ...v.style, fill: v.fill, color: v.color, hAlign: v.style.hAlign ?? (v.align === "left" ? undefined : v.align) }, v.isNumber);
-      tds.push(`<td${span} style="${css}">${esc(v.text).replace(/\n/g, "<br>")}</td>`);
+      const attrs = opts.cellAttrs ? ` data-r="${row}" data-c="${c}"` : "";
+      tds.push(`<td${span}${attrs} style="${css}">${esc(v.text).replace(/\n/g, "<br>")}</td>`);
     }
     rows.push(`<tr style="height:${rh}px">${tds.join("")}</tr>`);
   }
@@ -103,9 +115,8 @@ export function printSheet(wb: WorkbookModel, sheet: SheetModel): void {
     document.body.appendChild(host);
   }
   const page = sheet.page;
-  const header = page.header ? `<div class="tb-print-hf">${esc(page.header)}</div>` : "";
-  const footer = page.footer ? `<div class="tb-print-hf">${esc(page.footer)}</div>` : "";
-  host.innerHTML = header + (r ? rangeToHtml(wb, sheet, r, { gridlines: page.printGridlines, headings: page.printHeadings }) : "<p></p>") + footer;
+  host.innerHTML = r ? rangeToHtml(wb, sheet, r, { gridlines: page.printGridlines, headings: page.printHeadings }) : "<p></p>";
+  host.style.zoom = r ? String(fitScale(sheet, r)) : "";
   let st = document.getElementById("tb-print-page") as HTMLStyleElement | null;
   if (!st) {
     st = document.createElement("style");
@@ -114,8 +125,33 @@ export function printSheet(wb: WorkbookModel, sheet: SheetModel): void {
   }
   const m = page.margins;
   const size = page.paper === "Letter" ? "letter" : page.paper === "Legal" ? "legal" : page.paper;
-  st.textContent = `@page { size: ${size} ${page.orientation}; margin: ${m.top}in ${m.right}in ${m.bottom}in ${m.left}in; }`;
+  const box = (where: string, text?: string) => (text ? `@${where} { content: ${hfCss(text, sheet.name, wb.props.title ?? "")}; font: 9pt sans-serif; color: #333; }` : "");
+  st.textContent = `@page { size: ${size} ${page.orientation}; margin: ${m.top}in ${m.right}in ${m.bottom}in ${m.left}in; ${box("top-center", page.header)} ${box("bottom-center", page.footer)} }`;
   window.print();
+}
+
+/** Üst/alt bilgi kodlarını (&[Sayfa], &[Sayfalar], &[Sekme], &[Dosya], &[Tarih]) metne çevirir. */
+export function expandHeaderFooter(text: string, ctx: { page: number; pages: number; sheet: string; file: string }): string {
+  const today = new Date().toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return text
+    .replace(/&\[Sayfalar\]/g, String(ctx.pages))
+    .replace(/&\[Sayfa\]/g, String(ctx.page))
+    .replace(/&\[Sekme\]/g, ctx.sheet)
+    .replace(/&\[Dosya\]/g, ctx.file)
+    .replace(/&\[Tarih\]/g, today);
+}
+
+/** Üst/alt bilgiyi CSS @page kenar kutusu içeriğine çevirir (sayfa sayaçlarıyla). */
+export function hfCss(text: string, sheet: string, file: string): string {
+  const q = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  const marked = text.replace(/&\[Sayfalar\]/g, "\u0000\u0001N\u0000").replace(/&\[Sayfa\]/g, "\u0000\u0001P\u0000");
+  const parts: string[] = [];
+  for (const seg of expandHeaderFooter(marked, { page: 0, pages: 0, sheet, file }).split("\u0000")) {
+    if (seg === "\u0001P") parts.push("counter(page)");
+    else if (seg === "\u0001N") parts.push("counter(pages)");
+    else if (seg) parts.push(q(seg));
+  }
+  return parts.join(" ") || '""';
 }
 
 export function formatForPrint(v: number, code?: string): string {

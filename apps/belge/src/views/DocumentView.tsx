@@ -1,6 +1,6 @@
 // Çalışma alanı: Yazdırma Düzeni (sayfalar) ve Web Düzeni; cetvel, gezinti ve açıklama bölmeleri.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { EditorContent } from "@tiptap/react";
+import { EditorContent, useEditorState } from "@tiptap/react";
 import type { Editor, JSONContent } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { pageMetrics, pxToTw, type DocSettings } from "../model/document";
@@ -42,10 +42,10 @@ interface Props {
 
 export function DocumentView(props: Props) {
   const { editor, settings, updateSettings, controller, view, setView, hfEditing, setHfEditing, onHfEditor, version, scrollRef, printing } = props;
-  const layout = useSyncExternalStore(
-    (cb) => controller.subscribe(cb),
-    () => controller.info,
-  );
+  // Sayfa sayısı ve dipnot yerleşimi izlenir (başvurusu yalnız değişince yenilenir).
+  const subscribe = useCallback((cb: () => void) => controller.subscribe(cb), [controller]);
+  const layoutPages = useSyncExternalStore(subscribe, () => controller.info.pageCount);
+  const layoutNotes = useSyncExternalStore(subscribe, () => controller.info.footnotes);
   const pagesRef = useRef<HTMLDivElement>(null);
   const rulerHostRef = useRef<HTMLDivElement>(null);
   const [rulerOffset, setRulerOffset] = useState(0);
@@ -60,7 +60,7 @@ export function DocumentView(props: Props) {
   const colGap = settings.page.columnSpace / 15;
   const colW = cols > 1 ? (m.contentW - (cols - 1) * colGap) / cols : m.contentW;
   const g: PageGeom = { w: m.w, h: m.h, mt: m.mt, mb: m.mb, ml: m.ml, mr: m.mr, headerY: m.headerY, footerY: m.footerY, stride };
-  const pageCount = print ? layout.pageCount : 1;
+  const pageCount = print ? layoutPages : 1;
   const pagesH = pageCount * stride - gap;
 
   // Sayfa geometrisini sayfalama eklentisine bildir.
@@ -163,14 +163,20 @@ export function DocumentView(props: Props) {
     [hfEditing, updateSettings],
   );
 
-  const curPara = (() => {
-    const { $from } = editor.state.selection;
-    for (let d = $from.depth; d >= 0; d--) {
-      const n = $from.node(d);
-      if (n.type.name === "paragraph" || n.type.name === "heading") return n;
-    }
-    return null;
-  })();
+  // Cetvel girintileri: imleçteki paragrafın değerleri (yalnız değişince yeniden çizilir).
+  const ind = useEditorState({
+    editor,
+    selector: ({ editor: ed }) => {
+      const { $from } = ed.state.selection;
+      for (let d = $from.depth; d >= 0; d--) {
+        const n = $from.node(d);
+        if (n.type.name === "paragraph" || n.type.name === "heading")
+          return { l: (n.attrs.indentLeft as number | null) ?? 0, r: (n.attrs.indentRight as number | null) ?? 0, f: (n.attrs.indentFirst as number | null) ?? 0 };
+      }
+      return { l: 0, r: 0, f: 0 };
+    },
+    equalityFn: (a, b) => !!a && !!b && a.l === b.l && a.r === b.r && a.f === b.f,
+  });
 
   const rulerVisible = view.ruler && print && !printing && !view.focusMode;
   const canvasW = m.w + (showComments ? COMMENTS_W + 12 : 0) + CANVAS_PAD * 2;
@@ -189,9 +195,9 @@ export function DocumentView(props: Props) {
               pageW={m.w}
               ml={m.ml}
               mr={m.mr}
-              indentLeft={(curPara?.attrs.indentLeft as number | null) ?? 0}
-              indentRight={(curPara?.attrs.indentRight as number | null) ?? 0}
-              indentFirst={(curPara?.attrs.indentFirst as number | null) ?? 0}
+              indentLeft={ind?.l ?? 0}
+              indentRight={ind?.r ?? 0}
+              indentFirst={ind?.f ?? 0}
               onIndent={(v) => {
                 const clean = Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x && Math.abs(x) > 0.01 ? x : null]));
                 setParaAttrs(editor, clean);
@@ -216,7 +222,7 @@ export function DocumentView(props: Props) {
               onDoubleClick={onPagesDoubleClick}
               onContextMenu={props.onContextMenu}
             >
-              {print && <PageSheets count={pageCount} g={g} settings={settings} gridlines={view.gridlines} editing={hfEditing} editingPage={hfPage} footnotes={layout.footnotes} notes={notes} onNoteChange={onNoteChange} />}
+              {print && <PageSheets count={pageCount} g={g} settings={settings} gridlines={view.gridlines} editing={hfEditing} editingPage={hfPage} footnotes={layoutNotes} notes={notes} onNoteChange={onNoteChange} />}
               <div
                 className={`bl-body bl-doc${cols > 1 ? " has-columns" : ""}`}
                 style={
@@ -260,7 +266,7 @@ export function DocumentView(props: Props) {
                   onChange={(id, text) => updateSettings((s) => ({ ...s, comments: { ...s.comments, [id]: { ...s.comments[id], text } } }))}
                   onDelete={props.deleteComment}
                   onResolve={(id) => updateSettings((s) => ({ ...s, comments: { ...s.comments, [id]: { ...s.comments[id], resolved: !s.comments[id].resolved } } }))}
-                  version={version + layout.pageCount}
+                  version={version + layoutPages}
                 />
               )}
             </div>

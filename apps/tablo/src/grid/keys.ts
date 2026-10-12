@@ -26,7 +26,10 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
       if (alt && key === "ArrowDown") {
         const { row, col } = ctl.sel.active;
         const v = sheet.validations.find((x) => x.rule.type === "list" && x.ranges.some((r) => row >= r.r1 && row <= r.r2 && col >= r.c1 && col <= r.c2));
-        if (v) ctl.openDialog("validationList", { items: validationList(ctl.wb, sheet, v.rule.formula1 ?? "", row, col) });
+        if (v && v.rule.showDropdown !== false) {
+          ctl.listDropdown = true;
+          ctl.emit();
+        } else if (v) ctl.openDialog("validationList", { items: validationList(ctl.wb, sheet, v.rule.formula1 ?? "", row, col) });
         else ctl.openDialog("pickList");
         return true;
       }
@@ -100,10 +103,14 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
       ctl.openDialog("goto");
       return true;
     case "F9":
-      ctl.wb.engine.recalc(true);
+      ctl.wb.engine.recalc(!shift);
       ctl.emit();
       return true;
     case "F3":
+      if (ctrl) {
+        ctl.openDialog(shift ? "createNames" : "nameManager");
+        return true;
+      }
       if (shift) {
         ctl.openDialog("insertFunction");
         return true;

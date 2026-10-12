@@ -1,6 +1,6 @@
 /**
  * Excel işleç önceliğiyle Pratt ayrıştırıcısı.
- * Öncelik (düşükten yükseğe): karşılaştırma, &, + -, * /, ^, %, tekli - +, : (aralık).
+ * Öncelik (düşükten yükseğe): karşılaştırma, &, + -, * /, ^, %, tekli - +, boşluk (kesişim), : (aralık).
  * Excel'de tekli eksi ^'den önce uygulanır: =-2^2 → 4.
  */
 import { ParseError, type BinaryOp, type Node } from "./ast";
@@ -97,7 +97,18 @@ class Parser {
       this.i++;
       return this.parseExpr(UNARY_PREC);
     }
-    return this.parseRange();
+    return this.parseIntersect();
+  }
+
+  /** Kesişim işleci (boşluk): "A1:C3 B2:D4". */
+  private parseIntersect(): Node {
+    let left = this.parseRange();
+    while (this.peek()?.type === "isect") {
+      this.i++;
+      const right = this.parseRange();
+      left = { type: "binary", op: " ", left, right };
+    }
+    return left;
   }
 
   /** Aralık işleci (:) en yüksek önceliktedir. */
@@ -216,9 +227,21 @@ class Parser {
   }
 }
 
-/** Belirteç listesini AST'ye çevirir; boşluklar atlanır. */
+const OPERAND_END = new Set(["ref", "name", "rparen"]);
+const REF_START = new Set(["ref", "name", "func", "lparen"]);
+
+/** Belirteç listesini AST'ye çevirir; boşluklar atlanır (iki başvuru arasındaki boşluk kesişim işlecidir). */
 export function parseTokens(tokens: Token[], resolve: FunctionNameResolver = (n) => n.toUpperCase()): Node {
-  const significant = tokens.filter((t) => t.type !== "ws");
+  const significant: Token[] = [];
+  tokens.forEach((t, i) => {
+    if (t.type !== "ws") {
+      significant.push(t);
+      return;
+    }
+    const prev = significant[significant.length - 1];
+    const next = tokens.slice(i + 1).find((x) => x.type !== "ws");
+    if (prev && next && OPERAND_END.has(prev.type) && REF_START.has(next.type)) significant.push({ ...t, type: "isect" });
+  });
   const bad = significant.find((t) => t.type === "unknown");
   if (bad) throw new ParseError(`Geçersiz karakter "${bad.text}"`, bad.pos);
   return new Parser(significant, resolve).parseFormula();

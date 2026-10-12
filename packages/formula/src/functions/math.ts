@@ -593,7 +593,7 @@ export const mathFunctions: FnDef[] = [
     }
     const { nums, countA } = subtotalValues(a.slice(2), c, skipHidden, ignoreErrors);
     return agg.subtotalBy(code, nums, countA);
-  }),
+  }, { xlfn: true }),
   fn("RADIANS", "RADYAN", "math", "açı", "Dereceyi radyana çevirir.", 1, 1, n1((x) => (x * Math.PI) / 180), { lift: true }),
   fn("DEGREES", "DERECE", "math", "açı", "Radyanı dereceye çevirir.", 1, 1, n1((x) => (x * 180) / Math.PI), { lift: true }),
   fn("SIN", "SİN", "math", "sayı", "Açının sinüsünü verir.", 1, 1, n1(Math.sin), { lift: true }),

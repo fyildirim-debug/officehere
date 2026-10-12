@@ -97,13 +97,20 @@ export function FloatingLayer({ ctl, layout }: { ctl: Controller; layout: GridLa
   };
 
   return (
-    <div className="tb-floats" style={{ left: layout.cellsX, top: layout.cellsY, width: Math.max(0, layout.width - layout.cellsX), height: Math.max(0, layout.height - layout.cellsY) }}>
+    <div className="tb-floats" style={{ left: layout.cellsX - layout.frozenW, top: layout.cellsY - layout.frozenH, width: Math.max(0, layout.width - layout.cellsX + layout.frozenW), height: Math.max(0, layout.height - layout.cellsY + layout.frozenH) }}>
       {objs.map((obj) => {
         const o = obj.o;
         const p = absPos(sheet, o.anchor);
         const d = drag && drag.id === o.id ? drag : null;
-        const x = (p.x + (d?.dx ?? 0) - fc0) * z - layout.scrollX;
-        const y = (p.y + (d?.dy ?? 0) - fr0) * z - layout.scrollY;
+        // Dondurulmuş bölmede başlayan nesne o eksende kaymaz; kayan bölmedekiler donmuş alanın altında kırpılır
+        const px = p.x + (d?.dx ?? 0);
+        const py = p.y + (d?.dy ?? 0);
+        const fixedX = px < fc0;
+        const fixedY = py < fr0;
+        const x = fixedX ? px * z : layout.frozenW + (px - fc0) * z - layout.scrollX;
+        const y = fixedY ? py * z : layout.frozenH + (py - fr0) * z - layout.scrollY;
+        const clipL = fixedX ? 0 : Math.max(0, layout.frozenW - x);
+        const clipT = fixedY ? 0 : Math.max(0, layout.frozenH - y);
         const w = Math.max(20, o.width + (d?.dw ?? 0)) * z;
         const h = Math.max(20, o.height + (d?.dh ?? 0)) * z;
         if (x > layout.width || y > layout.height || x + w < -50 || y + h < -50) return null;
@@ -112,7 +119,7 @@ export function FloatingLayer({ ctl, layout }: { ctl: Controller; layout: GridLa
           <div
             key={o.id}
             className={`tb-float${selected ? " is-selected" : ""} is-${obj.kind}`}
-            style={{ left: x, top: y, width: w, height: h }}
+            style={{ left: x, top: y, width: w, height: h, clipPath: clipL || clipT ? `inset(${clipT}px 0 0 ${clipL}px)` : undefined }}
             tabIndex={-1}
             onPointerDown={(e) => onDown(e, obj, null)}
             onPointerMove={onMove}

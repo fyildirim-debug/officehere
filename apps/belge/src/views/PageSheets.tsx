@@ -1,22 +1,15 @@
-// Sayfa zeminleri: beyaz sayfa, filigran, sayfa kenarlığı, üst/alt bilgi, kılavuz çizgileri.
-import { memo, useLayoutEffect, useMemo, useRef } from "react";
+// Sayfa zeminleri: beyaz sayfa, filigran, sayfa kenarlığı, üst/alt bilgi, kılavuz çizgileri, dipnotlar.
+// Her sayfa kendi bölümünün boyut ve kenar boşluklarıyla çizilir.
+import { memo, useMemo } from "react";
 import { generateHTML, type JSONContent } from "@tiptap/core";
 import { fontStack } from "@officehere/core";
-import type { DocSettings } from "../model/document";
+import type { DocSettings, HfVariant } from "../model/document";
 import { NUMPAGES_TOKEN, PAGE_TOKEN } from "../editor/nodes";
 import { headerFooterExtensions } from "../editor/extensions";
+import type { PageInfo } from "../editor/pagination";
+import { FootnoteText, type FootnoteView } from "./FootnoteText";
 
-export interface PageGeom {
-  w: number;
-  h: number;
-  mt: number;
-  mb: number;
-  ml: number;
-  mr: number;
-  headerY: number;
-  footerY: number;
-  stride: number;
-}
+export type { FootnoteView } from "./FootnoteText";
 
 const hfExtensions = headerFooterExtensions();
 
@@ -35,35 +28,66 @@ export function hasContent(json: JSONContent | null): boolean {
   return json.content.some(walk);
 }
 
-export interface FootnoteView {
-  label: string;
-  text: string;
+/** Sayfanın üst/alt bilgi türü: bölümde "Farklı İlk Sayfa" ve belgede "Tek ve Çift Sayfalarda Farklı". */
+export function hfVariantOf(page: PageInfo | undefined, index: number, settings: Pick<DocSettings, "oddEven">): HfVariant {
+  if (page?.titlePage && page.first) return "first";
+  if (settings.oddEven && (index + 1) % 2 === 0) return "even";
+  return "default";
+}
+
+export function hfKey(which: "header" | "footer", v: HfVariant): "header" | "footer" | "headerFirst" | "footerFirst" | "headerEven" | "footerEven" {
+  if (v === "first") return which === "header" ? "headerFirst" : "footerFirst";
+  if (v === "even") return which === "header" ? "headerEven" : "footerEven";
+  return which;
+}
+
+/** Düzenleme sırasında sayfadaki üst/alt bilgi alanı etiketi (Word'deki gibi). */
+export function hfLabel(which: "header" | "footer", v: HfVariant, oddEven: boolean, section: number, sections: number): string {
+  const base = which === "header" ? "Üst Bilgi" : "Alt Bilgi";
+  const pre = v === "first" ? "İlk Sayfa " : v === "even" ? "Çift Sayfa " : oddEven ? "Tek Sayfa " : "";
+  const name = pre ? `${pre}${base.replace("Bilgi", "Bilgisi")}` : base;
+  return sections > 1 ? `${name} -Bölüm ${section + 1}-` : name;
 }
 
 interface Props {
-  count: number;
-  /** Sayfa başına dipnot kimlikleri ve kimlik → metin eşlemesi. */
+  pages: PageInfo[];
+  /** Sayfa başına dipnot kimlikleri ve kimlik → içerik eşlemesi. */
   footnotes: string[][];
   notes: Map<string, FootnoteView>;
-  onNoteChange: (id: string, text: string) => void;
-  g: PageGeom;
+  onNoteChange: (id: string, content: JSONContent) => void;
   settings: DocSettings;
   gridlines: boolean;
   editing: "header" | "footer" | null;
   /** Düzenlenen üst/alt bilginin bulunduğu sayfa. */
   editingPage: number;
+  sectionCount: number;
 }
 
-export const PageSheets = memo(function PageSheets({ count, g, settings, gridlines, editing, editingPage, footnotes, notes, onNoteChange }: Props) {
-  const headerHtml = useMemo(() => (hasContent(settings.header) ? toHtml(settings.header) : ""), [settings.header]);
-  const footerHtml = useMemo(() => (hasContent(settings.footer) ? toHtml(settings.footer) : ""), [settings.footer]);
+export const PageSheets = memo(function PageSheets({ pages, settings, gridlines, editing, editingPage, footnotes, notes, onNoteChange, sectionCount }: Props) {
+  const html = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const k of ["header", "footer", "headerFirst", "footerFirst", "headerEven", "footerEven"] as const) {
+      const json = settings[k];
+      m.set(k, hasContent(json) ? toHtml(json) : "");
+    }
+    return m;
+  }, [settings.header, settings.footer, settings.headerFirst, settings.footerFirst, settings.headerEven, settings.footerEven]); // eslint-disable-line react-hooks/exhaustive-deps
   const wm = settings.watermark;
   const pb = settings.pageBorder;
-  const pages = [];
+  const count = pages.length;
+  const editVariant = editing ? hfVariantOf(pages[editingPage], editingPage, settings) : null;
+  const out = [];
   for (let i = 0; i < count; i++) {
-    const fill = (html: string) => html.split(PAGE_TOKEN).join(String(i + 1)).split(NUMPAGES_TOKEN).join(String(count));
-    pages.push(
-      <div key={i} className="bl-page" data-page={i} style={{ top: i * g.stride, width: g.w, height: g.h, background: settings.pageColor ?? undefined }}>
+    const g = pages[i];
+    const v = hfVariantOf(g, i, settings);
+    const headerHtml = html.get(hfKey("header", v)) ?? "";
+    const footerHtml = html.get(hfKey("footer", v)) ?? "";
+    const fill = (h: string) => h.split(PAGE_TOKEN).join(String(i + 1)).split(NUMPAGES_TOKEN).join(String(count));
+    // Aynı türdeki üst/alt bilgi düzenlenirken diğer sayfalarda canlı kopya gösterilmez (düzenleyici tek sayfada).
+    const hideHeader = editing === "header" && i === editingPage;
+    const hideFooter = editing === "footer" && i === editingPage;
+    out.push(
+      <div key={i} className={`bl-page${g.blank ? " is-blank" : ""}`} data-page={i} data-section={g.section} style={{ top: g.top, left: g.left, width: g.w, height: g.h, background: settings.pageColor ?? undefined }}>
         {wm && (
           <div className="bl-watermark" aria-hidden="true">
             <span
@@ -81,11 +105,11 @@ export const PageSheets = memo(function PageSheets({ count, g, settings, gridlin
         )}
         {pb && <div className="bl-page-border" style={{ inset: 32, border: `${pb.style === "thick" ? Math.max(3, pb.width) : pb.width}pt ${pb.style === "thick" || pb.style === "single" ? "solid" : pb.style} ${pb.color}` }} />}
         {gridlines && <div className="bl-gridlines" style={{ top: g.mt, left: g.ml, right: g.mr, bottom: g.mb }} />}
-        {!(editing === "header" && i === editingPage) && headerHtml && (
-          <div className="bl-hf bl-doc bl-hf-header" style={{ top: g.headerY, left: g.ml, right: g.mr, maxHeight: g.mt - g.headerY }} dangerouslySetInnerHTML={{ __html: fill(headerHtml) }} />
+        {!hideHeader && headerHtml && (
+          <div className="bl-hf bl-doc bl-hf-header" style={{ top: g.headerY, left: g.ml, right: g.mr, maxHeight: Math.max(0, g.mt - g.headerY) }} dangerouslySetInnerHTML={{ __html: fill(headerHtml) }} />
         )}
-        {!(editing === "footer" && i === editingPage) && footerHtml && (
-          <div className="bl-hf bl-doc bl-hf-footer" style={{ bottom: g.footerY, left: g.ml, right: g.mr, maxHeight: g.mb - g.footerY }} dangerouslySetInnerHTML={{ __html: fill(footerHtml) }} />
+        {!hideFooter && footerHtml && (
+          <div className="bl-hf bl-doc bl-hf-footer" style={{ bottom: g.footerY, left: g.ml, right: g.mr, maxHeight: Math.max(0, g.mb - g.footerY) }} dangerouslySetInnerHTML={{ __html: fill(footerHtml) }} />
         )}
         {(footnotes[i]?.length ?? 0) > 0 && (
           <div className="bl-footnotes bl-doc" style={{ left: g.ml, right: g.mr, bottom: g.mb }}>
@@ -96,7 +120,7 @@ export const PageSheets = memo(function PageSheets({ count, g, settings, gridlin
               return (
                 <div key={id} className="bl-fn-row">
                   <sup>{n.label}</sup>
-                  <FootnoteText id={id} text={n.text} onChange={onNoteChange} />
+                  <FootnoteText id={id} note={n} onChange={onNoteChange} />
                 </div>
               );
             })}
@@ -105,42 +129,16 @@ export const PageSheets = memo(function PageSheets({ count, g, settings, gridlin
         {editing && (
           <>
             <div className="bl-hf-line" style={{ top: g.mt }}>
-              <span>Üst Bilgi</span>
+              <span>{hfLabel("header", v, settings.oddEven, g.section, sectionCount)}</span>
             </div>
             <div className="bl-hf-line is-footer" style={{ top: g.h - g.mb }}>
-              <span>Alt Bilgi</span>
+              <span>{hfLabel("footer", v, settings.oddEven, g.section, sectionCount)}</span>
             </div>
           </>
         )}
+        {editing && editVariant !== null && v !== editVariant && <div className="bl-hf-dim" />}
       </div>,
     );
   }
-  return <>{pages}</>;
+  return <>{out}</>;
 });
-
-/** Sayfa altındaki düzenlenebilir dipnot metni. */
-function FootnoteText({ id, text, onChange }: { id: string; text: string; onChange: (id: string, text: string) => void }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (document.activeElement !== el && el.value !== text) el.value = text;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [text]);
-  return (
-    <textarea
-      ref={ref}
-      className="bl-fn-text"
-      rows={1}
-      defaultValue={text}
-      placeholder="Dipnot metni"
-      data-note-id={id}
-      onChange={(e) => {
-        e.currentTarget.style.height = "auto";
-        e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
-        onChange(id, e.currentTarget.value);
-      }}
-    />
-  );
-}

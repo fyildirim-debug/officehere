@@ -1,5 +1,6 @@
 // Kelime işlemci kısayolları (editör odaklıyken).
 import { Extension, type Editor } from "@tiptap/core";
+import { Selection, TextSelection } from "@tiptap/pm/state";
 import type { StyleDef } from "../model/styles";
 import { applyStyle, changeIndent, clearCharFormatting, copyFormat, cycleCase, pasteFormat, setLineSpacing, setParaAttrs, stepFontSize, currentPara, type CopiedFormat } from "./commands";
 
@@ -13,6 +14,35 @@ export interface EditorHooks {
 }
 
 let copied: CopiedFormat | null = null;
+
+/** Ctrl+Home / Ctrl+End (Shift ile seçimi genişletir). */
+function docEdge(editor: Editor, dir: -1 | 1, extend: boolean): boolean {
+  const { state, view } = editor;
+  const target = dir < 0 ? Selection.atStart(state.doc) : Selection.atEnd(state.doc);
+  let sel: Selection = target;
+  if (extend) {
+    const head = dir < 0 ? target.from : target.to;
+    sel = TextSelection.between(state.selection.$anchor, state.doc.resolve(head));
+  }
+  view.dispatch(state.tr.setSelection(sel).scrollIntoView());
+  return true;
+}
+
+/** Bölüm başındaki tablonun ilk hücresinin başında Enter: tablonun önüne paragraf ekler (Word davranışı). */
+function paragraphBeforeTable(editor: Editor): boolean {
+  const { state, view } = editor;
+  const { $from, empty } = state.selection;
+  // belge > bölüm > tablo > satır > hücre > paragraf
+  if (!empty || $from.parentOffset !== 0 || $from.depth < 5) return false;
+  if ($from.node(2).type.name !== "table" || $from.index(1) !== 0) return false;
+  // Bölümün ilk bloğu olan tablonun ilk satırı, ilk hücresi, hücrenin ilk bloğu
+  if ($from.index(2) !== 0 || $from.index(3) !== 0 || $from.index(4) !== 0) return false;
+  const at = $from.before(2);
+  const tr = state.tr.insert(at, state.schema.nodes.paragraph.create());
+  tr.setSelection(TextSelection.create(tr.doc, at + 1));
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
 
 /** Sonraki paragrafı Normal olan stiller (Word'deki "Sonraki paragraf stili"). */
 const NEXT_NORMAL = new Set(["Title", "Subtitle", "Quote", "IntenseQuote"]);
@@ -96,12 +126,18 @@ export function createWordKeymap(hooks: EditorHooks) {
         "Mod-Alt-d": () => (hooks.insertNote("endnote"), true),
         Enter: () => {
           const e = ed();
+          if (paragraphBeforeTable(e)) return true;
           const { $from, empty } = e.state.selection;
           const node = $from.parent;
           const sid = node.attrs.styleId as string | null;
           if (!empty || node.type.name !== "paragraph" || !sid || !NEXT_NORMAL.has(sid) || $from.parentOffset !== node.content.size) return false;
           return e.chain().splitBlock().updateAttributes("paragraph", { styleId: null }).run();
         },
+        // Belge başı/sonu: tarayıcının yerel davranışı resim, tablo ve hücre seçiminde güvenilmez.
+        "Mod-Home": () => docEdge(ed(), -1, false),
+        "Mod-End": () => docEdge(ed(), 1, false),
+        "Mod-Shift-Home": () => docEdge(ed(), -1, true),
+        "Mod-Shift-End": () => docEdge(ed(), 1, true),
         Tab: () => {
           const e = ed();
           if (e.isActive("listItem") || e.isActive("table")) return false;

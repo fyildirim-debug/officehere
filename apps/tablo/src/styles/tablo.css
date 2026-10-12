@@ -655,3 +655,17 @@
   background: var(--oh-separator);
   align-self: stretch;
 }
+
+/* Büyük menü düğmelerinde ok, iki satırlı etiketin sonunda dursun (grup etiketiyle çakışmasın) */
+.oh-rbtn-large.has-menu .oh-rbtn-label {
+  display: block;
+  line-height: 1.2;
+}
+.oh-rbtn-large.has-menu .oh-rbtn-label .oh-chevron {
+  display: inline-block;
+  margin: 0 0 0 3px;
+  vertical-align: 1px;
+}
+.oh-rbtn-large.tb-wide {
+  max-width: 100px;
+}

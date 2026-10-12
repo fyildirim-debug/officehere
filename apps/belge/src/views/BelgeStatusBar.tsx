@@ -1,13 +1,19 @@
 // Durum çubuğu: sayfa, sözcük sayısı, dil, izleme durumu, görünüm düğmeleri ve yakınlaştırma.
 import { DocumentOnePage20Regular, Globe20Regular, ReadingModeMobile20Regular, TextProofingTools20Regular, ScanText20Regular } from "@fluentui/react-icons";
 import { StatusBar, StatusItem, ViewSwitcher, ZoomSlider, tipProps } from "@officehere/ui";
+import { useCallback, useSyncExternalStore } from "react";
+import { useEditorState } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import type { ViewOptions } from "../state/context";
+import type { PaginationController } from "../editor/pagination";
+import { countWords } from "../editor/commands";
 
 interface Props {
-  page: number;
-  pages: number;
+  editor: Editor;
+  controller: PaginationController;
+  /** Yazdırma Düzeni'nde sayfa bilgisi gösterilir. */
+  paged: boolean;
   words: number;
-  selWords: number;
   tracking: boolean;
   view: ViewOptions;
   setView: (p: Partial<ViewOptions>) => void;
@@ -19,8 +25,24 @@ interface Props {
 
 const LANG_NAMES: Record<string, string> = { tr: "Türkçe (Türkiye)", "en-US": "İngilizce (ABD)", de: "Almanca (Almanya)" };
 
-export function BelgeStatusBar({ page, pages, words, selWords, tracking, view, setView, onPageClick, onWordsClick, onZoomClick, lang }: Props) {
+export function BelgeStatusBar({ editor, controller, paged, words, tracking, view, setView, onPageClick, onWordsClick, onZoomClick, lang }: Props) {
   const n = (x: number) => x.toLocaleString("tr-TR");
+  // İmleç ve seçim burada izlenir; böylece her tuşta yalnız durum çubuğu yeniden çizilir.
+  const sel = useEditorState({
+    editor,
+    selector: ({ editor: ed }) => {
+      const { from, to, empty } = ed.state.selection;
+      return { from, words: empty ? -1 : countWords(ed.state.doc.textBetween(from, to, "\n", " ")) };
+    },
+    equalityFn: (a, b) => !!a && !!b && a.from === b.from && a.words === b.words,
+  });
+  const info = useSyncExternalStore(
+    useCallback((cb: () => void) => controller.subscribe(cb), [controller]),
+    () => controller.info,
+  );
+  const pages = paged ? info.pageCount : 1;
+  const page = paged ? controller.pageOf(sel?.from ?? 0) + 1 : 1;
+  const selWords = sel?.words ?? -1;
   return (
     <StatusBar
       left={

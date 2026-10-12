@@ -97,6 +97,20 @@ export class Ops {
     this.done(label);
   }
 
+  /** Tanımlı ad değişiklikleri (Ad Yöneticisi). */
+  namesOp(label: string, mutate: () => void): void {
+    const eng = this.wb.engine;
+    const before = eng.getNames();
+    mutate();
+    const after = eng.getNames();
+    const apply = (list: typeof before) => {
+      for (const n of eng.getNames()) eng.removeName(n.name, n.sheet);
+      for (const n of list) eng.defineName(n.name, n.formula, n.sheet);
+    };
+    this.history.push({ label, cost: 10, undo: () => apply(before), redo: () => apply(after) });
+    this.done(label);
+  }
+
   /** Tüm kitabın anlık görüntüsüyle (yapısal işlemler). */
   snapshotOp(label: string, mutate: () => void): void {
     const wb = this.wb;

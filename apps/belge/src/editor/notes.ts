@@ -106,8 +106,9 @@ export function createNotesPlugin() {
     if (ends.length) {
       const key = `endnotes:${ends.map((n) => `${n.id}=${n.label}`).join(",")}`;
       decos.push(
+        // Son bölümün içinde, son bloğun ardından (bölüm kenar boşlukları uygulansın).
         Decoration.widget(
-          doc.content.size,
+          Math.max(0, doc.content.size - 1),
           (view: EditorView) => {
             const wrap = document.createElement("div");
             wrap.className = "bl-endnotes";

@@ -100,7 +100,7 @@ export function FindDialog({ ctl, onClose, arg }: P) {
       <DialogTabs tabs={[{ id: "find", label: "Bul" }, { id: "replace", label: "Değiştir" }]} active={tab} onChange={setTab} />
       <div className="tb-find">
         <Field label="Aranan:" inline>
-          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus style={{ flex: 1 }} />
+          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} data-autofocus="true" style={{ flex: 1 }} />
         </Field>
         {isReplace && (
           <Field label="Yeni değer:" inline>

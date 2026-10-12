@@ -51,6 +51,8 @@ export class SheetModel {
   /** Görünümün sol üst hücresi (sayfa değiştirince geri yüklemek için). */
   scroll = { row: 0, col: 0 };
   protected = false;
+  /** Koruma parolası (yalnız oturumda tutulur, dosyaya yazılmaz). */
+  protectPassword?: string;
 
   constructor(
     public id: number,

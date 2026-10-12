@@ -115,6 +115,7 @@ function evalInner(node: Node, ctx: FnContext): Value {
     case "binary": {
       const l = evalInner(node.left, ctx);
       if (node.op === ":") return rangeOp(l, evalInner(node.right, ctx));
+      if (node.op === " ") return intersectOp(l, evalInner(node.right, ctx));
       const r = evalInner(node.right, ctx);
       return binary(node.op, l, r, ctx);
     }
@@ -149,6 +150,19 @@ function rangeOp(l: Value, r: Value): Value {
   if (!isRef(l) || !isRef(r)) return Errors.VALUE;
   if (l.sheet !== r.sheet) return Errors.VALUE;
   return { kind: "ref", sheet: l.sheet, r1: Math.min(l.r1, r.r1), c1: Math.min(l.c1, r.c1), r2: Math.max(l.r2, r.r2), c2: Math.max(l.c2, r.c2) };
+}
+
+/** Kesişim: iki başvurunun ortak alanı; ortak alan yoksa #BOŞ!. */
+function intersectOp(l: Value, r: Value): Value {
+  if (isError(l)) return l;
+  if (isError(r)) return r;
+  if (!isRef(l) || !isRef(r) || l.sheet !== r.sheet) return Errors.VALUE;
+  const r1 = Math.max(l.r1, r.r1);
+  const c1 = Math.max(l.c1, r.c1);
+  const r2 = Math.min(l.r2, r.r2);
+  const c2 = Math.min(l.c2, r.c2);
+  if (r1 > r2 || c1 > c2) return Errors.NULL;
+  return { kind: "ref", sheet: l.sheet, r1, c1, r2, c2 };
 }
 
 /** İşlenen: tek değer ya da 2B dizi. */

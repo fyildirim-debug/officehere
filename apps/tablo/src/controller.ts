@@ -57,6 +57,10 @@ export class Controller {
   formulaBarExpanded = false;
   /** Durum çubuğu iletisi (ör. "Hedefi seçin ve ENTER tuşuna basın"). */
   status = "";
+  /** Gözden Geçir > Tüm Notları Göster. */
+  showAllNotes = false;
+  /** Veri doğrulama açılan listesi açık mı. */
+  listDropdown = false;
   /** Seçili yüzen nesne (grafik, resim, şekil). */
   selObj: { kind: "chart" | "image" | "shape"; id: string } | null = null;
   /** Biçim Boyacısı: kopyalanan stiller. */
@@ -263,12 +267,30 @@ export class Controller {
 
   /* ------------------------------ Düzenleme ------------------------------ */
 
+  /** Korumalı sayfada kilitli hücre mi? */
+  isLocked(row: number, col: number): boolean {
+    return this.sheet.protected && this.wb.styleAt(this.sheet, row, col).locked !== false;
+  }
+
+  /** Seçimde kilitli hücre varsa uyarır (korumalı sayfa). */
+  guardSelection(): boolean {
+    if (!this.sheet.protected) return true;
+    for (const r of this.sel.ranges)
+      for (let row = r.r1; row <= Math.min(r.r2, r.r1 + 200); row++)
+        for (let col = r.c1; col <= Math.min(r.c2, r.c1 + 100); col++)
+          if (this.isLocked(row, col)) {
+            this.alert("Değiştirmeye çalıştığınız hücre korumalı bir sayfada. Değişiklik yapmak için Gözden Geçir sekmesinde Sayfa Korumasını Kaldır'ı tıklatın.");
+            return false;
+          }
+    return true;
+  }
+
   /** Hücre düzenlemeyi başlatır. text verilirse "Gir" kipinde yazılanla başlar. */
   startEdit(text?: string, inBar = false): void {
     if (this.edit) return;
     const { row, col } = this.sel.active;
-    if (this.sheet.protected) {
-      this.alert("Değiştirmeye çalıştığınız hücre korumalı bir sayfada.");
+    if (this.isLocked(row, col)) {
+      this.alert("Değiştirmeye çalıştığınız hücre veya grafik korumalı bir sayfada. Değişiklik yapmak için Gözden Geçir sekmesinde Sayfa Korumasını Kaldır'ı tıklatın.");
       return;
     }
     const initial = text ?? this.wb.editText(this.sheet, row, col);

@@ -5,6 +5,7 @@ import { Errors, isError, isRef, makeArray, type Scalar, type Value } from "../v
 import * as agg from "./aggregate";
 import { clipRef, collectNumbers, flatValues, forEachValue, matchCriteriaRanges, matrix, num, optNum, scalar, valueAt } from "./helpers";
 import { fn, type FnDef } from "./registry";
+import { lnGammaHP } from "./special";
 import { makeCriteria } from "../coerce";
 
 /** ORTALAMAA/MAKA tarzı: başvurudaki metin 0, mantıksal 1/0. */
@@ -241,12 +242,7 @@ function normDist(x: number, m: number, s: number, cum: boolean): number {
 }
 
 function lnGamma(x: number): number {
-  const g = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
-  let y = x;
-  const tmp = x + 5.5 - (x + 0.5) * Math.log(x + 5.5);
-  let ser = 1.000000000190015;
-  for (const c of g) ser += c / ++y;
-  return -tmp + Math.log((2.5066282746310005 * ser) / x);
+  return lnGammaHP(x);
 }
 
 function binomPmf(k: number, n: number, p: number): number {

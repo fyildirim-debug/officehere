@@ -1,6 +1,7 @@
 /** Tüm fonksiyon ailelerini kaydeder. */
 import { arrayFunctions } from "./array";
 import { dateFunctions } from "./date";
+import { distributionFunctions } from "./distributions";
 import { financialFunctions } from "./financial";
 import { infoFunctions, logicalFunctions } from "./logical";
 import { lookupFunctions } from "./lookup";
@@ -16,6 +17,7 @@ export function registerAll(): void {
   done = true;
   register(mathFunctions);
   register(statsFunctions);
+  register(distributionFunctions);
   register(logicalFunctions);
   register(infoFunctions);
   register(textFunctions);

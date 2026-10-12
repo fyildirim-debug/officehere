@@ -1,5 +1,44 @@
 // Satır içi resim: boyutlandırma tutamaçları, kenarlık, resim stili, döndürme ve alternatif metin.
 import Image from "@tiptap/extension-image";
+import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
+
+/** Tutamaçla boyutlandırma bitince resim seçili kalır (Word'deki gibi). */
+function keepImageSelectedPlugin() {
+  return new Plugin({
+    key: new PluginKey("belgeImageKeepSel"),
+    view(view: EditorView) {
+      let container: HTMLElement | null = null;
+      const onDown = (e: PointerEvent) => {
+        const t = e.target as HTMLElement;
+        container = t.closest?.("[data-resize-handle]") ? (t.closest("[data-resize-container]") as HTMLElement | null) : null;
+      };
+      const onUp = () => {
+        const el = container;
+        container = null;
+        if (!el) return;
+        window.setTimeout(() => {
+          if (view.isDestroyed) return;
+          let found = -1;
+          view.state.doc.descendants((n, pos) => {
+            if (found >= 0) return false;
+            if (n.type.name === "image" && view.nodeDOM(pos) === el) found = pos;
+            return true;
+          });
+          if (found >= 0) view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, found)));
+        }, 0);
+      };
+      view.dom.addEventListener("pointerdown", onDown, true);
+      window.addEventListener("pointerup", onUp, true);
+      return {
+        destroy() {
+          view.dom.removeEventListener("pointerdown", onDown, true);
+          window.removeEventListener("pointerup", onUp, true);
+        },
+      };
+    },
+  });
+}
 
 export const IMAGE_STYLES: { id: string; label: string }[] = [
   { id: "none", label: "Stil Yok" },
@@ -49,6 +88,9 @@ export const BelgeImage = Image.extend({
         },
       },
     };
+  },
+  addProseMirrorPlugins() {
+    return [...(this.parent?.() ?? []), keepImageSelectedPlugin()];
   },
 }).configure({
   inline: true,

@@ -16,6 +16,10 @@ function ranges(ctl: Controller): Rect[] {
 
 export function applyStyle(ctl: Controller, patch: Partial<CellStyle> | ((s: CellStyle) => Partial<CellStyle>), label?: string): void {
   if (ctl.edit) ctl.commitEdit(null);
+  if (ctl.sheet.protected) {
+    ctl.alert("Korumalı bir sayfada biçimlendirme yapılamaz. Önce Gözden Geçir sekmesinden sayfa korumasını kaldırın.");
+    return;
+  }
   ctl.ops.applyStyle(ctl.sheet, ranges(ctl), patch, label);
 }
 

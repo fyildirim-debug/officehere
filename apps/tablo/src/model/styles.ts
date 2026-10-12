@@ -86,7 +86,9 @@ export class StyleTable {
 function normalize(s: CellStyle): CellStyle {
   const out: CellStyle = {};
   for (const [k, v] of Object.entries(s)) {
-    if (v === undefined || v === null || v === false) continue;
+    // "locked: false" anlamlıdır (varsayılan kilitli)
+    if (v === undefined || v === null || (v === false && k !== "locked")) continue;
+    if (k === "locked" && v === true) continue;
     if (k === "numFmt" && v === "General") continue;
     if (k === "hAlign" && v === "general") continue;
     if (k === "indent" && v === 0) continue;

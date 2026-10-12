@@ -75,6 +75,16 @@
 .bl-doc ol {
   list-style-type: decimal;
 }
+/* Varsayılan iç içe numaralandırma: 1. → a. → i. */
+.bl-doc ol ol {
+  list-style-type: lower-alpha;
+}
+.bl-doc ol ol ol {
+  list-style-type: lower-roman;
+}
+.bl-doc ol ol ol ol {
+  list-style-type: decimal;
+}
 .bl-doc ol[data-list-style="decimal-paren"] {
   list-style-type: bl-decimal-paren;
 }

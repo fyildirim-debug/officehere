@@ -1,5 +1,5 @@
 // Editör şeması ve eklenti listesi.
-import type { AnyExtension } from "@tiptap/core";
+import { Node, type AnyExtension } from "@tiptap/core";
 import { fontStack } from "@officehere/core";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle, Color, FontFamily, FontSize, BackgroundColor } from "@tiptap/extension-text-style";
@@ -18,6 +18,8 @@ import { ShowMarks } from "./showMarks";
 import { TrackChanges } from "./trackChanges";
 import { createWordKeymap, type EditorHooks } from "./keymap";
 import { Note, Notes } from "./notes";
+import { PasteRules } from "./paste";
+import { BelgeDocument, ColumnBreak, Section, SectionKeys, createSectionLayout } from "./sections";
 
 /** Yazı tipi adı yedek zinciriyle (yüklü olmayan yazı tiplerinde ölçü uyumlu açık yazı tipine düşer). */
 const BelgeFontFamily = FontFamily.extend({
@@ -48,10 +50,11 @@ const Align = TextAlign.extend({
   },
 }).configure({ types: ["heading", "paragraph"], alignments: ["left", "center", "right", "justify"] });
 
-/** Belge içeriği şeması (statik dönüşümler ve testler için de kullanılır). */
-export function schemaExtensions(): AnyExtension[] {
+/** Ortak içerik şeması (belge kökü hariç). */
+function contentExtensions(): AnyExtension[] {
   return [
     StarterKit.configure({
+      document: false,
       blockquote: false,
       code: false,
       codeBlock: false,
@@ -92,11 +95,30 @@ export function schemaExtensions(): AnyExtension[] {
   ];
 }
 
+/** Belge içeriği şeması: belge > bölüm+ > blok+ (statik dönüşümler ve testler için de kullanılır). */
+export function schemaExtensions(): AnyExtension[] {
+  return [...contentExtensions(), BelgeDocument, Section, ColumnBreak];
+}
+
+/** Üst/alt bilgi kökü: bölümsüz blok dizisi. */
+const PlainDocument = Node.create({ name: "doc", topNode: true, content: "block+" });
+
 export function editorExtensions(controller: PaginationController, hooks: EditorHooks): AnyExtension[] {
-  return [...schemaExtensions(), Pagination.configure({ controller }), Notes, Search, ShowMarks, TrackChanges, createWordKeymap(hooks)];
+  return [
+    ...schemaExtensions(),
+    Pagination.configure({ controller }),
+    Notes,
+    Search,
+    ShowMarks,
+    TrackChanges,
+    createWordKeymap(hooks),
+    SectionKeys,
+    PasteRules,
+    createSectionLayout({ enabled: () => controller.geometry.enabled, defaultPage: () => controller.geometry.defaultPage }),
+  ];
 }
 
 /** Üst/alt bilgi editörü: gövdeyle aynı biçimlendirme, sayfalama yok. */
 export function headerFooterExtensions(): AnyExtension[] {
-  return schemaExtensions();
+  return [...contentExtensions(), PlainDocument];
 }

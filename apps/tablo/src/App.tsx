@@ -25,6 +25,8 @@ import { PageLayoutView } from "./grid/PageLayoutView";
 
 export function App() {
   const ctl = useMemo(() => new Controller(), []);
+  // Geliştirme kipinde tarayıcı testleri için erişim
+  if (import.meta.env.DEV) (window as unknown as { __tablo?: Controller }).__tablo = ctl;
   useSyncExternalStore(ctl.subscribe, ctl.getVersion);
   const [tab, setTab] = useState("home");
   const [collapsed, setCollapsed] = useState(false);
@@ -49,6 +51,8 @@ export function App() {
         ctx.open({ clientX: a.x, clientY: a.y, preventDefault: () => {} }, <ObjectMenu ctl={ctl} kind={a.kind} id={a.id} />);
         return;
       }
+      // İletişim kutuları hücre içeriğiyle çalışır: süren düzenleme önce onaylanır
+      if (ctl.edit && id !== "insertFunction" && id !== "alert" && id !== "confirm") ctl.commitEdit(null);
       setDialog({ id, arg });
     };
     ctl.alert = (message, title) => setDialog({ id: "alert", arg: { message, title } });
@@ -160,7 +164,7 @@ export function App() {
       </div>
       {filterMenu && <FilterMenu ctl={ctl} {...filterMenu} onClose={() => (setFilterMenu(null), ctl.focusGrid())} />}
       {ctx.element}
-      <DialogHost ctl={ctl} state={dialog} onClose={() => (setDialog(null), requestAnimationFrame(() => ctl.focusGrid()))} files={files} />
+      <DialogHost ctl={ctl} state={dialog} onClose={() => (setDialog(null), requestAnimationFrame(() => ctl.focusGrid()))} files={files} onBackstage={setBackstage} />
       {lifecycle.dialog}
     </AppShell>
   );

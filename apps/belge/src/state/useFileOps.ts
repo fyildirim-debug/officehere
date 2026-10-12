@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { addRecentFile, baseName, downloadBlob, getNative, openFile, readPath, saveFile, saveFileAs, type FileRef } from "@officehere/core";
-import { defaultSettings, type BelgeDocument, type DocSettings } from "../model/document";
+import { defaultSettings, normalizeDoc, type BelgeDocument, type DocSettings } from "../model/document";
 import { DOCX_FILTER, OPEN_FILTERS, docToText, htmlDocument, openDocument, writeDocx } from "../io";
 import { TEMPLATES } from "../templates/templates";
 import { annotateNotesHtml } from "../editor/notes";
@@ -38,7 +38,7 @@ export function clearDraft() {
 
 /** Geçmişi sıfırlayarak belge içeriğini yükler. */
 export function loadIntoEditor(editor: Editor, doc: BelgeDocument["content"]) {
-  editor.commands.setContent(doc, { emitUpdate: false });
+  editor.commands.setContent(normalizeDoc(doc), { emitUpdate: false });
   const state = EditorState.create({ doc: editor.state.doc, plugins: editor.state.plugins, selection: TextSelection.atStart(editor.state.doc) });
   editor.view.updateState(state);
 }
@@ -110,7 +110,7 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
     await openData(f.name, f.data, { name: f.name, path: f.path, handle: f.handle });
   }, [confirmDiscard, openData]);
 
-  const isPristine = useCallback(() => !dirty && editor.state.doc.textContent.trim() === "" && editor.state.doc.childCount <= 1, [dirty, editor]);
+  const isPristine = useCallback(() => !dirty && editor.state.doc.textContent.trim() === "" && editor.state.doc.childCount <= 1 && (editor.state.doc.firstChild?.childCount ?? 0) <= 1, [dirty, editor]);
 
   const openPath = useCallback(
     async (path: string) => {

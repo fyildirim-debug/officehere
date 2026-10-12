@@ -56,7 +56,8 @@ export function levelDef(s: ListSig, lvl: number): LevelDef {
     const o = ORDERED[MIXED[lvl % 3]];
     return { numFmt: o.fmt, lvlText: `%${lvl + 1}${o.suffix}` };
   }
-  const o = ORDERED[s.style ?? "decimal"] ?? ORDERED.decimal;
+  // Varsayılan numaralandırma düzeyleri: 1. → a. → i. (yalnız ilk düzey değil, iç içe listeler de).
+  const o = ORDERED[s.style ?? MIXED[lvl % 3]] ?? ORDERED.decimal;
   return { numFmt: o.fmt, lvlText: `%${lvl + 1}${o.suffix}` };
 }
 

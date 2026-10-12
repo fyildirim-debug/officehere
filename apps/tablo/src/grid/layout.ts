@@ -47,7 +47,7 @@ export class GridLayout {
     this.frozenW = sheet.cols.offset(this.fc) * z;
     this.headerW = 0;
     if (show) {
-      const lastRow = this.rowAtY(height + 50, 0);
+      const lastRow = this.rowAtY(height + 50);
       const digits = String(Math.max(lastRow + 1, 100)).length;
       this.headerW = Math.round(Math.max(26 * Math.max(0.6, z), measureDigits(digits) + 10 * Math.max(0.6, z)));
     }

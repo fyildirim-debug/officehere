@@ -7,8 +7,21 @@ import { formatGeneral, formatValue } from "@officehere/formula";
 import type { ChartDef } from "../model/types";
 import { PALETTES, niceScale, type ChartData } from "./chartData";
 
-const INK = "#595959";
-const GRID = "#D9D9D9";
+/** Grafik stilleri (Grafik Tasarımı > Grafik Stilleri): arka plan, yazı ve ızgara renkleri. */
+export const CHART_STYLES: { bg: string; ink: string; grid: string; border?: string }[] = [
+  { bg: "#FFFFFF", ink: "#595959", grid: "#D9D9D9" },
+  { bg: "#FFFFFF", ink: "#595959", grid: "#D9D9D9" },
+  { bg: "#F2F2F2", ink: "#404040", grid: "#FFFFFF" },
+  { bg: "#FFFFFF", ink: "#404040", grid: "#EDEDED", border: "#A6A6A6" },
+  { bg: "#262626", ink: "#D9D9D9", grid: "#404040" },
+  { bg: "#DEEBF7", ink: "#1F3864", grid: "#FFFFFF" },
+  { bg: "#FBE5D6", ink: "#843C0C", grid: "#FFFFFF" },
+  { bg: "#0E2841", ink: "#E8E8E8", grid: "#2B4A6B" },
+];
+
+export function themeOf(def: ChartDef): { bg: string; ink: string; grid: string; border?: string } {
+  return CHART_STYLES[def.style] ?? CHART_STYLES[1];
+}
 const FONT = '"Segoe UI", "Aptos", "Carlito", sans-serif';
 
 function fmt(v: number, numFmt?: string): string {
@@ -51,7 +64,7 @@ export function ChartView({ def, data, width, height }: { def: ChartDef; data: C
   let body: React.ReactNode;
   if (!data.series.length || !data.series.some((s) => s.values.some((v) => v !== null))) {
     body = (
-      <text x={width / 2} y={height / 2} textAnchor="middle" fontSize={12} fill={INK} fontFamily={FONT}>
+      <text x={width / 2} y={height / 2} textAnchor="middle" fontSize={12} fill={themeOf(def).ink} fontFamily={FONT}>
         Grafik verisi yok
       </text>
     );
@@ -61,9 +74,9 @@ export function ChartView({ def, data, width, height }: { def: ChartDef; data: C
   return (
     <div className="tb-chart-svgwrap">
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={def.title || "Grafik"} style={{ fontFamily: FONT, display: "block" }}>
-        <rect x={0} y={0} width={width} height={height} fill="#FFFFFF" />
+        <rect x={0.5} y={0.5} width={width - 1} height={height - 1} fill={themeOf(def).bg} stroke={themeOf(def).border ?? "none"} />
         {def.showTitle && (
-          <text x={width / 2} y={22} textAnchor="middle" fontSize={15} fill={INK}>
+          <text x={width / 2} y={22} textAnchor="middle" fontSize={15} fill={themeOf(def).ink}>
             {truncate(def.title || "Grafik Başlığı", Math.floor(width / 8))}
           </text>
         )}
@@ -94,7 +107,7 @@ function Legend({ items, def, width, height, plot, legendW, titleH }: { items: {
     const total = items.length * 18;
     let y = Math.max(titleH, plot.y + (plot.h - total) / 2);
     return (
-      <g fontSize={11} fill={INK}>
+      <g fontSize={11} fill={themeOf(def).ink}>
         {items.map((it, i) => {
           const yy = y + i * 18;
           return (
@@ -114,7 +127,7 @@ function Legend({ items, def, width, height, plot, legendW, titleH }: { items: {
   let x = Math.max(4, (width - total) / 2);
   const y = def.legendPos === "top" ? titleH + 4 : height - 18;
   return (
-    <g fontSize={11} fill={INK}>
+    <g fontSize={11} fill={themeOf(def).ink}>
       {items.map((it, i) => {
         const xx = x;
         x += widths[i];
@@ -157,7 +170,7 @@ function PieBody({ def, data, plot, colors, hoverProps }: BodyProps) {
         a0 = a1;
         return (
           <g key={i}>
-            <path d={d} fill={colors[i % colors.length]} stroke="#FFFFFF" strokeWidth={1.5} className="tb-chart-mark" {...hoverProps(`${data.categories[i] ?? ""}: ${fmt(v, data.numFmt)} (${Math.round((v / total) * 1000) / 10}%)`)} />
+            <path d={d} fill={colors[i % colors.length]} stroke={themeOf(def).bg} strokeWidth={1.5} className="tb-chart-mark" {...hoverProps(`${data.categories[i] ?? ""}: ${fmt(v, data.numFmt)} (${Math.round((v / total) * 1000) / 10}%)`)} />
             {label && (
               <text x={cx + lr * Math.cos(mid)} y={cy + lr * Math.sin(mid) + 4} textAnchor="middle" fontSize={11} fill="#FFFFFF" pointerEvents="none">
                 {label}
@@ -218,6 +231,12 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
     ? { x: plot.x + Math.min(plot.w * 0.35, Math.max(...data.categories.map((c) => c.length)) * 6.3 + 10), y: plot.y + 4, w: 0, h: plot.h - 22 }
     : { x: plot.x + labelW, y: plot.y + 6, w: plot.w - labelW - 6, h: plot.h - catLabelH - 8 };
   if (horizontal) area.w = plot.x + plot.w - area.x - 10;
+  // Eksen başlıkları için yer aç
+  if (def.yTitle) {
+    area.x += 14;
+    area.w -= 14;
+  }
+  if (def.xTitle) area.h -= 16;
   const vToPos = (v: number) => (horizontal ? area.x + ((v - sc.min) / (sc.max - sc.min)) * area.w : area.y + area.h - ((v - sc.min) / (sc.max - sc.min)) * area.h);
   const zero = vToPos(Math.max(sc.min, Math.min(sc.max, 0)));
   const band = (horizontal ? area.h : area.w) / Math.max(1, n);
@@ -226,16 +245,16 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
   ticks.forEach((t, i) => {
     const p = vToPos(t);
     if (horizontal) {
-      if (def.showGridlines) els.push(<line key={`g${i}`} x1={p} x2={p} y1={area.y} y2={area.y + area.h} stroke={GRID} strokeWidth={1} />);
+      if (def.showGridlines) els.push(<line key={`g${i}`} x1={p} x2={p} y1={area.y} y2={area.y + area.h} stroke={themeOf(def).grid} strokeWidth={1} />);
       els.push(
-        <text key={`t${i}`} x={p} y={area.y + area.h + 14} textAnchor="middle" fontSize={10.5} fill={INK}>
+        <text key={`t${i}`} x={p} y={area.y + area.h + 14} textAnchor="middle" fontSize={10.5} fill={themeOf(def).ink}>
           {tickLabels[i]}
         </text>,
       );
     } else {
-      if (def.showGridlines) els.push(<line key={`g${i}`} x1={area.x} x2={area.x + area.w} y1={p} y2={p} stroke={GRID} strokeWidth={1} />);
+      if (def.showGridlines) els.push(<line key={`g${i}`} x1={area.x} x2={area.x + area.w} y1={p} y2={p} stroke={themeOf(def).grid} strokeWidth={1} />);
       els.push(
-        <text key={`t${i}`} x={area.x - 6} y={p + 4} textAnchor="end" fontSize={10.5} fill={INK}>
+        <text key={`t${i}`} x={area.x - 6} y={p + 4} textAnchor="end" fontSize={10.5} fill={themeOf(def).ink}>
           {tickLabels[i]}
         </text>,
       );
@@ -249,13 +268,13 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
       const mid = (horizontal ? area.y : area.x) + band * (i + 0.5);
       if (horizontal)
         els.push(
-          <text key={`c${i}`} x={area.x - 6} y={mid + 4} textAnchor="end" fontSize={10.5} fill={INK}>
+          <text key={`c${i}`} x={area.x - 6} y={mid + 4} textAnchor="end" fontSize={10.5} fill={themeOf(def).ink}>
             {truncate(c, 18)}
           </text>,
         );
       else
         els.push(
-          <text key={`c${i}`} x={mid} y={area.y + area.h + 14} textAnchor="middle" fontSize={10.5} fill={INK}>
+          <text key={`c${i}`} x={mid} y={area.y + area.h + 14} textAnchor="middle" fontSize={10.5} fill={themeOf(def).ink}>
             {truncate(c, Math.max(3, Math.floor((band * every) / 6.5)))}
           </text>,
         );
@@ -264,7 +283,7 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
     for (let t = xs.min; t <= xs.max + xs.step / 1000; t += xs.step) {
       const p = area.x + ((t - xs.min) / (xs.max - xs.min)) * area.w;
       els.push(
-        <text key={`x${t}`} x={p} y={area.y + area.h + 14} textAnchor="middle" fontSize={10.5} fill={INK}>
+        <text key={`x${t}`} x={p} y={area.y + area.h + 14} textAnchor="middle" fontSize={10.5} fill={themeOf(def).ink}>
           {fmt(Number(t.toPrecision(12)))}
         </text>,
       );
@@ -305,7 +324,7 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
         else els.push(<rect key={`b${si}-${i}`} className="tb-chart-mark" x={start} y={Math.min(p1, p2)} width={Math.max(1, barW - 1)} height={Math.max(0.5, Math.abs(p2 - p1))} fill={color} {...hoverProps(tip)} />);
         if (def.showDataLabels)
           els.push(
-            <text key={`l${si}-${i}`} x={horizontal ? Math.max(p1, p2) + 4 : start + barW / 2} y={horizontal ? start + barW / 2 + 4 : Math.min(p1, p2) - 3} textAnchor={horizontal ? "start" : "middle"} fontSize={10} fill={INK} pointerEvents="none">
+            <text key={`l${si}-${i}`} x={horizontal ? Math.max(p1, p2) + 4 : start + barW / 2} y={horizontal ? start + barW / 2 + 4 : Math.min(p1, p2) - 3} textAnchor={horizontal ? "start" : "middle"} fontSize={10} fill={themeOf(def).ink} pointerEvents="none">
               {fmt(v, data.numFmt)}
             </text>,
           );
@@ -351,7 +370,7 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
       if (def.showDataLabels)
         pts.forEach((p, k) =>
           layers.push(
-            <text key={`dl${si}-${k}`} x={p[0]} y={p[1] - 7} textAnchor="middle" fontSize={10} fill={INK} pointerEvents="none">
+            <text key={`dl${si}-${k}`} x={p[0]} y={p[1] - 7} textAnchor="middle" fontSize={10} fill={themeOf(def).ink} pointerEvents="none">
               {fmt(p[2], data.numFmt)}
             </text>,
           ),
@@ -372,8 +391,14 @@ function AxisBody({ def, data, plot, colors, hoverProps }: BodyProps) {
   }
   if (def.yTitle)
     els.push(
-      <text key="yt" x={plot.x + 2} y={area.y + area.h / 2} fontSize={11} fill={INK} transform={`rotate(-90 ${plot.x + 8} ${area.y + area.h / 2})`} textAnchor="middle">
+      <text key="yt" x={plot.x + 2} y={area.y + area.h / 2} fontSize={11} fill={themeOf(def).ink} transform={`rotate(-90 ${plot.x + 8} ${area.y + area.h / 2})`} textAnchor="middle">
         {def.yTitle}
+      </text>,
+    );
+  if (def.xTitle)
+    els.push(
+      <text key="xt" x={area.x + area.w / 2} y={plot.y + plot.h - 2} fontSize={11} fill={themeOf(def).ink} textAnchor="middle">
+        {def.xTitle}
       </text>,
     );
   return <g>{els}</g>;
