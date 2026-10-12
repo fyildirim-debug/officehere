@@ -15,3 +15,7 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 dist-web/
+
+# Geçici test/ölçüm çıktıları
+**/tmpbench/
+out_*.txt
