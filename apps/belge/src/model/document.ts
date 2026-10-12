@@ -102,8 +102,12 @@ export interface DocSettings {
   pageBorder: PageBorder | null;
   /** Tasarım > Belge Biçimlendirme stil kümesi. */
   styleSet: string;
-  /** Tema adı (core THEMES). */
+  /** Tema adı (core THEMES): renkler ve yazı tipleri. */
   theme: string;
+  /** Tasarım > Yazı Tipleri ile seçilen yazı tipi teması (yoksa temanınki). */
+  fontTheme: string | null;
+  /** Tasarım > Paragraf Aralığı önayarı. */
+  paragraphSpacing: string;
   comments: Record<string, CommentData>;
   properties: DocProperties;
 }
@@ -135,6 +139,8 @@ export function defaultSettings(): DocSettings {
     pageBorder: null,
     styleSet: "default",
     theme: "OfficeHere",
+    fontTheme: null,
+    paragraphSpacing: "default",
     comments: {},
     properties: { title: "", subject: "", author: "", keywords: "", created: now, modified: now },
   };

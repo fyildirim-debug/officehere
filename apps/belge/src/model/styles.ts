@@ -218,12 +218,27 @@ export const STYLE_SETS: StyleSetDef[] = [
   },
 ];
 
+/** Tasarım > Paragraf Aralığı önayarları (Normal stile uygulanır). */
+export const PARAGRAPH_SPACINGS: { id: string; label: string; desc: string; before: number; after: number; line: number }[] = [
+  { id: "default", label: "Varsayılan", desc: "Stil kümesinin aralığı", before: 0, after: 8, line: 1.08 },
+  { id: "none", label: "Paragraf Aralığı Yok", desc: "Önce: 0 nk, Sonra: 0 nk, Satır: 1", before: 0, after: 0, line: 1 },
+  { id: "compact", label: "Sıkıştırılmış", desc: "Önce: 0 nk, Sonra: 4 nk, Satır: 1", before: 0, after: 4, line: 1 },
+  { id: "tight", label: "Sıkı", desc: "Önce: 0 nk, Sonra: 6 nk, Satır: 1,15", before: 0, after: 6, line: 1.15 },
+  { id: "open", label: "Açık", desc: "Önce: 0 nk, Sonra: 10 nk, Satır: 1,15", before: 0, after: 10, line: 1.15 },
+  { id: "relaxed", label: "Gevşek", desc: "Önce: 0 nk, Sonra: 6 nk, Satır: 1,5", before: 0, after: 6, line: 1.5 },
+  { id: "double", label: "Çift", desc: "Önce: 0 nk, Sonra: 8 nk, Satır: 2", before: 0, after: 8, line: 2 },
+];
+
 /** Tema + stil kümesine göre çözülmüş stil tablosu. */
-export function resolveStyles(styleSet: string, themeName: string): Record<string, StyleDef> {
-  const t = themeCtx(themeByName(themeName));
+export function resolveStyles(styleSet: string, themeName: string, fontTheme?: string | null, paragraphSpacing?: string): Record<string, StyleDef> {
+  const theme = themeByName(themeName);
+  const fonts = fontTheme ? themeByName(fontTheme) : theme;
+  const t = themeCtx({ ...theme, majorFont: fonts.majorFont, minorFont: fonts.minorFont });
   const out: Record<string, StyleDef> = {};
   for (const s of baseStyles(t)) out[s.id] = s;
   (STYLE_SETS.find((x) => x.id === styleSet) ?? STYLE_SETS[0]).apply(out, t);
+  const ps = PARAGRAPH_SPACINGS.find((x) => x.id === paragraphSpacing);
+  if (ps && ps.id !== "default") patch(out, "Normal", { spaceBefore: ps.before, spaceAfter: ps.after, line: ps.line });
   return out;
 }
 

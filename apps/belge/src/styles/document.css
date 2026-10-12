@@ -1,0 +1,643 @@
+/* Belge içeriği stilleri: listeler, tablolar, resimler, içindekiler. HTML dışa aktarımına da gömülür. */
+
+/* Listeler: Word'deki gibi madde işareti 0,63 cm, metin 1,27 cm. */
+.bl-doc ul,
+.bl-doc ol {
+  margin: 0 0 8pt;
+  padding-left: 36pt;
+}
+
+.bl-doc li ul,
+.bl-doc li ol {
+  margin: 0;
+}
+
+.bl-doc li > p,
+.bl-doc li > h1,
+.bl-doc li > h2,
+.bl-doc li > h3 {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.bl-doc li::marker {
+  font-family: inherit;
+}
+
+.bl-doc ul {
+  list-style-type: disc;
+}
+
+.bl-doc ul ul {
+  list-style-type: circle;
+}
+
+.bl-doc ul ul ul {
+  list-style-type: square;
+}
+
+.bl-doc ul ul ul ul {
+  list-style-type: disc;
+}
+
+.bl-doc ul[data-list-style="disc"] {
+  list-style-type: disc;
+}
+.bl-doc ul[data-list-style="circle"] {
+  list-style-type: circle;
+}
+.bl-doc ul[data-list-style="square"] {
+  list-style-type: square;
+}
+.bl-doc ul[data-list-style="diamond"] {
+  list-style-type: "❖  ";
+}
+.bl-doc ul[data-list-style="arrow"] {
+  list-style-type: "➢  ";
+}
+.bl-doc ul[data-list-style="check"] {
+  list-style-type: "✓  ";
+}
+.bl-doc ul[data-list-style="dash"] {
+  list-style-type: "–  ";
+}
+
+@counter-style bl-decimal-paren {
+  system: extends decimal;
+  suffix: ") ";
+}
+
+@counter-style bl-lower-alpha-paren {
+  system: extends lower-alpha;
+  suffix: ") ";
+}
+
+.bl-doc ol {
+  list-style-type: decimal;
+}
+.bl-doc ol[data-list-style="decimal-paren"] {
+  list-style-type: bl-decimal-paren;
+}
+.bl-doc ol[data-list-style="upper-roman"] {
+  list-style-type: upper-roman;
+}
+.bl-doc ol[data-list-style="upper-alpha"] {
+  list-style-type: upper-alpha;
+}
+.bl-doc ol[data-list-style="lower-alpha"] {
+  list-style-type: lower-alpha;
+}
+.bl-doc ol[data-list-style="lower-alpha-paren"] {
+  list-style-type: bl-lower-alpha-paren;
+}
+.bl-doc ol[data-list-style="lower-roman"] {
+  list-style-type: lower-roman;
+}
+
+/* Çok düzeyli: 1. 1.1. 1.1.1. */
+.bl-doc ol[data-multilevel="outline"],
+.bl-doc ol[data-multilevel="outline"] ol {
+  list-style-type: none;
+  counter-reset: bl-outline;
+}
+
+.bl-doc ol[data-multilevel="outline"] li {
+  counter-increment: bl-outline;
+  list-style-type: none;
+}
+
+.bl-doc ol[data-multilevel="outline"] li::marker {
+  content: counters(bl-outline, ".") ". ";
+}
+
+.bl-doc ol[data-multilevel="outline"] ol {
+  padding-left: 30pt;
+}
+
+.bl-doc ol[data-multilevel="mixed"] > li > ol {
+  list-style-type: lower-alpha;
+}
+
+.bl-doc ol[data-multilevel="mixed"] > li > ol > li > ol {
+  list-style-type: lower-roman;
+}
+
+.bl-doc ul[data-multilevel="bullets"] > li > ul {
+  list-style-type: circle;
+}
+
+.bl-doc ul[data-multilevel="bullets"] > li > ul > li > ul {
+  list-style-type: square;
+}
+
+/* Tablolar */
+.bl-doc .tableWrapper {
+  display: flex;
+  margin: 0 0 8pt;
+  overflow-x: auto;
+}
+
+.bl-doc table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 0;
+}
+
+.bl-doc td,
+.bl-doc th {
+  border: 0.5pt solid #000;
+  padding: 0 7.2px;
+  vertical-align: top;
+  position: relative;
+  box-sizing: border-box;
+  min-width: 1em;
+  font-weight: inherit;
+  text-align: inherit;
+}
+
+.bl-doc td > p,
+.bl-doc th > p,
+.bl-doc td > h1,
+.bl-doc td > h2,
+.bl-doc td > h3 {
+  margin-bottom: 0;
+  line-height: 1.2;
+}
+
+.bl-doc td > p[style*="margin-bottom"],
+.bl-doc td > p[style*="line-height"] {
+  margin-bottom: revert-layer;
+}
+
+.bl-doc .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 120, 215, 0.18);
+  pointer-events: none;
+}
+
+.bl-doc .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background: #4a90e2;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.bl-doc.resize-cursor,
+.bl-doc .resize-cursor {
+  cursor: col-resize;
+}
+
+table[data-table-style="plain"] td,
+table[data-table-style="plain"] th {
+  border-color: #bfbfbf;
+}
+
+table[data-table-style="none"] td,
+table[data-table-style="none"] th {
+  border: 1px dashed transparent;
+}
+
+.has-grid table[data-table-style="none"] td,
+.has-grid table[data-table-style="none"] th,
+.bl-show-marks table[data-table-style="none"] td {
+  border-color: #b4c7e7;
+}
+
+table[data-table-style="grid-blue"] td {
+  border-color: #45b0e1;
+}
+table[data-table-style="grid-blue"][data-header-row="true"] tr:first-child > * {
+  background: #156082;
+  color: #fff;
+  font-weight: 700;
+  border-color: #156082;
+}
+table[data-table-style="grid-blue"][data-banded-rows="true"] tr:nth-child(even) > *:not([data-bg]) {
+  background: #c1e4f5;
+}
+table[data-table-style="grid-blue"]:not([data-header-row="true"])[data-banded-rows="true"] tr:nth-child(odd) > *:not([data-bg]) {
+  background: #c1e4f5;
+}
+table[data-table-style="grid-blue"]:not([data-header-row="true"])[data-banded-rows="true"] tr:nth-child(even) > *:not([data-bg]) {
+  background: none;
+}
+
+table[data-table-style="grid-orange"] td {
+  border-color: #f1a983;
+}
+table[data-table-style="grid-orange"][data-header-row="true"] tr:first-child > * {
+  background: #e97132;
+  color: #fff;
+  font-weight: 700;
+  border-color: #e97132;
+}
+table[data-table-style="grid-orange"][data-banded-rows="true"] tr:nth-child(even) > *:not([data-bg]) {
+  background: #fbe2d5;
+}
+
+table[data-table-style="grid-green"] td {
+  border-color: #47d459;
+}
+table[data-table-style="grid-green"][data-header-row="true"] tr:first-child > * {
+  background: #196b24;
+  color: #fff;
+  font-weight: 700;
+  border-color: #196b24;
+}
+table[data-table-style="grid-green"][data-banded-rows="true"] tr:nth-child(even) > *:not([data-bg]) {
+  background: #c1f0c7;
+}
+
+table[data-table-style="grid-gray"] td {
+  border-color: #666;
+}
+table[data-table-style="grid-gray"][data-header-row="true"] tr:first-child > * {
+  background: #000;
+  color: #fff;
+  font-weight: 700;
+}
+table[data-table-style="grid-gray"][data-banded-rows="true"] tr:nth-child(even) > *:not([data-bg]) {
+  background: #ccc;
+}
+
+table[data-table-style="list-blue"] td {
+  border: 0;
+}
+table[data-table-style="list-blue"] {
+  border: 1px solid #156082;
+}
+table[data-table-style="list-blue"][data-header-row="true"] tr:first-child > * {
+  background: #156082;
+  color: #fff;
+  font-weight: 700;
+}
+
+table[data-table-style="light-blue"] td {
+  border-color: #94c3e8;
+}
+table[data-table-style="light-blue"][data-header-row="true"] tr:first-child > * {
+  background: #dae9f7;
+  color: #0f4761;
+  font-weight: 700;
+}
+table[data-table-style="light-blue"][data-banded-rows="true"] tr:nth-child(even) > *:not([data-bg]) {
+  background: #f2f7fc;
+}
+
+table[data-table-style="light-purple"] td {
+  border-color: #d86dcb;
+}
+table[data-table-style="light-purple"][data-header-row="true"] tr:first-child > * {
+  background: #f2ceef;
+  font-weight: 700;
+}
+table[data-table-style="light-purple"][data-banded-rows="true"] tr:nth-child(even) > *:not([data-bg]) {
+  background: #faebf8;
+}
+
+.bl-table[data-first-col="true"] tr > *:first-child {
+  font-weight: 700;
+}
+
+.bl-table[data-total-row="true"] tr:last-child > * {
+  font-weight: 700;
+  border-top-width: 1.5pt;
+}
+
+/* Resimler */
+.bl-doc img {
+  max-width: 100%;
+  vertical-align: bottom;
+}
+
+.bl-doc [data-resize-container] {
+  vertical-align: bottom;
+  max-width: 100%;
+}
+
+.bl-doc [data-resize-wrapper] img {
+  display: block;
+  max-width: none;
+}
+
+.bl-doc [data-resize-handle] {
+  width: 9px;
+  height: 9px;
+  background: #fff;
+  border: 1px solid #5a5a5a;
+  border-radius: 50%;
+  margin: -4px;
+  display: none;
+  z-index: 3;
+}
+
+.bl-doc .ProseMirror-selectednode [data-resize-handle],
+.bl-doc [data-resize-container].ProseMirror-selectednode [data-resize-handle] {
+  display: block;
+}
+
+.bl-doc [data-resize-handle="top-left"],
+.bl-doc [data-resize-handle="bottom-right"] {
+  cursor: nwse-resize;
+}
+
+.bl-doc [data-resize-handle="top-right"],
+.bl-doc [data-resize-handle="bottom-left"] {
+  cursor: nesw-resize;
+}
+
+.bl-doc .ProseMirror-selectednode img,
+.bl-doc img.ProseMirror-selectednode {
+  outline: 1px solid #5a5a5a;
+}
+
+.bl-doc img[data-img-style="frame"] {
+  border: 7px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.bl-doc img[data-img-style="shadow"] {
+  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.45);
+}
+.bl-doc img[data-img-style="rounded"] {
+  border-radius: 0 24px;
+}
+.bl-doc img[data-img-style="soft"] {
+  mask-image: radial-gradient(ellipse at center, #000 62%, transparent 100%);
+}
+.bl-doc img[data-img-style="oval"] {
+  border-radius: 50%;
+}
+.bl-doc img[data-img-style="thick"] {
+  border: 8px solid #000;
+}
+
+/* Sayfa sonu, sayfalama boşlukları */
+.bl-doc .bl-pagebreak {
+  height: 0;
+  overflow: visible;
+  margin: 0;
+  position: relative;
+  user-select: none;
+}
+
+.bl-doc .bl-pagebreak span {
+  display: none;
+}
+
+.bl-show-marks .bl-pagebreak,
+.is-web .bl-pagebreak {
+  height: auto;
+  border-top: 1px dotted #6b8fd6;
+  margin: 4px 0;
+  text-align: center;
+  line-height: 1;
+}
+
+.bl-show-marks .bl-pagebreak span,
+.is-web .bl-pagebreak span {
+  display: inline-block;
+  position: relative;
+  top: -0.6em;
+  padding: 0 6px;
+  background: #fff;
+  color: #6b8fd6;
+  font: 9pt var(--oh-font-ui);
+}
+
+.bl-pagebreak.ProseMirror-selectednode {
+  outline: 2px solid #4a90e2;
+  height: 4px;
+}
+
+.bl-pg {
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+.bl-pg-line {
+  display: block;
+}
+
+.bl-pg-row td {
+  border: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.bl-measuring .bl-pg {
+  display: none !important;
+}
+
+/* Tümünü Göster (¶) */
+.bl-pilcrow {
+  color: #6b8fd6;
+  font-family: Arial, sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  text-decoration: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.bl-ws {
+  background-image: radial-gradient(circle, #6b8fd6 0.09em, transparent 0.11em);
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.bl-tab {
+  background-image: linear-gradient(#6b8fd6, #6b8fd6);
+  background-size: 70% 1px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Arama vurgusu */
+.bl-hit {
+  background: #ffeb3b;
+}
+
+.bl-hit.is-current {
+  background: #ff9632;
+}
+
+/* Açıklamalar ve izlenen değişiklikler */
+.bl-comment {
+  background: rgba(255, 210, 0, 0.35);
+  border-bottom: 2px solid rgba(220, 170, 0, 0.8);
+}
+
+.bl-ins {
+  color: #c00000;
+  text-decoration: underline;
+}
+
+.bl-del {
+  color: #c00000;
+  text-decoration: line-through;
+}
+
+/* İçindekiler */
+.bl-toc {
+  margin: 0 0 8pt;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  user-select: none;
+}
+
+.bl-toc:hover,
+.bl-toc.ProseMirror-selectednode {
+  border-color: #b4c7e7;
+  background: rgba(0, 120, 215, 0.04);
+}
+
+.bl-toc-title {
+  font-family: "Aptos Display", "Aptos", "Segoe UI", "Carlito", sans-serif;
+  font-size: 16pt;
+  color: #0f4761;
+  margin: 0 0 6pt;
+}
+
+.bl-toc-entry {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 5pt;
+}
+
+.bl-toc-l2 {
+  padding-left: 11pt;
+}
+
+.bl-toc-l3 {
+  padding-left: 22pt;
+}
+
+.bl-toc-dots {
+  flex: 1;
+  border-bottom: 1.5px dotted #000;
+  transform: translateY(-3px);
+}
+
+.bl-toc-empty {
+  color: #666;
+  font-style: italic;
+}
+
+.bl-field {
+  background: #e8e8e8;
+  border-radius: 2px;
+}
+
+.bl-hf-header .bl-field,
+.bl-hf-footer .bl-field {
+  background: none;
+}
+
+.bl-bookmark {
+  display: inline-block;
+  width: 0;
+  height: 1em;
+  vertical-align: text-bottom;
+}
+
+.bl-show-marks .bl-bookmark {
+  width: 2px;
+  margin: 0 1px;
+  background: #888;
+}
+
+
+/* Dipnot / son not başvuruları ve metinleri */
+.bl-noteref {
+  font-size: 0.75em;
+  line-height: 0;
+  vertical-align: super;
+  cursor: default;
+}
+
+.bl-noteref::after {
+  content: attr(data-num);
+}
+
+.bl-noteref.ProseMirror-selectednode {
+  outline: 1px solid #4a90e2;
+}
+
+.bl-footnotes,
+.bl-endnotes {
+  color: #000;
+  font-size: 10pt;
+  line-height: 1.2;
+}
+
+.bl-footnotes {
+  position: absolute;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.bl-footnotes.is-measure {
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.bl-endnotes {
+  margin-top: 12pt;
+}
+
+.bl-note-sep {
+  width: 33%;
+  height: 0;
+  border-top: 0.75pt solid #000;
+  margin: 6px 0 7px;
+}
+
+.bl-fn-row,
+.bl-note-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.bl-fn-row > sup,
+.bl-note-row > sup {
+  font-size: 0.75em;
+  line-height: 1.6;
+  min-width: 0.9em;
+}
+
+.bl-fn-text,
+.bl-note-text {
+  flex: 1;
+  display: block;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.2;
+  min-height: 1.2em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.bl-fn-text:focus,
+.bl-note-text:focus {
+  background: rgba(0, 120, 215, 0.06);
+}

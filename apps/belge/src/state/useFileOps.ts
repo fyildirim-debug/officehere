@@ -1,0 +1,209 @@
+// Dosya işlemleri: yeni, aç, kaydet, farklı kaydet, dışa aktar ve otomatik kurtarma.
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Editor } from "@tiptap/core";
+import { EditorState, TextSelection } from "@tiptap/pm/state";
+import { addRecentFile, baseName, downloadBlob, getNative, openFile, readPath, saveFile, saveFileAs, type FileRef } from "@officehere/core";
+import { defaultSettings, type BelgeDocument, type DocSettings } from "../model/document";
+import { DOCX_FILTER, OPEN_FILTERS, docToText, htmlDocument, openDocument, writeDocx } from "../io";
+import { TEMPLATES } from "../templates/templates";
+import { annotateNotesHtml } from "../editor/notes";
+
+const DRAFT_KEY = "officehere.belge.draft";
+
+export interface Draft {
+  content: BelgeDocument["content"];
+  settings: DocSettings;
+  fileName: string;
+  savedAt: number;
+}
+
+export function readDraft(): Draft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as Draft;
+    return d?.content ? d : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // yok say
+  }
+}
+
+/** Geçmişi sıfırlayarak belge içeriğini yükler. */
+export function loadIntoEditor(editor: Editor, doc: BelgeDocument["content"]) {
+  editor.commands.setContent(doc, { emitUpdate: false });
+  const state = EditorState.create({ doc: editor.state.doc, plugins: editor.state.plugins, selection: TextSelection.atStart(editor.state.doc) });
+  editor.view.updateState(state);
+}
+
+interface Options {
+  editor: Editor;
+  settings: DocSettings;
+  setSettings: (s: DocSettings) => void;
+  dirty: boolean;
+  setDirty: (d: boolean) => void;
+  notify: (t: string, kind?: "info" | "warning" | "error" | "success") => void;
+  confirmDiscard: () => Promise<boolean>;
+  autosave: boolean;
+  onLoaded: () => void;
+}
+
+export function useFileOps({ editor, settings, setSettings, dirty, setDirty, notify, confirmDiscard, autosave, onLoaded }: Options) {
+  const [fileName, setFileName] = useState("Belge1");
+  const [fileRef, setFileRef] = useState<FileRef | null>(null);
+  const counter = useRef(1);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+
+  const currentDoc = useCallback((): BelgeDocument => ({ content: editor.getJSON(), settings: { ...settingsRef.current, properties: { ...settingsRef.current.properties, modified: new Date().toISOString() } } }), [editor]);
+
+  const load = useCallback(
+    (doc: BelgeDocument, name: string, ref: FileRef | null) => {
+      setSettings(doc.settings);
+      loadIntoEditor(editor, doc.content);
+      setFileName(name);
+      setFileRef(ref);
+      setDirty(false);
+      onLoaded();
+    },
+    [editor, setSettings, setDirty, onLoaded],
+  );
+
+  const newDocument = useCallback(
+    async (templateId = "blank") => {
+      if (!(await confirmDiscard())) return false;
+      const t = TEMPLATES.find((x) => x.id === templateId) ?? TEMPLATES[0];
+      counter.current += 1;
+      const doc = t.build();
+      load(doc, templateId === "blank" ? `Belge${counter.current}` : `${t.label}`, null);
+      clearDraft();
+      return true;
+    },
+    [confirmDiscard, load],
+  );
+
+  const openData = useCallback(
+    async (name: string, data: ArrayBuffer, ref: FileRef | null) => {
+      try {
+        const { doc, warning } = await openDocument(name, data);
+        load(doc, baseName(name), ref);
+        if (warning) notify(warning, "warning");
+        await addRecentFile({ path: ref?.path ?? name, name, app: "belge", openedAt: Date.now() });
+      } catch (err) {
+        notify(`"${name}" açılamadı: ${(err as Error).message}`, "error");
+      }
+    },
+    [load, notify],
+  );
+
+  const openDialog = useCallback(async () => {
+    if (!(await confirmDiscard())) return;
+    const f = await openFile(OPEN_FILTERS);
+    if (!f) return;
+    await openData(f.name, f.data, { name: f.name, path: f.path, handle: f.handle });
+  }, [confirmDiscard, openData]);
+
+  const isPristine = useCallback(() => !dirty && editor.state.doc.textContent.trim() === "" && editor.state.doc.childCount <= 1, [dirty, editor]);
+
+  const openPath = useCallback(
+    async (path: string) => {
+      if (!isPristine()) {
+        const n = getNative();
+        if (n) return void n.newWindow("belge", path);
+      }
+      const f = await readPath(path);
+      if (f) await openData(f.name, f.data, { name: f.name, path: f.path });
+    },
+    [isPristine, openData],
+  );
+
+  const docxName = (n: string) => (n.toLowerCase().endsWith(".docx") ? n : `${baseName(n)}.docx`);
+
+  const save = useCallback(async (): Promise<boolean> => {
+    try {
+      const bytes = await writeDocx(currentDoc());
+      const canOverwrite = fileRef && /\.docx$/i.test(fileRef.name);
+      const ref = await saveFile(canOverwrite ? fileRef : null, docxName(fileName), DOCX_FILTER, bytes);
+      if (!ref) return false;
+      setFileRef(ref);
+      setFileName(baseName(ref.name));
+      setDirty(false);
+      clearDraft();
+      await addRecentFile({ path: ref.path ?? ref.name, name: ref.name, app: "belge", openedAt: Date.now() });
+      notify(`"${ref.name}" kaydedildi.`, "success");
+      return true;
+    } catch (err) {
+      notify(`Kaydedilemedi: ${(err as Error).message}`, "error");
+      return false;
+    }
+  }, [currentDoc, fileRef, fileName, setDirty, notify]);
+
+  const saveAs = useCallback(async (): Promise<boolean> => {
+    try {
+      const bytes = await writeDocx(currentDoc());
+      const ref = await saveFileAs(docxName(fileName), DOCX_FILTER, bytes);
+      if (!ref) return false;
+      setFileRef(ref);
+      setFileName(baseName(ref.name));
+      setDirty(false);
+      clearDraft();
+      await addRecentFile({ path: ref.path ?? ref.name, name: ref.name, app: "belge", openedAt: Date.now() });
+      return true;
+    } catch (err) {
+      notify(`Kaydedilemedi: ${(err as Error).message}`, "error");
+      return false;
+    }
+  }, [currentDoc, fileName, setDirty, notify]);
+
+  const exportAs = useCallback(
+    async (kind: string) => {
+      const doc = currentDoc();
+      const base = baseName(fileName);
+      if (kind === "docx") {
+        const bytes = await writeDocx(doc);
+        downloadBlob(new Blob([bytes as BlobPart], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }), `${base}.docx`);
+      } else if (kind === "html") {
+        const html = htmlDocument(annotateNotesHtml(editor.getHTML()), doc.settings, doc.settings.properties.title || base);
+        await saveFileAs(`${base}.html`, [{ name: "Web Sayfası", extensions: ["html"] }], html);
+      } else if (kind === "txt") {
+        await saveFileAs(`${base}.txt`, [{ name: "Düz Metin", extensions: ["txt"] }], "﻿" + docToText(doc.content));
+      }
+    },
+    [currentDoc, editor, fileName],
+  );
+
+  const closeDocument = useCallback(async () => {
+    if (!(await confirmDiscard())) return;
+    counter.current += 1;
+    load({ content: { type: "doc", content: [{ type: "paragraph" }] }, settings: defaultSettings() }, `Belge${counter.current}`, null);
+    clearDraft();
+  }, [confirmDiscard, load]);
+
+  // Otomatik kurtarma: kirli belgeyi birkaç saniyede bir yerel depoya yaz.
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const nameRef = useRef(fileName);
+  nameRef.current = fileName;
+  useEffect(() => {
+    if (!autosave) return;
+    const id = window.setInterval(() => {
+      if (!dirtyRef.current) return;
+      try {
+        const d: Draft = { content: editor.getJSON(), settings: settingsRef.current, fileName: nameRef.current, savedAt: Date.now() };
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+      } catch {
+        // Depolama dolu ya da kapalı.
+      }
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [editor, autosave]);
+
+  return { fileName, setFileName, fileRef, newDocument, openDialog, openPath, openData, save, saveAs, exportAs, closeDocument, load, currentDoc };
+}
