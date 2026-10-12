@@ -475,8 +475,10 @@ export function RibbonCombo({ value, options, onCommit, width = 120, editable = 
 
   useEffect(() => {
     if (!open) return;
-    const sel = listRef.current?.querySelector(".is-selected") as HTMLElement | null;
-    sel?.scrollIntoView({ block: "center" });
+    // Seçili öğeyi ortala; scrollIntoView yerine yalnız listeyi kaydır ki üst öğeler (sayfa) kaymasın.
+    const list = listRef.current;
+    const sel = list?.querySelector(".is-selected") as HTMLElement | null;
+    if (list && sel) list.scrollTop = sel.offsetTop - list.clientHeight / 2 + sel.offsetHeight / 2;
   }, [open]);
 
   const commit = (v: string) => {

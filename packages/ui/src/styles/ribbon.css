@@ -551,6 +551,7 @@
 }
 
 .oh-combo-list {
+  position: relative;
   overflow-y: auto;
   padding: 4px;
   background: var(--oh-menu-bg);

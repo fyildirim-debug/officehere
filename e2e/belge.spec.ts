@@ -440,6 +440,34 @@ test.describe("OfficeHere Belge senaryoları", () => {
     await expect(body(page).locator("strong")).toHaveText("araç");
   });
 
+  test("mini araç çubuğu yazı tipi listesi açılınca kapanmaz (liste ortasındaki yazı tipi)", async ({ page }) => {
+    // Listenin ortasındaki bir yazı tipi seçiliyken liste kendi içinde kaydırılır; bu kaydırma çubuğu kapatmamalı.
+    const fontBox = page.locator(".oh-ribbon .oh-combo-input").first();
+    await fontBox.click();
+    await fontBox.fill("Cambria");
+    await fontBox.press("Enter");
+    await body(page).click();
+    await page.keyboard.type("Selam dünya");
+    const at = await page.evaluate(() => {
+      const w = document.createTreeWalker(document.querySelector(".bl-body .ProseMirror p")!, NodeFilter.SHOW_TEXT);
+      const text = w.nextNode()!;
+      const range = document.createRange();
+      range.setStart(text, 0);
+      range.setEnd(text, 5);
+      const r = range.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    await page.mouse.dblclick(at.x, at.y);
+    const bar = page.locator(".bl-minibar");
+    await expect(bar).toBeVisible();
+    await expect(bar.locator(".oh-combo-input").first()).toHaveValue("Cambria");
+    await bar.locator(".oh-combo-arrow").first().click();
+    await expect(page.locator(".oh-combo-list")).toBeVisible();
+    await expect(bar).toBeVisible();
+    await page.locator(".oh-combo-option", { hasText: "Georgia" }).click();
+    await expect(body(page).locator('span[style*="Georgia"]')).toHaveText("Selam");
+  });
+
   test("sekme durakları: Paragraf › Sekmeler, ondalık ve noktalı öncü", async ({ page }) => {
     await page.keyboard.type("Ürün\t12,50");
     await page.locator('.oh-ribbon-launcher[data-tip="Paragraf Ayarları"]').first().click();

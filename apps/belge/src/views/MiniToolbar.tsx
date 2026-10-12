@@ -74,7 +74,12 @@ export function useMiniToolbar() {
       if (!t.closest?.(".bl-minibar") && !t.closest?.("[data-oh-popover]") && !dom.contains(t)) setAnchor(null);
     };
     document.addEventListener("mousedown", onGlobalDown, true);
-    const onScroll = () => setAnchor((a) => (a && !a.context ? null : a));
+    // Yalnız belge kaydırılınca kapan; çubuğun kendi açılır listeleri (yazı tipi, boyut) kaydırılınca açık kalsın.
+    const onScroll = (e: Event) => {
+      const t = e.target;
+      if (t instanceof Element && (t.closest("[data-oh-popover]") || t.closest(".bl-minibar"))) return;
+      setAnchor((a) => (a && !a.context ? null : a));
+    };
     document.addEventListener("scroll", onScroll, true);
     // Bağlam menüsü kapanınca (Esc ya da komut) çubuk da kapanır.
     const afterInput = (e: Event) => {
