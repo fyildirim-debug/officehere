@@ -3,10 +3,10 @@
 import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { baseName, downloadBlob } from "@officehere/core";
 import { writeDocx } from "../io";
-import type { Draft } from "../state/useFileOps";
+import { writeDraft, type Draft } from "../state/drafts";
 
-const DRAFT_KEY = "officehere.belge.draft";
-const AUTO_RESTORE = "officehere.belge.autorestore";
+/** Kök hata sınırından "Belgeyi Kurtar": yeniden kurulan uygulama kendi taslağını yükler (aynı sayfa). */
+let autoRestore = false;
 
 /** Uygulamanın kayıt işlevleri (App her çizimde günceller). */
 export const recovery: { snapshot: (() => Draft | null) | null; save: (() => Promise<unknown>) | null } = { snapshot: null, save: null };
@@ -16,7 +16,7 @@ export function saveRecoveryDraft(): Draft | null {
   let d: Draft | null = null;
   try {
     d = recovery.snapshot?.() ?? null;
-    if (d) localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    if (d) writeDraft(d);
   } catch {
     // depolama kapalı ya da belge okunamadı
   }
@@ -25,13 +25,9 @@ export function saveRecoveryDraft(): Draft | null {
 
 /** Açılışta taslak kendiliğinden geri yüklensin mi (kök hata sınırından "Belgeyi Kurtar"). */
 export function takeAutoRestore(): boolean {
-  try {
-    const v = sessionStorage.getItem(AUTO_RESTORE) === "1";
-    sessionStorage.removeItem(AUTO_RESTORE);
-    return v;
-  } catch {
-    return false;
-  }
+  const v = autoRestore;
+  autoRestore = false;
+  return v;
 }
 
 async function downloadDraft(d: Draft | null) {
@@ -89,13 +85,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   private recover = () => {
     saveRecoveryDraft();
-    if (this.props.root) {
-      try {
-        sessionStorage.setItem(AUTO_RESTORE, "1");
-      } catch {
-        // yok say
-      }
-    }
+    if (this.props.root) autoRestore = true;
     this.reset();
   };
 

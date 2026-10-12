@@ -22,6 +22,7 @@ import { ChangeBars, revisionBalloons } from "./revisions";
 import { setOutline } from "../editor/outline";
 import type { TabStop } from "../editor/tabStops";
 import { resolveChanges } from "../editor/trackChanges";
+import { evenTileRows, tileCell } from "../editor/tileRows";
 
 /** Belgede izlenen değişiklik var mı. */
 function hasRevisions(editor: Editor): boolean {
@@ -75,7 +76,9 @@ export function DocumentView(props: Props) {
   const layoutPages = useSyncExternalStore(subscribe, () => controller.info.pages);
   const layoutNotes = useSyncExternalStore(subscribe, () => controller.info.footnotes);
   const layoutBodyW = useSyncExternalStore(subscribe, () => controller.info.bodyW);
-  const tileOk = useSyncExternalStore(subscribe, () => controller.info.tileOk !== false);
+  const tileRows = useSyncExternalStore(subscribe, () => controller.info.tileRows);
+  const tileCols = useSyncExternalStore(subscribe, () => controller.info.tileCols);
+  const tileTarget = useSyncExternalStore(subscribe, () => controller.info.tileTarget);
   const pagesRef = useRef<HTMLDivElement>(null);
   const rulerHostRef = useRef<HTMLDivElement>(null);
   const vrulerHostRef = useRef<HTMLDivElement>(null);
@@ -96,19 +99,22 @@ export function DocumentView(props: Props) {
   const lastPage = pages[pages.length - 1];
   const flowH = lastPage ? lastPage.top + lastPage.h : first.h;
 
-  // Birden Çok Sayfa: sayfa boyları eşitse ve pencereye en az iki sayfa sığıyorsa yan yana dizilir.
+  // Birden Çok Sayfa: pencereye en az iki sayfa sığıyorsa sayfalar yan yana, satırlara sarılarak dizilir.
   const perRowFit = Math.floor((scrollW / scale - 2 * CANVAS_PAD + TILE_GAP) / (bodyW + TILE_GAP));
   const tiled = print && !printing && !hfEditing && !view.focusMode && !view.onePage && pages.length > 1 && perRowFit >= 2;
-  // Satır kaydırılamıyorsa (tablo satırı ya da çok sütunlu bölüm sınırı) sayfalar tek satırda dizilir.
-  const perRow = tiled ? (tileOk ? Math.min(perRowFit, pageCount) : pageCount) : 1;
+  const fitRow = Math.min(perRowFit, pageCount);
+  // Satırlar sayfalamanın planından gelir (tablo satırı / çok sütunlu bölüm içi sınırlar satır başı olamaz).
+  const planned = tiled && tileTarget === fitRow && !!tileRows && tileRows[tileRows.length - 1] < pageCount;
+  const rowStarts = useMemo(() => (tiled ? (planned ? tileRows! : evenTileRows(pageCount, fitRow)) : []), [tiled, planned, tileRows, pageCount, fitRow]);
+  const perRow = tiled ? (planned ? (tileCols ?? fitRow) : fitRow) : 1;
   // Yan yana dizimde her sayfa en yüksek sayfa kadar bir yuvaya yerleşir.
   const stride = (tiled ? Math.max(...geoms.map((g) => g.h)) : (pages[0]?.h ?? first.h)) + gap;
-  const rows = tiled ? Math.ceil(pageCount / perRow) : pageCount;
+  const rows = tiled ? rowStarts.length : pageCount;
 
   // Sayfa geometrisini sayfalama eklentisine bildir.
   useEffect(() => {
-    controller.setGeometry({ enabled: print, gap, defaultPage: settings.page, tiles: tiled ? Math.min(perRowFit, pageCount) : 0, scale });
-  }, [controller, print, gap, settings.page, tiled, perRowFit, pageCount, scale]);
+    controller.setGeometry({ enabled: print, gap, defaultPage: settings.page, tiles: tiled ? fitRow : 0, scale });
+  }, [controller, print, gap, settings.page, tiled, fitRow, scale]);
 
   // Gövdenin üst konumu değişince (ilk bölüm kenar boşluğu) yeniden ölç.
   const bodyTop = first.mt;
@@ -121,11 +127,10 @@ export function DocumentView(props: Props) {
       const p = pages[i];
       if (!p) return { x: 0, y: 0 };
       if (!tiled) return { x: p.left, y: p.top };
-      const r = Math.floor(i / perRow);
-      const c = i % perRow;
-      return { x: c * (bodyW + TILE_GAP) + p.left, y: r * stride };
+      const { row, col } = tileCell(rowStarts, i);
+      return { x: col * (bodyW + TILE_GAP) + p.left, y: row * stride };
     },
-    [pages, tiled, perRow, bodyW, stride],
+    [pages, tiled, rowStarts, bodyW, stride],
   );
 
   const anchors = commentAnchors(editor);

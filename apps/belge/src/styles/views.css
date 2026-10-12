@@ -133,3 +133,31 @@
 .bl-dlg-note.is-error {
   color: #a4262c;
 }
+
+/* Belge kurtarma: birden çok taslak listesi */
+.bl-draftlist {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.bl-draftitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bl-draftname {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bl-draftwhen {
+  color: var(--oh-text-secondary, #616161);
+  margin-right: auto;
+}

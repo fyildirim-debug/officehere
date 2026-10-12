@@ -9,6 +9,7 @@ import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { defaultPage, type PageSetup } from "../model/document";
 import { bodyWidth, geomOf, sectionGeoms, sectionLayoutKey, type SecGeom } from "./sections";
+import { planTileRows, tileColumns } from "./tileRows";
 import { collectSectionChildren, collectUnits, layoutFlow, lineSplitAt, type ColumnCtx, type ColumnResult, type LayoutInfo, type PageBreakMark, type PageInfo, type SectionStyle, type Unit } from "./paginate";
 
 export type { LayoutInfo, PageInfo, PageBreakMark } from "./paginate";
@@ -82,10 +83,12 @@ export class PaginationController {
   publish(info: LayoutInfo) {
     const sameNotes = JSON.stringify(info.footnotes) === JSON.stringify(this.info.footnotes);
     const samePages = info.bodyW === this.info.bodyW && pagesKey(info.pages) === pagesKey(this.info.pages);
-    if (info.pageCount === this.info.pageCount && info.pageStarts.join() === this.info.pageStarts.join() && sameNotes && samePages && info.tileOk === this.info.tileOk) return;
+    const sameTiles = info.tileOk === this.info.tileOk && info.tileCols === this.info.tileCols && info.tileTarget === this.info.tileTarget && (info.tileRows ?? []).join() === (this.info.tileRows ?? []).join();
+    if (info.pageCount === this.info.pageCount && info.pageStarts.join() === this.info.pageStarts.join() && sameNotes && samePages && sameTiles) return;
     // Değişmeyen parçaların başvurusu korunur (abone bileşenler gereksiz yere yeniden çizilmesin).
     if (sameNotes) info.footnotes = this.info.footnotes;
     if (samePages) info.pages = this.info.pages;
+    if (sameTiles) info.tileRows = this.info.tileRows;
     this.info = info;
     this.listeners.forEach((l) => l(info));
   }
@@ -111,6 +114,14 @@ export class PaginationController {
   }
 }
 
+/** Erken biten satırın boş sayfa yuvalarını dolduran parça (tek akış ölçümünde gizlenir). */
+function tileExtra(tag: "div" | "span", b: PageBreakMark): HTMLElement[] {
+  if (!b.tileFill) return [];
+  const x = Object.assign(document.createElement(tag), { className: "bl-pg-fill bl-pg-extra" });
+  x.style.height = `${b.tileFill}px`;
+  return [x];
+}
+
 function makeWidget(b: PageBreakMark) {
   if (b.kind === "rowhead") return headerCloneWidget;
   if (b.kind === "row") {
@@ -132,7 +143,7 @@ function makeWidget(b: PageBreakMark) {
         // Boşluk önce, satır başı ara parçası sonda (sütun kümesi boşlukla birlikte biter).
         const fill = Object.assign(document.createElement("span"), { className: "bl-pg-fill" });
         fill.style.height = `${b.h}px`;
-        s.append(fill, Object.assign(document.createElement("span"), { className: "bl-pg-tilerow" }));
+        s.append(fill, ...tileExtra("span", b), Object.assign(document.createElement("span"), { className: "bl-pg-tilerow" }));
       } else s.style.height = `${b.h}px`;
       return s;
     };
@@ -143,7 +154,7 @@ function makeWidget(b: PageBreakMark) {
     if (b.tileRow) {
       const fill = Object.assign(document.createElement("div"), { className: "bl-pg-fill" });
       fill.style.height = `${b.h}px`;
-      d.append(fill, Object.assign(document.createElement("div"), { className: "bl-pg-tilerow" }));
+      d.append(fill, ...tileExtra("div", b), Object.assign(document.createElement("div"), { className: "bl-pg-tilerow" }));
     } else d.style.height = `${b.h}px`;
     return d;
   };
@@ -154,7 +165,7 @@ function buildDeco(doc: PMNode, breaks: PageBreakMark[], styles: SectionStyle[])
   for (const b of breaks) {
     if (b.pos <= 0 || b.pos > doc.content.size) continue;
     const head = b.kind === "rowhead" ? `:${doc.resolve(b.pos).parent.firstChild?.textContent ?? ""}:${JSON.stringify(doc.resolve(b.pos).parent.attrs)}` : "";
-    decos.push(Decoration.widget(b.pos, makeWidget(b), { side: -1, key: `pg:${b.kind}:${b.pos}:${b.h.toFixed(2)}${b.tileRow ? ":t" : ""}${head}`, ignoreSelection: true }));
+    decos.push(Decoration.widget(b.pos, makeWidget(b), { side: -1, key: `pg:${b.kind}:${b.pos}:${b.h.toFixed(2)}${b.tileRow ? `:t${(b.tileFill ?? 0).toFixed(1)}` : ""}${head}`, ignoreSelection: true }));
   }
   for (const s of styles) {
     const node = doc.nodeAt(s.pos);
@@ -168,7 +179,7 @@ function sameBreaks(a: PageBreakMark[], b: PageBreakMark[]) {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     const tol = a[i].kind === "span" || a[i].kind === "spanline" ? 0.05 : 0.5;
-    if (a[i].pos !== b[i].pos || a[i].kind !== b[i].kind || Math.abs(a[i].h - b[i].h) > tol || !!a[i].tileRow !== !!b[i].tileRow) return false;
+    if (a[i].pos !== b[i].pos || a[i].kind !== b[i].kind || Math.abs(a[i].h - b[i].h) > tol || !!a[i].tileRow !== !!b[i].tileRow || Math.abs((a[i].tileFill ?? 0) - (b[i].tileFill ?? 0)) > 0.5) return false;
   }
   return true;
 }
@@ -302,6 +313,7 @@ class PaginationView {
     let breaks: PageBreakMark[] = [];
     let styles: SectionStyle[] = [];
     let info: LayoutInfo | null = null;
+    let slot = 0;
     this.spanTargets = [];
     this.tailPredict = [];
     try {
@@ -319,6 +331,7 @@ class PaginationView {
       });
       const noteH = this.noteMeasurer(geoms[0].contentW);
       const slotH = g.tiles > 0 ? Math.max(...geoms.map((x) => x.h)) : 0;
+      slot = slotH;
       const res = layoutFlow({ view, units, geoms, bodyW, gap: g.gap, Y, screenY, scale, noteH, slotH, columns: (u, c) => this.columns(u, c, geoms, Y, screenY) });
       breaks = res.breaks;
       styles = res.styles;
@@ -327,28 +340,38 @@ class PaginationView {
       dom.classList.remove("bl-measuring");
       body?.classList.remove("bl-measuring-body");
     }
-    if (info) this.markTileRows(breaks, info, g.tiles);
+    if (info) this.markTileRows(breaks, info, g.tiles, slot + g.gap);
     this.slow = performance.now() - t0 > 12;
     if (!sameBreaks(breaks, old.breaks) || !sameStyles(styles, old.styles)) this.apply(breaks, styles);
     if (info) this.ctrl.publish(info);
     if ((this.spanTargets.length || this.tailPredict.some((t) => !t.fill)) && this.refineRounds < 3) requestAnimationFrame(() => this.refine());
   }
 
-  /** Birden Çok Sayfa: her satırın ilk sayfasını başlatan kesmeyi satır başı olarak işaretler. */
-  private markTileRows(breaks: PageBreakMark[], info: LayoutInfo, tiles: number) {
+  /**
+   * Birden Çok Sayfa: sayfalar satırlara dağıtılır; her satırın ilk sayfasını başlatan kesme satır başı
+   * olarak işaretlenir. Satır başı olamayan sınırlarda (tablo satırı, çok sütunlu bölüm içi, boş sayfa)
+   * satır erken biter ya da uzar; kısa satırların boş yuvaları dolguyla tamamlanır.
+   */
+  private markTileRows(breaks: PageBreakMark[], info: LayoutInfo, tiles: number, stride: number) {
     info.tileOk = true;
-    if (tiles < 2 || info.pageCount <= tiles) return;
-    const marks: PageBreakMark[] = [];
-    for (let k = tiles; k < info.pageCount; k += tiles) {
+    if (tiles < 2) return;
+    const breakAt = (k: number) => {
+      if (info.pages[k]?.blank || info.pages[k - 1]?.blank) return null;
       const pos = info.pageStarts[k];
-      const b = breaks.find((x) => x.pos === pos && (x.kind === "block" || x.kind === "line"));
-      if (!b || info.pages[k]?.blank || info.pages[k - 1]?.blank) {
-        info.tileOk = false;
-        return;
-      }
-      marks.push(b);
+      return breaks.find((x) => x.pos === pos && (x.kind === "block" || x.kind === "line")) ?? null;
+    };
+    const starts = planTileRows(info.pageCount, tiles, (k) => !!breakAt(k));
+    const cols = tileColumns(starts, info.pageCount);
+    info.tileRows = starts;
+    info.tileCols = cols;
+    info.tileTarget = tiles;
+    for (let r = 1; r < starts.length; r++) {
+      const b = breakAt(starts[r]);
+      if (!b) continue;
+      b.tileRow = true;
+      const len = starts[r] - starts[r - 1];
+      if (len < cols) b.tileFill = (cols - len) * stride;
     }
-    for (const b of marks) b.tileRow = true;
   }
 
   /**
@@ -448,6 +471,23 @@ class PaginationView {
     const view = this.view;
     if (view.isDestroyed || !this.ctrl.geometry.enabled) return;
     const dom = view.dom as HTMLElement;
+    // Yan yana dizimde konumlar satır/sütuna göredir: düzeltme tek akışta (sütunsuz) ölçülür.
+    const body = dom.closest(".bl-body");
+    const tiled = !!body?.classList.contains("is-tiled");
+    if (tiled) body!.classList.add("bl-measuring-body");
+    let changed = false;
+    try {
+      changed = this.refineErrors(view, dom);
+    } finally {
+      if (tiled) body!.classList.remove("bl-measuring-body");
+    }
+    if (changed) {
+      this.refineRounds++;
+      this.measure();
+    }
+  }
+
+  private refineErrors(view: EditorView, dom: HTMLElement): boolean {
     const host = (dom.closest(".bl-pages") as HTMLElement | null) ?? dom;
     const scale = this.ctrl.geometry.scale || 1;
     const originY = host.getBoundingClientRect().top;
@@ -477,10 +517,7 @@ class PaginationView {
         changed = true;
       }
     }
-    if (changed) {
-      this.refineRounds++;
-      this.measure();
-    }
+    return changed;
   }
 
   private apply(breaks: PageBreakMark[], styles: SectionStyle[]) {

@@ -40,6 +40,10 @@ export interface LayoutInfo {
   bodyW: number;
   /** Yan yana dizimde satır kaydırma mümkün mü (false: tek satır). */
   tileOk?: boolean;
+  /** Birden Çok Sayfa: satırların ilk sayfaları, sütun sayısı ve hesaplandığı hedef satır başına sayfa. */
+  tileRows?: number[];
+  tileCols?: number;
+  tileTarget?: number;
 }
 
 export interface PageBreakMark {
@@ -48,6 +52,8 @@ export interface PageBreakMark {
   h: number;
   /** Yan yana sayfa diziminde yeni satır başlatır (tüm sütunları kesen sıfır yükseklikli parça). */
   tileRow?: boolean;
+  /** Satır erken bittiyse boş sayfa yuvalarını dolduran ek yükseklik. */
+  tileFill?: number;
 }
 
 /** Bölüm düğümüne uygulanacak ek biçim (son sayfada sıralı sütun doldurma). */

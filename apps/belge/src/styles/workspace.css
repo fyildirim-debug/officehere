@@ -127,6 +127,10 @@
   height: auto !important;
 }
 
+.bl-measuring-body .bl-pg-extra {
+  display: none !important;
+}
+
 /* Kaydırılabilir kutu sütunlar arasında bölünemez: tablo sayfa sınırında bölünebilsin. */
 .bl-body.is-tiled .tableWrapper {
   overflow: visible;

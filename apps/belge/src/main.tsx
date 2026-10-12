@@ -3,6 +3,10 @@ import { createRoot } from "react-dom/client";
 import "@officehere/ui/styles.css";
 import { App } from "./App";
 import { ErrorBoundary } from "./views/ErrorBoundary";
+import { startPresence } from "./state/drafts";
+
+// Pencere canlılığı: diğer pencereler bu pencerenin taslağını "sahipsiz" saymasın.
+startPresence();
 
 createRoot(document.getElementById("root")!, {
   // Hata sınırlarının yakaladığı hatalar uyarı olarak günlüğe yazılır (kullanıcıya kurtarma ekranı gösterilir).

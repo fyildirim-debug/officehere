@@ -16,7 +16,8 @@ import { docStats } from "./editor/commands";
 import { setShowMarks } from "./editor/showMarks";
 import { annotateNotesHtml } from "./editor/notes";
 import { BelgeContext, type BelgeCtx, type DialogKind, type DialogState, type ViewOptions } from "./state/context";
-import { clearDraft, readDraft, useFileOps, type Draft } from "./state/useFileOps";
+import { useFileOps } from "./state/useFileOps";
+import { useDraftRecovery } from "./state/useDraftRecovery";
 import { DocumentView } from "./views/DocumentView";
 import { BelgeBackstage } from "./views/BelgeBackstage";
 import { DraftBar } from "./views/DraftBar";
@@ -25,7 +26,7 @@ import { DuplexDialog } from "./print/DuplexDialog";
 import { MiniToolbarHost, type MiniBarAnchor } from "./views/MiniToolbar";
 import { ProofPane } from "./views/ProofPane";
 import { StylesPane } from "./views/StylesPane";
-import { ErrorBoundary, recovery, takeAutoRestore } from "./views/ErrorBoundary";
+import { ErrorBoundary, recovery } from "./views/ErrorBoundary";
 import { usePrint } from "./state/usePrint";
 import { useFocusReturn, useVersionBump, useWindowFileDrop } from "./state/useShellEffects";
 import { useZoom } from "./state/useZoom";
@@ -51,7 +52,6 @@ import { ShapeTab } from "./ribbon/ShapeTab";
 import { MailingsTab } from "./ribbon/MailingsTab";
 import { OutlineTab } from "./ribbon/OutlineTab";
 import { MergeContext, useMailMerge } from "./mailmerge/useMailMerge";
-import { takeHandoff } from "./mailmerge/data";
 import "./styles/workspace.css";
 import "./styles/panes.css";
 import "./styles/ribbon.css";
@@ -84,7 +84,6 @@ export function App() {
   }, []);
   const [hfEditor, setHfEditor] = useState<Editor | null>(null);
   const [note, setNote] = useState<Note | null>(null);
-  const [draft, setDraft] = useState<Draft | null>(() => readDraft());
   const [version, setVersion] = useState(0);
   const [navFocus, setNavFocus] = useState(0);
   const [spellcheck, setSpellcheck] = useState(true);
@@ -238,24 +237,9 @@ export function App() {
   // Hata sınırları için güncel belge anlık görüntüsü ve kaydetme işlevi.
   recovery.snapshot = () => (editor.isDestroyed ? null : { content: editor.getJSON(), settings, fileName: files.fileName, savedAt: Date.now() });
   recovery.save = files.save;
-  // Birleştirme sonucu gibi yeni pencereye aktarılan belge açılışta yüklenir.
-  useEffect(() => {
-    const h = takeHandoff();
-    if (!h) return;
-    files.load({ content: h.doc.content, settings: { ...defaultSettings(), ...h.doc.settings } }, h.name, null);
-    setDirty(true);
-    if (h.then === "print") setBackstage("print");
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Açılışta: aktarılan belge (birleştirme sonucu / kurtarılan taslak), çökme kurtarması ve sahipsiz taslaklar.
+  const recoveryUi = useDraftRecovery({ load: files.load, setDirty, isPristine: files.isPristine, onPrint: () => setBackstage("print"), notify });
   const merge = useMailMerge(editor, () => controller.request());
-
-  // Kök hata sınırından "Belgeyi Kurtar": taslak açılışta kendiliğinden geri yüklenir.
-  useEffect(() => {
-    const d = readDraft();
-    if (!d || !takeAutoRestore()) return;
-    files.load({ content: d.content, settings: { ...defaultSettings(), ...d.settings } }, d.fileName, null);
-    setDirty(true);
-    setDraft(null);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useFocusReturn(active, !!dialog);
 
@@ -470,20 +454,7 @@ export function App() {
 
   const belowRibbon = (
     <>
-      {draft && (
-        <DraftBar
-          draft={draft}
-          onRestore={() => {
-            files.load({ content: draft.content, settings: { ...defaultSettings(), ...draft.settings } }, draft.fileName, null);
-            setDirty(true);
-            setDraft(null);
-          }}
-          onDiscard={() => {
-            clearDraft();
-            setDraft(null);
-          }}
-        />
-      )}
+      <DraftBar drafts={recoveryUi.drafts} onRestore={recoveryUi.restore} onDiscard={recoveryUi.discard} onClose={recoveryUi.close} />
       {note && (
         <MessageBar kind={note.kind} onClose={() => setNote(null)}>
           {note.text}

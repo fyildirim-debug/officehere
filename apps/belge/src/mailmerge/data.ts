@@ -156,10 +156,18 @@ export function mergeDocument(content: JSONContent, records: Record<string, stri
 
 const HANDOFF = "officehere.belge.handoff";
 
-/** Belgeyi yeni pencerede açar (birleştirme sonucu "Mektuplar1" gibi). */
-export function openInNewWindow(doc: BelgeDocument, name: string, then?: "print") {
+export interface Handoff {
+  doc: BelgeDocument;
+  name: string;
+  then?: "print";
+  /** Kurtarılan taslak: yeni pencere kendi taslağına yazınca bu anahtar silinir. */
+  restoreKey?: string;
+}
+
+/** Belgeyi yeni pencerede açar (birleştirme sonucu "Mektuplar1" ya da kurtarılan taslak). */
+export function openInNewWindow(doc: BelgeDocument, name: string, then?: "print", restoreKey?: string) {
   try {
-    localStorage.setItem(HANDOFF, JSON.stringify({ doc, name, then, at: Date.now() }));
+    localStorage.setItem(HANDOFF, JSON.stringify({ doc, name, then, restoreKey, at: Date.now() }));
   } catch {
     return false;
   }
@@ -169,17 +177,27 @@ export function openInNewWindow(doc: BelgeDocument, name: string, then?: "print"
   return true;
 }
 
-/** Açılışta yeni pencereye aktarılan belge (varsa; bir kez alınır). */
-export function takeHandoff(): { doc: BelgeDocument; name: string; then?: "print" } | null {
+let taken: Handoff | null | undefined;
+
+/** Açılışta yeni pencereye aktarılan belge (varsa; bir kez alınır, sonraki çağrılar aynı sonucu döndürür). */
+export function takeHandoff(): Handoff | null {
+  if (taken !== undefined) return taken;
+  taken = null;
   try {
     if (!getNative() && !new URLSearchParams(location.search).has("handoff")) return null;
     const raw = localStorage.getItem(HANDOFF);
     if (!raw) return null;
-    const v = JSON.parse(raw) as { doc: BelgeDocument; name: string; then?: "print"; at: number };
+    const v = JSON.parse(raw) as Handoff & { at: number };
     if (Date.now() - v.at > 60_000) return null;
     localStorage.removeItem(HANDOFF);
+    taken = v;
     return v;
   } catch {
     return null;
   }
+}
+
+/** Bu pencere başka bir pencereden aktarılan belgeyle mi açıldı. */
+export function isHandoffWindow(): boolean {
+  return !!takeHandoff();
 }

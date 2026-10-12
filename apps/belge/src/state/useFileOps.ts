@@ -8,34 +8,9 @@ import { defaultSettings, normalizeDoc, type BelgeDocument, type DocSettings } f
 import { DOCX_FILTER, OPEN_FILTERS, docToText, htmlDocument, openDocument, writeDocx } from "../io";
 import { TEMPLATES } from "../templates/templates";
 import { annotateNotesHtml } from "../editor/notes";
+import { clearOwnDraft, writeDraft, type Draft } from "./drafts";
 
-const DRAFT_KEY = "officehere.belge.draft";
-
-export interface Draft {
-  content: BelgeDocument["content"];
-  settings: DocSettings;
-  fileName: string;
-  savedAt: number;
-}
-
-export function readDraft(): Draft | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return null;
-    const d = JSON.parse(raw) as Draft;
-    return d?.content ? d : null;
-  } catch {
-    return null;
-  }
-}
-
-export function clearDraft() {
-  try {
-    localStorage.removeItem(DRAFT_KEY);
-  } catch {
-    // yok say
-  }
-}
+export type { Draft } from "./drafts";
 
 /** Geçmişi sıfırlayarak belge içeriğini yükler. */
 export function loadIntoEditor(editor: Editor, doc: BelgeDocument["content"]) {
@@ -88,7 +63,7 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       counter.current += 1;
       const doc = t.build();
       load(doc, templateId === "blank" ? `Belge${counter.current}` : `${t.label}`, null);
-      clearDraft();
+      clearOwnDraft();
       return true;
     },
     [confirmDiscard, load],
@@ -140,7 +115,7 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       setFileRef(ref);
       setFileName(baseName(ref.name));
       setDirty(false);
-      clearDraft();
+      clearOwnDraft();
       await addRecentFile({ path: ref.path ?? ref.name, name: ref.name, app: "belge", openedAt: Date.now() });
       notify(`"${ref.name}" kaydedildi.`, "success");
       return true;
@@ -158,7 +133,7 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       setFileRef(ref);
       setFileName(baseName(ref.name));
       setDirty(false);
-      clearDraft();
+      clearOwnDraft();
       await addRecentFile({ path: ref.path ?? ref.name, name: ref.name, app: "belge", openedAt: Date.now() });
       return true;
     } catch (err) {
@@ -188,27 +163,35 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
     if (!(await confirmDiscard())) return;
     counter.current += 1;
     load({ content: { type: "doc", content: [{ type: "paragraph" }] }, settings: defaultSettings() }, `Belge${counter.current}`, null);
-    clearDraft();
+    clearOwnDraft();
   }, [confirmDiscard, load]);
 
-  // Otomatik kurtarma: kirli belgeyi birkaç saniyede bir yerel depoya yaz.
+  // Otomatik kurtarma: kirli belgeyi birkaç saniyede bir bu pencerenin taslağına yaz.
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
   const nameRef = useRef(fileName);
   nameRef.current = fileName;
   useEffect(() => {
     if (!autosave) return;
-    const id = window.setInterval(() => {
-      if (!dirtyRef.current) return;
-      try {
-        const d: Draft = { content: editor.getJSON(), settings: settingsRef.current, fileName: nameRef.current, savedAt: Date.now() };
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
-      } catch {
-        // Depolama dolu ya da kapalı.
-      }
-    }, 5000);
-    return () => window.clearInterval(id);
+    const write = () => {
+      if (!dirtyRef.current || editor.isDestroyed) return;
+      const d: Draft = { content: editor.getJSON(), settings: settingsRef.current, fileName: nameRef.current, savedAt: Date.now() };
+      writeDraft(d);
+    };
+    const id = window.setInterval(write, 5000);
+    // Sayfa kapanırken/gizlenirken son durum da yazılır (5 sn beklemeden).
+    const onHide = () => write();
+    window.addEventListener("pagehide", onHide);
+    window.addEventListener("officehere:autosave", onHide);
+    const onVis = () => document.visibilityState === "hidden" && write();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("officehere:autosave", onHide);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [editor, autosave]);
 
-  return { fileName, setFileName, fileRef, newDocument, openDialog, openPath, openData, save, saveAs, exportAs, closeDocument, load, currentDoc };
+  return { isPristine, fileName, setFileName, fileRef, newDocument, openDialog, openPath, openData, save, saveAs, exportAs, closeDocument, load, currentDoc };
 }
