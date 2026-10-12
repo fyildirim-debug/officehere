@@ -2,6 +2,8 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import type {} from "../packages/core/src/bridge";
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync, statSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -14,12 +16,12 @@ function electronPath(): string {
   return require(path.join(desktop, "node_modules/electron")) as unknown as string;
 }
 
-async function launch(args: string[] = []): Promise<{ app: ElectronApplication; win: Page; userData: string }> {
+async function launch(args: string[] = [], env: Record<string, string> = {}): Promise<{ app: ElectronApplication; win: Page; userData: string }> {
   const userData = mkdtempSync(path.join(tmpdir(), "oh-masaustu-"));
   const app = await electron.launch({
     executablePath: electronPath(),
     args: [desktop, "--no-sandbox", ...args],
-    env: { ...process.env, OH_APPS_DIR: appsDir, OH_USER_DATA: userData, ELECTRON_DISABLE_SECURITY_WARNINGS: "1" },
+    env: { ...process.env, OH_APPS_DIR: appsDir, OH_USER_DATA: userData, ELECTRON_DISABLE_SECURITY_WARNINGS: "1", ...env },
   });
   const win = await app.firstWindow();
   await win.waitForLoadState("domcontentloaded");
@@ -51,6 +53,46 @@ test("üçüncü taraf lisans bildirimi uygulama içinde açılır", async () =>
   await notices.waitForURL(/^file:.*\/THIRD_PARTY_NOTICES\.txt$/);
   await expect(notices.locator("body")).toContainText("Third-Party Software Notices");
   await app.close();
+});
+
+/** GitHub "latest release" yanıtını taklit eden yerel sunucu. */
+async function releaseFeed(tag: string) {
+  const server = createServer((_req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ tag_name: tag, html_url: `https://github.com/fyildirim-debug/officehere/releases/tag/${tag}`, draft: false, prerelease: false }));
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/latest`, close: () => server.close() };
+}
+
+test("yeni sürüm başlık çubuğunda ve Seçenekler'de bildirilir", async () => {
+  const feed = await releaseFeed("v9.9.9");
+  const { app, win } = await launch([], { OH_UPDATE_MODE: "manual", OH_UPDATE_FEED: feed.url, OH_UPDATE_DELAY_MS: "0" });
+  const pill = win.locator(".oh-update-pill");
+  await expect(pill).toHaveText("Yeni sürüm: 9.9.9");
+  await win.locator(".oh-bs-item", { hasText: "Seçenekler" }).click();
+  const section = win.locator(".oh-update-section");
+  await expect(section).toContainText("Sürüm 9.9.9 yayımlandı.");
+  await expect(section.getByRole("button", { name: "İndirme sayfasını aç" })).toBeVisible();
+  await app.close();
+  feed.close();
+});
+
+test("güncel sürümde elle denetim 'güncel' der", async () => {
+  const feed = await releaseFeed("v0.0.1");
+  const { app, win } = await launch([], { OH_UPDATE_MODE: "manual", OH_UPDATE_FEED: feed.url, OH_UPDATE_DELAY_MS: "600000" });
+  await win.locator(".oh-bs-item", { hasText: "Seçenekler" }).click();
+  const section = win.locator(".oh-update-section");
+  await section.getByRole("button", { name: "Güncelleştirmeleri denetle" }).click();
+  await expect(section).toContainText("OfficeHere güncel.");
+  await expect(win.locator(".oh-update-pill")).toHaveCount(0);
+  // Otomatik denetim seçeneği kalıcıdır.
+  const auto = section.getByRole("checkbox", { name: "Güncelleştirmeleri otomatik denetle" });
+  await expect(auto).toBeChecked();
+  await auto.uncheck();
+  await expect(auto).not.toBeChecked();
+  await app.close();
+  feed.close();
 });
 
 test("başlangıçtan yeni belge penceresi açılır", async () => {

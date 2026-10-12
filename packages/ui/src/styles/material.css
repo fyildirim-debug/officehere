@@ -1,0 +1,275 @@
+/* Yüzen yüzeyler için malzeme katmanı: menüler, açılır listeler, galeri ve renk
+   paletleri, ipuçları. Arkası bulanık yarı saydam zemin, tek bir derinlik sistemi
+   (kenar çizgisi gölgenin içindedir, ayrıca border yok) ve kısa açılış hareketi.
+   backdrop-filter desteklenmezse zemin opak kalır. Uygulamaların kendi yüzen
+   yüzeyleri (mini araç çubuğu, formül önerileri…) aynı belirteçleri kullanır. */
+
+:root {
+  --oh-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --oh-float-radius: 10px;
+  --oh-float-item-radius: 6px;
+  --oh-glass-bg: rgba(252, 252, 252, 0.8);
+  --oh-glass-filter: blur(24px) saturate(180%);
+  --oh-glass-edge: rgba(0, 0, 0, 0.09);
+  --oh-glass-sheen: rgba(255, 255, 255, 0.75);
+  --oh-float-depth: 0 2px 6px -2px rgba(0, 0, 0, 0.1), 0 16px 36px -10px rgba(0, 0, 0, 0.22);
+  --oh-float-shadow: 0 0 0 1px var(--oh-glass-edge), inset 0 1px 0 var(--oh-glass-sheen), var(--oh-float-depth);
+  /* Seçime bağlı yüzeylerin (mini araç çubuğu) altındaki vurgu renkli hale. */
+  --oh-aura: color-mix(in srgb, var(--oh-accent) 32%, transparent);
+  --oh-selection: color-mix(in srgb, var(--oh-accent) 24%, transparent);
+  --oh-menu-shadow: var(--oh-float-depth);
+}
+
+:root[data-oh-theme="dark"],
+:root[data-oh-theme="black"] {
+  --oh-glass-bg: rgba(40, 40, 40, 0.86);
+  --oh-glass-edge: rgba(255, 255, 255, 0.11);
+  --oh-glass-sheen: rgba(255, 255, 255, 0.06);
+  --oh-float-depth: 0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 18px 40px -10px rgba(0, 0, 0, 0.6);
+  --oh-aura: color-mix(in srgb, var(--oh-accent) 45%, transparent);
+  --oh-selection: color-mix(in srgb, var(--oh-accent) 40%, transparent);
+}
+
+:root[data-oh-theme="black"] {
+  --oh-glass-bg: rgba(22, 22, 22, 0.88);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-oh-theme="system"] {
+    --oh-glass-bg: rgba(40, 40, 40, 0.86);
+    --oh-glass-edge: rgba(255, 255, 255, 0.11);
+    --oh-glass-sheen: rgba(255, 255, 255, 0.06);
+    --oh-float-depth: 0 2px 6px -2px rgba(0, 0, 0, 0.4), 0 18px 40px -10px rgba(0, 0, 0, 0.6);
+    --oh-aura: color-mix(in srgb, var(--oh-accent) 45%, transparent);
+    --oh-selection: color-mix(in srgb, var(--oh-accent) 40%, transparent);
+  }
+}
+
+/* Yüzey */
+.oh-menu,
+.oh-combo-list,
+.oh-ribbon-group-popup,
+.oh-tooltip {
+  border-color: transparent;
+  border-radius: var(--oh-float-radius);
+  box-shadow: var(--oh-float-shadow);
+}
+
+.oh-tooltip {
+  border-radius: 8px;
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .oh-menu,
+  .oh-combo-list,
+  .oh-ribbon-group-popup,
+  .oh-tooltip {
+    background: var(--oh-glass-bg);
+    -webkit-backdrop-filter: var(--oh-glass-filter);
+    backdrop-filter: var(--oh-glass-filter);
+  }
+}
+
+/* İç öğeler kabın köşesini izler (10px kap − 4px iç boşluk). */
+.oh-menu-item,
+.oh-combo-option {
+  border-radius: var(--oh-float-item-radius);
+}
+
+.oh-menu-sep {
+  margin: 4px 6px;
+}
+
+/* Açılış: varsayılan konumdan kısa, yavaşlayarak biten bir iniş. Bağımsız translate/scale
+   kullanılır; öğenin kendi transform'u (ör. sürüklenen iletişim kutusu) bozulmaz. */
+@keyframes oh-float-in {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+    scale: 0.985;
+  }
+}
+
+@keyframes oh-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.oh-menu,
+.oh-combo-list,
+.oh-ribbon-group-popup {
+  transform-origin: top center;
+  animation: oh-float-in 0.16s var(--oh-ease-out);
+}
+
+.oh-tooltip {
+  animation: oh-fade-in 0.12s ease-out;
+}
+
+/* İletişim kutuları yerinde belirir; arka plan karartması da yumuşak gelir. */
+.oh-dialog {
+  border-radius: 12px;
+  animation: oh-float-in 0.18s var(--oh-ease-out);
+}
+
+.oh-dialog-backdrop {
+  animation: oh-fade-in 0.18s ease-out;
+}
+
+/* Seçim ve odak uygulamanın vurgu rengini taşır. */
+::selection {
+  background: var(--oh-selection);
+}
+
+:focus-visible {
+  outline-color: var(--oh-accent);
+}
+
+/* Koyu zeminde vurgu rengi odak halkası için fazla koyu kalır: açık tonu kullanılır. */
+:root[data-oh-theme="dark"] :focus-visible,
+:root[data-oh-theme="black"] :focus-visible {
+  outline-color: color-mix(in srgb, var(--oh-accent) 55%, white);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-oh-theme="system"] :focus-visible {
+    outline-color: color-mix(in srgb, var(--oh-accent) 55%, white);
+  }
+}
+
+/* Kaydırma çubukları: ince, yuvarlak, üzerine gelince belirginleşen. */
+.oh-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--oh-text) 26%, transparent);
+  border: 4px solid transparent;
+  background-clip: padding-box;
+  border-radius: 8px;
+}
+
+.oh-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--oh-text) 42%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oh-menu,
+  .oh-combo-list,
+  .oh-ribbon-group-popup,
+  .oh-dialog {
+    animation-name: oh-fade-in;
+  }
+}
+
+/* "Saydamlığı azalt" sistem ayarı: cam yüzeyler opak olur. */
+@media (prefers-reduced-transparency: reduce) {
+  .oh-menu,
+  .oh-combo-list,
+  .oh-ribbon-group-popup,
+  .oh-tooltip {
+    background: var(--oh-menu-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Güncelleştirme rozeti (başlık çubuğu) */
+.oh-update-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--oh-titlebar-fg) 16%, transparent);
+  color: var(--oh-titlebar-fg);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  animation: oh-float-in 0.24s var(--oh-ease-out);
+  transition: background-color 0.15s ease;
+}
+
+.oh-update-pill:hover {
+  background: color-mix(in srgb, var(--oh-titlebar-fg) 26%, transparent);
+}
+
+.oh-update-pill svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* İndirme sürerken rozetin zemini ilerlemeyle dolar. */
+.oh-update-pill.is-downloading {
+  cursor: default;
+  background-image: linear-gradient(to right, color-mix(in srgb, var(--oh-titlebar-fg) 22%, transparent) var(--oh-update-p, 0%), transparent var(--oh-update-p, 0%));
+}
+
+/* Kuruluma hazır: tek eylem çağrısı, ters renkli. */
+.oh-update-pill.is-ready {
+  background: var(--oh-titlebar-fg);
+  color: var(--oh-titlebar-bg);
+  font-weight: 600;
+  box-shadow: 0 4px 14px -4px rgba(0, 0, 0, 0.35);
+}
+
+.oh-update-pill.is-ready:hover {
+  background: color-mix(in srgb, var(--oh-titlebar-fg) 88%, var(--oh-titlebar-bg));
+}
+
+/* Hakkında / Seçenekler: güncelleştirme bölümü */
+.oh-update-section {
+  max-width: 640px;
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--oh-surface-2);
+  box-shadow: 0 0 0 1px var(--oh-separator);
+}
+
+.oh-update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.oh-update-version {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.oh-update-status {
+  margin-top: 2px;
+  color: var(--oh-text-muted);
+}
+
+.oh-update-status.is-error {
+  color: #c50f1f;
+}
+
+:root[data-oh-theme="dark"] .oh-update-status.is-error,
+:root[data-oh-theme="black"] .oh-update-status.is-error {
+  color: #ff99a4;
+}
+
+.oh-update-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.oh-update-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oh-update-pill {
+    animation-name: oh-fade-in;
+  }
+}

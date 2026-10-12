@@ -170,6 +170,46 @@ export function kayitlariTopla(modulKimlikleri) {
   };
 }
 
+/** Paket adını, Node'un çözümleme sırasıyla başlangıç dizininden yukarı doğru arar. */
+function paketDiziniBul(ad, baslangic) {
+  for (let d = baslangic; ; d = path.dirname(d)) {
+    const aday = path.basename(d) === "node_modules" ? path.join(d, ad) : path.join(d, "node_modules", ad);
+    if (fs.existsSync(path.join(aday, "package.json"))) return aday;
+    if (path.dirname(d) === d) return null;
+  }
+}
+
+/**
+ * Bir paketin üretim bağımlılık ağacı (Electron ana sürecine paketlenen node_modules).
+ * Dönen değerler package.json yollarıdır; kayitlariTopla bunları modül kimliği gibi işler.
+ */
+export function uretimBagimliliklari(kokDizin) {
+  const dizinler = new Set();
+  const ziyaret = (dizin) => {
+    const pkg = pkgOku(dizin);
+    for (const ad of Object.keys({ ...(pkg?.dependencies ?? {}), ...(pkg?.optionalDependencies ?? {}) })) {
+      const d = paketDiziniBul(ad, dizin);
+      if (!d) continue;
+      const gercek = fs.realpathSync(d);
+      if (dizinler.has(gercek)) continue;
+      dizinler.add(gercek);
+      ziyaret(gercek);
+    }
+  };
+  ziyaret(kokDizin);
+  return [...dizinler].map((d) => path.join(d, "package.json").replace(/\\/g, "/"));
+}
+
+/** Dağıtıma girebilecek izin verici lisanslar (SPDX). Karşılıklılık (copyleft) şartı taşıyanlar yoktur. */
+export const IZINLI_LISANSLAR = new Set(["MIT", "ISC", "BSD-2-Clause", "BSD-3-Clause", "0BSD", "Apache-2.0", "Zlib", "BlueOak-1.0.0", "Unlicense", "CC0-1.0", "Python-2.0"]);
+
+/** SPDX ifadesi izinli mi: "A OR B" seçeneklerinden biri, "A AND B" için hepsi izinli olmalı. */
+export function lisansIzinli(ifade) {
+  const temiz = (ifade ?? "").replace(/[()]/g, " ").trim();
+  if (!temiz) return false;
+  return temiz.split(/\s+OR\s+/i).some((secenek) => secenek.split(/\s+AND\s+/i).every((l) => IZINLI_LISANSLAR.has(l.trim())));
+}
+
 const CIZGI = "=".repeat(78);
 
 export function bildirimMetni(kayitlar, urun = "OfficeHere") {
@@ -197,18 +237,33 @@ export function bildirimMetni(kayitlar, urun = "OfficeHere") {
   return `${[bas.join("\n"), ...govde].join("\n\n")}\n`;
 }
 
-/** Vite eklentisi: derleme çıktısına THIRD_PARTY_NOTICES.txt ekler. */
-export function lisansBildirimi() {
+/**
+ * Vite eklentisi: derleme çıktısına THIRD_PARTY_NOTICES.txt ekler.
+ * `uretimBagimliliklari`: yapılandırma dosyasına göre göreli bir paket dizini; o paketin
+ * üretim bağımlılıkları da (ör. Electron ana sürecine giren electron-updater) eklenir.
+ */
+export function lisansBildirimi(secenekler = {}) {
+  let yapilandirmaDizini = process.cwd();
   return {
     name: "officehere-lisans-bildirimi",
     apply: "build",
+    configResolved(c) {
+      if (c.configFile) yapilandirmaDizini = path.dirname(c.configFile);
+    },
     generateBundle(_secenek, paket) {
       const kimlikler = new Set();
+      if (secenekler.uretimBagimliliklari) {
+        for (const id of uretimBagimliliklari(path.resolve(yapilandirmaDizini, secenekler.uretimBagimliliklari))) kimlikler.add(id);
+      }
       for (const parca of Object.values(paket)) {
         if (parca.type !== "chunk") continue;
         for (const id of parca.moduleIds ?? Object.keys(parca.modules ?? {})) kimlikler.add(id);
       }
       const { kayitlar, eksik } = kayitlariTopla(kimlikler);
+      const yasak = kayitlar.filter((k) => !lisansIzinli(k.lisans));
+      if (yasak.length) {
+        this.error(`İzin verilmeyen ya da belirsiz lisans: ${yasak.map((k) => `${k.ad} (${k.lisans || "lisans yok"})`).join(", ")}. Bkz. HUKUKI.md.`);
+      }
       if (eksik.length) {
         this.error(`Lisans metni bulunamadı: ${eksik.join(", ")}. "node scripts/lisans-onbellek.mjs ${eksik.join(" ")}" ile önbelleğe alın.`);
       }

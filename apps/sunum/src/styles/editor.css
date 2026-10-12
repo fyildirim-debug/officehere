@@ -272,12 +272,20 @@
   position: absolute;
   padding: 2px 6px;
   background: var(--oh-menu-bg);
-  border: 1px solid var(--oh-border);
-  border-radius: 3px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   font-size: 11px;
   color: var(--oh-text);
   white-space: nowrap;
-  box-shadow: var(--oh-menu-shadow);
+  box-shadow: var(--oh-float-shadow);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .rot-info {
+    background: var(--oh-glass-bg);
+    -webkit-backdrop-filter: var(--oh-glass-filter);
+    backdrop-filter: var(--oh-glass-filter);
+  }
 }
 
 .cell-sel {

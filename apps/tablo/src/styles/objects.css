@@ -148,3 +148,33 @@
   right: -1px;
   bottom: -1px;
 }
+
+/* Yüzen yüzeyler ortak malzeme katmanını kullanır (@officehere/ui material.css). */
+.tb-assist-list,
+.tb-assist-desc,
+.tb-arghint,
+.tb-chart-tip,
+.tb-dv-list {
+  border-color: transparent;
+  border-radius: 8px;
+  box-shadow: var(--oh-float-shadow);
+  background: var(--oh-menu-bg);
+  color: var(--oh-text);
+}
+
+.tb-assist-list,
+.tb-dv-list {
+  animation: oh-float-in 0.16s var(--oh-ease-out);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .tb-assist-list,
+  .tb-assist-desc,
+  .tb-arghint,
+  .tb-chart-tip,
+  .tb-dv-list {
+    background: var(--oh-glass-bg);
+    -webkit-backdrop-filter: var(--oh-glass-filter);
+    backdrop-filter: var(--oh-glass-filter);
+  }
+}

@@ -28,5 +28,8 @@
     "electron-builder": "26.15.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.10"
   }
 }

@@ -20,7 +20,9 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 8px 6px 24px 0;
-  background: var(--oh-canvas-bg);
+  /* Panel slayt alanından ayrı bir zeminde durur; arada ince bir ayırıcı çizgi. */
+  background: var(--oh-chrome-bg);
+  border-right: 1px solid var(--oh-border);
   outline: none;
   user-select: none;
 }
@@ -153,8 +155,29 @@
   cursor: ns-resize;
 }
 
-.splitter:hover {
-  background: var(--oh-hover);
+/* Bölücü üzerine gelince ya da sürüklerken ortasında vurgu renginde ince bir çizgi belirir. */
+.splitter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  border-radius: 2px;
+  background: var(--oh-accent);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.splitter.is-v::after {
+  width: 2px;
+}
+
+.splitter.is-h::after {
+  height: 2px;
+}
+
+.splitter:hover::after,
+.splitter:active::after {
+  opacity: 0.7;
 }
 
 .status-btn {

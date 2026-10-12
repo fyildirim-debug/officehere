@@ -13,6 +13,7 @@ import {
   TemplateTile,
   TitleBar,
   UI_THEMES,
+  UpdateSection,
   useUiTheme,
 } from "@officehere/ui";
 
@@ -161,6 +162,7 @@ export function Launcher() {
             ))}
           </select>
         </label>
+        <UpdateSection />
         <p className="oh-bs-note">
           OfficeHere açık kaynaklı (MIT) bağımsız bir projedir; Microsoft Corporation ile bağlantılı değildir. Microsoft, Word, Excel ve PowerPoint, Microsoft
           Corporation'ın ticari markalarıdır.

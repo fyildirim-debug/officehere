@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getNative, type AppKind } from "@officehere/core";
 import { TooltipLayer, tipProps } from "./Tooltip";
+import { UpdatePill } from "./Updates";
 import { useUiTheme } from "../hooks/useUiTheme";
 
 export const APP_NAMES: Record<AppKind | "baslangic", string> = {
@@ -133,7 +134,10 @@ export function TitleBar({ app, title, dirty, quickAccess, onSearch, searchPlace
           </label>
         )}
       </div>
-      <div className="oh-titlebar-right">{right}</div>
+      <div className="oh-titlebar-right">
+        <UpdatePill />
+        {right}
+      </div>
       <div className="oh-titlebar-controls-space" />
     </header>
   );

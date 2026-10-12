@@ -17,6 +17,9 @@ ipcRenderer.on("oh:before-close", async () => {
 const pathListeners = new Set<(p: string) => void>();
 ipcRenderer.on("oh:open-path", (_e, p: string) => pathListeners.forEach((cb) => cb(p)));
 
+const updateListeners = new Set<(s: unknown) => void>();
+ipcRenderer.on("oh:update-state", (_e, s: unknown) => updateListeners.forEach((cb) => cb(s)));
+
 contextBridge.exposeInMainWorld("officehereNative", {
   platform: process.platform,
   openFile: (filters: unknown) => ipcRenderer.invoke("oh:open-file", filters),
@@ -43,6 +46,16 @@ contextBridge.exposeInMainWorld("officehereNative", {
   },
   setTitleBarOverlay: (color: string, symbolColor: string) => ipcRenderer.send("oh:set-titlebar-overlay", color, symbolColor),
   exportPdf: (suggestedName: string, options?: unknown) => ipcRenderer.invoke("oh:export-pdf", suggestedName, options),
+  updates: {
+    getState: () => ipcRenderer.invoke("oh:update-get"),
+    check: () => ipcRenderer.invoke("oh:update-check"),
+    install: () => ipcRenderer.invoke("oh:update-install"),
+    setAutoCheck: (on: boolean) => ipcRenderer.invoke("oh:update-auto", on),
+    onChange: (cb: (s: unknown) => void) => {
+      updateListeners.add(cb);
+      return () => updateListeners.delete(cb);
+    },
+  },
 });
 
 // Yerel pencere düğmeleri için başlık çubuğunda yer aç.

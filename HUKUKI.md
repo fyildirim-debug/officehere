@@ -76,9 +76,11 @@ Sans/Serif/Mono (Arial, Times New Roman, Courier New).
 ## Bağımlılıkların lisansları
 
 Projeye yalnız izin verici (permissive) lisanslı bağımlılıklar eklenir: MIT, ISC,
-BSD-2/3-Clause, 0BSD, Apache-2.0, Zlib, BlueOak-1.0.0, Unlicense. GPL/LGPL/AGPL
-gibi karşılıklılık (copyleft) şartı taşıyan bağımlılık eklenmez. Başlıca
-bağımlılıklar:
+BSD-2/3-Clause, 0BSD, Apache-2.0, Zlib, BlueOak-1.0.0, Unlicense, CC0-1.0,
+Python-2.0. GPL/LGPL/AGPL gibi karşılıklılık (copyleft) şartı taşıyan bağımlılık
+eklenmez. Bu liste derlemede denetlenir (`IZINLI_LISANSLAR`,
+`scripts/lisans-bildirimi.mjs`): listede olmayan ya da lisansı belirsiz bir
+bileşen pakete girerse derleme durur. Başlıca bağımlılıklar:
 
 | Paket | Kullanım | Lisans |
 | --- | --- | --- |
@@ -90,6 +92,7 @@ bağımlılıklar:
 | pako (JSZip içinde) | ZIP sıkıştırma | MIT ve Zlib |
 | mammoth | DOCX içe aktarma yedeği | BSD-2-Clause |
 | @fluentui/react-icons | Simgeler | MIT |
+| electron-updater | Masaüstü güncelleyici | MIT (bağımlılıkları MIT/ISC/BlueOak/Python-2.0) |
 
 Denetim notları (2026-10):
 
@@ -118,6 +121,10 @@ metninin bulunmasını şart koşar. Bu şart otomatik karşılanır:
   README'deki lisans bölümünden birebir alınır).
 - Lisans metni bulunamayan bir bileşen pakete girerse **derleme durur**; böylece
   bildirimsiz bileşen dağıtılamaz.
+- Masaüstü ana sürecine paketlenen bağımlılıklar (electron-updater ve ağacı)
+  başlangıç ekranının bildirimine eklenir. Lisans dosyası hiçbir yerde olmayan
+  `lazy-val` için package.json'daki MIT bildirimi ve yazar adıyla standart MIT
+  metni kullanılır.
 - Bildirim, her uygulamanın Hakkında sayfasından ve başlangıç ekranının
   Seçenekler sayfasından açılır. Masaüstü paketinde ayrıca `LICENSE.txt`
   (OfficeHere), `LICENSE.electron.txt` ve `LICENSES.chromium.html` bulunur;

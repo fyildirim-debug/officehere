@@ -2,7 +2,7 @@
    arayüz teması <html data-oh-theme="..."> ile seçilir. */
 
 :root {
-  --oh-font-ui: "Segoe UI", "Segoe UI Variable Text", system-ui, -apple-system, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  --oh-font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
   --oh-font-size: 12px;
 
   --oh-accent: #1f5fbf;

@@ -30,6 +30,7 @@ import {
 } from "./Backstage";
 import { APP_NAMES } from "./AppShell";
 import { UI_THEMES, useUiTheme } from "../hooks/useUiTheme";
+import { UpdateSection } from "./Updates";
 
 export interface BackstageTemplate {
   id: string;
@@ -225,6 +226,7 @@ export function OfficeBackstage(props: OfficeBackstageProps) {
               Üçüncü taraf yazılım bildirimleri
             </a>
           </p>
+          <UpdateSection />
           <p className="oh-bs-note">
             OfficeHere bağımsız bir projedir; Microsoft Corporation ile bağlantılı değildir, onun tarafından desteklenmez. Microsoft, Word, Excel ve PowerPoint,
             Microsoft Corporation'ın ticari markalarıdır. Dosya biçimi desteği açık ECMA-376 / ISO/IEC 29500 (Office Open XML) standardına dayanır.

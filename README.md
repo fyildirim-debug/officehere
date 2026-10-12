@@ -88,7 +88,13 @@ işletim sisteminize uygun paketi indirin:
 | macOS (Apple Silicon) | `-mac-arm64.dmg` (imzasız: ilk açılışta sağ tık → Aç) |
 
 Kurulum `.docx`, `.xlsx`, `.csv` ve `.pptx` dosyalarını OfficeHere ile
-ilişkilendirir. Paketler henüz kod imzalı değildir; Windows SmartScreen ilk
+ilişkilendirir.
+
+**Güncelleştirmeler:** Uygulama GitHub Sürümleri'ni açılışta ve altı saatte bir
+denetler (Seçenekler'den kapatılabilir). Windows kurulumu ve AppImage yeni sürümü
+arka planda indirir, yeniden başlatınca kurar; taşınabilir `.exe`, `.deb` ve
+macOS paketi yeni sürümü bildirir ve indirme sayfasını açar. Otomatik
+güncelleştirme 0.1.2 ile gelir; daha eski sürümlerden bir kez elle yükseltin. Paketler henüz kod imzalı değildir; Windows SmartScreen ilk
 açılışta uyarı gösterebilir ("Ek bilgi" → "Yine de çalıştır").
 
 Tarayıcıda kurulumsuz kullanmak için web sürümünü derleyip herhangi bir statik

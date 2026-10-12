@@ -43,11 +43,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: officehere-${{ matrix.os }}
+          # latest*.yml ve .blockmap dosyaları uygulama içi güncelleyici (electron-updater) içindir.
           path: |
             apps/desktop/release/*.exe
             apps/desktop/release/*.AppImage
             apps/desktop/release/*.deb
             apps/desktop/release/*.dmg
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/latest*.yml
           if-no-files-found: ignore
 
   yayin:
@@ -55,6 +58,14 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || startsWith(inputs.surum, 'v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      # Sürüm notları docs/surumler/<etiket>.md dosyasından; yoksa GitHub otomatik üretir.
+      - id: notlar
+        shell: bash
+        env:
+          SURUM: ${{ inputs.surum || github.ref_name }}
+        run: |
+          if [ -f "docs/surumler/${SURUM}.md" ]; then echo "yol=docs/surumler/${SURUM}.md" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/download-artifact@v4
         with:
           path: paketler
@@ -65,4 +76,5 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: OfficeHere ${{ inputs.surum || github.ref_name }}
           files: paketler/*
-          generate_release_notes: true
+          body_path: ${{ steps.notlar.outputs.yol }}
+          generate_release_notes: ${{ steps.notlar.outputs.yol == '' }}

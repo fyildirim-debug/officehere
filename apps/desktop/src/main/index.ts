@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { APP_COLORS, APP_TITLES, DEV_PORTS, appForPath, isSupportedFile, type AppKind, type WindowKind } from "./apps";
 import { addRecent, readRecent, type RecentFile } from "./recent";
+import { initUpdates } from "./updates";
 
 const isDev = process.env.OH_DEV === "1";
 const isMac = process.platform === "darwin";
@@ -284,6 +285,7 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform === "win32") app.setAppUserModelId("com.officehere.suite");
     buildMenu();
     registerIpc();
+    initUpdates();
     const files = [...filesFromArgv(process.argv), ...pendingPaths];
     if (files.length) files.forEach(openPath);
     else createWindow("baslangic");

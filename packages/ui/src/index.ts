@@ -10,6 +10,7 @@ export * from "./components/Backstage";
 export * from "./components/StatusBar";
 export * from "./components/Dialog";
 export * from "./components/OfficeBackstage";
+export * from "./components/Updates";
 export * from "./hooks/useHotkeys";
 export * from "./hooks/useUiTheme";
 export * from "./hooks/useDocumentLifecycle";
