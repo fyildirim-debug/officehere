@@ -20,7 +20,7 @@ import { tableStyleByGuid, DEFAULT_TABLE_STYLE } from "../render/tableStyles";
 import { attr, boolAttr, descendants, fromEmu, kid, kidPath, kids, numAttr } from "./xml";
 
 import { type ReadCtx, readColor, mediaFor, readFill, readLine, readEffects } from "./readStyle";
-import { readTextBody } from "./readText";
+import { readHlink, readTextBody } from "./readText";
 
 export * from "./readStyle";
 export * from "./readText";
@@ -158,7 +158,7 @@ function readGeom(spPr: Element | undefined): { geom: string; adj?: Record<strin
 /* Şekiller                                                             */
 /* ------------------------------------------------------------------ */
 
-function nvProps(nv: Element | undefined, ctx: ReadCtx): { id: string; name: string; descr?: string; hidden?: boolean; ph?: Placeholder; txBox?: boolean } {
+function nvProps(nv: Element | undefined, ctx: ReadCtx): { id: string; name: string; descr?: string; hidden?: boolean; ph?: Placeholder; txBox?: boolean; link?: string } {
   const c = kid(nv, "cNvPr");
   const nid = numAttr(c, "id");
   const id = uid();
@@ -180,6 +180,7 @@ function nvProps(nv: Element | undefined, ctx: ReadCtx): { id: string; name: str
     hidden: boolAttr(c, "hidden") || undefined,
     ph,
     txBox: boolAttr(cNvSpPr, "txBox") || undefined,
+    link: readHlink(kid(c, "hlinkClick"), ctx),
   };
 }
 
@@ -243,6 +244,7 @@ function readSp(el: Element, ctx: ReadCtx, connector: boolean): SpShape {
     ph: info.ph,
     txBox: info.txBox,
     connector: connector || undefined,
+    link: info.link,
   };
   if (!sp.text && !connector && !isLineGeom(sp.geom) && !info.ph) sp.text = undefined;
   // Çizim sekmesiyle oluşturulan mürekkep (silgiyle silinebilmesi için).
@@ -289,6 +291,7 @@ function readPic(el: Element, ctx: ReadCtx): PicShape {
     effects: readEffects(spPr, ctx),
     adjust: adjust.brightness || adjust.contrast || adjust.grayscale || adjust.alpha !== undefined ? adjust : undefined,
     ph: info.ph,
+    link: info.link,
   };
 }
 
@@ -390,6 +393,7 @@ function readGroup(el: Element, ctx: ReadCtx): GroupShape | undefined {
     flipV: xf?.flipV,
     hidden: info.hidden,
     children: mapped,
+    link: info.link,
   };
 }
 

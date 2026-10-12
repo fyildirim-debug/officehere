@@ -5,6 +5,7 @@
  */
 import JSZip from "jszip";
 import { uid } from "../model/factory";
+import { mapSlideLinks } from "../model/links";
 import { DEFAULT_HF } from "../model/presentation";
 import { findPlaceholder, placeholderKind } from "../model/textStyle";
 import type { Fill, Layout, LayoutType, LevelStyle, Master, Placeholder, Presentation, SchemeColorName, Shape, Slide, SpShape, TextStyles, Theme } from "../model/types";
@@ -280,6 +281,7 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
 
   // Slaytlar
   const slides: Slide[] = [];
+  const slideByPath = new Map<string, Slide>();
   const sldIds = kids(kid(presDoc, "sldIdLst"), "sldId");
   for (const sid of sldIds) {
     const rid = relId(sid);
@@ -339,6 +341,19 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
       }
     }
     slides.push(slide);
+    slideByPath.set(sp, slide);
+  }
+
+  // Slayt atlama köprüleri (parça yolu) slayt kimliklerine çevrilir.
+  const idByPath = new Map<string, string>();
+  sldIds.forEach((sid) => {
+    const rid = relId(sid);
+    const sp = rid ? presRels.get(rid)?.target : undefined;
+    const sl = sp ? slideByPath.get(sp) : undefined;
+    if (sp && sl) idByPath.set(sp, sl.id);
+  });
+  for (let k = 0; k < slides.length; k++) {
+    slides[k] = mapSlideLinks(slides[k], (l) => (l.startsWith("#sldpath:") ? (idByPath.has(l.slice(9)) ? `#slide:${idByPath.get(l.slice(9))}` : undefined) : l));
   }
 
   // Belge özellikleri

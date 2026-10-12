@@ -58,12 +58,29 @@ export function readRunProps(rPr: Element | undefined, ctx: ReadCtx): RunProps {
   }
   const latin = fontName(attr(kid(rPr, "latin"), "typeface"));
   if (latin) p.font = latin;
-  const link = relId(kid(rPr, "hlinkClick"));
-  if (link) {
-    const rel = ctx.rels.get(link);
-    if (rel?.external) p.link = rel.target;
-  }
+  const link = readHlink(kid(rPr, "hlinkClick"), ctx);
+  if (link) p.link = link;
   return p;
+}
+
+const SHOW_JUMPS: Record<string, string> = { nextslide: "#next", previousslide: "#prev", firstslide: "#first", lastslide: "#last" };
+
+/**
+ * a:hlinkClick → köprü dizgesi. Slayt atlamaları önce "#sldpath:<parça yolu>"
+ * olarak okunur; tüm slaytlar okunduktan sonra slayt kimliğine çevrilir.
+ */
+export function readHlink(el: Element | undefined, ctx: ReadCtx): string | undefined {
+  if (!el) return undefined;
+  const action = attr(el, "action") ?? "";
+  const rid = relId(el);
+  if (action.startsWith("ppaction://hlinkshowjump")) {
+    const m = /jump=([a-z]+)/i.exec(action);
+    return m ? SHOW_JUMPS[m[1].toLowerCase()] : undefined;
+  }
+  const rel = rid ? ctx.rels.get(rid) : undefined;
+  if (action.startsWith("ppaction://hlinksldjump")) return rel && !rel.external ? `#sldpath:${rel.target}` : undefined;
+  if (action && !action.startsWith("ppaction://hlinkfile")) return undefined;
+  return rel?.external ? rel.target : undefined;
 }
 
 const AUTONUM: Set<string> = new Set(["arabicPeriod", "arabicParenR", "romanUcPeriod", "romanLcPeriod", "alphaUcPeriod", "alphaLcPeriod", "alphaLcParenR", "alphaUcParenR"]);

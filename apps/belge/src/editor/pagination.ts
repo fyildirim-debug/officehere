@@ -21,6 +21,8 @@ export interface PageGeometry {
   defaultPage: PageSetup;
   /** Birden Çok Sayfa: satır başına sayfa (0 = kapalı). */
   tiles: number;
+  /** Ekran ölçeği (CSS zoom). Ölçeği öğe genişliğinden çıkarmak tamsayı yuvarlaması yüzünden uzun belgede kaymaya yol açar. */
+  scale: number;
 }
 
 interface PagState {
@@ -48,7 +50,7 @@ const pagesKey = (pages: PageInfo[]) => pages.map((p) => `${p.top.toFixed(1)}:${
 
 /** React tarafıyla paylaşılan denetleyici: geometri ve düzen bilgisi. */
 export class PaginationController {
-  geometry: PageGeometry = { enabled: false, gap: 16, defaultPage: defaultPage(), tiles: 0 };
+  geometry: PageGeometry = { enabled: false, gap: 16, defaultPage: defaultPage(), tiles: 0, scale: 1 };
   info: LayoutInfo = singlePageInfo(defaultPage());
   view: EditorView | null = null;
   private listeners = new Set<(i: LayoutInfo) => void>();
@@ -228,7 +230,7 @@ class PaginationView {
       row.append(sup, span);
       this.measurer.appendChild(row);
       const dom = this.view.dom as HTMLElement;
-      const h = row.getBoundingClientRect().height / (dom.offsetWidth ? dom.getBoundingClientRect().width / dom.offsetWidth : 1);
+      const h = row.getBoundingClientRect().height / (this.ctrl.geometry.scale || 1);
       this.noteCache.set(key, h);
       return h;
     };
@@ -296,7 +298,7 @@ class PaginationView {
       const bodyW = bodyWidth(geoms);
       const host = (dom.closest(".bl-pages") as HTMLElement | null) ?? dom;
       const r = host.getBoundingClientRect();
-      const scale = dom.offsetWidth ? dom.getBoundingClientRect().width / dom.offsetWidth : 1;
+      const scale = g.scale || 1;
       const originY = r.top;
       const Y = (sy: number) => (sy - originY) / scale;
       const screenY = (y: number) => originY + y * scale;
@@ -435,18 +437,16 @@ class PaginationView {
     if (view.isDestroyed || !this.ctrl.geometry.enabled) return;
     const dom = view.dom as HTMLElement;
     const host = (dom.closest(".bl-pages") as HTMLElement | null) ?? dom;
-    const scale = dom.offsetWidth ? dom.getBoundingClientRect().width / dom.offsetWidth : 1;
+    const scale = this.ctrl.geometry.scale || 1;
     const originY = host.getBoundingClientRect().top;
     const Y = (sy: number) => (sy - originY) / scale;
     let changed = false;
     // Zincirdeki her ara parçanın yalnız kendi hatası düzeltilir (öncekinin düzeltmesi sonrakini zaten kaydırır).
     const upstream = new Map<number, number>();
-    const errs: number[] = [];
     for (const s of this.spanTargets) {
       const el = findWidget(view, s.pos);
       if (!el) continue;
       const err = s.target - Y(el.getBoundingClientRect().bottom);
-      errs.push(err);
       const local = err - (upstream.get(s.sec) ?? 0);
       upstream.set(s.sec, err);
       if (Math.abs(err) > 0.25 && Math.abs(local) > 0.05) {
@@ -465,7 +465,6 @@ class PaginationView {
         changed = true;
       }
     }
-    if (import.meta.env.DEV) (window as unknown as { __pgdbg?: unknown[] }).__pgdbg = [...((window as unknown as { __pgdbg?: unknown[] }).__pgdbg ?? []), { round: this.refineRounds, changed, errs, fix: [...this.spanFix.entries()] }];
     if (changed) {
       this.refineRounds++;
       this.measure();

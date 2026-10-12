@@ -93,8 +93,8 @@ export function DocumentView(props: Props) {
 
   // Sayfa geometrisini sayfalama eklentisine bildir.
   useEffect(() => {
-    controller.setGeometry({ enabled: print, gap, defaultPage: settings.page, tiles: tiled ? Math.min(perRowFit, pageCount) : 0 });
-  }, [controller, print, gap, settings.page, tiled, perRowFit, pageCount]);
+    controller.setGeometry({ enabled: print, gap, defaultPage: settings.page, tiles: tiled ? Math.min(perRowFit, pageCount) : 0, scale });
+  }, [controller, print, gap, settings.page, tiled, perRowFit, pageCount, scale]);
 
   // Gövdenin üst konumu değişince (ilk bölüm kenar boşluğu) yeniden ölç.
   const bodyTop = first.mt;
