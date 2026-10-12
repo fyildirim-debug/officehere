@@ -167,50 +167,261 @@
   flex: 1;
 }
 
+/* Son kullanılan dosyalar: arama, sabitlenmiş/son grupları, satırlar */
 .oh-recent {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12.5px;
+  max-width: 920px;
 }
 
-.oh-recent th {
-  text-align: left;
+.oh-recent-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: min(360px, 100%);
+  margin: 0 0 12px;
+}
+
+.oh-recent-search svg {
+  position: absolute;
+  left: 10px;
+  width: 16px;
+  height: 16px;
+  color: var(--oh-text-muted);
+  pointer-events: none;
+}
+
+.oh-recent-search input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px 0 32px;
+  border: 1px solid var(--oh-border);
+  border-radius: 8px;
+  background: var(--oh-surface);
+  color: var(--oh-text);
+  font: inherit;
+  font-size: 13px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.oh-recent-search input::placeholder {
+  color: var(--oh-text-muted);
+}
+
+.oh-recent-search input:hover {
+  border-color: var(--oh-border-strong);
+}
+
+.oh-recent-search input:focus {
+  outline: none;
+  border-color: var(--oh-accent);
+  box-shadow: 0 0 0 1px var(--oh-accent);
+}
+
+.oh-recent-group {
+  margin: 14px 0 4px 10px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--oh-text-muted);
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--oh-separator);
 }
 
-.oh-recent td {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--oh-separator);
+.oh-recent-search + .oh-recent-group {
+  margin-top: 4px;
 }
 
-.oh-recent tbody tr {
+.oh-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.oh-recent-row {
+  position: relative;
+  border-radius: 8px;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    translate 0.15s var(--oh-ease-out);
+}
+
+.oh-recent-row:hover {
+  background: color-mix(in srgb, var(--oh-accent) 7%, var(--oh-surface));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--oh-text) 7%, transparent),
+    0 4px 12px -6px rgba(0, 0, 0, 0.18);
+  translate: 0 -1px;
+}
+
+:root[data-oh-theme="dark"] .oh-recent-row:hover,
+:root[data-oh-theme="black"] .oh-recent-row:hover {
+  background: color-mix(in srgb, var(--oh-text) 7%, var(--oh-surface));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--oh-text) 10%, transparent),
+    0 6px 16px -6px rgba(0, 0, 0, 0.55);
+}
+
+.oh-recent-open {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 48px 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--oh-text);
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
-.oh-recent tbody tr:hover {
-  background: var(--oh-hover);
+.oh-recent-open:focus-visible {
+  outline: 2px solid var(--oh-accent);
+  outline-offset: -2px;
+}
+
+.oh-recent-icon {
+  display: flex;
+}
+
+.oh-recent-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .oh-recent-name {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--oh-text);
+  min-width: 0;
+  font-size: 13.5px;
 }
 
-.oh-recent-name .oh-applogo {
-  color: var(--oh-accent);
+.oh-recent-filename,
+.oh-recent-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .oh-recent-path {
   color: var(--oh-text-muted);
-  max-width: 360px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.oh-recent-time {
+  color: var(--oh-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.oh-recent-pin {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-top: -14px;
+  border: 0;
+  border-radius: var(--oh-float-item-radius);
+  background: transparent;
+  color: var(--oh-icon);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.oh-recent-pin svg {
+  width: 16px;
+  height: 16px;
+}
+
+.oh-recent-row:hover .oh-recent-pin,
+.oh-recent-row:focus-within .oh-recent-pin,
+.oh-recent-row.is-pinned .oh-recent-pin {
+  opacity: 1;
+}
+
+.oh-recent-row.is-pinned .oh-recent-pin {
+  color: var(--oh-accent);
+}
+
+:root[data-oh-theme="dark"] .oh-recent-row.is-pinned .oh-recent-pin,
+:root[data-oh-theme="black"] .oh-recent-row.is-pinned .oh-recent-pin {
+  color: color-mix(in srgb, var(--oh-accent) 55%, white);
+}
+
+.oh-recent-pin:hover {
+  background: var(--oh-hover);
+}
+
+.oh-recent-pin:focus-visible {
+  outline: 2px solid var(--oh-accent);
+  outline-offset: -2px;
+}
+
+/* Taşınmış ya da silinmiş dosya: soluk satır ve rozet */
+.oh-recent-row.is-missing .oh-recent-icon,
+.oh-recent-row.is-missing .oh-recent-filename,
+.oh-recent-row.is-missing .oh-recent-path,
+.oh-recent-row.is-missing .oh-recent-time {
+  opacity: 0.5;
+}
+
+.oh-recent-badge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #c50f1f 10%, transparent);
+  color: #a4262c;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+:root[data-oh-theme="dark"] .oh-recent-badge,
+:root[data-oh-theme="black"] .oh-recent-badge {
+  background: color-mix(in srgb, #ff99a4 16%, transparent);
+  color: #ff99a4;
+}
+
+.oh-recent-dialog-path {
+  margin: 0 0 4px;
+  color: var(--oh-text-muted);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-oh-theme="system"] .oh-recent-row:hover {
+    background: color-mix(in srgb, var(--oh-text) 7%, var(--oh-surface));
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--oh-text) 10%, transparent),
+      0 6px 16px -6px rgba(0, 0, 0, 0.55);
+  }
+
+  :root[data-oh-theme="system"] .oh-recent-badge {
+    background: color-mix(in srgb, #ff99a4 16%, transparent);
+    color: #ff99a4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oh-recent-row,
+  .oh-recent-row:hover {
+    translate: none;
+    transition: none;
+  }
 }
 
 .oh-bs-action {

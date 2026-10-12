@@ -28,8 +28,15 @@ contextBridge.exposeInMainWorld("officehereNative", {
   writeFile: (path: string, data: ArrayBuffer) => ipcRenderer.invoke("oh:write-file", path, data),
   getRecent: () => ipcRenderer.invoke("oh:get-recent"),
   addRecent: (file: unknown) => ipcRenderer.invoke("oh:add-recent", file),
+  pinRecent: (path: string, pinned: boolean) => ipcRenderer.invoke("oh:pin-recent", path, pinned),
+  removeRecent: (path: string) => ipcRenderer.invoke("oh:remove-recent", path),
+  showInFolder: (path: string) => ipcRenderer.invoke("oh:show-in-folder", path),
+  recentStatus: (paths: string[]) => ipcRenderer.invoke("oh:recent-status", paths),
+  getSettings: () => ipcRenderer.invoke("oh:settings-get"),
+  setSetting: (key: string, value: unknown) => ipcRenderer.invoke("oh:settings-set", key, value),
   newWindow: (app: string, path?: string) => ipcRenderer.invoke("oh:new-window", app, path),
-  setDocumentState: (state: { title: string; dirty: boolean }) => ipcRenderer.send("oh:set-document-state", state),
+  setDocumentState: (state: { title: string; dirty: boolean; path?: string }) =>
+    ipcRenderer.send("oh:set-document-state", { title: state.title, dirty: state.dirty, ...(typeof state.path === "string" ? { path: state.path } : {}) }),
   onOpenPath: (cb: (p: string) => void) => {
     pathListeners.add(cb);
     return () => pathListeners.delete(cb);
