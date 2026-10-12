@@ -327,5 +327,7 @@ const IMG_RESET = { float: "", position: "", left: "", top: "", zIndex: "", marg
 export function applyWrap(container: HTMLElement, img: HTMLElement, attrs: Partial<WrapAttrs>) {
   Object.assign(img.style, IMG_RESET);
   Object.assign(container.style, wrapStyle(attrs));
+  // Satır içi resimde kapsayıcı satır içi esnek kutu kalmalı; blok olursa satır genişliğine yayılır ve tutamaçlar resmin dışına düşer.
+  if (!container.style.display) container.style.display = "inline-flex";
   container.dataset.wrap = attrs.wrap ?? "inline";
 }

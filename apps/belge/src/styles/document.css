@@ -141,10 +141,11 @@
 }
 
 /* Tablolar */
+/* Metin alanından geniş tablo Word'deki gibi sağ kenar boşluğuna taşar; kaydırma çubuğu çıkmaz. */
 .bl-doc .tableWrapper {
   display: flex;
   margin: 0 0 8pt;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .bl-doc table {

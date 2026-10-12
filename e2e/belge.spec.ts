@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { URL, collectErrors } from "./ortak";
 import { belgeTur4Tests } from "./belge-tur4";
@@ -496,6 +497,47 @@ test.describe("OfficeHere Belge senaryoları", () => {
     await page.keyboard.press("Control+z");
     await expect(svg).toHaveAttribute("width", "576");
     await expect(svg).toHaveCount(1);
+  });
+
+  test("metin alanından geniş tablo kenar boşluğuna taşar; tabloda kaydırma çubuğu çıkmaz", async ({ page }) => {
+    const docx = readFileSync(resolve(__dirname, "..", "apps/belge/src/io/__fixtures__/genis-tablo.docx"));
+    await page.setInputFiles("#bl-open-input", { name: "genis-tablo.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", buffer: docx });
+    const card = body(page).locator("td", { hasText: "CARD11" });
+    await card.click();
+    const m = await body(page)
+      .locator(".tableWrapper")
+      .first()
+      .evaluate((w: HTMLElement) => {
+        const cs = getComputedStyle(w);
+        return { ox: cs.overflowX, oy: cs.overflowY, sbH: w.offsetHeight - w.clientHeight, sbV: w.offsetWidth - w.clientWidth, table: w.querySelector("table")!.getBoundingClientRect().width, wrapper: w.getBoundingClientRect().width };
+      });
+    expect(m).toMatchObject({ ox: "visible", oy: "visible", sbH: 0, sbV: 0 });
+    expect(m.table).toBeGreaterThan(m.wrapper + 50);
+    // Son sütun kırpılmadan görünür.
+    const last = (await body(page).locator("td", { hasText: ">2015>200.412" }).first().boundingBox())!;
+    expect(last.width).toBeGreaterThan(100);
+  });
+
+  test("satır içi resmin boyutlandırma tutamaçları resmin köşelerindedir", async ({ page }) => {
+    await page.keyboard.type("Önce ");
+    await tab(page, "Ekle");
+    await button(page, "Resimler").click();
+    const [fc] = await Promise.all([page.waitForEvent("filechooser"), menuItem(page, "Bu Cihaz...").click()]);
+    await fc.setFiles({ name: "kare.png", mimeType: "image/png", buffer: PNG });
+    const img = body(page).locator("[data-resize-wrapper] img");
+    await expect(img).toBeVisible();
+    await img.click();
+    await expect(body(page).locator('[data-resize-handle="top-right"]')).toBeVisible();
+    const ib = (await img.boundingBox())!;
+    const corners = { "top-left": [ib.x, ib.y], "top-right": [ib.x + ib.width, ib.y], "bottom-left": [ib.x, ib.y + ib.height], "bottom-right": [ib.x + ib.width, ib.y + ib.height] };
+    for (const [dir, [x, y]] of Object.entries(corners)) {
+      const hb = (await body(page).locator(`[data-resize-handle="${dir}"]`).boundingBox())!;
+      expect(Math.abs(hb.x + hb.width / 2 - x), dir).toBeLessThan(3);
+      expect(Math.abs(hb.y + hb.height / 2 - y), dir).toBeLessThan(3);
+    }
+    // Resim metinle aynı satırda kalır (kapsayıcı satır içi).
+    const kap = await body(page).locator("[data-resize-container]").evaluate((el) => getComputedStyle(el).display);
+    expect(kap).toBe("inline-flex");
   });
 
   test("sekme durakları: Paragraf › Sekmeler, ondalık ve noktalı öncü", async ({ page }) => {

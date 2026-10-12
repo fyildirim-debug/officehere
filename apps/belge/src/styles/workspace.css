@@ -131,11 +131,6 @@
   display: none !important;
 }
 
-/* Kaydırılabilir kutu sütunlar arasında bölünemez: tablo sayfa sınırında bölünebilsin. */
-.bl-body.is-tiled .tableWrapper {
-  overflow: visible;
-}
-
 .bl-body.is-tiled .bl-section > .bl-toc {
   display: flow-root;
 }
