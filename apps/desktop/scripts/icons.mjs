@@ -71,6 +71,28 @@ function ico(pngs) {
   return Buffer.concat([header, ...entries, ...pngs.map((p) => p.data)]);
 }
 
+/** PNG verilerinden macOS ICNS dosyası oluşturur (ic07/ic08/ic09/ic10 PNG girdileri). */
+function icns(entries) {
+  const parts = entries.map(({ type, data }) => {
+    const h = Buffer.alloc(8);
+    h.write(type, 0, "ascii");
+    h.writeUInt32BE(data.length + 8, 4);
+    return Buffer.concat([h, data]);
+  });
+  const body = Buffer.concat(parts);
+  const head = Buffer.alloc(8);
+  head.write("icns", 0, "ascii");
+  head.writeUInt32BE(body.length + 8, 4);
+  return Buffer.concat([head, body]);
+}
+
+const ICNS_SIZES = [
+  ["ic07", 128],
+  ["ic08", 256],
+  ["ic09", 512],
+  ["ic10", 1024],
+];
+
 const browser = await chromium.launch();
 const page = await browser.newPage();
 
@@ -99,6 +121,15 @@ for (const [name, spec] of Object.entries(FILETYPES)) {
   for (const s of ICO_SIZES) pngs.push({ size: s, data: await render(svg, s) });
   await writeFile(path.join(build, "filetypes", `${name}.ico`), ico(pngs));
   await writeFile(path.join(build, "filetypes", `${name}.png`), await render(svg, 512));
+  const icnsEntries = [];
+  for (const [type, size] of ICNS_SIZES) icnsEntries.push({ type, data: await render(svg, size) });
+  await writeFile(path.join(build, "filetypes", `${name}.icns`), icns(icnsEntries));
+}
+
+{
+  const suiteIcns = [];
+  for (const [type, size] of ICNS_SIZES) suiteIcns.push({ type, data: await render(SUITE, size) });
+  await writeFile(path.join(build, "icon.icns"), icns(suiteIcns));
 }
 
 await browser.close();

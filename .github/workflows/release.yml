@@ -1,10 +1,17 @@
 name: Sürüm
 
-# "v0.1.0" gibi bir etiket gönderildiğinde Windows, Linux ve macOS paketlerini üretip GitHub Sürümüne yükler.
+# "v0.1.0" gibi bir etiket gönderildiğinde ya da elle "surum" girişiyle tetiklendiğinde
+# Windows, Linux ve macOS paketlerini üretip GitHub Sürümüne yükler. Elle tetiklemede
+# etiket, çalışılan commit üzerinde GitHub tarafından oluşturulur.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      surum:
+        description: "Sürüm etiketi (ör. v0.1.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -45,7 +52,7 @@ jobs:
 
   yayin:
     needs: paket
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || startsWith(inputs.surum, 'v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -54,5 +61,8 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.surum || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          name: OfficeHere ${{ inputs.surum || github.ref_name }}
           files: paketler/*
           generate_release_notes: true
