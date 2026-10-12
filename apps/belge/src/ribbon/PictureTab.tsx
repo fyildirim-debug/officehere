@@ -4,16 +4,13 @@ import {
   ArrowRotateClockwise20Regular,
   ImageAltText20Regular,
   ImageBorder32Regular,
-  TextAlignCenter20Regular,
-  TextAlignLeft20Regular,
-  TextAlignRight20Regular,
   RotateLeft20Regular,
   FlipHorizontal20Regular,
   FlipVertical20Regular,
   Crop20Regular,
   Crop32Regular,
 } from "@fluentui/react-icons";
-import { ColorPalette, Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonSplitButton, RibbonStack } from "@officehere/ui";
+import { AlignIcon, ColorPalette, Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonSplitButton, RibbonStack } from "@officehere/ui";
 import { applyCrop, cropMode, setCropMode } from "../views/CropOverlay";
 import { useBelge } from "../state/context";
 import { IMAGE_STYLES } from "../editor/image";
@@ -88,13 +85,13 @@ export function PictureTab() {
             }
           />
           <RibbonMenuButton
-            icon={<TextAlignLeft20Regular />}
+            icon={<AlignIcon kind="left" />}
             label="Hizala"
             menu={
-              <Menu>
-                <MenuItem icon={<TextAlignLeft20Regular />} label="Sola Hizala" onClick={() => align("left")} />
-                <MenuItem icon={<TextAlignCenter20Regular />} label="Ortala" onClick={() => align("center")} />
-                <MenuItem icon={<TextAlignRight20Regular />} label="Sağa Hizala" onClick={() => align("right")} />
+              <Menu label="Hizala">
+                <MenuItem icon={<AlignIcon kind="left" size={24} />} label="Sola Hizala" onClick={() => align("left")} />
+                <MenuItem icon={<AlignIcon kind="center" size={24} />} label="Ortala" onClick={() => align("center")} />
+                <MenuItem icon={<AlignIcon kind="right" size={24} />} label="Sağa Hizala" onClick={() => align("right")} />
               </Menu>
             }
           />

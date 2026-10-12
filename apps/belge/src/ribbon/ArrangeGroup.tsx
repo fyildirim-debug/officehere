@@ -1,80 +1,70 @@
 // "Yerleştir" grubu (Düzen sekmesi ve Resim Biçimi): Konum, Metni Kaydır, Öne Getir, Arkaya Gönder.
 // Komutlar seçili resme uygulanır; resim seçili değilse devre dışıdır (Word'deki gibi).
-import { PositionBackward20Regular, PositionForward20Regular, PositionToBack24Regular, PositionToFront24Regular, TextWrap24Regular, TextboxAlignMiddle24Regular } from "@fluentui/react-icons";
-import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonGroup, RibbonMenuButton, RibbonSplitButton } from "@officehere/ui";
+// Seçenekler ne yaptığını gösteren kendi çizimlerimizle sunulur (packages/ui ArrangeIcons).
+import { LayerIcon, Menu, MenuItem, MenuSeparator, PositionIcon, RibbonGroup, RibbonMenuButton, RibbonSplitButton, WrapIcon } from "@officehere/ui";
 import { useBelge } from "../state/context";
-import { POSITION_PRESETS, WRAP_LABEL, arrange, selectedImage, setPosition, setWrap, type WrapMode } from "../editor/imageWrap";
+import { WRAP_LABEL, arrange, selectedImage, setWrap, type WrapMode } from "../editor/imageWrap";
+import { PositionMenu } from "./PositionMenu";
+
+/** Menü çizimlerinin boyutu (px). */
+const ICON = 32;
 
 export function ArrangeGroup({ extra }: { extra?: React.ReactNode }) {
   const ctx = useBelge();
   const { editor } = ctx;
   const img = selectedImage(editor);
   const wrap = (img?.node.attrs.wrap as WrapMode | undefined) ?? "inline";
-  const toPosition = (id: string) => {
-    const preset = POSITION_PRESETS.find((p) => p.id === id);
-    if (!preset || !img) return;
-    const info = ctx.controller.info;
-    const page = info.pages[ctx.controller.pageOf(img.pos)] ?? info.pages[0];
-    const pagesEl = editor.view.dom.closest(".bl-pages") as HTMLElement | null;
-    setPosition(editor, preset, page, pagesEl?.getBoundingClientRect().top ?? 0, ctx.view.zoom / 100);
-  };
   return (
-    <RibbonGroup label="Yerleştir" icon={<TextWrap24Regular />}>
+    <RibbonGroup label="Yerleştir" icon={<PositionIcon size={32} />}>
       <RibbonMenuButton
         size="large"
-        icon={<TextboxAlignMiddle24Regular />}
+        icon={<PositionIcon size={32} />}
         label="Konum"
+        description="Resmin sayfadaki yerini seçin; metin çevresinden akar."
         disabled={!img}
-        menu={
-          <Menu width={300}>
-            <MenuItem label="Metinle Aynı Hizada" checked={wrap === "inline"} onClick={() => setWrap(editor, "inline")} />
-            <MenuHeader>Metin Kaydırma ile</MenuHeader>
-            {POSITION_PRESETS.map((p) => (
-              <MenuItem key={p.id} label={p.label} onClick={() => toPosition(p.id)} />
-            ))}
-          </Menu>
-        }
+        menu={<PositionMenu />}
       />
       <RibbonMenuButton
         size="large"
-        icon={<TextWrap24Regular />}
+        icon={<WrapIcon mode="square" size={32} />}
         label="Metni Kaydır"
+        description="Metnin resmin çevresinden nasıl akacağını seçin."
         disabled={!img}
         menu={
-          <Menu width={240}>
+          <Menu width={220} label="Metni Kaydır">
             {(Object.keys(WRAP_LABEL) as WrapMode[]).map((w) => (
-              <MenuItem key={w} label={WRAP_LABEL[w]} checked={wrap === w} onClick={() => setWrap(editor, w)} />
+              <MenuItem key={w} icon={<WrapIcon mode={w} size={ICON} />} label={WRAP_LABEL[w]} checked={wrap === w} onClick={() => setWrap(editor, w)} />
             ))}
           </Menu>
         }
       />
       <RibbonSplitButton
         size="large"
-        icon={<PositionToFront24Regular />}
+        icon={<LayerIcon kind="forward" size={32} />}
         label="Öne Getir"
         disabled={!img}
         onClick={() => arrange(editor, "forward")}
         menu={
-          <Menu>
-            <MenuItem icon={<PositionForward20Regular />} label="Öne Getir" onClick={() => arrange(editor, "forward")} />
-            <MenuItem icon={<PositionToFront24Regular />} label="En Öne Getir" onClick={() => arrange(editor, "front")} />
+          <Menu label="Öne Getir">
+            <MenuItem icon={<LayerIcon kind="forward" size={ICON} />} label="Öne Getir" onClick={() => arrange(editor, "forward")} />
+            <MenuItem icon={<LayerIcon kind="front" size={ICON} />} label="En Öne Getir" onClick={() => arrange(editor, "front")} />
             <MenuSeparator />
-            <MenuItem label="Metnin Önüne Getir" onClick={() => setWrap(editor, "front")} />
+            <MenuItem icon={<WrapIcon mode="front" size={ICON} />} label="Metnin Önüne Getir" onClick={() => setWrap(editor, "front")} />
           </Menu>
         }
       />
       <RibbonSplitButton
         size="large"
-        icon={<PositionToBack24Regular />}
+        icon={<LayerIcon kind="backward" size={32} />}
         label="Arkaya Gönder"
         disabled={!img}
         onClick={() => arrange(editor, "backward")}
         menu={
-          <Menu>
-            <MenuItem icon={<PositionBackward20Regular />} label="Arkaya Gönder" onClick={() => arrange(editor, "backward")} />
-            <MenuItem icon={<PositionToBack24Regular />} label="En Arkaya Gönder" onClick={() => arrange(editor, "back")} />
+          <Menu label="Arkaya Gönder">
+            <MenuItem icon={<LayerIcon kind="backward" size={ICON} />} label="Arkaya Gönder" onClick={() => arrange(editor, "backward")} />
+            <MenuItem icon={<LayerIcon kind="back" size={ICON} />} label="En Arkaya Gönder" onClick={() => arrange(editor, "back")} />
             <MenuSeparator />
-            <MenuItem label="Metnin Arkasına Gönder" onClick={() => setWrap(editor, "behind")} />
+            <MenuItem icon={<WrapIcon mode="behind" size={ICON} />} label="Metnin Arkasına Gönder" onClick={() => setWrap(editor, "behind")} />
           </Menu>
         }
       />
