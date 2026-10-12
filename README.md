@@ -83,9 +83,9 @@ işletim sisteminize uygun paketi indirin:
 
 | Sistem | Paket |
 | --- | --- |
-| Windows 10/11 | `OfficeHere-<sürüm>-win-x64.exe` (kurulum) ya da `-tasinabilir.exe` |
+| Windows 10/11 | `OfficeHere-<sürüm>-win-x64.exe` (64 bit kurulum), `-win-arm64.exe` (ARM), `-win.exe` (iki mimari tek kurulumda) ya da `-tasinabilir.exe` (kurulumsuz) |
 | Linux | `.AppImage` ya da `.deb` |
-| macOS | `.dmg` |
+| macOS (Apple Silicon) | `-mac-arm64.dmg` (imzasız: ilk açılışta sağ tık → Aç) |
 
 Kurulum `.docx`, `.xlsx`, `.csv` ve `.pptx` dosyalarını OfficeHere ile
 ilişkilendirir. Paketler henüz kod imzalı değildir; Windows SmartScreen ilk
