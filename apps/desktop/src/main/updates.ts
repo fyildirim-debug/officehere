@@ -3,9 +3,8 @@
 // güncelleştirmeyi arka planda indirir ve yeniden başlatınca kurar; diğerlerinde
 // GitHub API ile yeni sürüm bildirilir ve indirme sayfası açılır.
 import { app, BrowserWindow, ipcMain, net, shell } from "electron";
-import fs from "node:fs";
-import path from "node:path";
 import type { AppUpdater } from "electron-updater";
+import { readSettings, writeSettings } from "./settings";
 import { compareVersions, releaseFromGitHub, updateMode } from "./updateCore";
 
 const REPO = "fyildirim-debug/officehere";
@@ -32,27 +31,6 @@ let updater: AppUpdater | null = null;
 let timer: NodeJS.Timeout | null = null;
 
 const releasePage = (version: string) => `https://github.com/${REPO}/releases/tag/v${version}`;
-
-function settingsPath() {
-  return path.join(app.getPath("userData"), "ayarlar.json");
-}
-
-function readSettings(): Record<string, unknown> {
-  try {
-    return JSON.parse(fs.readFileSync(settingsPath(), "utf8")) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
-
-function writeSettings(patch: Record<string, unknown>) {
-  try {
-    fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
-    fs.writeFileSync(settingsPath(), JSON.stringify({ ...readSettings(), ...patch }, null, 2));
-  } catch {
-    // Ayar yazılamazsa yalnız bu oturum için geçerli olur.
-  }
-}
 
 function set(patch: Partial<UpdateState>) {
   state = { ...state, ...patch };

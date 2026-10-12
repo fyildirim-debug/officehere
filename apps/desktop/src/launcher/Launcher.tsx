@@ -78,6 +78,37 @@ function Preview({ app }: { app: AppKind }) {
   );
 }
 
+/** Seçenekler: açılışta son oturumu geri yükleme (yalnız masaüstü; ayar ana süreçte saklanır). */
+function SessionOption() {
+  const native = getNative();
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    native
+      ?.getSettings?.()
+      .then((s) => setOn(s.oturumuGeriYukle === true))
+      .catch(() => setOn(false));
+  }, [native]);
+  if (!native?.getSettings || !native.setSetting) return null;
+  return (
+    <div className="ohl-option">
+      <label className="ohl-check">
+        <input
+          type="checkbox"
+          checked={on === true}
+          disabled={on === null}
+          onChange={(e) => {
+            const value = e.target.checked;
+            setOn(value);
+            void native.setSetting?.("oturumuGeriYukle", value).then((s) => setOn(s.oturumuGeriYukle === true));
+          }}
+        />
+        <span>Açılışta son oturumu geri yükle</span>
+      </label>
+      <p className="ohl-option-note">OfficeHere dosya seçilmeden başlatıldığında, son kapatılışta açık olan belgeler kendi pencerelerinde yeniden açılır.</p>
+    </div>
+  );
+}
+
 export function Launcher() {
   const [page, setPage] = useState("home");
   const [recent, setRecent] = useState<RecentFile[]>([]);
@@ -162,6 +193,7 @@ export function Launcher() {
             ))}
           </select>
         </label>
+        <SessionOption />
         <UpdateSection />
         <p className="oh-bs-note">
           OfficeHere açık kaynaklı (MIT) bağımsız bir projedir; Microsoft Corporation ile bağlantılı değildir. Microsoft, Word, Excel ve PowerPoint, Microsoft

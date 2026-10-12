@@ -1,4 +1,5 @@
 import { getNative, type AppKind, type FileFilter, type RecentFile } from "./bridge";
+import { orderRecent, withRecentAdded, withRecentPinned, withRecentRemoved } from "./recent";
 
 /** Açılmış ya da kaydedilmiş bir dosyanın tanıtıcısı. */
 export interface FileRef {
@@ -184,33 +185,91 @@ export function downloadBlob(blob: Blob, fileName: string): void {
 }
 
 const RECENT_KEY = "officehere.recent";
+const WEB_RECENT_MAX = 25;
 
-/** Son kullanılan dosyalar (masaüstünde ana süreçten, tarayıcıda yerel depodan). */
-export async function getRecentFiles(app?: AppKind): Promise<RecentFile[]> {
-  const native = getNative();
-  let list: RecentFile[] = [];
-  if (native) {
-    list = await native.getRecent();
-  } else {
+const recentListeners = new Set<() => void>();
+
+/** Bu penceredeki son kullanılanlar değişikliklerini (ekleme, sabitleme, kaldırma) bildirir. */
+export function onRecentFilesChange(callback: () => void): () => void {
+  recentListeners.add(callback);
+  return () => recentListeners.delete(callback);
+}
+
+function notifyRecent() {
+  for (const cb of recentListeners) {
     try {
-      list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as RecentFile[];
+      cb();
     } catch {
-      list = [];
+      // Bir dinleyicinin hatası diğerlerini durdurmasın.
     }
   }
+}
+
+function readWebRecent(): RecentFile[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as RecentFile[];
+    return Array.isArray(list) ? list.filter((f) => f && typeof f.path === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeWebRecent(list: RecentFile[]) {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch {
+    // Yerel depo kapalıysa son kullanılanlar tutulmaz.
+  }
+}
+
+/** Son kullanılan dosyalar (masaüstünde ana süreçten, tarayıcıda yerel depodan); sabitlenenler başta. */
+export async function getRecentFiles(app?: AppKind): Promise<RecentFile[]> {
+  const native = getNative();
+  const list = orderRecent(native ? await native.getRecent() : readWebRecent());
   return app ? list.filter((f) => f.app === app) : list;
 }
 
 export async function addRecentFile(file: RecentFile): Promise<void> {
   const native = getNative();
-  if (native) return native.addRecent(file);
-  try {
-    const list = (JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as RecentFile[]).filter(
-      (f) => !(f.path === file.path && f.app === file.app),
-    );
-    list.unshift(file);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 25)));
-  } catch {
-    // Yerel depo kapalıysa son kullanılanlar tutulmaz.
+  if (native) await native.addRecent(file);
+  else writeWebRecent(withRecentAdded(readWebRecent(), file, WEB_RECENT_MAX));
+  notifyRecent();
+}
+
+/** Dosyayı son kullanılanlarda sabitler ya da sabitlemeyi kaldırır. */
+export async function pinRecentFile(file: Pick<RecentFile, "app" | "path">, pinned: boolean): Promise<void> {
+  const native = getNative();
+  if (native) await native.pinRecent?.(file.path, pinned);
+  else writeWebRecent(withRecentPinned(readWebRecent(), file, pinned));
+  notifyRecent();
+}
+
+/** Dosyayı son kullanılanlar listesinden çıkarır. */
+export async function removeRecentFile(file: Pick<RecentFile, "app" | "path">): Promise<void> {
+  const native = getNative();
+  if (native) await native.removeRecent?.(file.path);
+  else writeWebRecent(withRecentRemoved(readWebRecent(), file));
+  notifyRecent();
+}
+
+/** Yollardaki dosyalar hâlâ var mı (masaüstü). Tarayıcıda denetlenemez; hepsi var sayılır. */
+export async function getRecentFileStatus(paths: string[]): Promise<Record<string, boolean>> {
+  const native = getNative();
+  if (native?.recentStatus && paths.length) {
+    try {
+      return await native.recentStatus(paths);
+    } catch {
+      // Denetlenemezse dosyalar var sayılır.
+    }
   }
+  return Object.fromEntries(paths.map((p) => [p, true]));
+}
+
+/** "Klasörde göster" yalnız masaüstünde kullanılabilir. */
+export function canShowInFolder(): boolean {
+  return typeof getNative()?.showInFolder === "function";
+}
+
+export async function showInFolder(path: string): Promise<void> {
+  await getNative()?.showInFolder?.(path);
 }

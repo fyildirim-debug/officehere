@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
-import { formatDateTime, type RecentFile } from "@officehere/core";
-import { AppLogo } from "./AppShell";
+
+export { RecentFileList, type RecentFileListProps } from "./RecentFileList";
 
 export interface BackstageNavItem {
   id: string;
@@ -83,35 +83,6 @@ export function TemplateTile({ label, preview, onClick, shape = "portrait" }: Te
 
 export function TemplateRow({ children }: { children: ReactNode }) {
   return <div className="oh-template-row">{children}</div>;
-}
-
-export function RecentFileList({ files, onOpen, emptyText = "Son kullanılan dosya yok." }: { files: RecentFile[]; onOpen: (f: RecentFile) => void; emptyText?: string }) {
-  if (files.length === 0) return <p className="oh-bs-empty">{emptyText}</p>;
-  return (
-    <table className="oh-recent">
-      <thead>
-        <tr>
-          <th>Ad</th>
-          <th>Konum</th>
-          <th>Açılma tarihi</th>
-        </tr>
-      </thead>
-      <tbody>
-        {files.map((f) => (
-          <tr key={`${f.app}:${f.path}`} onClick={() => onOpen(f)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onOpen(f)}>
-            <td>
-              <span className="oh-recent-name">
-                <AppLogo app={f.app} size={18} />
-                {f.name}
-              </span>
-            </td>
-            <td className="oh-recent-path">{f.path === f.name ? "Bu cihaz" : f.path}</td>
-            <td>{formatDateTime(f.openedAt)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
 }
 
 /** Backstage içindeki büyük eylem kartı (Aç → "Gözat", Dışarı Aktar → "PDF Oluştur"). */

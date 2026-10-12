@@ -28,6 +28,21 @@ export interface RecentFile {
   name: string;
   app: AppKind;
   openedAt: number;
+  /** Sabitlenen dosya listenin başında durur ve sınır aşılınca atılmaz. */
+  pinned?: boolean;
+}
+
+/** Belgenin pencere başlığı, kaydedilmemiş değişiklik durumu ve (varsa) diskteki tam yolu. */
+export interface DocumentState {
+  title: string;
+  dirty: boolean;
+  path?: string;
+}
+
+/** Masaüstü ayarları (kullanıcı verisi dizininde ayarlar.json). */
+export interface DesktopSettings {
+  /** Uygulama dosyasız açılınca son oturumdaki belgeler yeniden açılsın. */
+  oturumuGeriYukle?: boolean;
 }
 
 /** Güncelleştirme durumu (masaüstü). */
@@ -69,8 +84,20 @@ export interface OfficehereNative {
   writeFile(path: string, data: ArrayBuffer): Promise<boolean>;
   getRecent(): Promise<RecentFile[]>;
   addRecent(file: RecentFile): Promise<void>;
+  /** Son kullanılanlarda dosyayı sabitler ya da sabitlemeyi kaldırır. */
+  pinRecent?(path: string, pinned: boolean): Promise<void>;
+  /** Dosyayı son kullanılanlar listesinden çıkarır (dosyanın kendisine dokunmaz). */
+  removeRecent?(path: string): Promise<void>;
+  /** Dosyayı sistemin dosya yöneticisinde, klasörü açıp seçili gösterir. */
+  showInFolder?(path: string): Promise<void>;
+  /** Verilen yollardaki dosyalar hâlâ var mı. */
+  recentStatus?(paths: string[]): Promise<Record<string, boolean>>;
+  /** Masaüstü ayarları. */
+  getSettings?(): Promise<DesktopSettings>;
+  setSetting?<K extends keyof DesktopSettings>(key: K, value: DesktopSettings[K]): Promise<DesktopSettings>;
   newWindow(app: AppKind, path?: string): Promise<void>;
-  setDocumentState(state: { title: string; dirty: boolean }): void;
+  /** Başlık, kirli durum ve belge yolu; ana süreç oturumu bu yolla hatırlar. */
+  setDocumentState(state: DocumentState): void;
   /** Ana süreç bir dosya açılmasını istediğinde (dosya ilişkilendirme, son kullanılanlar). */
   onOpenPath(callback: (path: string) => void): () => void;
   /** Pencere kapatılmak istendiğinde; false dönerse kapanma iptal edilir. */

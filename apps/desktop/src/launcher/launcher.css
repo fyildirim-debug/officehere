@@ -33,3 +33,28 @@
 .oh-bs-back {
   visibility: hidden;
 }
+
+/* Seçenekler: onay kutusu ve açıklaması */
+.ohl-option {
+  max-width: 640px;
+  margin: 16px 0 4px;
+}
+
+.ohl-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ohl-check input {
+  margin: 0;
+  accent-color: var(--oh-accent);
+}
+
+.ohl-option-note {
+  margin: 4px 0 0 24px;
+  color: var(--oh-text-muted);
+  line-height: 1.45;
+}
