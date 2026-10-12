@@ -18,6 +18,9 @@ interface WindowState {
   allowClose: boolean;
 }
 
+// Testler için yalıtılmış kullanıcı verisi dizini (son kullanılanlar vb.).
+if (process.env.OH_USER_DATA) app.setPath("userData", process.env.OH_USER_DATA);
+
 const states = new Map<number, WindowState>();
 /** Uygulama hazır olmadan gelen dosya açma istekleri (macOS open-file). */
 const pendingPaths: string[] = [];
@@ -29,6 +32,8 @@ function resourceDir(...parts: string[]) {
 
 function pageLocation(kind: WindowKind): { url?: string; file?: string } {
   if (isDev) return { url: `http://localhost:${DEV_PORTS[kind]}/` };
+  // Testler için: web sürümü dizini (pnpm web → dist-web: kökte başlangıç, alt dizinlerde uygulamalar).
+  if (process.env.OH_APPS_DIR) return { file: path.join(process.env.OH_APPS_DIR, ...(kind === "baslangic" ? [] : [kind]), "index.html") };
   if (app.isPackaged) return { file: path.join(process.resourcesPath, "apps", kind, "index.html") };
   // Paketlenmemiş üretim derlemesi (pnpm start): depo içindeki dist dizinleri.
   const file = kind === "baslangic" ? path.join(__dirname, "..", "launcher", "index.html") : resourceDir(kind, "dist", "index.html");

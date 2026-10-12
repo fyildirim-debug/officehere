@@ -21,7 +21,8 @@
     "dist:linux": "pnpm --filter @officehere/desktop dist --linux",
     "dist:mac": "pnpm --filter @officehere/desktop dist --mac",
     "web": "node scripts/build-web.mjs",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:masaustu": "playwright test -c playwright.masaustu.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",
