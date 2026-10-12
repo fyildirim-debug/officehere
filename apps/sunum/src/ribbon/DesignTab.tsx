@@ -6,7 +6,7 @@ import { PaintBucket20Regular, SlideSize24Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, useMenuClose } from "@officehere/ui";
 import { makeSp, textBody } from "../model/factory";
-import { applyTheme, applyVariant, newPresentation, resizePresentation, SLIDE_16_9, SLIDE_4_3 } from "../model/presentation";
+import { applyTheme, applyVariant, newPresentation, SLIDE_16_9, SLIDE_4_3 } from "../model/presentation";
 import type { Color, Fill, Presentation, Theme } from "../model/types";
 import { fillToCss } from "../render/style";
 import { ScaledSlide } from "../render/SlideView";
@@ -203,8 +203,8 @@ export function DesignTab({ ctx }: { ctx: RibbonCtx }) {
           menu={
             <Menu>
               <MenuHeader>Slayt Boyutu</MenuHeader>
-              <MenuItem label="Standart (4:3)" checked={Math.abs(ratio - 4 / 3) < 0.01} onClick={() => a.store.commit((p) => resizePresentation(p, SLIDE_4_3.width, SLIDE_4_3.height))} />
-              <MenuItem label="Geniş Ekran (16:9)" checked={Math.abs(ratio - 16 / 9) < 0.01} onClick={() => a.store.commit((p) => resizePresentation(p, SLIDE_16_9.width, SLIDE_16_9.height))} />
+              <MenuItem label="Standart (4:3)" checked={Math.abs(ratio - 4 / 3) < 0.01} onClick={() => Math.abs(ratio - 4 / 3) >= 0.01 && cmd.setSlideSize(SLIDE_4_3.width, SLIDE_4_3.height)} />
+              <MenuItem label="Geniş Ekran (16:9)" checked={Math.abs(ratio - 16 / 9) < 0.01} onClick={() => Math.abs(ratio - 16 / 9) >= 0.01 && cmd.setSlideSize(SLIDE_16_9.width, SLIDE_16_9.height)} />
               <MenuSeparator />
               <MenuItem label="Özel Slayt Boyutu..." onClick={() => ctx.openDialog("slideSize")} />
             </Menu>

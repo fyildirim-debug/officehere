@@ -95,8 +95,10 @@ export class Actions {
     const cur = this.slide();
     let lid = layoutId;
     if (!lid) {
-      const curLayout = layoutOf(s.pres, cur);
-      lid = !curLayout || curLayout.type === "title" ? layoutByType(s.pres, "obj").id : curLayout.id;
+      const curLayout = cur ? layoutOf(s.pres, cur) : undefined;
+      // Boş sunuda ilk slayt Başlık Slaydı'dır; sonrakiler geçerli düzeni (başlıktan sonra Başlık ve İçerik) alır.
+      if (!s.pres.slides.length) lid = layoutByType(s.pres, "title").id;
+      else lid = !curLayout || curLayout.type === "title" ? layoutByType(s.pres, "obj").id : curLayout.id;
     }
     const slide = makeSlide(s.pres, lid);
     const at = s.slideIdx + 1;
