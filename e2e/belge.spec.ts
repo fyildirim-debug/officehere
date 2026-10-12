@@ -32,7 +32,11 @@ test.describe("OfficeHere Belge senaryoları", () => {
   const tab = (page: Page, name: string) => page.getByRole("tab", { name, exact: true }).click();
   const button = (page: Page, name: string) => ribbon(page).getByRole("button", { name, exact: true }).first();
   /** Menü öğesi (açıklamalı öğelerin erişilebilir adı açıklamayı da içerir). */
-  const menuItem = (page: Page, name: string) => page.getByRole("menuitem", { name: new RegExp(`^${name}(\\s|$)`) }).first();
+  const menuItem = (page: Page, name: string) => {
+    // İşaretlenebilir öğeler (checked) menuitemcheckbox rolündedir.
+    const re = new RegExp(`^${name}(\\s|$)`);
+    return page.getByRole("menuitem", { name: re }).or(page.getByRole("menuitemcheckbox", { name: re })).first();
+  };
   const pages = (page: Page) => page.locator(".bl-pages > .bl-page");
   const status = (page: Page) => page.locator(".oh-statusbar");
 

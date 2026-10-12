@@ -447,7 +447,7 @@ test.describe("OfficeHere Sunum — sağlamlık ve yeni özellikler", () => {
   test("Slayt Boyutu › Standart (4:3) ölçekleme sorusunu sorar", async ({ page }) => {
     await tab(page, "Tasarım");
     await ribbon(page).getByRole("button", { name: "Slayt Boyutu" }).click();
-    await page.getByRole("menuitem", { name: "Standart (4:3)" }).click();
+    await page.getByRole("menuitemcheckbox", { name: "Standart (4:3)" }).click();
     await expect(page.getByRole("dialog")).toContainText("Slayt Boyutu");
     await page.getByRole("button", { name: "Sığdırmayı Sağla" }).click();
     const ratio = await page.locator(".stage").evaluate((e) => e.clientWidth / e.clientHeight);
@@ -604,7 +604,7 @@ test.describe("OfficeHere Sunum — sağlamlık ve yeni özellikler", () => {
     const name = (await tile.getAttribute("aria-label"))!;
     await tile.click({ button: "right" });
     await expect(page.getByRole("menuitem", { name: "Tüm Slaytlara Uygula" })).toBeVisible();
-    await page.getByRole("menuitem", { name: "Varsayılan Tema Olarak Ayarla" }).click();
+    await page.getByRole("menuitemcheckbox", { name: "Varsayılan Tema Olarak Ayarla" }).click();
     await page.keyboard.press("Control+n");
     await tab(page, "Tasarım");
     await expect(ribbon(page).getByRole("group", { name: "Temalar" }).locator(".oh-gallery-item.is-selected")).toHaveAttribute("aria-label", name);
@@ -636,7 +636,7 @@ test.describe("OfficeHere Sunum — sağlamlık ve yeni özellikler", () => {
     await expect(chart).toContainText("Seri 1");
     await ribbon(page).getByRole("button", { name: "Grafik Öğesi Ekle" }).click();
     await page.getByRole("menuitem", { name: "Eksen Başlıkları" }).hover();
-    await page.getByRole("menuitem", { name: "Birincil Dikey" }).click();
+    await page.getByRole("menuitemcheckbox", { name: "Birincil Dikey" }).click();
     await expect(chart).toContainText("Eksen Başlığı");
   });
 

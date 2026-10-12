@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Popover } from "./Popover";
+import { navItems } from "./menuKeyboard";
 
 interface MenuCtx {
   /** Tüm menü zincirini kapatır. */
@@ -16,10 +17,17 @@ export function MenuProvider({ onClose, children }: { onClose: () => void; child
   return <MenuContext.Provider value={{ closeAll: onClose }}>{children}</MenuContext.Provider>;
 }
 
-export function Menu({ children, className, width }: { children: ReactNode; className?: string; width?: number }) {
+/** Menü içindeki öğeler Tab durağı değildir (odak ok tuşlarıyla taşınır); menü dışındaki öğe olağan kalır. */
+const MenuListContext = createContext(false);
+
+/**
+ * Menü kabı. Klavye gezintisi (↑/↓, Home/End, harfle atlama, →/← alt menü, Esc, Tab) içinde
+ * bulunduğu Popover'dan gelir; uygulamaların düz .oh-menu kapları da aynı davranışı alır.
+ */
+export function Menu({ children, className, width, label }: { children: ReactNode; className?: string; width?: number; label?: string }) {
   return (
-    <div className={`oh-menu ${className ?? ""}`} role="menu" style={width ? { minWidth: width } : undefined}>
-      {children}
+    <div className={`oh-menu ${className ?? ""}`} role="menu" aria-label={label} tabIndex={-1} style={width ? { minWidth: width } : undefined}>
+      <MenuListContext.Provider value={true}>{children}</MenuListContext.Provider>
     </div>
   );
 }
@@ -42,17 +50,31 @@ export interface MenuItemProps {
 
 export function MenuItem({ icon, label, shortcut, checked, disabled, danger, description, onClick, submenu, keepOpen }: MenuItemProps) {
   const { closeAll } = useContext(MenuContext);
+  const inList = useContext(MenuListContext);
   const ref = useRef<HTMLButtonElement>(null);
+  const subRef = useRef<HTMLDivElement>(null);
   const [subOpen, setSubOpen] = useState(false);
+  // Alt menü klavyeyle açıldıysa odak ilk öğesine geçer; fareyle açılınca odak yerinde kalır.
+  const [subKbd, setSubKbd] = useState(false);
   const timer = useRef<number | undefined>(undefined);
 
   const openSub = () => {
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setSubOpen(true), 120);
+    timer.current = window.setTimeout(() => (setSubKbd(false), setSubOpen(true)), 120);
   };
   const closeSub = () => {
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setSubOpen(false), 200);
+  };
+  const openSubByKey = () => {
+    window.clearTimeout(timer.current);
+    if (subOpen) {
+      const first = subRef.current && navItems(subRef.current)[0];
+      first?.focus({ preventScroll: true });
+    } else {
+      setSubKbd(true);
+      setSubOpen(true);
+    }
   };
 
   return (
@@ -60,15 +82,26 @@ export function MenuItem({ icon, label, shortcut, checked, disabled, danger, des
       <button
         ref={ref}
         type="button"
-        role="menuitem"
+        role={checked !== undefined ? "menuitemcheckbox" : "menuitem"}
+        tabIndex={inList ? -1 : undefined}
         className={`oh-menu-item${checked ? " is-checked" : ""}${danger ? " is-danger" : ""}${submenu ? " has-sub" : ""}${subOpen ? " is-open" : ""}`}
         disabled={disabled}
         aria-checked={checked}
+        aria-haspopup={submenu ? "menu" : undefined}
+        aria-expanded={submenu ? subOpen : undefined}
         onMouseEnter={submenu ? openSub : undefined}
         onMouseLeave={submenu ? closeSub : undefined}
-        onClick={() => {
+        onKeyDown={(e) => {
+          if (!submenu || e.key !== "ArrowRight") return;
+          e.preventDefault();
+          e.stopPropagation();
+          openSubByKey();
+        }}
+        onClick={(e) => {
           if (submenu) {
-            setSubOpen(true);
+            // Klavyeyle (Enter/Space) tetiklenen tıklamanın ayrıntısı 0'dır.
+            if (e.detail === 0) openSubByKey();
+            else setSubOpen(true);
             return;
           }
           onClick?.();
@@ -84,8 +117,17 @@ export function MenuItem({ icon, label, shortcut, checked, disabled, danger, des
         {submenu && <span className="oh-menu-chevron">›</span>}
       </button>
       {submenu && (
-        <Popover open={subOpen} onClose={() => setSubOpen(false)} anchor={ref} placement="right-start">
-          <div onMouseEnter={() => window.clearTimeout(timer.current)} onMouseLeave={closeSub}>
+        <Popover
+          open={subOpen}
+          onClose={() => {
+            window.clearTimeout(timer.current);
+            setSubOpen(false);
+          }}
+          anchor={ref}
+          placement="right-start"
+          focusOnOpen={subKbd}
+        >
+          <div ref={subRef} onMouseEnter={() => window.clearTimeout(timer.current)} onMouseLeave={closeSub}>
             {submenu}
           </div>
         </Popover>

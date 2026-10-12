@@ -3,15 +3,19 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
 import { Popover } from "./Popover";
 import { MenuProvider } from "./Menu";
 import { tipProps } from "./Tooltip";
+import { focusEl, tabbables } from "./menuKeyboard";
+import { nextEnabled } from "./menuNav";
 
 /* ------------------------------------------------------------------ */
 /* Şerit (Ribbon)                                                      */
@@ -57,6 +61,9 @@ export function Ribbon({ tabs, activeTab, onTabChange, onFileClick, fileLabel = 
   const [floating, setFloating] = useState(false);
   const [width, setWidth] = useState(0);
   const ribbonRef = useRef<HTMLDivElement>(null);
+  const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+  const pendingBodyFocus = useRef(false);
+  const uid = useId();
 
   // Genişlik değişince küçültmeyi sıfırla ve yeniden ölç.
   useEffect(() => {
@@ -98,43 +105,112 @@ export function Ribbon({ tabs, activeTab, onTabChange, onFileClick, fileLabel = 
     return () => document.removeEventListener("mousedown", onDown, true);
   }, [floating]);
 
+  /** Şerit gövdesindeki ilk denetime iner (↓ ya da Tab). */
+  const focusBody = () => {
+    const first = bodyRef.current && tabbables(bodyRef.current)[0];
+    if (!first) return false;
+    focusEl(first, bodyRef.current ?? undefined);
+    return true;
+  };
+
+  useEffect(() => {
+    if (floating && pendingBodyFocus.current) focusBody();
+    pendingBodyFocus.current = false;
+  }, [floating]);
+
+  // Sekmeler: ←/→ odak ve seçim birlikte (uçlarda döner), Home/End; ↓ ya da Tab gövdeye iner.
+  const onTabKey = (e: ReactKeyboardEvent, i: number) => {
+    let next = -1;
+    switch (e.key) {
+      case "ArrowRight":
+      case "ArrowLeft":
+        next = nextEnabled(visible.length, i, e.key === "ArrowRight" ? 1 : -1);
+        break;
+      case "Home":
+        next = 0;
+        break;
+      case "End":
+        next = visible.length - 1;
+        break;
+      case "ArrowDown":
+      case "Tab":
+        if (e.key === "Tab" && e.shiftKey) return;
+        if (collapsed && !floating) {
+          e.preventDefault();
+          pendingBodyFocus.current = true;
+          setFloating(true);
+        } else if (focusBody()) e.preventDefault();
+        return;
+      default:
+        return;
+    }
+    const t = visible[next];
+    if (!t) return;
+    e.preventDefault();
+    if (t.id !== active?.id) onTabChange(t.id);
+    tabRefs.current.get(t.id)?.focus();
+  };
+
   let lastGroup: string | undefined;
   return (
     <div ref={ribbonRef} className={`oh-ribbon${collapsed ? " is-collapsed" : ""}${floating ? " is-floating" : ""}`}>
-      <div className="oh-ribbon-tabs" role="tablist">
+      <div className="oh-ribbon-tabs">
         <button type="button" className="oh-ribbon-tab oh-ribbon-file" onClick={onFileClick}>
           {fileLabel}
         </button>
-        {visible.map((t) => {
-          const showGroup = t.contextual && t.contextualGroup && t.contextualGroup !== lastGroup;
-          lastGroup = t.contextual ? t.contextualGroup : undefined;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={t.id === active?.id}
-              className={`oh-ribbon-tab${t.id === active?.id && showBody ? " is-active" : ""}${t.contextual ? " is-contextual" : ""}`}
-              data-group={showGroup ? t.contextualGroup : undefined}
-              onClick={() => {
-                onTabChange(t.id);
-                if (collapsed) setFloating(!(floating && t.id === active?.id));
-              }}
-              onDoubleClick={() => {
-                setFloating(false);
-                onCollapsedChange?.(!collapsed);
-              }}
-            >
-              {t.label}
-            </button>
-          );
-        })}
+        <div className="oh-ribbon-tablist" role="tablist" aria-label="Şerit">
+          {visible.map((t, i) => {
+            const showGroup = t.contextual && t.contextualGroup && t.contextualGroup !== lastGroup;
+            lastGroup = t.contextual ? t.contextualGroup : undefined;
+            const selected = t.id === active?.id;
+            return (
+              <button
+                key={t.id}
+                ref={(el) => {
+                  if (el) tabRefs.current.set(t.id, el);
+                  else tabRefs.current.delete(t.id);
+                }}
+                type="button"
+                role="tab"
+                id={`${uid}-tab-${t.id}`}
+                aria-selected={selected}
+                aria-controls={selected && showBody ? `${uid}-panel` : undefined}
+                tabIndex={selected ? 0 : -1}
+                className={`oh-ribbon-tab${selected && showBody ? " is-active" : ""}${t.contextual ? " is-contextual" : ""}`}
+                data-group={showGroup ? t.contextualGroup : undefined}
+                onKeyDown={(e) => onTabKey(e, i)}
+                onClick={() => {
+                  onTabChange(t.id);
+                  if (collapsed) setFloating(!(floating && t.id === active?.id));
+                }}
+                onDoubleClick={() => {
+                  setFloating(false);
+                  onCollapsedChange?.(!collapsed);
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
         <div className="oh-ribbon-tabs-spacer" />
         {tabsRight}
       </div>
       {showBody && active && (
         <RibbonLayoutContext.Provider value={layout}>
-          <div className="oh-ribbon-body" ref={bodyRef} role="tabpanel">
+          <div
+            className="oh-ribbon-body"
+            ref={bodyRef}
+            role="tabpanel"
+            id={`${uid}-panel`}
+            aria-labelledby={`${uid}-tab-${active.id}`}
+            onKeyDown={(e) => {
+              // Daraltılmış şeridin açılan gövdesinde Esc gövdeyi kapatıp odağı sekmeye verir.
+              if (e.key !== "Escape" || !floating || e.defaultPrevented) return;
+              setFloating(false);
+              tabRefs.current.get(active.id)?.focus();
+            }}
+          >
             <div className="oh-ribbon-content" key={active.id}>
               {active.content}
             </div>
@@ -207,14 +283,23 @@ export function RibbonGroup({ label, children, onLauncher, launcherTip, icon }: 
   if (collapsed) {
     return (
       <div ref={ref} className="oh-ribbon-group is-collapsed">
-        <button ref={btnRef} type="button" className={`oh-rbtn oh-rbtn-large${open ? " is-open" : ""}`} onClick={() => setOpen((o) => !o)}>
+        <button
+          ref={btnRef}
+          type="button"
+          className={`oh-rbtn oh-rbtn-large${open ? " is-open" : ""}`}
+          aria-haspopup="true"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          onKeyDown={(e) => openOnArrow(e, open, () => setOpen(true))}
+        >
           <span className="oh-rbtn-icon">{icon ?? <span className="oh-ribbon-group-dot" />}</span>
           <span className="oh-rbtn-label">
             {label}
             <Chevron />
           </span>
         </button>
-        <Popover open={open} onClose={close} anchor={btnRef}>
+        {/* Klavyeyle açılınca odak ilk denetime geçer, Tab içeride döner; Esc odağı düğmeye verir. */}
+        <Popover open={open} onClose={close} anchor={btnRef} focusOnOpen="keyboard">
           <MenuProvider onClose={close}>
             <div className="oh-ribbon-group oh-ribbon-group-popup">
               <div className="oh-ribbon-group-items">{children}</div>
@@ -304,6 +389,13 @@ function preventMouseFocus(e: React.MouseEvent) {
   e.preventDefault();
 }
 
+/** Menü düğmesinde ↓ (ya da Alt+↓) menüyü açar; Enter/Space doğal tıklamayla açar. */
+function openOnArrow(e: ReactKeyboardEvent, open: boolean, openMenu: () => void) {
+  if (e.key !== "ArrowDown" || open || e.ctrlKey || e.metaKey) return;
+  e.preventDefault();
+  openMenu();
+}
+
 export function RibbonButton({
   icon,
   label,
@@ -366,6 +458,12 @@ export function RibbonMenuButton({ icon, label, size = "medium", disabled, check
           if (!open) onOpen?.();
           setOpen(!open);
         }}
+        onKeyDown={(e) =>
+          openOnArrow(e, open, () => {
+            onOpen?.();
+            setOpen(true);
+          })
+        }
         {...tipProps(tip ?? label, shortcut, description)}
       >
         {icon && <span className="oh-rbtn-icon">{icon}</span>}
@@ -413,7 +511,15 @@ export function RibbonSplitButton({ icon, label, size = "medium", disabled, chec
         className={`oh-split oh-split-${size}${open ? " is-open" : ""}${checked ? " is-checked" : ""}${disabled ? " is-disabled" : ""} ${className ?? ""}`}
         {...tipProps(tip ?? label, shortcut, description)}
       >
-        <button type="button" className="oh-split-main" disabled={disabled} aria-label={label ?? tip} onMouseDown={preventMouseFocus} onClick={onClick}>
+        <button
+          type="button"
+          className="oh-split-main"
+          disabled={disabled}
+          aria-label={label ?? tip}
+          onMouseDown={preventMouseFocus}
+          onClick={onClick}
+          onKeyDown={(e) => openOnArrow(e, open, () => setOpen(true))}
+        >
           {iconEl}
           {label && size === "medium" && <span className="oh-rbtn-label">{label}</span>}
         </button>
@@ -426,6 +532,7 @@ export function RibbonSplitButton({ icon, label, size = "medium", disabled, chec
           aria-label={`${label ?? tip ?? ""} seçenekleri`}
           onMouseDown={preventMouseFocus}
           onClick={() => setOpen(!open)}
+          onKeyDown={(e) => openOnArrow(e, open, () => setOpen(true))}
         >
           {size === "large" && label && <span className="oh-rbtn-label">{label}</span>}
           <Chevron />
@@ -439,120 +546,10 @@ export function RibbonSplitButton({ icon, label, size = "medium", disabled, chec
 }
 
 /* ------------------------------------------------------------------ */
-/* Açılan kutu (yazı tipi, boyut)                                       */
+/* Açılan kutu (yazı tipi, boyut): RibbonCombo.tsx                      */
 /* ------------------------------------------------------------------ */
 
-export interface ComboOption {
-  value: string;
-  label?: string;
-  /** Seçenek satırına uygulanacak stil (yazı tipi önizlemesi). */
-  style?: React.CSSProperties;
-  group?: string;
-}
-
-export interface RibbonComboProps {
-  value: string;
-  options: (string | ComboOption)[];
-  onCommit: (value: string) => void;
-  width?: number;
-  editable?: boolean;
-  tip?: string;
-  shortcut?: string;
-  disabled?: boolean;
-  placeholder?: string;
-  /** Liste yüksekliği (px). */
-  listHeight?: number;
-}
-
-export function RibbonCombo({ value, options, onCommit, width = 120, editable = true, tip, shortcut, disabled, placeholder, listHeight = 320 }: RibbonComboProps) {
-  const [text, setText] = useState(value);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const opts = options.map((o) => (typeof o === "string" ? { value: o } : o));
-
-  useEffect(() => setText(value), [value]);
-
-  useEffect(() => {
-    if (!open) return;
-    // Seçili öğeyi ortala; scrollIntoView yerine yalnız listeyi kaydır ki üst öğeler (sayfa) kaymasın.
-    const list = listRef.current;
-    const sel = list?.querySelector(".is-selected") as HTMLElement | null;
-    if (list && sel) list.scrollTop = sel.offsetTop - list.clientHeight / 2 + sel.offsetHeight / 2;
-  }, [open]);
-
-  const commit = (v: string) => {
-    setOpen(false);
-    if (v.trim() === "") {
-      setText(value);
-      return;
-    }
-    onCommit(v);
-  };
-
-  let lastGroup: string | undefined;
-  return (
-    <>
-      <div ref={ref} className={`oh-combo${open ? " is-open" : ""}${disabled ? " is-disabled" : ""}`} style={{ width }} {...tipProps(tip, shortcut)}>
-        <input
-          className="oh-combo-input"
-          value={text}
-          disabled={disabled}
-          readOnly={!editable}
-          placeholder={placeholder}
-          aria-label={tip}
-          onChange={(e) => setText(e.target.value)}
-          onFocus={(e) => e.currentTarget.select()}
-          onMouseDown={!editable ? (e) => (e.preventDefault(), setOpen(!open)) : undefined}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commit(text);
-            } else if (e.key === "Escape") {
-              setText(value);
-              setOpen(false);
-            } else if (e.key === "ArrowDown" && e.altKey) {
-              setOpen(true);
-            }
-          }}
-          onBlur={() => {
-            if (!open && text !== value) commit(text);
-          }}
-        />
-        <button type="button" className="oh-combo-arrow" tabIndex={-1} disabled={disabled} onMouseDown={(e) => e.preventDefault()} onClick={() => setOpen(!open)} aria-label="Listeyi aç">
-          <Chevron />
-        </button>
-      </div>
-      <Popover open={open} onClose={() => setOpen(false)} anchor={ref}>
-        <div ref={listRef} className="oh-combo-list" style={{ minWidth: width, maxHeight: listHeight }} role="listbox">
-          {opts.map((o) => {
-            const header = o.group && o.group !== lastGroup ? o.group : null;
-            lastGroup = o.group;
-            return (
-              <div key={`${o.group ?? ""}:${o.value}`}>
-                {header && <div className="oh-menu-header">{header}</div>}
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={o.value === value}
-                  className={`oh-combo-option${o.value === value ? " is-selected" : ""}`}
-                  style={o.style}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    setText(o.value);
-                    commit(o.value);
-                  }}
-                >
-                  {o.label ?? o.value}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </Popover>
-    </>
-  );
-}
+export { RibbonCombo, type ComboOption, type RibbonComboProps } from "./RibbonCombo";
 
 /* ------------------------------------------------------------------ */
 /* Onay kutusu ve sayı kutusu                                           */

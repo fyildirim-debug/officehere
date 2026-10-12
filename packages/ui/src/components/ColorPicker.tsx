@@ -92,6 +92,10 @@ function Swatch({ color, selected, onPick }: { color: string; selected: boolean;
   return (
     <button
       type="button"
+      // Menüde ok tuşlarıyla (ızgarada konuma göre) gezilir; Tab durağı değildir.
+      role="menuitemradio"
+      aria-checked={selected}
+      tabIndex={-1}
       className={`oh-swatch${selected ? " is-selected" : ""}`}
       style={{ background: color }}
       title={color}

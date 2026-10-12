@@ -1,11 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { createMenuNav, focusBeforeLastPointer, focusOnOpen as focusLayer, lastInputWasKeyboard, layerInfo, prepareLayer } from "./menuKeyboard";
 
 export type Placement = "bottom-start" | "bottom-end" | "right-start" | "left-start" | "top-start";
 
+/** Kapanma nedeni: Esc, dışarı tıklama, pencere odağı kaybı, alt menüde ←, saf menüde Tab. */
+export type PopoverCloseReason = "escape" | "outside" | "blur" | "arrow" | "tab";
+
 export interface PopoverProps {
   open: boolean;
-  onClose: () => void;
+  onClose: (reason?: PopoverCloseReason) => void;
   /** Konumlandırmanın bağlanacağı öğe. */
   anchor?: RefObject<HTMLElement | null>;
   /** Öğe yerine sabit nokta (sağ tık menüsü). */
@@ -17,21 +21,100 @@ export interface PopoverProps {
   ignore?: RefObject<HTMLElement | null>[];
   style?: CSSProperties;
   role?: string;
+  /**
+   * Açılınca odak katmana taşınsın mı. "auto" (varsayılan): içerik menüyse; "keyboard": yalnız
+   * klavyeyle açıldıysa; true/false: her zaman/hiçbir zaman. Klavyeyle açılınca ilk öğeye,
+   * fareyle açılınca vurgusuz olarak kaba odaklanılır. Kapanınca odak eski yerine döner.
+   */
+  focusOnOpen?: "auto" | "keyboard" | boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/* Açık katman yığını: Esc yalnız en üsttekini kapatır.                  */
+/* ------------------------------------------------------------------ */
+
+interface Layer {
+  el: HTMLElement | null;
+  close: (reason: PopoverCloseReason) => void;
+  anchor: HTMLElement | null;
+  /** Alt menüyse onu açan üst menü öğesi. */
+  parentItem: HTMLElement | null;
+  /** Kapanınca odağın döneceği öğe (alt menüde üst öğe, değilse açılıştaki odak). */
+  restoreTo: HTMLElement | null;
+}
+
+const layers: Layer[] = [];
+let escInstalled = false;
+
+function installEscape() {
+  if (escInstalled) return;
+  escInstalled = true;
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key !== "Escape" || !layers.length) return;
+      e.stopPropagation();
+      layers[layers.length - 1].close("escape");
+    },
+    true,
+  );
+}
+
+/** Alt menü zinciri (en üstten başlayarak, alt menü olmayan ilk katmana kadar). */
+function menuChain(layer: Layer): Layer[] {
+  const chain = [layer];
+  for (let i = layers.indexOf(layer) - 1, cur = layer; i >= 0 && cur.parentItem; i--) {
+    if (!layers[i].el?.contains(cur.parentItem)) break;
+    cur = layers[i];
+    chain.push(cur);
+  }
+  return chain;
 }
 
 /**
  * Bir öğeye ya da noktaya bağlı, ekrandan taşmayan açılır katman.
- * Dışarı tıklama ve Escape ile kapanır.
+ * Dışarı tıklama ve Escape ile kapanır; menü içeriğinde klavye gezintisi sağlar.
  */
-export function Popover({ open, onClose, anchor, point, placement = "bottom-start", className, children, ignore, style, role }: PopoverProps) {
+export function Popover(props: PopoverProps) {
+  if (!props.open) return null;
+  return createPortal(<PopoverLayer {...props} />, document.body);
+}
+
+function PopoverLayer({ onClose, anchor, point, placement = "bottom-start", className, children, ignore, style, role, focusOnOpen = "auto" }: PopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const layerRef = useRef<Layer | null>(null);
+  const [nav] = useState(createMenuNav);
+
+  // Katmanı yığına ekle; kapanırken (DOM henüz yerindeyken) odak içerideyse eski yerine döndür.
+  useLayoutEffect(() => {
+    installEscape();
+    const a = anchor?.current ?? null;
+    const ae = document.activeElement;
+    const parentItem = a?.closest("[data-oh-popover]") && a.matches('[role^="menuitem"]') ? a : null;
+    const layer: Layer = {
+      el: ref.current,
+      close: (r) => closeRef.current(r),
+      anchor: a,
+      parentItem,
+      restoreTo: parentItem ?? (ae instanceof HTMLElement && ae !== document.body ? ae : focusBeforeLastPointer()),
+    };
+    layers.push(layer);
+    layerRef.current = layer;
+    return () => {
+      const i = layers.indexOf(layer);
+      if (i >= 0) layers.splice(i, 1);
+      const now = document.activeElement;
+      const inside = !!now && [layer, ...layers.slice(Math.max(0, i))].some((l) => l.el?.contains(now));
+      const to = layer.restoreTo;
+      if (inside && to?.isConnected && !to.matches(":disabled")) to.focus({ preventScroll: true });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useLayoutEffect(() => {
-    if (!open) {
-      setPos(null);
-      return;
-    }
     const el = ref.current;
     if (!el) return;
     const w = el.offsetWidth;
@@ -75,10 +158,22 @@ export function Popover({ open, onClose, anchor, point, placement = "bottom-star
       if (top < 4) top = 4;
     }
     setPos({ left, top });
-  }, [open, point?.x, point?.y, anchor, placement]);
+  }, [point?.x, point?.y, anchor, placement]);
+
+  // Görünür olunca (konum hesaplandıktan sonra) bir kez: menü rolü ve açılış odağı.
+  const shown = pos !== null;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!shown || !el) return;
+    const info = layerInfo(el);
+    prepareLayer(info);
+    const kbd = lastInputWasKeyboard();
+    const want = focusOnOpen === "auto" ? info.kind !== null : focusOnOpen === "keyboard" ? kbd : focusOnOpen;
+    if (want) focusLayer(el, info, kbd ? "first" : "container");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown]);
 
   useEffect(() => {
-    if (!open) return;
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (ref.current?.contains(t)) return;
@@ -91,28 +186,19 @@ export function Popover({ open, onClose, anchor, point, placement = "bottom-star
         const myLevel = Number(ref.current?.getAttribute("data-oh-level") ?? 1);
         if (Number(host.getAttribute("data-oh-level") ?? 1) > myLevel) return;
       }
-      onClose();
+      closeRef.current("outside");
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    const onBlur = () => onClose();
+    const onBlur = () => closeRef.current("blur");
     document.addEventListener("mousedown", onDown, true);
-    document.addEventListener("keydown", onKey, true);
     window.addEventListener("blur", onBlur);
     return () => {
       document.removeEventListener("mousedown", onDown, true);
-      document.removeEventListener("keydown", onKey, true);
       window.removeEventListener("blur", onBlur);
     };
-  }, [open, onClose, anchor, ignore]);
+  }, [anchor, ignore]);
 
-  if (!open) return null;
   const level = anchor?.current?.closest("[data-oh-popover]")?.getAttribute("data-oh-level");
-  return createPortal(
+  return (
     <div
       ref={ref}
       data-oh-popover=""
@@ -121,9 +207,28 @@ export function Popover({ open, onClose, anchor, point, placement = "bottom-star
       className={`oh-popover ${className ?? ""}`}
       style={{ ...style, left: pos?.left ?? -9999, top: pos?.top ?? -9999, visibility: pos ? "visible" : "hidden" }}
       onContextMenu={(e) => e.preventDefault()}
+      onMouseMove={(e) => ref.current && nav.onMouseMove(e, ref.current)}
+      onKeyDown={(e) => {
+        const el = ref.current;
+        const layer = layerRef.current;
+        if (!el || !layer) return;
+        nav.onKeyDown(e, el, {
+          submenu: !!layer.parentItem,
+          tabLoop: focusOnOpen === "keyboard" || focusOnOpen === true,
+          close: (r) => {
+            if (r !== "tab") return layer.close(r);
+            for (const l of menuChain(layer)) l.close(r);
+          },
+          tabTarget: () => {
+            const chain = menuChain(layer);
+            const root = chain[chain.length - 1];
+            const to = root.restoreTo;
+            return { el: to, opener: !!to && !!root.anchor?.contains(to) };
+          },
+        });
+      }}
     >
       {children}
-    </div>,
-    document.body,
+    </div>
   );
 }

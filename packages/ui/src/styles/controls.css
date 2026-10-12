@@ -470,3 +470,88 @@
 .oh-messagebar-close:hover {
   background: rgba(0, 0, 0, 0.06);
 }
+
+/* Klavye odağı (menüler, renk paleti) */
+
+:root {
+  --oh-focus-ring: var(--oh-accent);
+}
+
+/* Koyu zeminde vurgu rengi halka için fazla koyu kalır: açık tonu kullanılır. */
+:root[data-oh-theme="dark"],
+:root[data-oh-theme="black"] {
+  --oh-focus-ring: color-mix(in srgb, var(--oh-accent) 55%, white);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-oh-theme="system"] {
+    --oh-focus-ring: color-mix(in srgb, var(--oh-accent) 55%, white);
+  }
+}
+
+/* Fareyle açılan menüde odak kabın kendisindedir; kap halka almaz. */
+.oh-menu:focus,
+[data-oh-popover]:focus {
+  outline: none;
+}
+
+/* Klavyeyle seçilen menü öğesi: üzerine gelinmiş gibi zemin + içe gömülü halka. */
+.oh-menu-item:focus-visible {
+  background: var(--oh-hover);
+  outline: 2px solid var(--oh-focus-ring);
+  outline-offset: -2px;
+}
+
+.oh-menu-item.is-checked:focus-visible {
+  background: var(--oh-checked);
+}
+
+.oh-swatch:focus-visible {
+  position: relative;
+  z-index: 2;
+  outline: 2px solid var(--oh-focus-ring);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px var(--oh-menu-bg);
+}
+
+/* Klavyeyle gezilirken (fare kıpırdayana dek) imlecin altında kalan öğe vurgulanmaz: tek vurgu odakta. */
+[data-oh-kbd] .oh-menu-item:hover:not(:focus-visible):not(.is-open) {
+  background: transparent;
+}
+
+[data-oh-kbd] .oh-menu-item.is-checked:hover:not(:focus-visible):not(.is-open) {
+  background: var(--oh-checked);
+}
+
+[data-oh-kbd] .oh-swatch:hover:not(:focus-visible):not(.is-selected) {
+  outline: none;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* Yüksek karşıtlık (zorunlu renkler): zemin vurguları görünmez; seçili ve odaklı durumlar çizgiyle. */
+@media (forced-colors: active) {
+  .oh-menu-item:hover:not(:disabled),
+  .oh-menu-item.is-open {
+    outline: 1px solid Highlight;
+    outline-offset: -1px;
+  }
+
+  .oh-menu-item.is-checked {
+    outline: 1px dashed CanvasText;
+    outline-offset: -2px;
+  }
+
+  /* Renk örnekleri kendi renginde kalır. */
+  .oh-swatch {
+    forced-color-adjust: none;
+  }
+
+  .oh-swatch.is-selected {
+    outline: 2px solid CanvasText;
+  }
+
+  .oh-menu-item:focus-visible,
+  .oh-swatch:focus-visible {
+    outline: 2px solid Highlight;
+  }
+}
