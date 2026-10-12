@@ -260,28 +260,40 @@ export function LayoutThumb({ pres, layout, width }: { pres: Presentation; layou
 
 export function LayoutGallery({ pres, onPick, selectedId, header = "Düzen" }: { pres: Presentation; onPick: (id: string) => void; selectedId?: string; header?: string }) {
   const close = useMenuClose();
+  // Seçili slaytlara uygulanmış temaların düzenleri ayrı başlık altında (asıl slayt başına bir grup).
+  const groups: { name: string; layouts: Layout[] }[] = [{ name: header, layouts: pres.layouts.filter((l) => !l.theme) }];
+  for (const l of pres.layouts) {
+    if (!l.theme) continue;
+    const g = groups.find((x) => x.name === l.theme!.name && x !== groups[0]);
+    if (g) g.layouts.push(l);
+    else groups.push({ name: l.theme.name, layouts: [l] });
+  }
   return (
     <div className="oh-menu" style={{ maxHeight: "75vh" }}>
-      <MenuHeader>{header}</MenuHeader>
-      <div className="layout-grid">
-        {pres.layouts.map((l) => (
-          <button
-            key={l.id}
-            type="button"
-            className={`layout-tile${l.id === selectedId ? " is-selected" : ""}`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              onPick(l.id);
-              close();
-            }}
-          >
-            <span className="layout-tile-prev">
-              <LayoutThumb pres={pres} layout={l} width={104} />
-            </span>
-            <span>{l.name}</span>
-          </button>
-        ))}
-      </div>
+      {groups.map((g, gi) => (
+        <div key={gi}>
+          <MenuHeader>{g.name}</MenuHeader>
+          <div className="layout-grid">
+            {g.layouts.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                className={`layout-tile${l.id === selectedId ? " is-selected" : ""}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onPick(l.id);
+                  close();
+                }}
+              >
+                <span className="layout-tile-prev">
+                  <LayoutThumb pres={pres} layout={l} width={104} />
+                </span>
+                <span>{l.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

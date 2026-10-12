@@ -19,7 +19,7 @@ import { SelectionOverlay } from "./SelectionOverlay";
 import { snapMove, snapValue, type GuideLine } from "./snap";
 import { cellSelRects, childOfGroupContaining, cropGhostOf, GridOverlay, InkPreview, inkIdsAt, MARGIN, topLevelOf, type Drag, type Pt } from "./canvasUtils";
 import { useAutofit } from "./useAutofit";
-import { contextKind, type CanvasMenuKind } from "./contextKind";
+import { contextKind, isInEditedShape, type CanvasMenuKind } from "./contextKind";
 import { PointEditor } from "./PointEditor";
 import { useAnimBadges } from "./contextKind";
 import { useViewportZoom } from "./useViewportZoom";
@@ -74,7 +74,7 @@ export function Canvas(props: CanvasProps) {
 
   const tctx: TextContext = useMemo(() => ({ master: pres.master, layout: layoutOf(pres, slide) }), [pres, slide]);
 
-  useAutofit({ slide, slideIdx: state.slideIdx, measuring: !overrides, tctx, theme: pres.theme, slideRef, actions });
+  useAutofit({ slide, slideIdx: state.slideIdx, measuring: !overrides, tctx, theme: tctx.layout?.theme ?? pres.theme, slideRef, actions });
 
   /* ------------------------- Metin düzenleyici ------------------------- */
   const editing = state.editing;
@@ -102,6 +102,11 @@ export function Canvas(props: CanvasProps) {
     const pt = toSlide(e.clientX, e.clientY);
     actions.store.set({ focus: "canvas" });
     if (e.button === 2) {
+      // Düzenlenen şeklin içinde sağ tık: odak metin düzenleyicide kalır.
+      if (isInEditedShape(target, st, slideRef.current)) {
+        e.preventDefault();
+        return;
+      }
       const shapeEl = target.closest("[data-shape-id]") as HTMLElement | null;
       if (shapeEl) {
         const top = topLevelOf(slide.shapes, shapeEl.dataset.shapeId!);
@@ -225,7 +230,8 @@ export function Canvas(props: CanvasProps) {
       const cell = td ? (td.dataset.cell!.split(",").map(Number) as [number, number]) : undefined;
       const textHit = !!target.closest(".tb.is-hit") || (!!cell && wasSelected);
       const shapes = sel.map((x) => findShape(slide.shapes, x)).filter((x): x is Shape => !!x);
-      if (cell && wasSelected && top.kind === "table") {
+      // Tablo hücresinde (seçili olmasa da) sürükleme hücre aralığı seçer, tıklama hücreyi düzenler; tablo kenarlıktan taşınır.
+      if (cell && top.kind === "table" && !e.shiftKey && !e.ctrlKey) {
         drag.current = { kind: "cells", id: top.id, start: cell };
         actions.store.set({ cellSel: null });
         // Tıklama ise hücre düzenlenir (pointerup'ta).
@@ -512,9 +518,13 @@ export function Canvas(props: CanvasProps) {
         }
         const top = slide ? topLevelOf(slide.shapes, d.id) : undefined;
         if (sh.kind === "sp" && d.textHit && !(top?.kind === "group" && top.id === sh.id)) {
-          if (st.editing?.shapeId === sh.id) return;
+          if (st.editing?.shapeId === sh.id) {
+            // Düzenlenen şeklin metin dışı alanına tıklama: imleç en yakın konuma, odak metne.
+            if (d.point) actions.textHandle?.placeCaret(d.point.x, d.point.y);
+            return;
+          }
           actions.startEditing({ shapeId: sh.id, point: d.point });
-        }
+        } else if (sh.kind === "sp" && st.editing?.shapeId === sh.id && d.point) actions.textHandle?.placeCaret(d.point.x, d.point.y);
         return;
       }
       case "move": {
@@ -648,6 +658,9 @@ export function Canvas(props: CanvasProps) {
         onPointerCancel={onPointerUp}
         onDoubleClick={onDoubleClick}
         onContextMenu={onContextMenu}
+        onMouseDown={(e) => {
+          if (e.button === 2 && isInEditedShape(e.target as Element, propsRef.current.state, slideRef.current)) e.preventDefault();
+        }}
         tabIndex={-1}
       >
         <div className="canvas-content" style={{ width: contentW, height: contentH }}>

@@ -65,8 +65,19 @@ export function transitionXml(t: Transition | undefined): string {
   const ext = `<p:extLst><p:ext uri="${OH_EXT_URI}"><oh:transition xmlns:oh="${NS.oh}"${attrs({ type: t.type, option: t.option, dur: Math.round(t.duration * 1000), snd: t.sound })}/></p:ext></p:extLst>`;
   // Önceki sesi durdur standart öğesi (sentezlenen sesler yalnız uzantıda saklanır).
   const snd = t.sound === "stop" ? "<p:sndAc><p:endSnd/></p:sndAc>" : "";
-  return `<p:transition${a}>${transitionChild(t)}${snd}${ext}</p:transition>`;
+  const xml = `<p:transition${a}>${transitionChild(t)}${snd}${ext}</p:transition>`;
+  if (t.type !== "morph") return xml;
+  // Dönüştür: p159:morph (MS-PPTX uzantısı) Choice içinde; diğer okuyucular için soluklaştırma yedeği.
+  const ms = Math.round(t.duration * 1000);
+  return (
+    `<mc:AlternateContent xmlns:mc="${MC_NS}"><mc:Choice xmlns:p159="${P159_NS}" xmlns:p14="${P14_NS}" Requires="p159"><p:transition${a} p14:dur="${ms}"><p159:morph option="byObject"/>${snd}</p:transition></mc:Choice>` +
+    `<mc:Fallback><p:transition${a}><p:fade/>${snd}${ext}</p:transition></mc:Fallback></mc:AlternateContent>`
+  );
 }
+
+const MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+const P159_NS = "http://schemas.microsoft.com/office/powerpoint/2015/09/main";
+const P14_NS = "http://schemas.microsoft.com/office/powerpoint/2010/main";
 
 const FLY_SUB: Record<string, number> = { t: 1, r: 2, b: 4, l: 8, tr: 3, br: 6, bl: 12, tl: 9 };
 

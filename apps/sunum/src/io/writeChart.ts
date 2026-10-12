@@ -35,9 +35,29 @@ const txt = (sz: number, color = '<a:schemeClr val="tx1"><a:lumMod val="65000"/>
 
 const GRID_LN = '<c:spPr><a:ln w="9525"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="15000"/><a:lumOff val="85000"/></a:schemeClr></a:solidFill></a:ln></c:spPr>';
 
-function dLblsXml(show: boolean | undefined, pos?: string): string {
-  if (!show) return "";
-  return `<c:dLbls>${pos ? `<c:dLblPos val="${pos}"/>` : ""}<c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="0"/><c:showBubbleSize val="0"/></c:dLbls>`;
+const C15 = "http://schemas.microsoft.com/office/drawing/2012/chart";
+
+/** Türün kabul ettiği dLblPos değerleri (CT_DLblPos; alan, radar ve halkada konum yazılmaz). */
+function allowedPos(c: ChartData, line: boolean): string[] {
+  const stacked = !!c.grouping && c.grouping !== "clustered";
+  if (line || c.type === "scatter") return ["ctr", "l", "r", "t", "b"];
+  if (c.type === "col" || c.type === "bar" || c.type === "combo") return stacked ? ["ctr", "inEnd", "inBase"] : ["ctr", "inEnd", "inBase", "outEnd"];
+  if (c.type === "pie") return ["ctr", "inEnd", "outEnd", "bestFit"];
+  return [];
+}
+
+/** Veri etiketleri; veri belirtme çizgisi c15 uzantısıyla (dikdörtgen balon) yazılır. */
+function dLblsXml(c: ChartData, line = false): string {
+  if (!c.dataLabels) return "";
+  const allowed = allowedPos(c, line);
+  const callout = c.labelPos === "callout";
+  const fallback = line || c.type === "scatter" ? "t" : c.type === "pie" ? "bestFit" : allowed.includes("outEnd") ? "outEnd" : undefined;
+  const pos = callout ? fallback : c.labelPos && allowed.includes(c.labelPos) ? c.labelPos : undefined;
+  const box = callout ? '<c:spPr><a:solidFill><a:schemeClr val="bg1"/></a:solidFill><a:ln><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="25000"/><a:lumOff val="75000"/></a:schemeClr></a:solidFill></a:ln></c:spPr>' : "";
+  const ext = callout
+    ? `<c:extLst><c:ext uri="{CE6537A1-D6FC-4f65-9D91-7224C49458BB}" xmlns:c15="${C15}"><c15:spPr xmlns:c15="${C15}"><a:prstGeom prst="wedgeRectCallout"><a:avLst/></a:prstGeom></c15:spPr><c15:showLeaderLines val="1"/></c:ext></c:extLst>`
+    : "";
+  return `<c:dLbls>${box}${pos ? `<c:dLblPos val="${pos}"/>` : ""}<c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="0"/><c:showBubbleSize val="0"/>${ext}</c:dLbls>`;
 }
 
 /** Eksen başlığı (c:title, zengin metin). */
@@ -66,31 +86,39 @@ export function chartXml(c: ChartData, embedRid?: string): string {
       const head = `<c:idx val="${j}"/><c:order val="${j}"/>${tx}`;
       if (pie) {
         const dpts = c.categories.map((_, i) => `<c:dPt><c:idx val="${i}"/><c:bubble3D val="0"/><c:spPr><a:solidFill>${colorXml(seriesColor(i, undefined, pal), ctx)}</a:solidFill><a:ln w="19050"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:ln></c:spPr></c:dPt>`).join("");
-        return `<c:ser>${head}${dpts}${dLblsXml(c.dataLabels, c.type === "pie" ? "ctr" : undefined)}${cat}${val}</c:ser>`;
+        return `<c:ser>${head}${dpts}${dLblsXml(c)}${cat}${val}</c:ser>`;
       }
       if (c.type === "scatter") {
         const xs = c.categories.map((t) => parseChartNumber(t));
         const xVal = xs.every((v) => v !== null) ? `<c:xVal><c:numRef><c:f>${catRef}</c:f>${numCache(xs)}</c:numRef></c:xVal>` : `<c:xVal><c:strRef><c:f>${catRef}</c:f>${strCache(c.categories)}</c:strRef></c:xVal>`;
         const yVal = `<c:yVal><c:numRef><c:f>${SHEET}!$${col}$2:$${col}$${lastRow}</c:f>${numCache(s.values.slice(0, n))}</c:numRef></c:yVal>`;
-        const sp = `<c:spPr><a:ln w="19050" cap="rnd"><a:noFill/></a:ln></c:spPr><c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr><a:solidFill>${colorXml(color, ctx)}</a:solidFill></c:spPr></c:marker>`;
-        return `<c:ser>${head}${sp}${dLblsXml(c.dataLabels, "t")}${xVal}${yVal}<c:smooth val="0"/></c:ser>`;
+        // Alt tür: yalnız işaretçi (çizgisiz), düz/düzgün çizgi, işaretçili ya da işaretçisiz.
+        const ss = c.scatterStyle;
+        const ln = ss ? `<a:ln w="19050" cap="rnd"><a:solidFill>${colorXml(color, ctx)}</a:solidFill><a:round/></a:ln>` : '<a:ln w="19050" cap="rnd"><a:noFill/></a:ln>';
+        const mk = ss === "line" || ss === "smooth" ? '<c:marker><c:symbol val="none"/></c:marker>' : `<c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr><a:solidFill>${colorXml(color, ctx)}</a:solidFill></c:spPr></c:marker>`;
+        const smooth = ss === "smooth" || ss === "smoothMarker" ? 1 : 0;
+        return `<c:ser>${head}<c:spPr>${ln}</c:spPr>${mk}${dLblsXml(c)}${xVal}${yVal}<c:smooth val="${smooth}"/></c:ser>`;
       }
       if (c.type === "radar") {
-        const sp = `<c:spPr><a:ln w="28575" cap="rnd"><a:solidFill>${colorXml(color, ctx)}</a:solidFill><a:round/></a:ln></c:spPr><c:marker><c:symbol val="none"/></c:marker>`;
-        return `<c:ser>${head}${sp}${dLblsXml(c.dataLabels)}${cat}${val}</c:ser>`;
+        const filled = c.radarStyle === "filled";
+        const mk = c.radarStyle === "marker" ? `<c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr><a:solidFill>${colorXml(color, ctx)}</a:solidFill></c:spPr></c:marker>` : '<c:marker><c:symbol val="none"/></c:marker>';
+        const sp = `<c:spPr>${filled ? `<a:solidFill>${colorXml(color, ctx)}</a:solidFill>` : ""}<a:ln w="28575" cap="rnd"><a:solidFill>${colorXml(color, ctx)}</a:solidFill><a:round/></a:ln></c:spPr>${mk}`;
+        return `<c:ser>${head}${sp}${dLblsXml(c)}${cat}${val}</c:ser>`;
       }
       if (isLineSer(j)) {
         const sp = `<c:spPr><a:ln w="28575" cap="rnd"><a:solidFill>${colorXml(color, ctx)}</a:solidFill><a:round/></a:ln></c:spPr><c:marker><c:symbol val="none"/></c:marker>`;
-        return `<c:ser>${head}${sp}${dLblsXml(c.dataLabels, "t")}${cat}${val}<c:smooth val="0"/></c:ser>`;
+        return `<c:ser>${head}${sp}${dLblsXml(c, true)}${cat}${val}<c:smooth val="0"/></c:ser>`;
       }
       const sp = `<c:spPr><a:solidFill>${colorXml(color, ctx)}</a:solidFill><a:ln><a:noFill/></a:ln></c:spPr>`;
-      if (c.type === "area") return `<c:ser>${head}${sp}${dLblsXml(c.dataLabels)}${cat}${val}</c:ser>`;
-      return `<c:ser>${head}${sp}<c:invertIfNegative val="0"/>${dLblsXml(c.dataLabels, "outEnd")}${cat}${val}</c:ser>`;
+      if (c.type === "area") return `<c:ser>${head}${sp}${dLblsXml(c)}${cat}${val}</c:ser>`;
+      return `<c:ser>${head}${sp}<c:invertIfNegative val="0"/>${dLblsXml(c)}${cat}${val}</c:ser>`;
   });
   const sers = serList.join("");
 
   const AX1 = 500000001;
   const AX2 = 500000002;
+  const AX3 = 500000003;
+  const AX4 = 500000004;
   const axIds = `<c:axId val="${AX1}"/><c:axId val="${AX2}"/>`;
   let plot = "";
   const grp = c.grouping ?? "clustered";
@@ -108,15 +136,15 @@ export function chartXml(c: ChartData, embedRid?: string): string {
       plot = `<c:areaChart><c:grouping val="${lineGrp}"/><c:varyColors val="0"/>${sers}${axIds}</c:areaChart>`;
       break;
     case "scatter":
-      plot = `<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>${sers}${axIds}</c:scatterChart>`;
+      plot = `<c:scatterChart><c:scatterStyle val="${c.scatterStyle === "smooth" || c.scatterStyle === "smoothMarker" ? "smoothMarker" : "lineMarker"}"/><c:varyColors val="0"/>${sers}${axIds}</c:scatterChart>`;
       break;
     case "radar":
-      plot = `<c:radarChart><c:radarStyle val="marker"/><c:varyColors val="0"/>${sers}${axIds}</c:radarChart>`;
+      plot = `<c:radarChart><c:radarStyle val="${c.radarStyle === "filled" ? "filled" : "marker"}"/><c:varyColors val="0"/>${sers}${axIds}</c:radarChart>`;
       break;
     case "combo":
       plot =
         `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${serList.slice(0, -1).join("")}<c:gapWidth val="219"/><c:overlap val="-27"/>${axIds}</c:barChart>` +
-        `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${serList.slice(-1).join("")}<c:marker val="1"/>${axIds}</c:lineChart>`;
+        `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${serList.slice(-1).join("")}<c:marker val="1"/>${c.secondaryLine ? `<c:axId val="${AX3}"/><c:axId val="${AX4}"/>` : axIds}</c:lineChart>`;
       break;
     case "pie":
       plot = `<c:pieChart><c:varyColors val="1"/>${sers}<c:firstSliceAng val="0"/></c:pieChart>`;
@@ -141,6 +169,11 @@ export function chartXml(c: ChartData, embedRid?: string): string {
     plot +=
       catAx +
       `<c:valAx><c:axId val="${AX2}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="${valPos}"/>${grids}${valTitle}${valFmt}${common}<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>${txt(1197)}<c:crossAx val="${AX1}"/><c:crosses val="autoZero"/><c:crossBetween val="${c.type === "scatter" ? "midCat" : "between"}"/></c:valAx>`;
+    // Birleşik grafikte ikincil eksen: gizli kategori ekseni ve sağda değer ekseni.
+    if (c.type === "combo" && c.secondaryLine)
+      plot +=
+        `<c:catAx><c:axId val="${AX3}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="1"/><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="1"/>${common}<c:crossAx val="${AX4}"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>` +
+        `<c:valAx><c:axId val="${AX4}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="r"/><c:numFmt formatCode="General" sourceLinked="1"/>${common}<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>${txt(1197)}<c:crossAx val="${AX3}"/><c:crosses val="max"/><c:crossBetween val="between"/></c:valAx>`;
   }
   const title = c.showTitle
     ? `<c:title><c:tx><c:rich><a:bodyPr rot="0" spcFirstLastPara="1" vertOverflow="ellipsis" wrap="square" anchor="ctr" anchorCtr="1"/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1862" b="0"><a:solidFill><a:schemeClr val="tx1"><a:lumMod val="65000"/><a:lumOff val="35000"/></a:schemeClr></a:solidFill><a:latin typeface="+mn-lt"/></a:defRPr></a:pPr><a:r><a:rPr lang="tr-TR"/><a:t>${esc(chartTitle(c))}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/>`

@@ -8,6 +8,7 @@ import type { AppCommands, DialogKind } from "../ribbon/types";
 import type { ShowStroke } from "../show/ShowInk";
 import { applyLink, type LinkContext } from "../state/linkActions";
 import { insertChart, updateChart } from "../state/mediaActions";
+import { applySubtype } from "../model/chart";
 import { FontDialog, ParagraphDialog } from "../dialogs/TextDialogs";
 import { DateTimeDialog, HeaderFooterDialog, IconsDialog, InsertTableDialog, SymbolDialog } from "../dialogs/InsertDialogs";
 import { AboutDialog, FindDialog, ReplaceFontsDialog, ShortcutsDialog, SizePosDialog, SlideSizeDialog, ZoomDialog } from "../dialogs/MiscDialogs";
@@ -100,14 +101,14 @@ export function AppDialogs({ a, state, info, cmd, dialog, closeDialog, extra, se
         current={extra?.kind === "chartType" ? extra.current : undefined}
         theme={state.pres.theme}
         onClose={closeExtra}
-        onPick={(t, g) => {
+        onPick={(t, patch) => {
           if (extra?.kind !== "chartType") return;
           if (extra.changeId) {
-            updateChart(a, extra.changeId, (c) => ({ ...c, type: t, grouping: g && g !== "clustered" ? g : undefined }));
+            updateChart(a, extra.changeId, (c) => applySubtype(c, patch.type ?? t, patch));
             closeExtra();
             return;
           }
-          const id = insertChart(a, t, g);
+          const id = insertChart(a, t, patch);
           const sh = id ? a.selectedShapes()[0] : undefined;
           // PowerPoint gibi: ekledikten sonra veri tablosu açılır.
           if (id && sh?.kind === "chart") setExtra({ kind: "chartData", id, chart: sh.chart });

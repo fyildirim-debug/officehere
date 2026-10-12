@@ -1,5 +1,5 @@
 /**
- * Şekilleri Birleştir: Birleşim, Birleştir (tek-çift), Kesişim, Çıkar.
+ * Şekilleri Birleştir: Birleşim, Birleştir (tek-çift), Parçala, Kesişim, Çıkar.
  * Şekiller slayt koordinatlarında çokgenlere düzleştirilir (eğriler
  * örneklenir); iki çokgen arasında Greiner–Hormann kırpma uygulanır.
  * Sonuç, ilk seçilen şeklin biçimini alan tek bir özel şekildir.
@@ -12,7 +12,7 @@ import type { Actions } from "../state/actions";
 
 export type Pt = [number, number];
 export type Ring = Pt[];
-export type MergeOp = "union" | "combine" | "intersect" | "subtract";
+export type MergeOp = "union" | "combine" | "intersect" | "subtract" | "fragment";
 
 /* ------------------------- Düzleştirme ------------------------- */
 
@@ -287,10 +287,35 @@ export function mergeRings(shapes: Ring[][], op: MergeOp): Ring[] {
   return acc.filter((r) => Math.abs(area(r)) > 0.5);
 }
 
-/** Seçili şekilleri birleştirip yeni özel şekil döndürür (sonuç boşsa null). */
-export function mergeShapes(list: SpShape[], op: MergeOp): SpShape | null {
-  if (list.length < 2) return null;
-  const rings = mergeRings(list.map(shapeRings), op);
+/** Parçala: şekillerin örtüşmesiyle oluşan her bölge ayrı bir halka kümesi olur. */
+export function fragmentRings(shapes: Ring[][]): Ring[][] {
+  let pieces: Ring[][] = [];
+  const done: Ring[] = [];
+  const big = (rs: Ring[]) => rs.filter((r) => Math.abs(area(r)) > 0.5);
+  for (const b of shapes) {
+    const next: Ring[][] = [];
+    for (const p of pieces) {
+      const inter = big(mergeRings([p, b], "intersect"));
+      const diff = big(mergeRings([p, b], "subtract"));
+      if (inter.length) next.push(inter);
+      if (diff.length) next.push(diff);
+    }
+    const rest = done.length ? big(mergeRings([b, done], "subtract")) : b;
+    if (rest.length) next.push(rest);
+    done.push(...b);
+    pieces = next;
+  }
+  // Ayrık bölgeler ayrı parçalara bölünür; delikler (başka halkanın içindeki halkalar) kapsayanına eklenir.
+  const out: Ring[][] = [];
+  for (const p of pieces) {
+    const holes = new Set<Ring>();
+    for (const r of p) if (p.some((o) => o !== r && Math.abs(area(o)) > Math.abs(area(r)) && pointInRing(r[0], o))) holes.add(r);
+    for (const r of p) if (!holes.has(r)) out.push([r, ...[...holes].filter((h) => pointInRing(h[0], r))]);
+  }
+  return out;
+}
+
+function ringsToShape(rings: Ring[], first: SpShape): SpShape | null {
   if (!rings.length) return null;
   let minX = Infinity;
   let minY = Infinity;
@@ -311,9 +336,15 @@ export function mergeShapes(list: SpShape[], op: MergeOp): SpShape | null {
     r.forEach(([x, y], i) => cmds.push({ c: i ? "L" : "M", pts: [r2(x - minX), r2(y - minY)] }));
     cmds.push({ c: "Z", pts: [] });
   }
-  const first = list[0];
   const path: CustomPath = { w, h, cmds };
   return { ...first, id: uid(), x: minX, y: minY, w, h, rot: 0, flipH: undefined, flipV: undefined, geom: "custom", adj: undefined, paths: [path], text: undefined, ph: undefined, txBox: undefined, name: `Serbest Biçim ${first.name.replace(/\D+/g, "") || ""}`.trim() };
+}
+
+/** Seçili şekilleri birleştirip yeni özel şekil(ler) döndürür (Parçala birden çok şekil verir). */
+export function mergeShapes(list: SpShape[], op: MergeOp): SpShape[] {
+  if (list.length < 2) return [];
+  const sets = op === "fragment" ? fragmentRings(list.map(shapeRings)) : [mergeRings(list.map(shapeRings), op)];
+  return sets.map((rs) => ringsToShape(rs, list[0])).filter((x): x is SpShape => !!x);
 }
 
 /** Seçili şekilleri birleştirir; sonuç ilk seçilen şeklin yerine ve biçimiyle eklenir. */
@@ -332,11 +363,11 @@ export function mergeSelection(a: Actions, op: MergeOp): boolean {
       const slides = p.slides.slice();
       const cur = slides[i];
       const rest = cur.shapes.filter((s) => !ids.has(s.id));
-      const shapes = merged ? [...rest.slice(0, at), merged, ...rest.slice(at)] : rest;
+      const shapes = [...rest.slice(0, at), ...merged, ...rest.slice(at)];
       slides[i] = { ...cur, shapes, animations: cur.animations.filter((an) => !ids.has(an.shapeId)) };
       return { ...p, slides };
     },
-    { sel: merged ? [merged.id] : [], editing: null },
+    { sel: merged.map((m) => m.id), editing: null },
   );
   return true;
 }

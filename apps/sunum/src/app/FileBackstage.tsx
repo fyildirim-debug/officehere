@@ -1,7 +1,7 @@
 /** Dosya menüsü: şablonlar, dışa aktarma ve Bilgi özellikleri. */
 import { ArrowDownload24Regular, DocumentPdf24Regular, Image24Regular, ImageMultiple24Regular, TextBulletListLtr24Regular } from "@fluentui/react-icons";
 import { useLayoutEffect, useRef, useState } from "react";
-import { OfficeBackstage, type BackstageExport } from "@officehere/ui";
+import { OfficeBackstage, type BackstageExport, type OfficeBackstagePage } from "@officehere/ui";
 import type { RecentFile } from "@officehere/core";
 import { formatDateTime, isDesktop } from "@officehere/core";
 import type { Presentation } from "../model/types";
@@ -35,6 +35,7 @@ const EXPORTS: BackstageExport[] = [
 ];
 
 export function FileBackstage(props: {
+  initialPage?: OfficeBackstagePage;
   state: AppState;
   actions: Actions;
   onBack: () => void;
@@ -68,6 +69,7 @@ export function FileBackstage(props: {
   return (
     <OfficeBackstage
       app="sunum"
+      initialPage={props.initialPage}
       fileName={state.fileName}
       filePath={state.fileRef?.path}
       templates={templates}
@@ -84,6 +86,18 @@ export function FileBackstage(props: {
       onBack={props.onBack}
       info={info}
       printPreview={pres.slides[0] ? <PrintPreview pres={pres} start={state.slideIdx} /> : undefined}
+      extraOptions={
+        <>
+          <label className="oh-field is-inline">
+            <span className="oh-field-label">Yazarken yazımı denetle</span>
+            <input type="checkbox" checked={state.spellcheck} onChange={(e) => props.actions.store.set({ spellcheck: e.target.checked })} />
+          </label>
+          <label className="oh-field is-inline">
+            <span className="oh-field-label">Not bölmesini göster</span>
+            <input type="checkbox" checked={state.showNotes} onChange={(e) => props.actions.store.set({ showNotes: e.target.checked })} />
+          </label>
+        </>
+      }
     />
   );
 }

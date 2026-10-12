@@ -47,6 +47,8 @@ export function readTransition(sld: Element): Transition | undefined {
     advanceOnClick: advClick !== "0" && advClick !== "false",
     advanceAfter: advTm !== undefined ? advTm / 1000 : undefined,
   };
+  // Dönüştür (p159:morph) Choice içindedir; yedek geçiş soluklaştırmadır.
+  if (kids(sld, "AlternateContent").some((ac) => descendants(kid(ac, "Choice") as Element, "morph").length)) return { ...base, type: "morph" };
   const mine = extEl(t, "transition");
   if (mine) {
     const type = attr(mine, "type") as TransitionType | undefined;

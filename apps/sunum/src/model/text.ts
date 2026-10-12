@@ -147,11 +147,46 @@ export function deleteRange(body: TextBody, from: Pos, to: Pos): TextBody {
   }
   const p1 = paras[from.p];
   const p2 = paras[to.p];
-  const [a] = splitRuns(p1.runs, 0, expandFields(p1, from.o, paraLen(p1))[0]);
+  // İlk paragrafın başından seçim başlangıcına kadarki kısım (splitRuns'un ORTA parçası) korunur;
+  // son paragrafın seçim sonundan sonraki kısmı eklenir.
+  const [, a] = splitRuns(p1.runs, 0, expandFields(p1, from.o, paraLen(p1))[0]);
   const [, , b] = splitRuns(p2.runs, 0, expandFields(p2, 0, to.o)[1]);
-  const merged: Paragraph = { ...p1, runs: normalizeRuns([...a, ...b]), endProps: a.length ? p1.endProps : (p1.endProps ?? propsAt(body, from)) };
+  const keepA = a.filter((r) => r.text);
+  // Birleşen paragraf boş kalırsa yazılacak metnin biçimi: ilk paragrafın sonu ya da ikincinin başı.
+  const endProps = keepA.length ? p1.endProps : p1.runs.length ? propsAt(body, from) : (p1.endProps ?? p2.endProps);
+  const merged: Paragraph = { ...p1, runs: normalizeRuns([...keepA, ...b]), endProps };
   paras.splice(from.p, to.p - from.p + 1, merged);
   return { ...body, paragraphs: paras };
+}
+
+/** i. paragrafı bir sonrakiyle birleştirir (biçimli çalımlar korunur). */
+export function mergeParagraphs(body: TextBody, i: number): TextBody {
+  if (i < 0 || i >= body.paragraphs.length - 1) return body;
+  return deleteRange(body, { p: i, o: paraLen(body.paragraphs[i]) }, { p: i + 1, o: 0 });
+}
+
+/** Backspace: seçimi ya da imleçten önceki karakteri siler. Girintili paragrafın başında önce düzeyi düşürür. */
+export function removeBackward(body: TextBody, sel: Sel): { body: TextBody; caret: Pos } {
+  const [a, z] = orderSel(sel);
+  if (cmpPos(a, z) !== 0) return { body: deleteRange(body, a, z), caret: a };
+  const p = body.paragraphs[a.p];
+  if (a.o === 0 && p && p.level > 0) {
+    const paragraphs = body.paragraphs.slice();
+    paragraphs[a.p] = { ...p, level: p.level - 1 };
+    return { body: { ...body, paragraphs }, caret: a };
+  }
+  const from = prevPos(body, a);
+  if (cmpPos(from, a) === 0) return { body, caret: a };
+  return { body: deleteRange(body, from, a), caret: from };
+}
+
+/** Delete: seçimi ya da imleçten sonraki karakteri siler (paragraf sonunda birleştirir). */
+export function removeForward(body: TextBody, sel: Sel): { body: TextBody; caret: Pos } {
+  const [a, z] = orderSel(sel);
+  if (cmpPos(a, z) !== 0) return { body: deleteRange(body, a, z), caret: a };
+  const to = nextPos(body, a);
+  if (cmpPos(to, a) === 0) return { body, caret: a };
+  return { body: deleteRange(body, a, to), caret: a };
 }
 
 /** Seçimi siler ve metni ekler; yeni imleç konumunu döndürür. */

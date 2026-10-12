@@ -329,6 +329,8 @@ export interface TransitionPlan {
   outgoingOnTop?: boolean;
   /** Siyah zemin üzerinden. */
   thruBlack?: boolean;
+  /** Dönüştür: şekil eşleştirmeli geçiş (showExtras). */
+  morph?: boolean;
 }
 
 const DIR_VEC: Record<string, [number, number]> = { u: [0, 1], d: [0, -1], l: [1, 0], r: [-1, 0] };
@@ -337,6 +339,8 @@ export function transitionPlan(t: Transition | undefined): TransitionPlan | null
   if (!t || t.type === "none" || t.type === "cut") return null;
   const o = t.option ?? "";
   switch (t.type) {
+    case "morph":
+      return { morph: true };
     case "fade":
       if (o === "black") return { thruBlack: true, outgoing: [{ opacity: 1 }, { opacity: 0, offset: 0.5 }, { opacity: 0 }], incoming: [{ opacity: 0 }, { opacity: 0, offset: 0.5 }, { opacity: 1 }], easing: "linear" };
       return { incoming: [{ opacity: 0 }, { opacity: 1 }], easing: "linear" };

@@ -91,7 +91,12 @@ export function useAutofit({ slide, slideIdx, measuring, tctx, theme, slideRef, 
           if (guard.current.allow(s.id))
             updates.set(s.id, (sh) => {
               if (sh.kind !== "table") return sh;
-              const nrows = sh.rows.map((r, i) => ({ ...r, h: Math.max(r.h, hs[i]) }));
+              // Satır içerikle büyür; içerik azalınca en küçük yüksekliğe (minH) kadar geri küçülür.
+              const nrows = sh.rows.map((r, i) => {
+                const minH = r.minH ?? r.h;
+                const h = Math.max(minH, hs[i]);
+                return { ...r, h, minH: h > minH + 0.5 ? minH : undefined };
+              });
               return { ...sh, rows: nrows, h: nrows.reduce((t, r) => t + r.h, 0) };
             });
         } else {

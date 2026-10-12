@@ -9,6 +9,7 @@ import { Menu, MenuItem, MenuSeparator, useContextMenu } from "@officehere/ui";
 import type { Presentation, Shape, Slide } from "../model/types";
 import { findShape } from "../model/ops";
 import { linkSlideIndex } from "../model/links";
+import { morphAnimations, zoomAnimations, zoomJump, type ZoomRect } from "./showExtras";
 import { SlideView } from "../render/SlideView";
 import { animationKeyframes, buildSteps, initiallyHidden, transitionPlan, type StepEffect } from "./effects";
 import { InkOverlay, type ShowStroke } from "./ShowInk";
@@ -79,6 +80,9 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
   const ctx = useContextMenu();
   const wasFullscreen = useRef(false);
   const autoTimer = useRef<number | undefined>(undefined);
+  const zoomRef = useRef<ZoomRect | null>(null);
+  const hoverRef = useRef<HTMLElement | null>(null);
+  const zoomRet = useRef<{ slide: number; last: number; rect: ZoomRect } | null>(null);
 
   const current = layers[layers.length - 1];
   const index = current.index;
@@ -243,11 +247,14 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
     }
     // Geçiş sesi (izleyici penceresine bağlı sunucu penceresi sessizdir).
     if (!top.fromEnd && !link && sl.transition?.sound && (layers.length > 1 || preview !== "animations")) playTransitionSound(sl.transition.sound);
-    const plan = layers.length > 1 ? transitionPlan(sl.transition) : null;
+    // Yakınlaştırmaya tıklanmışsa (ya da dönülüyorsa) geçiş yerine yakınlaşma oynatılır.
+    const zr = layers.length > 1 ? zoomRef.current : null;
+    zoomRef.current = null;
+    const plan = zr ? { morph: false } : layers.length > 1 ? transitionPlan(sl.transition) : null;
     const inEl = layerEl;
     const outLayer = layers.length > 1 ? layers[layers.length - 2] : undefined;
     const outEl = outLayer ? layerEls.current.get(outLayer.key) : undefined;
-    const dur = Math.max(0.05, sl.transition?.duration ?? 1) * 1000;
+    const dur = zr ? 900 : Math.max(0.05, sl.transition?.duration ?? 1) * 1000;
     const afterTransition = () => {
       setLayers((ls) => (ls.length > 1 ? [ls[ls.length - 1]] : ls));
       if (preview === "transition") {
@@ -278,6 +285,8 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
         inEl.style.zIndex = "1";
       }
       const anims: globalThis.Animation[] = [];
+      if (zr) anims.push(...zoomAnimations(inEl, outEl, zr, pres.width, pres.height, dur));
+      else if (plan.morph && outLayer && pres.slides[outLayer.index]) anims.push(...morphAnimations(inEl, outEl, pres.slides[outLayer.index], sl, dur));
       if (plan.incoming) anims.push(inEl.animate(plan.incoming, { duration: dur, easing: plan.easing ?? "linear", fill: "both" }));
       if (plan.outgoing) anims.push(outEl.animate(plan.outgoing, { duration: dur, easing: plan.easing ?? "linear", fill: "both" }));
       Promise.all(anims.map((a) => a.finished.catch(() => undefined))).then(() => {
@@ -313,6 +322,14 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
         const k = st.step;
         setStep(k + 1);
         void runEffects(top.key, st.steps.clicks[k], false);
+        return;
+      }
+      // Yakınlaştırmanın kapsamı bitti: yakınlaştırma slaydına uzaklaşarak dönülür.
+      const zret = zoomRet.current;
+      if (zret && st.index === zret.last) {
+        zoomRet.current = null;
+        zoomRef.current = { ...zret.rect, out: true };
+        goTo(zret.slide, true);
         return;
       }
       const ni = stepInOrder(order, st.index, 1);
@@ -448,6 +465,13 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
     if ((e.target as Element).closest("button, .show-bar, .presenter-side, .show-toolbar, .show-grid, .rehearse-bar, video, audio, [data-media]")) return;
     if (tools.tool === "pen" || tools.tool === "highlighter" || tools.tool === "eraser") return;
     const linkEl = (e.target as Element).closest("[data-link]") as HTMLElement | null;
+    const zj = linkEl?.dataset.zoom && screen === "none" && !onRemote ? zoomJump(pres, index, linkEl.dataset.shapeId ?? "") : null;
+    if (zj) {
+      zoomRef.current = zj.rect;
+      zoomRet.current = zj.ret ? { slide: index, last: zj.last, rect: zj.rect } : null;
+      goTo(zj.target);
+      return;
+    }
     if (linkEl?.dataset.link && screen === "none" && !onRemote) {
       followShowLink(linkEl.dataset.link);
       return;
@@ -592,6 +616,12 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
       onContextMenu={(e) => {
         e.preventDefault();
         openMenu(e);
+      }}
+      onMouseOver={(e) => {
+        // Eylem Ayarları › Fare Üzerine Gelme: şeklin üzerine her girişte bir kez.
+        const el = (e.target as Element).closest("[data-hover-link]") as HTMLElement | null;
+        if (el !== hoverRef.current && el?.dataset.hoverLink && screen === "none" && !onRemote) followShowLink(el.dataset.hoverLink);
+        hoverRef.current = el;
       }}
     >
       <div className="show-area" ref={areaRef}>

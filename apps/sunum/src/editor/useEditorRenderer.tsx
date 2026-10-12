@@ -60,7 +60,7 @@ export function useEditorRenderer(actions: Actions, getState: () => AppState) {
                   if (idx >= nRows * nCols) {
                     // Son hücrede Tab: yeni satır ekle.
                     actions.updateShapes((s) =>
-                      s.kind === "table" ? { ...s, rows: [...s.rows, { h: s.rows[s.rows.length - 1].h, cells: s.cols.map(() => ({ text: { paragraphs: [{ runs: [], level: 0, props: {} }] } })) }], h: s.h + s.rows[s.rows.length - 1].h } : s,
+                      s.kind === "table" ? { ...s, rows: [...s.rows, { h: s.rows[s.rows.length - 1].minH ?? s.rows[s.rows.length - 1].h, cells: s.cols.map(() => ({ text: { paragraphs: [{ runs: [], level: 0, props: {} }] } })) }], h: s.h + s.rows[s.rows.length - 1].h } : s,
                     [shape.id]);
                   }
                   actions.store.set({ editing: { shapeId: shape.id, cell: [Math.floor(idx / nCols), idx % nCols], selectAll: true } });

@@ -16,7 +16,7 @@ import {
   Video24Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, RibbonButton, RibbonCheckbox, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonStack } from "@officehere/ui";
-import { CHART_PALETTES, CHART_STYLES, hasAxes, isPieType, QUICK_LAYOUTS, seriesColor, switchRowColumn } from "../model/chart";
+import { CHART_PALETTES, CHART_STYLES, effectiveLabelPos, hasAxes, isPieType, labelPositions, QUICK_LAYOUTS, seriesColor, switchRowColumn } from "../model/chart";
 import { cssColor } from "../model/color";
 import type { ChartData, Color } from "../model/types";
 import { ChartSvg } from "../render/ChartSvg";
@@ -105,8 +105,14 @@ export function ChartDesignTab({ ctx }: { ctx: RibbonCtx }) {
                 label="Veri Etiketleri"
                 submenu={
                   <Menu>
-                    <MenuItem label="Yok" checked={!c?.dataLabels} onClick={() => set({ dataLabels: undefined })} />
-                    <MenuItem label={pie ? "Ortala" : "Göster"} checked={!!c?.dataLabels} onClick={() => set({ dataLabels: true })} />
+                    <MenuItem label="Yok" checked={!c?.dataLabels} onClick={() => set({ dataLabels: undefined, labelPos: undefined })} />
+                    {c && labelPositions(c.type, !!c.grouping && c.grouping !== "clustered").length ? (
+                      labelPositions(c.type, !!c.grouping && c.grouping !== "clustered").map((x) => (
+                        <MenuItem key={x.pos} label={x.label} checked={!!c.dataLabels && effectiveLabelPos(c) === x.pos} onClick={() => set({ dataLabels: true, labelPos: x.pos })} />
+                      ))
+                    ) : (
+                      <MenuItem label="Göster" checked={!!c?.dataLabels} onClick={() => set({ dataLabels: true })} />
+                    )}
                   </Menu>
                 }
               />

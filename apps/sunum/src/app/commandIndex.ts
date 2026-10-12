@@ -10,6 +10,8 @@ export interface CommandEntry {
   group: string;
   /** Aynı grup + başlıktaki kaçıncı öğe. */
   nth: number;
+  /** Şeritte düğmesi olmayan komutlar (Dosya menüsü, galeri öğeleri) doğrudan çalışır. */
+  run?: () => void;
 }
 
 /** Karşılaştırma için: Türkçe küçük harf + aksan/şapka farkı yok sayılır. */

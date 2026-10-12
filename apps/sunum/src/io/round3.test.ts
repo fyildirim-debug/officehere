@@ -42,7 +42,7 @@ describe("özel slayt gösterileri", () => {
 describe("grafik ayrıntıları", () => {
   it("yığılmış gruplama, eksen başlıkları, kılavuzlar, stil, palet dışı alanlar korunur", async () => {
     const p = deck(1);
-    const ch = makeChart("bar", 100, 100, 600, 400, "Grafik 1", "percentStacked");
+    const ch = makeChart("bar", 100, 100, 600, 400, "Grafik 1", { grouping: "percentStacked" });
     ch.chart = { ...ch.chart, axisTitles: { cat: "Bölge", val: "Pay" }, gridMajor: false, gridMinor: true, style: 3, fill: { rgb: "#F0F0F0" } };
     p.slides[1].shapes.push(ch);
     const r = await roundTrip(p);

@@ -115,16 +115,16 @@
 
 .tb-p[data-bullet]::before {
   content: attr(data-bullet);
-  display: inline-block;
-  min-width: var(--bu-w, 0);
+  display: inline;
+  padding-right: var(--bu-pad, 0);
   font-family: var(--bu-font);
   font-size: var(--bu-size);
   color: var(--bu-color);
   opacity: var(--bu-op, 1);
   text-indent: 0;
   white-space: pre;
-  font-style: normal;
-  font-weight: normal;
+  font-style: var(--bu-style, normal);
+  font-weight: var(--bu-weight, normal);
   text-decoration: none;
   vertical-align: baseline;
 }

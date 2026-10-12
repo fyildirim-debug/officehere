@@ -21,7 +21,7 @@ function cloneCellStyle(c: TableCell): TableCell {
 export function insertRow(t: TableShape, at: number, below: boolean): TableShape {
   const ref = t.rows[Math.max(0, Math.min(t.rows.length - 1, at))];
   const idx = below ? at + 1 : at;
-  const row = { h: ref?.h ?? 40, cells: (ref?.cells ?? t.cols.map(emptyCell)).map((c) => ({ ...cloneCellStyle(c), gridSpan: undefined, hMerge: undefined })) };
+  const row = { h: ref?.minH ?? ref?.h ?? 40, cells: (ref?.cells ?? t.cols.map(emptyCell)).map((c) => ({ ...cloneCellStyle(c), gridSpan: undefined, hMerge: undefined })) };
   const rows = [...t.rows.slice(0, idx), row, ...t.rows.slice(idx)];
   return { ...t, rows, h: rows.reduce((s, r) => s + r.h, 0) };
 }

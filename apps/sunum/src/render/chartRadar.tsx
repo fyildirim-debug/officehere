@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { formatChartNumber, niceScale, valueRange } from "../model/chart";
 import type { ChartData } from "../model/types";
 import type { Box, ChartPaint } from "./ChartSvg";
+import { pointLabel } from "./chartLabels";
 
 export function radarParts(chart: ChartData, plot: Box, paint: ChartPaint, labels: boolean): ReactNode[] {
   const out: ReactNode[] = [];
@@ -42,15 +43,10 @@ export function radarParts(chart: ChartData, plot: Box, paint: ChartPaint, label
   chart.series.forEach((s, j) => {
     const pts = Array.from({ length: n }, (_, i) => pt(i, rel(s.values[i] ?? 0) * r));
     const d = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`).join(" ") + " Z";
-    out.push(<path key={`rp${j}`} d={d} fill="none" stroke={paint.color(j)} strokeWidth={Math.max(1.5, fs * 0.19)} strokeLinejoin="round" />);
-    if (labels)
-      pts.forEach(([x, y], i) =>
-        out.push(
-          <text key={`rd${j}-${i}`} x={x} y={y - fs * 0.4} textAnchor="middle" fontSize={fs * 0.85} fill={paint.text}>
-            {formatChartNumber(s.values[i] ?? 0)}
-          </text>,
-        ),
-      );
+    const filled = chart.radarStyle === "filled";
+    out.push(<path key={`rp${j}`} d={d} fill={filled ? paint.color(j) : "none"} fillOpacity={filled ? 0.75 : undefined} stroke={paint.color(j)} strokeWidth={Math.max(1.5, fs * 0.19)} strokeLinejoin="round" />);
+    if (chart.radarStyle === "marker") pts.forEach(([x, y], i) => out.push(<circle key={`rm${j}-${i}`} cx={x} cy={y} r={Math.max(2.5, fs * 0.3)} fill={paint.color(j)} />));
+    if (labels) pts.forEach(([x, y], i) => out.push(pointLabel(`rd${j}-${i}`, x, y, "t", formatChartNumber(s.values[i] ?? 0), paint)));
   });
   return out;
 }

@@ -293,7 +293,11 @@ export function bodyPrXml(b: TextBody | undefined, forceDefaults = false): strin
     anchor: b?.anchor,
   });
   let fit = "";
-  if (b?.autofit === "shrink") fit = `<a:normAutofit${attrs({ fontScale: b.fontScale && b.fontScale < 1 ? Math.round(b.fontScale * 100000) : undefined, lnSpcReduction: b.lnSpcReduction ? Math.round(b.lnSpcReduction * 100000) : undefined })}/>`;
+  // Küçültme sonucu (fontScale/lnSpcReduction) yer tutucuda autofit düzenden miras gelse de yazılır;
+  // aksi hâlde diğer uygulamalar metni küçültmeden çizer ve taşar.
+  const shrunk = (b?.fontScale !== undefined && b.fontScale < 1) || !!b?.lnSpcReduction;
+  if (b?.autofit === "shrink" || (b && b.autofit === undefined && shrunk))
+    fit = `<a:normAutofit${attrs({ fontScale: b.fontScale && b.fontScale < 1 ? Math.round(b.fontScale * 100000) : undefined, lnSpcReduction: b.lnSpcReduction ? Math.round(b.lnSpcReduction * 100000) : undefined })}/>`;
   else if (b?.autofit === "shape") fit = "<a:spAutoFit/>";
   else if (b?.autofit === "none") fit = "<a:noAutofit/>";
   return fit ? `<a:bodyPr${a}>${fit}</a:bodyPr>` : `<a:bodyPr${a}/>`;
@@ -316,7 +320,7 @@ function cNvPr(s: Shape, ctx: WriteCtx): string {
   const id = ctx.nextId();
   ctx.idMap.set(s.id, id);
   const a = attrs({ id, name: s.name || `Şekil ${id}`, descr: s.descr, hidden: s.hidden ? "1" : undefined });
-  const link = hlinkXml(s.link, ctx);
+  const link = hlinkXml(s.link, ctx) + hlinkXml(s.hoverLink, ctx, "a:hlinkHover");
   return link ? `<p:cNvPr${a}>${link}</p:cNvPr>` : `<p:cNvPr${a}/>`;
 }
 
@@ -360,6 +364,10 @@ export function picXml(s: PicShape, ctx: WriteCtx): string {
     const ph = s.ph ? `<p:ph${attrs({ type: s.ph.type === "obj" ? undefined : s.ph.type, idx: s.ph.idx })}/>` : "";
     nvPr = `<p:nvPr>${ph}<${tag} r:link="${linkRid}"/><p:extLst><p:ext uri="${MEDIA_EXT_URI}"><p14:media xmlns:p14="${NS.p14}" r:embed="${embedRid}"/></p:ext>${opts}</p:extLst></p:nvPr>`;
     if (!s.link) cnv = cnv.replace(/\/>$/, '><a:hlinkClick r:id="" action="ppaction://media"/></p:cNvPr>');
+  } else if (s.zoom) {
+    // Yakınlaştırma: resim + slayda atlama köprüsü (diğer okuyucular için) ve uygulama uzantısı.
+    const ph = s.ph ? `<p:ph${attrs({ type: s.ph.type === "obj" ? undefined : s.ph.type, idx: s.ph.idx })}/>` : "";
+    nvPr = `<p:nvPr>${ph}<p:extLst><p:ext uri="${OH_EXT_URI}"><oh:zoom xmlns:oh="${NS.oh}"${attrs({ summary: s.zoom.summary ? "1" : undefined, ret: s.zoom.ret ? "1" : undefined })}/></p:ext></p:extLst></p:nvPr>`;
   }
   return (
     `<p:pic><p:nvPicPr>${cnv}<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>${nvPr}</p:nvPicPr>` +

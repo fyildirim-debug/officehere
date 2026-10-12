@@ -6,6 +6,7 @@ import { PaintBucket20Regular, SlideSize24Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGallery, RibbonGroup, RibbonMenuButton, useContextMenu, useMenuClose } from "@officehere/ui";
 import { makeSp, textBody } from "../model/factory";
+import { applyThemeToSlides } from "../model/designs";
 import { applyTheme, applyVariant, defaultThemeId, newPresentation, setDefaultThemeId, SLIDE_16_9, SLIDE_4_3 } from "../model/presentation";
 import type { Color, Fill, Presentation, Theme } from "../model/types";
 import { fillToCss } from "../render/style";
@@ -124,6 +125,14 @@ export function DesignTab({ ctx }: { ctx: RibbonCtx }) {
       e,
       <Menu>
         <MenuItem label="Tüm Slaytlara Uygula" onClick={() => a.store.commit((p) => applyTheme(p, t.id, 0), { sel: [], editing: null })} />
+        <MenuItem
+          label="Seçili Slaytlara Uygula"
+          onClick={() => {
+            const cur = a.s.pres.slides[a.s.slideIdx]?.id;
+            const ids = a.s.slideSel.length ? a.s.slideSel : cur ? [cur] : [];
+            a.store.commit((p) => applyThemeToSlides(p, t.id, ids), { sel: [], editing: null });
+          }}
+        />
         <MenuItem label="Varsayılan Tema Olarak Ayarla" checked={isDefault} onClick={() => {
           setDefaultThemeId(t.id);
           a.message(`"${t.name}" yeni boş sunular için varsayılan tema olarak ayarlandı.`, "success");

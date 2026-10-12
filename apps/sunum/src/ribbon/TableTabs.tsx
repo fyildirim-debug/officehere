@@ -267,7 +267,7 @@ export function TableLayoutTab({ ctx }: { ctx: RibbonCtx }) {
       </RibbonGroup>
       <RibbonGroup label="Hücre Boyutu" icon={<TableResizeColumn24Regular />}>
         <RibbonStack>
-          <RibbonSpinner label="Yükseklik:" value={cm(rowH)} min={0.1} max={50} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => r && updateTable(ctx, (x) => { const rows = x.rows.map((row, i) => (i >= r.r1 && i <= r.r2 ? { ...row, h: fromCm(v) } : row)); return { ...x, rows, h: rows.reduce((s, q) => s + q.h, 0) }; })} />
+          <RibbonSpinner label="Yükseklik:" value={cm(rowH)} min={0.1} max={50} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => r && updateTable(ctx, (x) => { const rows = x.rows.map((row, i) => (i >= r.r1 && i <= r.r2 ? { ...row, h: fromCm(v), minH: undefined } : row)); return { ...x, rows, h: rows.reduce((s, q) => s + q.h, 0) }; })} />
           <RibbonSpinner label="Genişlik:" value={cm(colW)} min={0.1} max={50} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => r && updateTable(ctx, (x) => { const cols = x.cols.map((c, j) => (j >= r.c1 && j <= r.c2 ? fromCm(v) : c)); return { ...x, cols, w: cols.reduce((s, q) => s + q, 0) }; })} />
         </RibbonStack>
         <RibbonStack>
@@ -291,7 +291,7 @@ export function TableLayoutTab({ ctx }: { ctx: RibbonCtx }) {
       </RibbonGroup>
       <RibbonGroup label="Tablo Boyutu" icon={<TableResizeRow24Regular />}>
         <RibbonStack>
-          <RibbonSpinner label="Yükseklik:" value={t ? cm(t.h) : 0} min={0.5} max={142} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => updateTable(ctx, (x) => { const k = fromCm(v) / (x.h || 1); const rows = x.rows.map((row) => ({ ...row, h: row.h * k })); return { ...x, rows, h: fromCm(v) }; })} />
+          <RibbonSpinner label="Yükseklik:" value={t ? cm(t.h) : 0} min={0.5} max={142} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => updateTable(ctx, (x) => { const k = fromCm(v) / (x.h || 1); const rows = x.rows.map((row) => ({ ...row, h: row.h * k, minH: row.minH && row.minH * k })); return { ...x, rows, h: fromCm(v) }; })} />
           <RibbonSpinner label="Genişlik:" value={t ? cm(t.w) : 0} min={0.5} max={142} step={0.1} decimals={2} unit="cm" width={84} onChange={(v) => updateTable(ctx, (x) => { const k = fromCm(v) / (x.w || 1); return { ...x, cols: x.cols.map((c) => c * k), w: fromCm(v) }; })} />
         </RibbonStack>
       </RibbonGroup>

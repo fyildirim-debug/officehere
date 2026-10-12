@@ -144,6 +144,17 @@ function WordArtGallery({ ctx }: { ctx: RibbonCtx }) {
   );
 }
 
+/** Parçala simgesi (iki kesişen kare, kesişim ayrı bölge). */
+function ShapeFragment() {
+  return (
+    <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+      <path d="M3 3h9v4H7v5H3z" fill="none" stroke="currentColor" strokeWidth="1.1" />
+      <path d="M8 8h4v4H8z" fill="currentColor" opacity="0.55" />
+      <path d="M13 8h4v9H8v-4h5z" fill="none" stroke="currentColor" strokeWidth="1.1" />
+    </svg>
+  );
+}
+
 export function ShapeFormatTab({ ctx }: { ctx: RibbonCtx }) {
   const { state, actions: a, cmd } = ctx;
   const theme = state.pres.theme;
@@ -197,6 +208,7 @@ export function ShapeFormatTab({ ctx }: { ctx: RibbonCtx }) {
               <Menu>
                 <MenuItem icon={<ShapeUnion20Regular />} label="Birleşim" onClick={() => mergeSelection(a, "union")} />
                 <MenuItem icon={<ShapeExclude20Regular />} label="Birleştir" onClick={() => mergeSelection(a, "combine")} />
+                <MenuItem icon={<ShapeFragment />} label="Parçala" onClick={() => mergeSelection(a, "fragment")} />
                 <MenuItem icon={<ShapeIntersect20Regular />} label="Kesişim" onClick={() => mergeSelection(a, "intersect")} />
                 <MenuItem icon={<ShapeSubtract20Regular />} label="Çıkar" onClick={() => mergeSelection(a, "subtract")} />
               </Menu>

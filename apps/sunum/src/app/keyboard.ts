@@ -42,6 +42,23 @@ export function useKeyboard(actions: Actions, h: KeyHandlers) {
       const k = code.startsWith("Key") ? code.slice(3) : code.startsWith("Digit") ? code.slice(5) : key;
       const inField = isFormField(e.target);
       const editingText = !!s.editing && (e.target as HTMLElement)?.classList?.contains("tb-edit");
+      // Düzenleme sürerken odak düzenleyiciden kaymışsa (sağ tık, kaydırma çubuğu vb.) tuşlar metne yönlendirilir.
+      const h0 = actions.textHandle;
+      const strayEdit = !!s.editing && !!h0 && !editingText && !inField && s.focus === "canvas" && !(e.target as HTMLElement | null)?.closest?.(".oh-ribbon, [role=dialog], .oh-popover");
+      if (strayEdit && h0) {
+        if (mod && !e.altKey && !e.shiftKey && k === "A") {
+          e.preventDefault();
+          e.stopPropagation();
+          h0.focus();
+          h0.selectAll();
+          return;
+        }
+        if (!mod && !e.altKey && (key.length === 1 || key === "Backspace" || key === "Delete" || key === "Enter" || key.startsWith("Arrow") || key === "Home" || key === "End")) {
+          // Odak düzenleyiciye döner; tarayıcının varsayılan işlemi (yazma/silme) orada uygulanır.
+          h0.focus();
+          return;
+        }
+      }
       const run = (fn: () => void) => {
         e.preventDefault();
         e.stopPropagation();

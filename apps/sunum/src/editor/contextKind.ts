@@ -10,6 +10,8 @@ export type CanvasMenuKind = "shape" | "slide" | "text" | "cell";
 
 export function contextKind(t: Element, st: AppState, slideEl: HTMLElement | null, actions: Actions): CanvasMenuKind {
   if (t.closest(".tb-edit")) return st.editing?.cell ? "cell" : "text";
+  // Düzenlenen şeklin herhangi bir yerinde (metin bloğu dışında da) metin menüsü açılır.
+  if (st.editing && !st.editing.cell && isInEditedShape(t, st, slideEl)) return "text";
   // Tablo hücresi: tıklanan hücre seçim dışındaysa o hücre seçilir.
   const td = t.closest("td[data-cell]") as HTMLElement | null;
   const tblEl = td?.closest("[data-shape-id]") as HTMLElement | null;
@@ -22,6 +24,14 @@ export function contextKind(t: Element, st: AppState, slideEl: HTMLElement | nul
   }
   const onShape = !!t.closest("[data-shape-id]") && !!slideEl?.contains(t);
   return onShape ? "shape" : "slide";
+}
+
+/** Öğe, düzenlenmekte olan şeklin içinde mi? */
+export function isInEditedShape(t: Element, st: AppState, slideEl: HTMLElement | null): boolean {
+  const ed = st.editing;
+  if (!ed || !slideEl) return false;
+  const el = t.closest("[data-shape-id]") as HTMLElement | null;
+  return !!el && slideEl.contains(el) && el.dataset.shapeId === ed.shapeId;
 }
 
 /** Animasyon sekmesinde şekillerin yanında gösterilen sıra numaraları. */

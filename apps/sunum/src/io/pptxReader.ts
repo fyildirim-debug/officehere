@@ -246,6 +246,13 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
     // İkincil asıl slaytın metin stilleri farklıysa düzen yer tutucularına taşınır.
     const ownStyles = mi > 0 && master && JSON.stringify(textStyles) !== JSON.stringify(master.textStyles) ? textStyles : undefined;
     const mDeco = mShapes.filter((x) => !(x.kind === "sp" && x.ph));
+    // İkincil asıl slaydın teması farklıysa düzenleri o temayla çizilir (Seçili Slaytlara Uygula).
+    let designTheme: Theme | undefined;
+    if (mi > 0) {
+      const tp = [...mRels.values()].find((r) => r.type === REL.theme)?.target;
+      const t2 = tp && tp !== themePath ? readTheme(await text(tp)).theme : undefined;
+      if (t2 && (JSON.stringify(t2.colors) !== JSON.stringify(theme.colors) || JSON.stringify(t2.fonts) !== JSON.stringify(theme.fonts))) designTheme = t2;
+    }
 
     // Düzenler
     const layoutRids = kids(kid(mDoc, "sldLayoutIdLst"), "sldLayoutId").map((e) => relId(e)).filter(Boolean) as string[];
@@ -286,6 +293,7 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
         shapes,
         background,
         showMasterShapes,
+        ...(designTheme ? { theme: designTheme } : {}),
       };
       layouts.push(layout);
       layoutByPath.set(lp, layout);

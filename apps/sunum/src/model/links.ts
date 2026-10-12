@@ -99,6 +99,16 @@ export function mapShapeLinks(s: Shape, fn: (link: string) => string | undefined
       else delete out.link;
     }
   }
+  if (out.hoverLink) {
+    const nh = fn(out.hoverLink);
+    if (nh !== out.hoverLink) {
+      out = { ...out };
+      if (nh) out.hoverLink = nh;
+      else delete out.hoverLink;
+    }
+  }
+  // Yakınlaştırma şeklinin hedefi köprüsüyle birlikte taşınır.
+  if (out.kind === "pic" && out.zoom && out.link?.startsWith("#slide:") && out.zoom.slideId !== out.link.slice(7)) out = { ...out, zoom: { ...out.zoom, slideId: out.link.slice(7) } };
   if (out.kind === "sp" && out.text) {
     const t = mapBody(out.text, fn);
     if (t !== out.text) out = { ...out, text: t };

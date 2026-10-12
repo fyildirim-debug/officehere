@@ -154,7 +154,7 @@
 }
 
 .splitter:hover {
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--oh-hover);
 }
 
 .status-btn {
@@ -777,7 +777,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 8px 8px 24px 0;
-  background: var(--oh-panel-bg, #fff);
+  background: var(--oh-surface);
   border-right: 1px solid var(--oh-border);
 }
 
@@ -877,7 +877,7 @@
   max-width: calc(100% - 32px);
   padding: 5px 12px;
   border-radius: 4px;
-  background: rgba(32, 32, 32, 0.86);
+  background: var(--sn-hint-bg);
   color: #fff;
   font-size: 12px;
   line-height: 1.4;
@@ -1172,12 +1172,12 @@
 }
 
 .chart-grid td.is-series input {
-  color: #2f6db5;
+  color: var(--sn-series-text);
   font-weight: 600;
 }
 
 .chart-grid td.is-cat input {
-  color: #b04a1f;
+  color: var(--sn-cat-text);
 }
 
 .chart-grid td input:focus {

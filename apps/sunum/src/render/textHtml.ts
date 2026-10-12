@@ -43,6 +43,32 @@ function alpha(n: number): string {
   return s;
 }
 
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+const glyphCache = new Map<string, number>();
+
+/** Madde/numara etiketinin genişliği (px): tarayıcıda tuval ölçümü, yoksa yaklaşık değer. */
+function labelWidthPx(label: string, sizePt: number, font: string, bold: boolean, italic: boolean): number {
+  const key = `${label}|${sizePt.toFixed(2)}|${font}|${bold}|${italic}`;
+  const hit = glyphCache.get(key);
+  if (hit !== undefined) return hit;
+  if (measureCtx === undefined) {
+    try {
+      const ok = typeof document !== "undefined" && typeof navigator !== "undefined" && !/jsdom/i.test(navigator.userAgent);
+      measureCtx = ok ? document.createElement("canvas").getContext("2d") : null;
+    } catch {
+      measureCtx = null;
+    }
+  }
+  let w = numberWidthPx(label, sizePt);
+  if (measureCtx) {
+    measureCtx.font = `${italic ? "italic " : ""}${bold ? "700 " : ""}${sizePt}pt ${font}`;
+    w = measureCtx.measureText(label).width;
+  }
+  if (glyphCache.size > 2000) glyphCache.clear();
+  glyphCache.set(key, w);
+  return w;
+}
+
 /** Numara etiketinin yaklaşık genişliği (px); sekme durağı kararı için. */
 function numberWidthPx(label: string, sizePt: number): number {
   let em = 0;
@@ -148,7 +174,9 @@ export function paragraphsHtml(body: TextBody, ctx: TextRenderCtx): string {
     if (bu && bu.type === "char") {
       attr = ` data-bullet="${escHtml(bu.char)}"`;
       const bfont = bu.font ? fontStack(bu.font) : fontStack(resolveFont(rp.font, ctx.theme));
-      extra = `;--bu-font:${bfont.replace(/"/g, "'")};--bu-size:${(((rp.size ?? 18) * (bu.size ?? 100)) / 100).toFixed(2)}pt;--bu-color:${cssColor(bu.color ?? rp.color, ctx.theme)};--bu-w:${Math.max(0, -(ep.indent ?? 0)).toFixed(2)}px`;
+      const bsz = ((rp.size ?? 18) * (bu.size ?? 100)) / 100;
+      const pad = Math.max(0, -(ep.indent ?? 0) - labelWidthPx(bu.char, bsz, bfont, false, false));
+      extra = `;--bu-font:${bfont.replace(/"/g, "'")};--bu-size:${bsz.toFixed(2)}pt;--bu-color:${cssColor(bu.color ?? rp.color, ctx.theme)};--bu-pad:${pad.toFixed(2)}px`;
     }
     return `<div class="tb-p is-prompt"${attr} style="${paraCss({ ...ep, bullet: undefined }, ctx, true, rp.size ?? 18)}${extra}"><span style="${runCss(rp, ctx)}">${escHtml(ctx.prompt)}</span></div>`;
   }
@@ -182,8 +210,16 @@ export function paragraphsHtml(body: TextBody, ctx: TextRenderCtx): string {
           minW = Math.ceil((start + est + 4) / 96) * 96 - start;
         }
       }
+      // Numara ilk çalımın kalın/italik biçimini alır.
+      const bBold = bu.type === "auto" && !!refProps.bold;
+      const bItalic = bu.type === "auto" && !!refProps.italic;
+      // Etiket satır içi (bölünmez) kutudur; asılı girintiye kadar sağ dolguyla genişletilir. Böylece
+      // boşluksuz uzun bir sözcük etiketten ayrılıp alt satıra düşmez.
+      const pad = Math.max(0, minW - labelWidthPx(label, bsize, bfont, bBold, bItalic));
       bulletAttr = ` data-bullet="${escHtml(label)}"`;
-      bulletStyle = `;--bu-font:${bfont.replace(/"/g, "'")};--bu-size:${bsize.toFixed(2)}pt;--bu-color:${bcolor};--bu-w:${minW.toFixed(2)}px`;
+      bulletStyle = `;--bu-font:${bfont.replace(/"/g, "'")};--bu-size:${bsize.toFixed(2)}pt;--bu-color:${bcolor};--bu-pad:${pad.toFixed(2)}px`;
+      if (bBold) bulletStyle += ";--bu-weight:700";
+      if (bItalic) bulletStyle += ";--bu-style:italic";
       if (isEmpty && ctx.editing) bulletStyle += ";--bu-op:0.45";
     }
     const css = paraCss(ep, ctx, i === 0, refProps.size ?? 18) + bulletStyle;

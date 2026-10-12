@@ -33,7 +33,7 @@ export function freezeColors<T>(v: T, theme: Theme): T {
 function scaleShape(sh: Shape, s: number, ox: number, oy: number): Shape {
   const base = { ...sh, x: sh.x * s + ox, y: sh.y * s + oy, w: sh.w * s, h: sh.h * s };
   if (sh.kind === "group") return { ...base, children: sh.children.map((c) => scaleShape(c, s, ox, oy)) } as Shape;
-  if (sh.kind === "table") return { ...base, cols: sh.cols.map((c) => c * s), rows: sh.rows.map((r) => ({ ...r, h: r.h * s })) } as Shape;
+  if (sh.kind === "table") return { ...base, cols: sh.cols.map((c) => c * s), rows: sh.rows.map((r) => ({ ...r, h: r.h * s, minH: r.minH && r.minH * s })) } as Shape;
   return base as Shape;
 }
 

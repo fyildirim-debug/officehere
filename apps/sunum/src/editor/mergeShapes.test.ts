@@ -1,7 +1,7 @@
 /** Şekilleri Birleştir: çokgen işlemleri. */
 import { describe, expect, it } from "vitest";
 import { makeSp } from "../model/factory";
-import { area, cmdsToRings, mergeRings, mergeShapes, ringOp, type Ring } from "./mergeShapes";
+import { area, cmdsToRings, fragmentRings, mergeRings, mergeShapes, ringOp, type Ring } from "./mergeShapes";
 
 const sq = (x: number, y: number, s: number): Ring => [
   [x, y],
@@ -43,9 +43,17 @@ describe("çokgen işlemleri", () => {
   it("şekiller tek özel şekle dönüşür", () => {
     const r1 = makeSp("rect", 0, 0, 100, 100);
     const r2 = makeSp("ellipse", 50, 50, 100, 100);
-    const u = mergeShapes([r1, r2], "union")!;
+    const [u] = mergeShapes([r1, r2], "union");
     expect(u.geom).toBe("custom");
     expect(u.w).toBeCloseTo(150, 0);
-    expect(mergeShapes([r1, makeSp("rect", 300, 300, 10, 10)], "intersect")).toBeNull();
+    expect(mergeShapes([r1, makeSp("rect", 300, 300, 10, 10)], "intersect")).toEqual([]);
+  });
+  it("Parçala: örtüşen iki kare üç parçaya ayrılır, alanlar korunur", () => {
+    const parts = fragmentRings([[a], [b]]);
+    expect(parts).toHaveLength(3);
+    expect(parts.map((p) => total(p)).sort((x, y) => x - y)).toEqual([expect.closeTo(25, 2), expect.closeTo(75, 2), expect.closeTo(75, 2)]);
+    const shapes = mergeShapes([makeSp("rect", 0, 0, 100, 100), makeSp("rect", 50, 0, 100, 100)], "fragment");
+    expect(shapes).toHaveLength(3);
+    expect(shapes.every((x) => x.geom === "custom")).toBe(true);
   });
 });

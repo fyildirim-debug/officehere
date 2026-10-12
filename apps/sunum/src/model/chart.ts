@@ -1,6 +1,6 @@
 /** Grafik verisi yardımcıları: varsayılan veri, eksen ölçeği, sayı biçimi. */
 import { uid } from "./factory";
-import type { ChartData, ChartGrouping, ChartShape, ChartType, Color } from "./types";
+import type { ChartData, ChartShape, ChartType, Color, DataLabelPos } from "./types";
 
 const ACCENTS = ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"] as const;
 type Accent = (typeof ACCENTS)[number];
@@ -40,16 +40,105 @@ export const CHART_TYPES: { type: ChartType; label: string }[] = [
   { type: "doughnut", label: "Halka" },
 ];
 
-/** Gruplandırma alt türleri (Grafik Ekle iletişim kutusunun üst satırı). */
-export function chartSubtypes(t: ChartType): { grouping: ChartGrouping; label: string }[] {
+export interface ChartSubtype {
+  id: string;
+  label: string;
+  /** Alt türün grafiğe uyguladığı alanlar (tür değişebilir: Pasta ↔ Halka). */
+  patch: Partial<ChartData>;
+}
+
+/** Grafik Ekle iletişim kutusunun üst satırındaki alt türler. */
+export function chartSubtypes(t: ChartType): ChartSubtype[] {
   const base: Partial<Record<ChartType, string>> = { col: "Sütun", bar: "Çubuk", line: "Çizgi", area: "Alan" };
   const b = base[t];
-  if (!b) return [];
-  return [
-    { grouping: "clustered", label: t === "line" || t === "area" ? b : `Kümelenmiş ${b}` },
-    { grouping: "stacked", label: `Yığılmış ${b}` },
-    { grouping: "percentStacked", label: `%100 Yığılmış ${b}` },
-  ];
+  if (b)
+    return [
+      { id: "clustered", label: t === "line" || t === "area" ? b : `Kümelenmiş ${b}`, patch: { grouping: undefined } },
+      { id: "stacked", label: `Yığılmış ${b}`, patch: { grouping: "stacked" } },
+      { id: "percentStacked", label: `%100 Yığılmış ${b}`, patch: { grouping: "percentStacked" } },
+    ];
+  if (t === "pie" || t === "doughnut")
+    return [
+      { id: "pie", label: "Pasta", patch: { type: "pie" } },
+      { id: "doughnut", label: "Halka", patch: { type: "doughnut" } },
+    ];
+  if (t === "scatter")
+    return [
+      { id: "marker", label: "Dağılım", patch: { scatterStyle: undefined } },
+      { id: "smoothMarker", label: "Düzgün Çizgili ve İşaretçili Dağılım", patch: { scatterStyle: "smoothMarker" } },
+      { id: "smooth", label: "Düzgün Çizgili Dağılım", patch: { scatterStyle: "smooth" } },
+      { id: "lineMarker", label: "Düz Çizgili ve İşaretçili Dağılım", patch: { scatterStyle: "lineMarker" } },
+      { id: "line", label: "Düz Çizgili Dağılım", patch: { scatterStyle: "line" } },
+    ];
+  if (t === "radar")
+    return [
+      { id: "standard", label: "Radar", patch: { radarStyle: undefined } },
+      { id: "marker", label: "İşaretçili Radar", patch: { radarStyle: "marker" } },
+      { id: "filled", label: "Dolgulu Radar", patch: { radarStyle: "filled" } },
+    ];
+  if (t === "combo")
+    return [
+      { id: "colLine", label: "Kümelenmiş Sütun - Çizgi", patch: { secondaryLine: undefined } },
+      { id: "colLine2", label: "Kümelenmiş Sütun - İkincil Eksende Çizgi", patch: { secondaryLine: true } },
+    ];
+  return [];
+}
+
+/** Türe özgü alt tür alanlarını sıfırlayıp alt türü uygular. */
+export function applySubtype(c: ChartData, type: ChartType, patch: Partial<ChartData> = {}): ChartData {
+  const out: ChartData = { ...c, type, grouping: undefined, scatterStyle: undefined, radarStyle: undefined, secondaryLine: undefined, ...patch };
+  if (out.grouping === "clustered") out.grouping = undefined;
+  // Konum seçenekleri türler arasında farklıdır: uymayan konum varsayılana döner.
+  if (out.labelPos && !labelPositions(out.type, !!out.grouping).some((x) => x.pos === out.labelPos)) out.labelPos = undefined;
+  return out;
+}
+
+/** Grafiğin geçerli alt türü. */
+export function subtypeIdOf(c: ChartData): string | undefined {
+  const subs = chartSubtypes(c.type);
+  const val = (k: keyof ChartData) => (k === "grouping" && c.grouping === "clustered" ? undefined : c[k]);
+  return subs.find((s) => Object.entries(s.patch).every(([k, v]) => (k === "type" ? c.type === v : val(k as keyof ChartData) === v)))?.id ?? subs[0]?.id;
+}
+
+/** Veri etiketi konumları (Grafik Öğesi Ekle › Veri Etiketleri). */
+export function labelPositions(t: ChartType, stacked = false): { pos: DataLabelPos; label: string }[] {
+  if (t === "col" || t === "bar" || t === "combo")
+    return [
+      { pos: "ctr", label: "Orta" },
+      { pos: "inEnd", label: "İç Uç" },
+      { pos: "inBase", label: "İç Taban" },
+      ...(stacked ? [] : [{ pos: "outEnd" as const, label: "Dış Uç" }]),
+      { pos: "callout", label: "Veri Belirtme Çizgisi" },
+    ];
+  if (t === "line" || t === "scatter")
+    return [
+      { pos: "ctr", label: "Orta" },
+      { pos: "l", label: "Sol" },
+      { pos: "r", label: "Sağ" },
+      { pos: "t", label: "Üst" },
+      { pos: "b", label: "Alt" },
+      { pos: "callout", label: "Veri Belirtme Çizgisi" },
+    ];
+  if (t === "pie")
+    return [
+      { pos: "ctr", label: "Orta" },
+      { pos: "inEnd", label: "İç Uç" },
+      { pos: "outEnd", label: "Dış Uç" },
+      { pos: "bestFit", label: "En İyi Sığdırma" },
+      { pos: "callout", label: "Veri Belirtme Çizgisi" },
+    ];
+  if (t === "doughnut") return [{ pos: "callout", label: "Veri Belirtme Çizgisi" }];
+  return [];
+}
+
+/** Etiket konumu (seçilmemişse türün varsayılanı). */
+export function effectiveLabelPos(c: ChartData): DataLabelPos {
+  if (c.labelPos) return c.labelPos;
+  const stacked = !!c.grouping && c.grouping !== "clustered";
+  if (c.type === "col" || c.type === "bar" || c.type === "combo") return stacked ? "ctr" : "outEnd";
+  if (c.type === "pie" || c.type === "doughnut") return c.type === "pie" ? "bestFit" : "ctr";
+  if (c.type === "area") return "ctr";
+  return c.type === "line" || c.type === "scatter" ? "r" : "t";
 }
 
 export function chartTypeLabel(t: ChartType): string {
@@ -133,7 +222,12 @@ export function scatterX(c: ChartData): number[] {
 }
 
 /** Yeni grafiğin örnek verisi (PowerPoint'in varsayılan tablosuna benzer). */
-export function defaultChartData(type: ChartType, grouping?: ChartGrouping): ChartData {
+export function defaultChartData(type: ChartType, patch: Partial<ChartData> = {}): ChartData {
+  const t = patch.type ?? type;
+  return applySubtype(baseChartData(t), t, patch);
+}
+
+function baseChartData(type: ChartType): ChartData {
   if (type === "scatter") {
     return { type, showTitle: true, categories: ["0,7", "1,8", "2,6"], series: [{ name: "Y Değerleri", values: [2.7, 3.2, 0.8] }], legend: "b" };
   }
@@ -156,12 +250,11 @@ export function defaultChartData(type: ChartType, grouping?: ChartGrouping): Cha
       { name: "Seri 3", values: [2, 2, 3, 5] },
     ],
     legend: "b",
-    grouping: grouping && grouping !== "clustered" ? grouping : undefined,
   };
 }
 
-export function makeChart(type: ChartType, x: number, y: number, w: number, h: number, name = "Grafik", grouping?: ChartGrouping): ChartShape {
-  return { kind: "chart", id: uid(), name, x, y, w, h, rot: 0, chart: defaultChartData(type, grouping) };
+export function makeChart(type: ChartType, x: number, y: number, w: number, h: number, name = "Grafik", patch?: Partial<ChartData>): ChartShape {
+  return { kind: "chart", id: uid(), name, x, y, w, h, rot: 0, chart: defaultChartData(type, patch) };
 }
 
 /** Görüntülenecek başlık (boşsa tek seride seri adı). */

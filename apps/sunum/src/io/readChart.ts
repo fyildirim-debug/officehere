@@ -1,5 +1,5 @@
 /** Grafik parçası okuyucusu (c:chartSpace → ChartData; önbellekli değerler kullanılır). */
-import type { ChartData, ChartSeries, ChartType } from "../model/types";
+import type { ChartData, ChartSeries, ChartType, DataLabelPos } from "../model/types";
 import { readFill, type ReadCtx } from "./readStyle";
 import { attr, descendants, kid, kids, numAttr, parseXml } from "./xml";
 
@@ -18,6 +18,8 @@ const TYPES: Record<string, ChartType> = {
   ofPieChart: "pie",
   doughnutChart: "doughnut",
 };
+
+const POS = new Set(["ctr", "inEnd", "inBase", "outEnd", "bestFit", "t", "b", "l", "r"]);
 
 /** strCache/numCache/strLit/numLit noktaları (idx sırasıyla). */
 function cachePoints(el: Element | undefined): { count: number; pts: Map<number, string> } {
@@ -81,7 +83,23 @@ export function readChartXml(xml: string, ctx: ReadCtx): ChartData | null {
   const pos = attr(kid(legendEl, "legendPos"), "val");
   // CT_LegendPos varsayılanı "r" (sağ); öğe yoksa da sağ kabul edilir.
   const legend: ChartData["legend"] = !legendEl ? "none" : pos === "t" || pos === "l" || pos === "b" ? pos : "r";
-  const dl = descendants(typeEl, "dLbls").some((d) => attr(kid(d, "showVal"), "val") === "1");
+  const dlEls = [...descendants(typeEl, "dLbls"), ...(lineEl ? descendants(lineEl, "dLbls") : [])];
+  const dlEl = dlEls.find((d) => attr(kid(d, "showVal"), "val") === "1");
+  const dl = !!dlEl;
+  // Konum ve veri belirtme çizgisi (c15 uzantısındaki balon geometrisi).
+  const callout = !!dlEl && descendants(dlEl, "prstGeom").some((g) => /Callout/i.test(attr(g, "prst") ?? ""));
+  const posVal = attr(kid(dlEl, "dLblPos"), "val");
+  const labelPos = callout ? "callout" : POS.has(posVal ?? "") ? (posVal as DataLabelPos) : undefined;
+  // Dağılım / radar alt türleri ve birleşik grafikte ikincil eksen.
+  const ser0 = serEls[0];
+  const noLine = !!kid(kid(kid(ser0, "spPr"), "ln"), "noFill");
+  const noMarker = attr(kid(kid(ser0, "marker"), "symbol"), "val") === "none";
+  const smooth = attr(kid(ser0, "smooth"), "val") === "1" || attr(kid(typeEl, "scatterStyle"), "val") === "smooth";
+  const scatterStyle: ChartData["scatterStyle"] = type !== "scatter" || noLine ? undefined : smooth ? (noMarker ? "smooth" : "smoothMarker") : noMarker ? "line" : "lineMarker";
+  const rs = attr(kid(typeEl, "radarStyle"), "val");
+  const radarStyle: ChartData["radarStyle"] = type !== "radar" ? undefined : rs === "filled" ? "filled" : kid(ser0, "marker") && !noMarker ? "marker" : undefined;
+  const axOf = (el: Element | undefined) => (el ? kids(el, "axId").map((a) => attr(a, "val")).join(",") : "");
+  const secondaryLine = type === "combo" && !!lineEl && axOf(lineEl) !== axOf(typeEl) ? true : undefined;
   const g = attr(kid(typeEl, "grouping"), "val");
   const grouping: ChartData["grouping"] = g === "stacked" || g === "percentStacked" ? g : undefined;
   // Eksenler: kategori ekseni (dağılımda ilk değer ekseni) ve değer ekseni.
@@ -103,6 +121,10 @@ export function readChartXml(xml: string, ctx: ReadCtx): ChartData | null {
     series: series.length ? series : [{ name: "Seri 1", values: categories.map(() => null) }],
     legend,
     dataLabels: dl || undefined,
+    labelPos: dl ? labelPos : undefined,
+    scatterStyle,
+    radarStyle,
+    secondaryLine,
     grouping,
     axisTitles,
     gridMajor: valAx && !kid(valAx, "majorGridlines") ? false : undefined,

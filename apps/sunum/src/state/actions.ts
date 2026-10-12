@@ -1,4 +1,5 @@
 /** Slayt ve şekil komutları (şerit, kısayollar ve bağlam menüleri bunları kullanır). */
+import { defaultActionFor } from "../render/actionButtons";
 import { cloneShape, DEFAULT_SHAPE_FILL, DEFAULT_SHAPE_LINE, makePicture, makeSp, makeTable, makeTextBox, NO_FILL, NO_LINE, uid } from "../model/factory";
 import {
   aabb,
@@ -98,7 +99,10 @@ export class Actions {
       const curLayout = cur ? layoutOf(s.pres, cur) : undefined;
       // Boş sunuda ilk slayt Başlık Slaydı'dır; sonrakiler geçerli düzeni (başlıktan sonra Başlık ve İçerik) alır.
       if (!s.pres.slides.length) lid = layoutByType(s.pres, "title").id;
-      else lid = !curLayout || curLayout.type === "title" ? layoutByType(s.pres, "obj").id : curLayout.id;
+      else if (curLayout?.type === "title") {
+        // Başlık slaydından sonra aynı temanın (asıl slaydın) Başlık ve İçerik düzeni.
+        lid = (s.pres.layouts.find((l) => l.type === "obj" && l.theme?.name === curLayout.theme?.name) ?? layoutByType(s.pres, "obj")).id;
+      } else lid = curLayout ? curLayout.id : layoutByType(s.pres, "obj").id;
     }
     const slide = makeSlide(s.pres, lid);
     const at = s.slideIdx + 1;
@@ -282,7 +286,11 @@ export class Actions {
       connector: line && geom !== "line" && geom !== "arc" ? true : undefined,
       text: line ? undefined : { paragraphs: [{ runs: [], level: 0, props: { align: "ctr" } }], anchor: "ctr", levels: [{ run: { color: { scheme: "lt1" } }, para: { align: "ctr" } }] },
     });
+    // Eylem düğmesi: türüne uygun varsayılan eylem atanır ve Eylem Ayarları açılır.
+    const act = geom.startsWith("actionButton") ? defaultActionFor(geom) : undefined;
+    if (act) sh.link = act;
     this.addShapes([sh]);
+    if (geom.startsWith("actionButton")) this.store.set({ dialogRequest: "action" });
   }
 
   insertTextBox(box: Box, autoWidth: boolean, vertical = false) {

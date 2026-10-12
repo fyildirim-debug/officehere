@@ -20,7 +20,7 @@ export interface EditTarget {
 }
 
 export type ViewMode = "normal" | "outline" | "sorter" | "notes" | "reading" | "master";
-export type PaneKind = "background" | "shape" | "animation" | "selection" | "comments" | "spelling" | "reuse" | null;
+export type PaneKind = "background" | "shape" | "animation" | "selection" | "comments" | "spelling" | "reuse" | "accessibility" | null;
 
 export interface InsertMode {
   kind: "shape" | "textbox" | "table";
@@ -73,6 +73,8 @@ export interface AppState {
   ink: InkTool | null;
   /** Seçim değişimini şeride bildirmek için sayaç. */
   textTick: number;
+  /** Eylemlerin uygulamadan açmasını istediği iletişim kutusu (ör. eylem düğmesi çizilince Eylem Ayarları). */
+  dialogRequest?: string | null;
   ribbonTab: string;
   /** Daraltılmış bölümlerin kimlikleri. */
   collapsedSections: string[];

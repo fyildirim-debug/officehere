@@ -5,10 +5,11 @@
  */
 import { memo, type ReactNode } from "react";
 import { fontStack } from "@officehere/core";
-import { chartStyle, chartTitle, formatChartNumber, hasAxes, isPieType, niceScale, scatterX, seriesColor, stackedValues, valueRange } from "../model/chart";
+import { chartStyle, chartTitle, effectiveLabelPos, formatChartNumber, hasAxes, isPieType, niceScale, scatterX, seriesColor, stackedValues, valueRange } from "../model/chart";
 import { cssColor } from "../model/color";
 import type { ChartData, Theme } from "../model/types";
 import { radarParts } from "./chartRadar";
+import { barLabel, pieLabelMargin, pointLabel, sliceLabel } from "./chartLabels";
 
 export interface Box {
   x: number;
@@ -24,6 +25,8 @@ export interface ChartPaint {
   minor: string;
   outline: string | null;
   color: (i: number) => string;
+  /** Veri belirtme çizgisi kutusunun dolgusu. */
+  labelBg: string;
 }
 
 export const ChartSvg = memo(function ChartSvg({ chart, w, h, theme }: { chart: ChartData; w: number; h: number; theme: Theme }) {
@@ -43,6 +46,7 @@ export const ChartSvg = memo(function ChartSvg({ chart, w, h, theme }: { chart: 
     minor: dark ? cssColor({ scheme: "lt1", lumMod: 0.15, lumOff: 0.1 }, theme) : cssColor({ scheme: "dk1", lumMod: 0.05, lumOff: 0.95 }, theme),
     outline: st.outline ? cssColor({ scheme: "lt1" }, theme) : null,
     color: (i) => cssColor(seriesColor(i, pie ? undefined : chart.series[i]?.color, chart.palette), theme),
+    labelBg: dark ? cssColor({ scheme: "dk1", lumMod: 0.75, lumOff: 0.25 }, theme) : cssColor({ scheme: "lt1" }, theme),
   };
   const labels = !!chart.dataLabels || st.labels;
   const pad = fs * 0.8;
@@ -148,7 +152,8 @@ function pieParts(chart: ChartData, plot: Box, paint: ChartPaint, labels: boolea
   const fs = paint.fs;
   const vals = (chart.series[0]?.values ?? []).map((v) => (v && v > 0 ? v : 0));
   const total = vals.reduce((a, b) => a + b, 0);
-  const r = Math.max(4, Math.min(plot.w, plot.h) / 2 - fs * 0.3);
+  const lpos = effectiveLabelPos(chart);
+  const r = Math.max(4, Math.min(plot.w, plot.h) / 2 - fs * 0.3 - pieLabelMargin(lpos, fs, labels));
   const cx = plot.x + plot.w / 2;
   const cy = plot.y + plot.h / 2;
   const hole = chart.type === "doughnut" ? r * 0.75 : 0;
@@ -165,15 +170,7 @@ function pieParts(chart: ChartData, plot: Box, paint: ChartPaint, labels: boolea
     } else if (hole) d = `M${p(a0, r)} A${r} ${r} 0 ${large} 1 ${p(a1, r)} L${p(a1, hole)} A${hole} ${hole} 0 ${large} 0 ${p(a0, hole)} Z`;
     else d = `M${cx} ${cy} L${p(a0, r)} A${r} ${r} 0 ${large} 1 ${p(a1, r)} Z`;
     out.push(<path key={`sl${i}`} d={d} fill={paint.color(i)} fillRule="evenodd" stroke={paint.outline ?? "#fff"} strokeWidth={Math.max(0.75, r / 120)} />);
-    if (labels) {
-      const mid = (a0 + a1) / 2;
-      const lr = hole ? (r + hole) / 2 : r * 0.65;
-      out.push(
-        <text key={`dl${i}`} x={cx + lr * Math.cos(mid)} y={cy + lr * Math.sin(mid) + fs * 0.35} textAnchor="middle" fontSize={fs} fill="#fff">
-          {formatChartNumber(chart.series[0].values[i] ?? 0)}
-        </text>,
-      );
-    }
+    if (labels) out.push(sliceLabel(`dl${i}`, cx, cy, r, hole, (a0 + a1) / 2, lpos, formatChartNumber(chart.series[0].values[i] ?? 0), paint));
     a0 = a1;
   });
   return out;
@@ -200,7 +197,7 @@ function axisParts(chart: ChartData, plot: Box, paint: ChartPaint, labels: boole
   const area: Box = horiz
     ? { x: plot.x + Math.min(plot.w * 0.35, Math.max(...cats.map((c) => c.length), 1) * fs * 0.55 + fs * 0.6), y: plot.y, w: 0, h: plot.h - fs * 1.6 }
     : { x: plot.x + valLabelW, y: plot.y + fs * 0.4, w: 0, h: plot.h - fs * 2 };
-  area.w = plot.x + plot.w - area.x;
+  area.w = plot.x + plot.w - area.x - (chart.type === "combo" && chart.secondaryLine ? valLabelW : 0);
   const vpos = (v: number) => (v - sc.min) / (sc.max - sc.min || 1);
   const showMajor = chart.gridMajor !== false;
 
@@ -271,12 +268,7 @@ function axisParts(chart: ChartData, plot: Box, paint: ChartPaint, labels: boole
   const zero = vpos(Math.max(sc.min, Math.min(sc.max, 0)));
   const ns = Math.max(1, chart.series.length);
   const stack = stacked ? stackedValues(chart) : null;
-  const label = (key: string, x: number, y: number, v: number, anchor: "middle" | "start" = "middle", fill = textColor) =>
-    out.push(
-      <text key={key} x={x} y={y} textAnchor={anchor} fontSize={fs * 0.9} fill={fill}>
-        {formatChartNumber(v)}
-      </text>,
-    );
+  const lpos = effectiveLabelPos(chart);
   // Birleşik: son seri çizgi, diğerleri kümelenmiş sütun.
   const combo = chart.type === "combo";
   const barCount = combo ? Math.max(1, ns - 1) : ns;
@@ -294,52 +286,92 @@ function axisParts(chart: ChartData, plot: Box, paint: ChartPaint, labels: boole
         const seg = stack ? stack[j][i] : null;
         const a = vpos(Math.max(sc.min, Math.min(sc.max, seg ? seg.lo : Math.min(0, v))));
         const b = vpos(Math.max(sc.min, Math.min(sc.max, seg ? seg.hi : Math.max(0, v))));
+        let rect: Box;
         if (horiz) {
           const y = area.y + area.h - (i + 1) * band + start + (stacked ? 0 : (ns - 1 - j) * step);
-          const x0 = area.x + a * area.w;
-          const ww = (b - a) * area.w;
-          out.push(<rect key={`b${j}-${i}`} x={x0} y={y} width={Math.max(0, ww)} height={barW} fill={col} stroke={paint.outline ?? undefined} strokeWidth={paint.outline ? 0.75 : undefined} />);
-          if (labels) stacked ? label(`d${j}-${i}`, x0 + ww / 2, y + barW / 2 + fs * 0.35, v, "middle", "#fff") : label(`d${j}-${i}`, x0 + ww + fs * 0.3, y + barW / 2 + fs * 0.35, v, "start");
+          rect = { x: area.x + a * area.w, y, w: Math.max(0, (b - a) * area.w), h: barW };
         } else {
-          const x = area.x + i * band + start + j * step;
           const y0 = area.y + area.h - b * area.h;
-          const hh = (b - a) * area.h;
-          out.push(<rect key={`b${j}-${i}`} x={x} y={y0} width={barW} height={Math.max(0, hh)} fill={col} stroke={paint.outline ?? undefined} strokeWidth={paint.outline ? 0.75 : undefined} />);
-          if (labels) stacked ? label(`d${j}-${i}`, x + barW / 2, y0 + hh / 2 + fs * 0.35, v, "middle", "#fff") : label(`d${j}-${i}`, x + barW / 2, y0 - fs * 0.3, v);
+          rect = { x: area.x + i * band + start + j * step, y: y0, w: barW, h: Math.max(0, (b - a) * area.h) };
         }
+        out.push(<rect key={`b${j}-${i}`} x={rect.x} y={rect.y} width={rect.w} height={rect.h} fill={col} stroke={paint.outline ?? undefined} strokeWidth={paint.outline ? 0.75 : undefined} />);
+        if (labels) out.push(barLabel(`d${j}-${i}`, rect, horiz, v < 0, lpos, formatChartNumber(v), paint));
       });
     });
   }
   if (chart.type !== "col" && chart.type !== "bar" && !(combo && ns < 2)) {
+    // İkincil eksen (birleşik): çizgi serisi kendi ölçeğiyle, değerleri sağda.
+    const secondary = combo && !!chart.secondaryLine;
+    const last = chart.series[ns - 1];
+    const sc2 = secondary ? niceScale(Math.min(0, ...last.values.map((v) => v ?? 0)), Math.max(0, ...last.values.map((v) => v ?? 0)), Math.max(3, Math.floor(plot.h / (fs * 2.6)))) : null;
+    if (sc2) {
+      for (let v = sc2.min, k = 0; v <= sc2.max + sc2.step * 1e-6; v += sc2.step, k++) {
+        const y = area.y + area.h - ((v - sc2.min) / (sc2.max - sc2.min || 1)) * area.h;
+        out.push(
+          <text key={`v2${k}`} x={area.x + area.w + fs * 0.4} y={y + fs * 0.35} textAnchor="start" fontSize={fs} fill={textColor}>
+            {formatChartNumber(Math.round(v / sc2.step) * sc2.step)}
+          </text>,
+        );
+      }
+    }
     // Çizgi, alan, dağılım ve birleşik grafiğin çizgisi: noktalar kategori ortalarında (dağılımda X değerinde).
-    const yOf = (v: number) => area.y + area.h - vpos(Math.max(sc.min, Math.min(sc.max, v))) * area.h;
+    const yOf = (v: number, j: number) =>
+      sc2 && j === ns - 1 ? area.y + area.h - ((Math.max(sc2.min, Math.min(sc2.max, v)) - sc2.min) / (sc2.max - sc2.min || 1)) * area.h : area.y + area.h - vpos(Math.max(sc.min, Math.min(sc.max, v))) * area.h;
     const xOf = (i: number) => (scatter ? xpos(xs[i]) : area.x + (i + 0.5) * band);
     const baseY = area.y + area.h - zero * area.h;
     const order = combo ? [ns - 1] : chart.type === "area" && stacked ? chart.series.map((_, j) => j).reverse() : chart.series.map((_, j) => j);
+    const ss = chart.scatterStyle;
+    const drawLine = !scatter || !!ss;
+    const smooth = scatter && (ss === "smooth" || ss === "smoothMarker");
+    const markers = scatter && ss !== "line" && ss !== "smooth";
     for (const j of order) {
       const s = chart.series[j];
       const col = paint.color(j);
-      const p = s.values.map((v, i) => (v === null || v === undefined || !Number.isFinite(v) ? null : ([xOf(i), yOf(stack ? stack[j][i].hi : v)] as [number, number])));
+      const p = s.values.map((v, i) => (v === null || v === undefined || !Number.isFinite(v) ? null : ([xOf(i), yOf(stack ? stack[j][i].hi : v, j)] as [number, number])));
       const valid = p.filter((x): x is [number, number] => !!x);
       if (!valid.length) continue;
       if (chart.type === "area") {
-        const lower = stack ? s.values.map((_, i) => [xOf(i), yOf(stack[j][i].lo)] as [number, number]).reverse() : [[valid[valid.length - 1][0], baseY] as [number, number], [valid[0][0], baseY] as [number, number]];
+        const lower = stack ? s.values.map((_, i) => [xOf(i), yOf(stack[j][i].lo, j)] as [number, number]).reverse() : [[valid[valid.length - 1][0], baseY] as [number, number], [valid[0][0], baseY] as [number, number]];
         const d = `M${valid.map(([x, y]) => `${x.toFixed(2)} ${y.toFixed(2)}`).join(" L")} L${lower.map(([x, y]) => `${x.toFixed(2)} ${y.toFixed(2)}`).join(" L")} Z`;
         out.push(<path key={`a${j}`} d={d} fill={col} stroke={paint.outline ?? undefined} />);
       } else {
-        let d = "";
-        p.forEach((q, i) => {
-          if (!q) return;
-          d += `${d && p[i - 1] ? "L" : "M"}${q[0].toFixed(2)} ${q[1].toFixed(2)} `;
-        });
-        if (!scatter) out.push(<path key={`l${j}`} d={d} fill="none" stroke={col} strokeWidth={Math.max(1.5, fs * 0.19)} strokeLinejoin="round" strokeLinecap="round" />);
-        if (scatter) valid.forEach(([x, y], i) => out.push(<circle key={`m${j}-${i}`} cx={x} cy={y} r={Math.max(2.5, fs * 0.33)} fill={col} />));
+        if (drawLine) {
+          const d = smooth ? smoothPath(valid) : linePath(p);
+          out.push(<path key={`l${j}`} d={d} fill="none" stroke={col} strokeWidth={Math.max(1.5, fs * 0.19)} strokeLinejoin="round" strokeLinecap="round" />);
+        }
+        if (markers) valid.forEach(([x, y], i) => out.push(<circle key={`m${j}-${i}`} cx={x} cy={y} r={Math.max(2.5, fs * 0.33)} fill={col} />));
       }
-      if (labels) p.forEach((q, i) => q && label(`d${j}-${i}`, q[0], q[1] - fs * 0.5, s.values[i] as number));
+      if (labels) p.forEach((q, i) => q && out.push(chart.type === "area" ? pointLabel(`d${j}-${i}`, q[0], q[1] + fs, "ctr", formatChartNumber(s.values[i] as number), paint) : pointLabel(`d${j}-${i}`, q[0], q[1], combo ? (lpos === "ctr" || lpos === "callout" ? lpos : "t") : lpos, formatChartNumber(s.values[i] as number), paint)));
     }
   }
   // Kategori ekseni çizgisi
   if (horiz) out.push(<line key="ax" x1={area.x + zero * area.w} x2={area.x + zero * area.w} y1={area.y} y2={area.y + area.h} stroke={gridColor} strokeWidth={1} />);
   else out.push(<line key="ax" x1={area.x} x2={area.x + area.w} y1={area.y + area.h - zero * area.h} y2={area.y + area.h - zero * area.h} stroke={gridColor} strokeWidth={1} />);
   return out;
+}
+
+/** Kesik çizgi yolu (boş değerlerde ara verir). */
+function linePath(p: ([number, number] | null)[]): string {
+  let d = "";
+  p.forEach((q, i) => {
+    if (!q) return;
+    d += `${d && p[i - 1] ? "L" : "M"}${q[0].toFixed(2)} ${q[1].toFixed(2)} `;
+  });
+  return d;
+}
+
+/** Düzgün eğri (Catmull-Rom → kübik Bézier). */
+function smoothPath(pts: [number, number][]): string {
+  if (pts.length < 3) return linePath(pts);
+  let d = `M${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${c1[0].toFixed(2)} ${c1[1].toFixed(2)} ${c2[0].toFixed(2)} ${c2[1].toFixed(2)} ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`;
+  }
+  return d;
 }

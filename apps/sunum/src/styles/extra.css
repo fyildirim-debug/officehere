@@ -474,6 +474,14 @@ body > .crash-box {
   top: 0;
 }
 
+.point-editor-path line.seg-hit {
+  stroke: transparent;
+  stroke-width: 9;
+  stroke-dasharray: none;
+  pointer-events: stroke;
+  cursor: context-menu;
+}
+
 .point-editor-path line {
   stroke: #c42b1c;
   stroke-width: 1;

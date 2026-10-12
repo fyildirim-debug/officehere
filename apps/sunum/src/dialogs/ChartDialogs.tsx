@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { DataArea24Regular, DataBarHorizontal24Regular, DataBarVertical24Regular, DataLine24Regular, DataPie24Regular, Add20Regular, Subtract20Regular } from "@fluentui/react-icons";
 import { Dialog, DialogButton } from "@officehere/ui";
-import { CHART_TYPES, chartFromGrid, chartSubtypes, chartToGrid, defaultChartData } from "../model/chart";
-import type { ChartData, ChartGrouping, ChartType, Theme } from "../model/types";
+import { applySubtype, CHART_TYPES, chartFromGrid, chartSubtypes, chartToGrid, defaultChartData, subtypeIdOf } from "../model/chart";
+import type { ChartData, ChartType, Theme } from "../model/types";
 import { ChartSvg } from "../render/ChartSvg";
 
 const ICONS: Record<ChartType, React.ReactNode> = {
@@ -42,24 +42,29 @@ const ICONS: Record<ChartType, React.ReactNode> = {
 };
 
 /** Grafik türü seçimi. `current` verilirse "Grafik Türünü Değiştir" kipidir. */
-export function InsertChartDialog({ open, current, theme, onClose, onPick }: { open: boolean; current?: ChartData; theme: Theme; onClose: () => void; onPick: (t: ChartType, g?: ChartGrouping) => void }) {
-  const [type, setType] = useState<ChartType>(current?.type ?? "col");
-  const [grouping, setGrouping] = useState<ChartGrouping>(current?.grouping ?? "clustered");
+export function InsertChartDialog({ open, current, theme, onClose, onPick }: { open: boolean; current?: ChartData; theme: Theme; onClose: () => void; onPick: (t: ChartType, patch: Partial<ChartData>) => void }) {
+  const [type, setTypeRaw] = useState<ChartType>(current?.type ?? "col");
+  const [sub, setSub] = useState<string | undefined>(current ? subtypeIdOf(current) : undefined);
   const [last, setLast] = useState(false);
   if (open !== last) {
     setLast(open);
     if (open) {
-      setType(current?.type ?? "col");
-      setGrouping(current?.grouping ?? "clustered");
+      setTypeRaw(current?.type ?? "col");
+      setSub(current ? subtypeIdOf(current) : undefined);
     }
   }
   if (!open) return null;
+  const setType = (t: ChartType) => {
+    setTypeRaw(t);
+    setSub(current && current.type === t ? subtypeIdOf(current) : t === "doughnut" ? "doughnut" : undefined);
+  };
   const subs = chartSubtypes(type);
-  const g = subs.length ? grouping : undefined;
-  const preview: ChartData = current ? { ...current, type, grouping: g === "clustered" ? undefined : g } : defaultChartData(type, g);
-  const subLabel = subs.find((x) => x.grouping === g)?.label;
+  const chosen = subs.find((x) => x.id === sub) ?? subs[0];
+  const patch = chosen?.patch ?? {};
+  const preview: ChartData = current ? applySubtype(current, patch.type ?? type, patch) : defaultChartData(type, patch);
+  const subLabel = chosen?.label;
   // Seçim sonrası kapatma/sonraki adım çağırana aittir (ekleme sonrası veri tablosu açılır).
-  const ok = () => onPick(type, g);
+  const ok = () => onPick(type, patch);
   return (
     <Dialog
       open
@@ -79,7 +84,7 @@ export function InsertChartDialog({ open, current, theme, onClose, onPick }: { o
       <div className="chart-dlg">
         <div className="chart-dlg-list" role="listbox" aria-label="Grafik türü">
           {CHART_TYPES.map((c) => (
-            <div key={c.type} role="option" aria-selected={type === c.type} className={`list-row${type === c.type ? " is-selected" : ""}`} onClick={() => setType(c.type)} onDoubleClick={() => onPick(c.type)}>
+            <div key={c.type} role="option" aria-selected={type === c.type} className={`list-row${type === c.type ? " is-selected" : ""}`} onClick={() => setType(c.type)} onDoubleClick={() => onPick(c.type, chartSubtypes(c.type)[0]?.patch ?? {})}>
               {ICONS[c.type]}
               <span>{c.label}</span>
             </div>
@@ -89,9 +94,9 @@ export function InsertChartDialog({ open, current, theme, onClose, onPick }: { o
           {subs.length > 0 && (
             <div className="chart-dlg-subs" role="radiogroup" aria-label="Alt tür">
               {subs.map((x) => (
-                <button key={x.grouping} type="button" role="radio" aria-checked={g === x.grouping} className={`chart-dlg-sub${g === x.grouping ? " is-selected" : ""}`} title={x.label} aria-label={x.label} onClick={() => setGrouping(x.grouping)}>
+                <button key={x.id} type="button" role="radio" aria-checked={chosen?.id === x.id} className={`chart-dlg-sub${chosen?.id === x.id ? " is-selected" : ""}`} title={x.label} aria-label={x.label} onClick={() => setSub(x.id)}>
                   <span className="chart-thumb" style={{ width: 64, height: 44 }}>
-                    <ChartSvg chart={{ ...defaultChartData(type, x.grouping), showTitle: false, legend: "none" }} w={64} h={44} theme={theme} />
+                    <ChartSvg chart={{ ...defaultChartData(type, x.patch), showTitle: false, legend: "none" }} w={64} h={44} theme={theme} />
                   </span>
                 </button>
               ))}

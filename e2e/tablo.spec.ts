@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { URL, collectErrors } from "./ortak";
 
 // OfficeHere Tablo uçtan uca senaryoları. Izgara canvas olduğu için hücre konumları
@@ -394,5 +394,183 @@ test.describe("OfficeHere Tablo uçtan uca", () => {
     expect(await page.evaluate(() => window.__ohTablo!.sparklines())).toEqual([{ type: "column", cells: ["E2"] }]);
     await page.keyboard.press("Control+z");
     expect((await page.evaluate(() => window.__ohTablo!.sparklines()))[0].cells).toEqual(["E2", "E3"]);
+  });
+});
+
+// 3. tur: kabul testi bulgularının düzeltmeleri
+const FIXTURES = resolve(__dirname, "..", "apps/tablo/test/fixtures/openpyxl");
+
+/** Dosya › Aç › Gözat ile dosya açar (kitapta kaydedilmemiş değişiklik olmamalı). */
+async function openFile(page: Page, file: string) {
+  await page.evaluate(() => {
+    delete (window as unknown as { showOpenFilePicker?: unknown }).showOpenFilePicker;
+  });
+  await page.locator(".oh-ribbon-file").click();
+  await page.locator(".oh-bs-item", { hasText: "Aç" }).first().click();
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.locator(".oh-bs-action", { hasText: "Gözat" }).first().click()]);
+  await chooser.setFiles(file);
+}
+
+/** Düğmeye tıklayıp işlemin ve ardından gelen iki çizim karesinin süresini (ms) ölçer. */
+async function timedClick(selector: ReturnType<Page["locator"]>): Promise<number> {
+  return selector.evaluate(async (b: HTMLElement) => {
+    const t = performance.now();
+    b.click();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return performance.now() - t;
+  });
+}
+
+test.describe("OfficeHere Tablo 3. tur", () => {
+  let errors: string[] = [];
+  test.beforeEach(({ page }) => {
+    errors = collectErrors(page);
+  });
+  test.afterEach(() => {
+    expect(errors).toEqual([]);
+  });
+
+  test("openpyxl ile üretilmiş XLSX açılır (mutlak ilişki hedefleri, notlar, tablo, grafikler)", async ({ page }) => {
+    await open(page);
+    await openFile(page, join(FIXTURES, "karmasik.xlsx"));
+    await page.waitForFunction(() => window.__ohTablo!.sheetNames().includes("Bütçe"));
+    expect(await page.evaluate(() => window.__ohTablo!.sheetNames())).toEqual(expect.arrayContaining(["Bütçe", "Satışlar"]));
+    expect(await page.evaluate(() => window.__ohTablo!.chartCount("Bütçe"))).toBe(2);
+    expect(await page.evaluate(() => window.__ohTablo!.chartCount("Satışlar"))).toBe(1);
+    await expect(page.locator(".tb-float.is-chart svg").first()).toBeVisible();
+    await expect(page.locator(".oh-messagebar")).toHaveCount(0);
+  });
+
+  test("okunamayan parça dosyayı reddettirmez; bilgi çubuğunda bildirilir", async ({ page }) => {
+    await open(page);
+    await openFile(page, join(FIXTURES, "bozuk_aciklama.xlsx"));
+    await expect(page.locator(".oh-messagebar")).toContainText("okunamadı ve atlandı");
+    await expect(page.locator(".oh-messagebar")).toContainText("açıklamalar");
+    expect((await cell(page, "B2"))!.value).toBe(100);
+    expect(await page.evaluate(() => window.__ohTablo!.chartCount())).toBe(1);
+    await page.locator(".oh-messagebar").getByRole("button", { name: "Kapat" }).click();
+    await expect(page.locator(".oh-messagebar")).toHaveCount(0);
+  });
+
+  test("50.000 satırda filtre uygulama ve temizleme 1 saniyenin altında", async ({ page }) => {
+    await open(page);
+    const file = join(mkdtempSync(join(tmpdir(), "oh-big-")), "buyuk.csv");
+    const cities = ["İzmir", "Ankara", "Bursa", "Muğla", "Adana"];
+    const lines = ["Şehir;Tutar"];
+    for (let i = 0; i < 50000; i++) lines.push(`${cities[i % 5]};${i % 997}`);
+    writeFileSync(file, lines.join("\n") + "\n", "utf8");
+    await openFile(page, file);
+    await page.waitForFunction(() => window.__ohTablo!.cell("A50001")?.value === "Adana", null, { timeout: 30_000 });
+    await clickCell(page, "A1");
+    await tab(page, "Veri").click();
+    await ribbon(page, "Filtre").click();
+    const a1 = (await page.evaluate(() => window.__ohTablo!.cellRect("A1")))!;
+    await page.mouse.click(a1.x + a1.w - 7, a1.y + a1.h / 2);
+    await page.locator("label", { hasText: "(Tümünü Seç)" }).click();
+    await page.locator("label", { hasText: /^İzmir$/ }).click();
+    const apply = await timedClick(page.getByRole("button", { name: "Tamam" }));
+    expect(await page.evaluate(() => [1, 2, 6, 49996].map((r) => window.__ohTablo!.isRowHidden(r)))).toEqual([false, true, false, false]);
+    await expect(page.locator(".oh-statusbar")).toContainText("50.000 kayıttan 10.000 tanesi bulundu");
+    const clear = await timedClick(ribbon(page, "Temizle"));
+    expect(await page.evaluate(() => [2, 3, 49999].some((r) => window.__ohTablo!.isRowHidden(r)))).toBe(false);
+    await expect(page.locator(".oh-statusbar")).not.toContainText("tanesi bulundu");
+    console.log(`50.000 satır: filtre uygula ${Math.round(apply)} ms, temizle ${Math.round(clear)} ms`);
+    expect(apply).toBeLessThan(1000);
+    expect(clear).toBeLessThan(1000);
+  });
+
+  test("tablo alttaki ve sağdaki girişle genişler; hesaplanan sütun ve yapılandırılmış başvuru", async ({ page }) => {
+    await open(page);
+    await fillData(page, [["Ürün", "Adet", "Fiyat"], ["Çay", "10", "2,5"], ["Şeker", "4", "30"]]);
+    await clickCell(page, "A1");
+    await page.keyboard.press("Control+t");
+    await page.getByRole("dialog", { name: "Tablo Oluştur" }).getByRole("button", { name: "Tamam" }).click();
+    await enter(page, "D1", "Tutar");
+    await enter(page, "D2", "=[@Adet]*[@Fiyat]");
+    expect(await cell(page, "D2")).toMatchObject({ value: 25, edit: "=Tablo1[@Adet]*Tablo1[@Fiyat]" });
+    // Hesaplanan sütun tüm satırlara yayılır
+    expect(await cell(page, "D3")).toMatchObject({ value: 120, edit: "=Tablo1[@Adet]*Tablo1[@Fiyat]" });
+    // Alttaki satıra yazınca tablo genişler, formül yeni satıra gelir
+    await enter(page, "A4", "Un");
+    await enter(page, "B4", "2");
+    await enter(page, "C4", "50");
+    expect((await cell(page, "D4"))!.value).toBe(100);
+    await enter(page, "F1", "=TOPLA(Tablo1[Tutar])");
+    expect(await cell(page, "F1")).toMatchObject({ value: 245, formula: "=SUM(Tablo1[Tutar])", edit: "=TOPLA(Tablo1[Tutar])" });
+  });
+
+  test("F4 son biçim işlemini yineler", async ({ page }) => {
+    await open(page);
+    await enter(page, "B2", "1");
+    await enter(page, "B5", "2");
+    await clickCell(page, "B2");
+    await page.keyboard.press("Control+b");
+    await clickCell(page, "B5");
+    await page.keyboard.press("F4");
+    expect((await cell(page, "B5"))!.bold).toBe(true);
+  });
+
+  test("grafik: çift tık biçim bölmesi, Ctrl+C/V kopya, Delete yalnız grafiği siler", async ({ page }) => {
+    await open(page);
+    await fillData(page, [["Ay", "Satış"], ["Ocak", "10"], ["Şubat", "14"], ["Mart", "9"]]);
+    await clickCell(page, "B2");
+    await page.keyboard.press("Alt+F1");
+    expect(await page.evaluate(() => window.__ohTablo!.chartCount())).toBe(1);
+    const chart = page.locator(".tb-float.is-chart").first();
+    await chart.dblclick();
+    await expect(page.getByRole("complementary", { name: "Grafik Alanını Biçimlendir" })).toBeVisible();
+    await page.getByRole("complementary", { name: "Grafik Alanını Biçimlendir" }).getByRole("button", { name: "Kapat" }).click();
+    const box = (await chart.boundingBox())!;
+    await page.mouse.click(box.x + box.width / 2, box.y + 12);
+    await page.keyboard.press("Control+c");
+    await clickCell(page, "A12");
+    await page.keyboard.press("Control+v");
+    await expect.poll(() => page.evaluate(() => window.__ohTablo!.chartCount())).toBe(2);
+    // Yapıştırılan grafik seçili: Delete onu siler, hücreler yerinde kalır
+    await page.keyboard.press("Delete");
+    await expect.poll(() => page.evaluate(() => window.__ohTablo!.chartCount())).toBe(1);
+    expect((await cell(page, "B2"))!.value).toBe(10);
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => page.evaluate(() => window.__ohTablo!.chartCount())).toBe(2);
+  });
+
+  test("Alt Toplam anahat düzeyleriyle; 2 düğmesi ayrıntıyı gizler", async ({ page }) => {
+    await open(page);
+    await fillData(page, [["Bölge", "Tutar"], ["Doğu", "10"], ["Doğu", "20"], ["Batı", "5"]]);
+    await clickCell(page, "A2");
+    await tab(page, "Veri").click();
+    await ribbon(page, "Alt Toplam").click();
+    await page.getByRole("dialog", { name: "Alt Toplam" }).getByRole("button", { name: "Tamam" }).click();
+    expect(await cell(page, "B4")).toMatchObject({ value: 30, formula: "=SUBTOTAL(9,B2:B3)" });
+    expect(await cell(page, "A7")).toMatchObject({ value: "Genel Toplam" });
+    expect((await cell(page, "B7"))!.value).toBe(35);
+    // Satır anahattı düzey düğmesi "2" (sütun başlığı hizasında, satır numaralarının solunda)
+    const canvas = (await page.locator(".tb-canvas").boundingBox())!;
+    const a1 = (await page.evaluate(() => window.__ohTablo!.cellRect("A1")))!;
+    await page.mouse.click(canvas.x + 2 + 1.5 * 14, a1.y - 10);
+    expect(await page.evaluate(() => [1, 2, 3, 4].map((r) => window.__ohTablo!.isRowHidden(r)))).toEqual([true, true, false, true]);
+  });
+
+  test("Sayfa Düzeni görünümünde hücre düzenlenir; Sonlar > Sayfa Sonu Ekle sayfaları böler", async ({ page }) => {
+    await open(page);
+    await fillData(page, [["Ürün", "Adet"], ["Çay", "10"], ["Şeker", "4"]]);
+    await tab(page, "Görünüm").click();
+    await ribbon(page, "Sayfa Düzeni").click();
+    await expect(page.locator(".tb-pl-page")).toHaveCount(1);
+    await page.locator('.tb-pl td[data-r="1"][data-c="1"]').click();
+    expect(await selection(page)).toBe("B2");
+    await page.keyboard.type("77");
+    await page.keyboard.press("Enter");
+    expect((await cell(page, "B2"))!.value).toBe(77);
+    expect(await selection(page)).toBe("B3");
+    await expect(page.locator('.tb-pl td[data-r="1"][data-c="1"]')).toHaveText("77");
+    // B3'ün üstüne ve soluna sayfa sonu: 2 x 2 sayfa
+    await tab(page, "Sayfa Düzeni").click();
+    await ribbon(page, "Sonlar").click();
+    await page.getByRole("menuitem", { name: "Sayfa Sonu Ekle" }).click();
+    await expect(page.locator(".tb-pl-page")).toHaveCount(4);
+    await expect(page.locator(".tb-pl-num").first()).toHaveText("Sayfa 1 / 4");
+    await page.keyboard.press("Control+z");
+    await expect(page.locator(".tb-pl-page")).toHaveCount(1);
   });
 });

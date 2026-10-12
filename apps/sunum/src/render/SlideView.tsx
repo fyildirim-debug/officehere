@@ -29,6 +29,8 @@ export interface RenderCtx {
   slideNumber: number;
   editing?: EditorSlot | null;
   renderEditor?: (shape: SpShape | TableShape, textCtx: TextRenderCtx, cell?: [number, number]) => ReactNode;
+  /** Yakınlaştırma şekillerinin hedef slaydı canlı çizilir (iç içe çizimde yok). */
+  pres?: Presentation;
 }
 
 export type GeomOverride = Pick<ShapeBase, "x" | "y" | "w" | "h" | "rot"> & { flipH?: boolean; flipV?: boolean; crop?: { l: number; t: number; r: number; b: number } };
@@ -46,6 +48,8 @@ export interface SlideViewProps {
   style?: CSSProperties;
   /** Arka plan grafiklerini/şekilleri çizmeden yalnız arka plan (geçiş katmanları için gerekmez). */
   shapeClass?: (s: Shape) => string | undefined;
+  /** Yakınlaştırma şeklinin içinde çizilen slayt (yakınlaştırmalar yeniden açılmaz). */
+  zoomHost?: boolean;
 }
 
 export function slideBackground(pres: Presentation, slide: Slide) {
@@ -53,11 +57,12 @@ export function slideBackground(pres: Presentation, slide: Slide) {
   return slide.background ?? layout?.background ?? pres.master.background;
 }
 
-export const SlideView = memo(function SlideView({ pres, slide, slideNumber, mode, overrides, editing, renderEditor, className, style, shapeClass }: SlideViewProps) {
+export const SlideView = memo(function SlideView({ pres, slide, slideNumber, mode, overrides, editing, renderEditor, className, style, shapeClass, zoomHost }: SlideViewProps) {
   const layout = pres.layouts.find((l) => l.id === slide.layoutId) ?? pres.layouts[0];
+  const theme = layout?.theme ?? pres.theme;
   const ctx = useMemo<RenderCtx>(
-    () => ({ theme: pres.theme, master: pres.master, layout, mode, slideNumber, editing, renderEditor }),
-    [pres.theme, pres.master, layout, mode, slideNumber, editing, renderEditor],
+    () => ({ theme, master: pres.master, layout, mode, slideNumber, editing, renderEditor, pres: zoomHost ? undefined : pres }),
+    [theme, pres, layout, mode, slideNumber, editing, renderEditor, zoomHost],
   );
   const bg = slide.background ?? layout?.background ?? pres.master.background;
   const showMaster = !slide.hideMasterShapes && (layout?.showMasterShapes ?? true);
@@ -68,7 +73,7 @@ export const SlideView = memo(function SlideView({ pres, slide, slideNumber, mod
       style={{ width: pres.width, height: pres.height, ...style }}
       data-slide-id={slide.id}
     >
-      <div className="sv-bg" style={{ background: fillToCss(bg, pres.theme) }} />
+      <div className="sv-bg" style={{ background: fillToCss(bg, theme) }} />
       {showMaster && <DecoLayer shapes={pres.master.shapes} ctx={decoCtx} />}
       {!slide.hideMasterShapes && layout && <DecoLayer shapes={layout.shapes} ctx={decoCtx} />}
       {slide.shapes.map((s) => (
@@ -123,6 +128,8 @@ export const ShapeView = memo(function ShapeView({ shape, ctx, override, overrid
     className: `sh sh-${shape.kind}${deco ? " is-deco" : ""}${extraClass ? ` ${extraClass}` : ""}`,
     "data-shape-id": deco ? undefined : shape.id,
     "data-link": shape.link && ctx.mode === "show" ? shape.link : undefined,
+    "data-zoom": shape.kind === "pic" && shape.zoom && ctx.mode === "show" ? "1" : undefined,
+    "data-hover-link": shape.hoverLink && ctx.mode === "show" ? shape.hoverLink : undefined,
     style,
   };
   const flipH = override?.flipH ?? shape.flipH;
@@ -139,6 +146,8 @@ export const ShapeView = memo(function ShapeView({ shape, ctx, override, overrid
         <div {...common}>
           {shape.media && (ctx.mode === "show" || ctx.mode === "edit") ? (
             <MediaBody shape={shape} media={shape.media} w={g.w} h={g.h} mode={ctx.mode} />
+          ) : shape.zoom && ctx.pres ? (
+            <ZoomBody pres={ctx.pres} zoom={shape.zoom} w={g.w} h={g.h} fallback={shape.src} />
           ) : (
             <PicBody shape={shape} w={g.w} h={g.h} ctx={ctx} flipH={flipH} flipV={flipV} crop={override?.crop} />
           )}
@@ -488,7 +497,7 @@ function TableBody({ shape, w, ctx }: { shape: TableShape; w: number; ctx: Rende
       </colgroup>
       <tbody>
         {shape.rows.map((row, r) => (
-          <tr key={r} style={{ height: row.h }}>
+          <tr key={r} style={{ height: row.minH ?? row.h }}>
             {row.cells.map((cell, c) => {
               if (cell.hMerge || cell.vMerge) return null;
               const fmt = cellFormat(shape, r, c);
@@ -531,6 +540,18 @@ export function ScaledSlide({ pres, slide, slideNumber, width, mode = "thumb", c
   return (
     <div className={`sv-scaled ${className ?? ""}`} style={{ width, height: pres.height * scale }}>
       <SlideView pres={pres} slide={slide} slideNumber={slideNumber} mode={mode} style={{ transform: `scale(${scale})`, transformOrigin: "0 0" }} shapeClass={shapeClass} />
+    </div>
+  );
+}
+
+/** Yakınlaştırma şekli: hedef slaydın canlı küçük görünümü (hedef silinmişse kayıtlı resim). */
+function ZoomBody({ pres, zoom, w, h, fallback }: { pres: Presentation; zoom: NonNullable<PicShape["zoom"]>; w: number; h: number; fallback: string }) {
+  const i = pres.slides.findIndex((s) => s.id === zoom.slideId);
+  if (i < 0) return <img className="pic-img" src={fallback} alt="" draggable={false} style={{ width: w, height: h }} />;
+  const k = w / pres.width;
+  return (
+    <div className="zoom-body" style={{ width: w, height: h, overflow: "hidden", position: "relative" }}>
+      <SlideView pres={pres} slide={pres.slides[i]} slideNumber={i + 1} mode="thumb" zoomHost style={{ transform: `scale(${k}, ${h / pres.height})`, transformOrigin: "0 0", position: "absolute", left: 0, top: 0 }} />
     </div>
   );
 }

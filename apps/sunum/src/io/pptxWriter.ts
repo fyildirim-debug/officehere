@@ -4,7 +4,7 @@
  */
 import JSZip from "jszip";
 import { flatShapes } from "../model/ops";
-import type { ChartData, Layout, Presentation, Shape, SpShape } from "../model/types";
+import type { ChartData, Layout, Master, Presentation, Shape, SpShape, Theme } from "../model/types";
 import { bgXml, spTreeXml, type ChartStore, type MediaStore, type WriteCtx } from "./writeDrawing";
 import { chartWorkbook, chartXml } from "./writeChart";
 import { appXml, CLR_MAP, coreXml, notesMasterXml, notesSlideXml, NS_DECL, presentationXml, PRES_PROPS, samplePrompt, tableStylesXml, themeXml, txStylesXml, VIEW_PROPS } from "./writeParts";
@@ -165,31 +165,48 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
   add("ppt/theme/theme1.xml", themeXml(pres.theme, pres.theme.name, !!pres.masterEdited), CT.theme);
   add("ppt/theme/theme2.xml", themeXml(pres.theme, "Not Teması"), CT.theme);
 
-  // Asıl slayt
-  const masterPath = "ppt/slideMasters/slideMaster1.xml";
-  const mctx = makeCtx(masterPath, media, false, undefined, charts);
-  const layoutPaths = pres.layouts.map((_, i) => `ppt/slideLayouts/slideLayout${i + 1}.xml`);
-  const layoutRids = layoutPaths.map((p) => mctx.rels.add(REL.slideLayout, `../slideLayouts/${p.split("/").pop()}`));
-  const masterTree = spTreeXml(withFooterFields(pres.master.shapes), mctx, { promptAsText: (s) => samplePrompt(s, true) });
-  const layoutIdLst = layoutRids.map((rid, i) => `<p:sldLayoutId id="${2147483649 + i}" r:id="${rid}"/>`).join("");
-  const masterTx = txStylesXml(pres.master.textStyles, mctx);
-  mctx.rels.add(REL.theme, "../theme/theme1.xml");
-  add(masterPath, `<p:sldMaster ${NS_DECL}><p:cSld>${bgXml(pres.master.background, mctx)}${masterTree}</p:cSld>${CLR_MAP}<p:sldLayoutIdLst>${layoutIdLst}</p:sldLayoutIdLst>${masterTx}</p:sldMaster>`, CT.master);
-  zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", mctx.rels.xml());
+  // Asıl slaytlar: sununun asıl slaydı ve seçili slaytlara uygulanmış her tema için ikincil asıl slayt
+  // (arka planı ve süsleri düzenlere taşınmış; kendi tema parçasıyla).
+  const designs: { theme: Theme; master: Master; layouts: Layout[] }[] = [{ theme: pres.theme, master: pres.master, layouts: pres.layouts.filter((l) => !l.theme) }];
+  for (const l of pres.layouts) {
+    if (!l.theme) continue;
+    const d = designs.find((x, i) => i > 0 && x.theme.name === l.theme!.name && x.theme.id === l.theme!.id);
+    if (d) d.layouts.push(l);
+    else designs.push({ theme: l.theme, master: { background: l.background ?? pres.master.background, shapes: [], textStyles: pres.master.textStyles }, layouts: [l] });
+  }
+  const layoutOrder: Layout[] = designs.flatMap((d) => d.layouts);
+  const layoutFile = (l: Layout) => `slideLayout${layoutOrder.indexOf(l) + 1}.xml`;
+  let sldId = 2147483648;
+  const masterIds: number[] = [];
+  designs.forEach((d, mi) => {
+    const n = mi + 1;
+    const themeFile = mi === 0 ? "theme1.xml" : `theme${n + 1}.xml`;
+    if (mi > 0) add(`ppt/theme/${themeFile}`, themeXml(d.theme, d.theme.name), CT.theme);
+    const masterPath = `ppt/slideMasters/slideMaster${n}.xml`;
+    const mctx = makeCtx(masterPath, media, false, undefined, charts);
+    masterIds.push(sldId++);
+    const layoutIdLst = d.layouts.map((l) => `<p:sldLayoutId id="${sldId++}" r:id="${mctx.rels.add(REL.slideLayout, `../slideLayouts/${layoutFile(l)}`)}"/>`).join("");
+    const masterTree = spTreeXml(withFooterFields(d.master.shapes), mctx, { promptAsText: (s) => samplePrompt(s, true) });
+    const masterTx = txStylesXml(d.master.textStyles, mctx);
+    mctx.rels.add(REL.theme, `../theme/${themeFile}`);
+    add(masterPath, `<p:sldMaster ${NS_DECL}><p:cSld>${bgXml(d.master.background, mctx)}${masterTree}</p:cSld>${CLR_MAP}<p:sldLayoutIdLst>${layoutIdLst}</p:sldLayoutIdLst>${masterTx}</p:sldMaster>`, CT.master);
+    zip.file(`ppt/slideMasters/_rels/slideMaster${n}.xml.rels`, mctx.rels.xml());
 
-  // Düzenler
-  pres.layouts.forEach((l: Layout, i) => {
-    const path = layoutPaths[i];
-    const ctx = makeCtx(path, media, false, undefined, charts);
-    ctx.rels.add(REL.slideMaster, "../slideMasters/slideMaster1.xml");
-    const tree = spTreeXml(withFooterFields(l.shapes), ctx, { promptAsText: (s) => samplePrompt(s, false) });
-    const type = l.type === "cust" ? undefined : l.type;
-    add(
-      path,
-      `<p:sldLayout ${NS_DECL}${attrs({ type, preserve: "1", showMasterSp: l.showMasterShapes ? undefined : "0" })}><p:cSld name="${esc(l.name)}">${bgXml(l.background, ctx)}${tree}</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`,
-      CT.layout,
-    );
-    zip.file(`ppt/slideLayouts/_rels/slideLayout${i + 1}.xml.rels`, ctx.rels.xml());
+    // Düzenler
+    for (const l of d.layouts) {
+      const file = layoutFile(l);
+      const path = `ppt/slideLayouts/${file}`;
+      const ctx = makeCtx(path, media, false, undefined, charts);
+      ctx.rels.add(REL.slideMaster, `../slideMasters/slideMaster${n}.xml`);
+      const tree = spTreeXml(withFooterFields(l.shapes), ctx, { promptAsText: (s) => samplePrompt(s, false) });
+      const type = l.type === "cust" ? undefined : l.type;
+      add(
+        path,
+        `<p:sldLayout ${NS_DECL}${attrs({ type, preserve: "1", showMasterSp: l.showMasterShapes ? undefined : "0" })}><p:cSld name="${esc(l.name)}">${bgXml(l.background, ctx)}${tree}</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>`,
+        CT.layout,
+      );
+      zip.file(`ppt/slideLayouts/_rels/${file}.rels`, ctx.rels.xml());
+    }
   });
 
   // Not asıl sayfası
@@ -213,8 +230,8 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
   pres.slides.forEach((slide, i) => {
     const path = `ppt/slides/slide${i + 1}.xml`;
     const ctx = makeCtx(path, media, true, slideNumbers, charts);
-    const li = Math.max(0, pres.layouts.findIndex((l) => l.id === slide.layoutId));
-    ctx.rels.add(REL.slideLayout, `../slideLayouts/slideLayout${li + 1}.xml`);
+    const sl = layoutOrder.find((l) => l.id === slide.layoutId) ?? layoutOrder[0];
+    ctx.rels.add(REL.slideLayout, `../slideLayouts/${layoutFile(sl)}`);
     tableStyleIds(slide.shapes, tableStyles);
     const tree = spTreeXml(slide.shapes, ctx);
     const trans = transitionXml(slide.transition);
@@ -252,7 +269,7 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
 
   // Sunu
   const pctx = makeCtx("ppt/presentation.xml", media, false);
-  const masterRid = pctx.rels.add(REL.slideMaster, "slideMasters/slideMaster1.xml");
+  const masterRids = designs.map((_, i) => pctx.rels.add(REL.slideMaster, `slideMasters/slideMaster${i + 1}.xml`));
   const slideRids = pres.slides.map((_, i) => pctx.rels.add(REL.slide, `slides/slide${i + 1}.xml`));
   const notesRid = hasNotes ? pctx.rels.add(REL.notesMaster, "notesMasters/notesMaster1.xml") : null;
   pctx.rels.add(REL.presProps, "presProps.xml");
@@ -269,7 +286,7 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
       .join("");
     add("ppt/commentAuthors.xml", `<p:cmAuthorLst ${NS_DECL}>${list}</p:cmAuthorLst>`, CT.commentAuthors);
   }
-  add("ppt/presentation.xml", presentationXml(pres, masterRid, notesRid, slideRids, pctx), CT.presentation);
+  add("ppt/presentation.xml", presentationXml(pres, masterRids.map((rid, i) => [masterIds[i], rid] as [number, string]), notesRid, slideRids, pctx), CT.presentation);
   zip.file("ppt/_rels/presentation.xml.rels", pctx.rels.xml());
   add("ppt/presProps.xml", PRES_PROPS, CT.presProps);
   add("ppt/viewProps.xml", VIEW_PROPS, CT.viewProps);

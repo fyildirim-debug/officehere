@@ -37,6 +37,7 @@ const PUSH_DIRS: Option[] = [
 
 export const TRANSITIONS: TransitionDef[] = [
   { type: "none", label: "Yok" },
+  { type: "morph", label: "Dönüştür" },
   { type: "fade", label: "Soluklaştır", options: [{ id: "smooth", label: "Düzgün" }, { id: "black", label: "Siyahtan" }], defaultOption: "smooth" },
   { type: "push", label: "İt", options: PUSH_DIRS, defaultOption: "u" },
   { type: "wipe", label: "Sil", options: DIR4, defaultOption: "l" },

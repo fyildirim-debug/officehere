@@ -4,6 +4,7 @@
  * (çoğunlukla kısa kenarın 100000'de biri) kullanır.
  */
 import type { CustomPath } from "../model/types";
+import { actionButtonGeometry } from "./actionButtons";
 
 export type FillMode = "norm" | "darken" | "darkenLess" | "lighten" | "lightenLess" | "none";
 
@@ -563,6 +564,7 @@ export function presetGeometry(geom: string, w: number, h: number, adjIn?: Recor
     case "arc":
       return { paths: [{ d: `M${pt(w / 2, 0)} A${f(w / 2)} ${f(h / 2)} 0 0 1 ${pt(w, h / 2)}`, fill: "none", stroke: true }], text: full(w, h), open: true };
     default:
+      if (geom.startsWith("actionButton")) return actionButtonGeometry(geom, w, h);
       return one(`M0 0 L${pt(w, 0)} L${pt(w, h)} L${pt(0, h)} Z`, w, h);
   }
 }
@@ -571,126 +573,4 @@ export function isLineGeom(geom: string): boolean {
   return geom === "line" || geom === "straightConnector1" || geom === "bentConnector3" || geom === "curvedConnector3" || geom === "arc";
 }
 
-export interface ShapeCatalogItem {
-  geom: string;
-  label: string;
-  /** Çizgi okları (Ok Çizgisi). */
-  tail?: "triangle";
-  head?: "triangle";
-}
-
-export const SHAPE_CATALOG: { group: string; items: ShapeCatalogItem[] }[] = [
-  {
-    group: "Çizgiler",
-    items: [
-      { geom: "line", label: "Çizgi" },
-      { geom: "straightConnector1", label: "Ok Çizgisi", tail: "triangle" },
-      { geom: "straightConnector1", label: "Çift Ok Çizgisi", tail: "triangle", head: "triangle" },
-      { geom: "bentConnector3", label: "Bağlayıcı: Dirsek" },
-      { geom: "curvedConnector3", label: "Bağlayıcı: Eğri" },
-      { geom: "arc", label: "Yay" },
-    ],
-  },
-  {
-    group: "Dikdörtgenler",
-    items: [
-      { geom: "rect", label: "Dikdörtgen" },
-      { geom: "roundRect", label: "Dikdörtgen: Köşeleri Yuvarlatılmış" },
-      { geom: "snip1Rect", label: "Dikdörtgen: Tek Köşesi Kesik" },
-      { geom: "round2SameRect", label: "Dikdörtgen: Aynı Kenar Köşeleri Yuvarlatılmış" },
-    ],
-  },
-  {
-    group: "Temel Şekiller",
-    items: [
-      { geom: "ellipse", label: "Oval" },
-      { geom: "triangle", label: "İkizkenar Üçgen" },
-      { geom: "rtTriangle", label: "Dik Üçgen" },
-      { geom: "parallelogram", label: "Paralelkenar" },
-      { geom: "trapezoid", label: "Yamuk" },
-      { geom: "diamond", label: "Elmas" },
-      { geom: "pentagon", label: "Normal Beşgen" },
-      { geom: "hexagon", label: "Altıgen" },
-      { geom: "heptagon", label: "Yedigen" },
-      { geom: "octagon", label: "Sekizgen" },
-      { geom: "decagon", label: "Ongen" },
-      { geom: "dodecagon", label: "Onikigen" },
-      { geom: "pie", label: "Pasta" },
-      { geom: "teardrop", label: "Gözyaşı" },
-      { geom: "frame", label: "Çerçeve" },
-      { geom: "corner", label: "L Şekli" },
-      { geom: "plus", label: "Artı" },
-      { geom: "can", label: "Silindir" },
-      { geom: "cube", label: "Küp" },
-      { geom: "bevel", label: "Eğim" },
-      { geom: "donut", label: "Halka" },
-      { geom: "noSmoking", label: "Yasak İşareti" },
-      { geom: "foldedCorner", label: "Katlanmış Köşe" },
-      { geom: "smileyFace", label: "Gülen Yüz" },
-      { geom: "heart", label: "Kalp" },
-      { geom: "lightningBolt", label: "Şimşek" },
-      { geom: "sun", label: "Güneş" },
-      { geom: "moon", label: "Ay" },
-      { geom: "cloud", label: "Bulut" },
-      { geom: "wave", label: "Dalga" },
-    ],
-  },
-  {
-    group: "Blok Oklar",
-    items: [
-      { geom: "rightArrow", label: "Ok: Sağ" },
-      { geom: "leftArrow", label: "Ok: Sol" },
-      { geom: "upArrow", label: "Ok: Yukarı" },
-      { geom: "downArrow", label: "Ok: Aşağı" },
-      { geom: "leftRightArrow", label: "Ok: Sol-Sağ" },
-      { geom: "upDownArrow", label: "Ok: Yukarı-Aşağı" },
-      { geom: "quadArrow", label: "Ok: Dört Yönlü" },
-      { geom: "homePlate", label: "Ok: Beşgen" },
-      { geom: "chevron", label: "Ok: Köşeli Çift Ayraç" },
-    ],
-  },
-  {
-    group: "Denklem Şekilleri",
-    items: [
-      { geom: "mathPlus", label: "Artı İşareti" },
-      { geom: "mathMinus", label: "Eksi İşareti" },
-      { geom: "mathMultiply", label: "Çarpma İşareti" },
-      { geom: "mathEqual", label: "Eşittir" },
-    ],
-  },
-  {
-    group: "Akış Çizelgesi",
-    items: [
-      { geom: "flowChartProcess", label: "Akış Çizelgesi: İşlem" },
-      { geom: "flowChartDecision", label: "Akış Çizelgesi: Karar" },
-      { geom: "flowChartInputOutput", label: "Akış Çizelgesi: Veri" },
-      { geom: "flowChartPredefinedProcess", label: "Akış Çizelgesi: Önceden Tanımlı İşlem" },
-      { geom: "flowChartDocument", label: "Akış Çizelgesi: Belge" },
-      { geom: "flowChartTerminator", label: "Akış Çizelgesi: Sonlandırıcı" },
-      { geom: "flowChartConnector", label: "Akış Çizelgesi: Bağlayıcı" },
-    ],
-  },
-  {
-    group: "Yıldızlar ve Başlık Sancakları",
-    items: [
-      { geom: "irregularSeal1", label: "Patlama: 8 Köşeli" },
-      { geom: "star4", label: "Yıldız: 4 Köşeli" },
-      { geom: "star5", label: "Yıldız: 5 Köşeli" },
-      { geom: "star6", label: "Yıldız: 6 Köşeli" },
-      { geom: "star8", label: "Yıldız: 8 Köşeli" },
-      { geom: "star10", label: "Yıldız: 10 Köşeli" },
-      { geom: "star12", label: "Yıldız: 12 Köşeli" },
-    ],
-  },
-  {
-    group: "Belirtme Çizgileri",
-    items: [
-      { geom: "wedgeRectCallout", label: "Konuşma Balonu: Dikdörtgen" },
-      { geom: "wedgeRoundRectCallout", label: "Konuşma Balonu: Köşeleri Yuvarlatılmış Dikdörtgen" },
-      { geom: "wedgeEllipseCallout", label: "Konuşma Balonu: Oval" },
-      { geom: "cloudCallout", label: "Düşünce Balonu: Bulut" },
-    ],
-  },
-];
-
-export const SHAPE_LABELS: Record<string, string> = Object.fromEntries(SHAPE_CATALOG.flatMap((g) => g.items.map((i) => [i.geom, i.label])));
+export { SHAPE_CATALOG, SHAPE_LABELS, type ShapeCatalogItem } from "./shapeCatalog";

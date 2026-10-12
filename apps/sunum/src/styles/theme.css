@@ -1,0 +1,22 @@
+/* Sunum'a özgü arayüz renkleri. Office teması (html[data-oh-theme]) koyuysa koyu karşılıkları
+   kullanılır; slayt içeriği temadan bağımsızdır. */
+:root {
+  --sn-series-text: #2f6db5;
+  --sn-cat-text: #b04a1f;
+  --sn-hint-bg: rgba(32, 32, 32, 0.86);
+}
+
+:root[data-oh-theme="dark"],
+:root[data-oh-theme="black"] {
+  --sn-series-text: #8ab4f8;
+  --sn-cat-text: #f2a27f;
+  --sn-hint-bg: rgba(70, 70, 70, 0.92);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-oh-theme="system"] {
+    --sn-series-text: #8ab4f8;
+    --sn-cat-text: #f2a27f;
+    --sn-hint-bg: rgba(70, 70, 70, 0.92);
+  }
+}

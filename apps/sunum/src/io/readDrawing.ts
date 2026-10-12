@@ -160,7 +160,7 @@ function readGeom(spPr: Element | undefined): { geom: string; adj?: Record<strin
 /* Şekiller                                                             */
 /* ------------------------------------------------------------------ */
 
-function nvProps(nv: Element | undefined, ctx: ReadCtx): { id: string; name: string; descr?: string; hidden?: boolean; ph?: Placeholder; txBox?: boolean; link?: string } {
+function nvProps(nv: Element | undefined, ctx: ReadCtx): { id: string; name: string; descr?: string; hidden?: boolean; ph?: Placeholder; txBox?: boolean; link?: string; hoverLink?: string } {
   const c = kid(nv, "cNvPr");
   const nid = numAttr(c, "id");
   const id = uid();
@@ -183,6 +183,7 @@ function nvProps(nv: Element | undefined, ctx: ReadCtx): { id: string; name: str
     ph,
     txBox: boolAttr(cNvSpPr, "txBox") || undefined,
     link: readHlink(kid(c, "hlinkClick"), ctx),
+    hoverLink: readHlink(kid(c, "hlinkHover"), ctx),
   };
 }
 
@@ -251,6 +252,7 @@ function readSp(el: Element, ctx: ReadCtx, connector: boolean): SpShape {
     txBox: info.txBox,
     connector: connector || undefined,
     link: info.link,
+    hoverLink: info.hoverLink,
   };
   if (!sp.text && !connector && !isLineGeom(sp.geom) && !info.ph) sp.text = undefined;
   // Çizim sekmesiyle oluşturulan mürekkep (silgiyle silinebilmesi için).
@@ -292,9 +294,13 @@ function readPic(el: Element, ctx: ReadCtx): PicShape {
       if (opt && boolAttr(opt, "loop")) media.loop = true;
     }
   }
+  const zEl = descendants(nvPr, "zoom")[0];
+  // Hedef slayt kimliği köprü (#slide:) çözülünce mapShapeLinks ile atanır.
+  const zoom = zEl ? { slideId: "", summary: boolAttr(zEl, "summary") || undefined, ret: boolAttr(zEl, "ret") || undefined } : undefined;
   return {
     kind: "pic",
     media,
+    zoom,
     id: info.id,
     name: info.name,
     descr: info.descr,
@@ -314,6 +320,7 @@ function readPic(el: Element, ctx: ReadCtx): PicShape {
     adjust: adjust.brightness || adjust.contrast || adjust.grayscale || adjust.alpha !== undefined ? adjust : undefined,
     ph: info.ph,
     link: info.link,
+    hoverLink: info.hoverLink,
   };
 }
 
@@ -416,6 +423,7 @@ function readGroup(el: Element, ctx: ReadCtx): GroupShape | undefined {
     hidden: info.hidden,
     children: mapped,
     link: info.link,
+    hoverLink: info.hoverLink,
   };
 }
 

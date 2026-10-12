@@ -143,12 +143,12 @@ export function notesSlideXml(text: string): string {
   return `<p:notes ${NS_DECL}><p:cSld>${tree}</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>`;
 }
 
-export function presentationXml(pres: Presentation, masterRid: string, notesRid: string | null, slideRids: string[], ctx: WriteCtx): string {
+export function presentationXml(pres: Presentation, masters: [number, string][], notesRid: string | null, slideRids: string[], ctx: WriteCtx): string {
   const sldIds = slideRids.map((rid, i) => `<p:sldId id="${256 + i}" r:id="${rid}"/>`).join("");
   const type = Math.abs(pres.width / pres.height - 4 / 3) < 0.01 ? ' type="screen4x3"' : "";
   return (
     `<p:presentation ${NS_DECL} saveSubsetFonts="1">` +
-    `<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="${masterRid}"/></p:sldMasterIdLst>` +
+    `<p:sldMasterIdLst>${masters.map(([id, rid]) => `<p:sldMasterId id="${id}" r:id="${rid}"/>`).join("")}</p:sldMasterIdLst>` +
     (notesRid ? `<p:notesMasterIdLst><p:notesMasterId r:id="${notesRid}"/></p:notesMasterIdLst>` : "") +
     (sldIds ? `<p:sldIdLst>${sldIds}</p:sldIdLst>` : "") +
     `<p:sldSz cx="${Math.round(pres.width * 9525)}" cy="${Math.round(pres.height * 9525)}"${type}/>` +

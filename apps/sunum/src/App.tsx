@@ -1,7 +1,7 @@
 /** OfficeHere Sunum — uygulama kökü. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRedo20Regular, ArrowUndo20Regular, Save20Regular, SlidePlay20Regular } from "@fluentui/react-icons";
-import { AppShell, MessageBar, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle } from "@officehere/ui";
+import { AppShell, MessageBar, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, type OfficeBackstagePage } from "@officehere/ui";
 import { downloadBlob } from "@officehere/core";
 import { blankPresentation } from "./model/presentation";
 import { Canvas } from "./editor/Canvas";
@@ -36,17 +36,19 @@ import { buildRibbonTabs } from "./app/ribbonTabs";
 import { ErrorBoundary } from "./app/ErrorBoundary";
 import { useAutoRecover } from "./app/useAutoRecover";
 import { CommandSearch } from "./app/CommandSearch";
+import { extraCommands } from "./app/extraCommands";
 import "./styles/slide.css";
 import "./styles/editor.css";
 import "./styles/app.css";
 import "./styles/show.css";
 import "./styles/print.css";
 import "./styles/extra.css";
+import "./styles/theme.css";
 
 export function App() {
   const { store, actions: a } = useMemo(() => appSession(), []);
   const state = useStore(store);
-  const [backstage, setBackstage] = useState(false);
+  const [backstage, setBackstage] = useState<false | true | OfficeBackstagePage>(false);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   const [show, setShow] = useState<ShowState | null>(null);
   const [printing, setPrinting] = useState<null | "print" | "pdf">(null);
@@ -57,7 +59,7 @@ export function App() {
   const [findQuery, setFindQuery] = useState("");
   const ctxMenu = useContextMenu();
   const blockedRef = useRef(false);
-  blockedRef.current = !!dialog || !!extra || backstage || (!!show && !show.preview);
+  blockedRef.current = !!dialog || !!extra || !!backstage || (!!show && !show.preview);
   const recovery = useMemo(() => recoveryHandlers(), []);
   const autoRecover = useAutoRecover(a);
 
@@ -101,6 +103,28 @@ export function App() {
   // Metin bilgisi (şerit durumları için).
   const info = useMemo(() => textInfo(a), [a, state.pres, state.sel, state.editing, state.textTick, state.cellSel]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const searchExtra = useMemo(
+    () =>
+      extraCommands(
+        a,
+        {
+          save: () => void save(a),
+          saveAs: () => void save(a, true),
+          print: cmd.print,
+          exportPdf: cmd.exportPdf,
+          newDoc: () => void newDoc(),
+          open: async () => {
+            if (await lifecycle.confirmDiscard()) await openDialog(a);
+          },
+          backstage: (page) => {
+            a.stopEditing();
+            setBackstage(page);
+          },
+        },
+        cmd.previewTransition,
+      ),
+    [a, cmd, newDoc, lifecycle],
+  );
   const ctx: RibbonCtx = { state, actions: a, text: info, openDialog: openDialogFn, cmd, show: { settings: showSettings, set: setShowSettings } };
   const tabs = buildRibbonTabs(ctx);
   const editView = state.view === "normal" || state.view === "outline" || state.view === "master";
@@ -329,6 +353,7 @@ export function App() {
         backstage={
           backstage ? (
             <FileBackstage
+              initialPage={backstage === true ? undefined : backstage}
               state={state}
               actions={a}
               onBack={() => setBackstage(false)}
@@ -378,7 +403,7 @@ export function App() {
           {editView && sidePane && bound("Görev bölmesi", sidePane, () => a.store.set({ pane: null }))}
         </div>
       </AppShell>
-      <CommandSearch ctx={ctx} tabs={tabs} collapsed={collapsed} onExpand={() => setCollapsed(false)} />
+      <CommandSearch ctx={ctx} tabs={tabs} collapsed={collapsed} onExpand={() => setCollapsed(false)} extra={searchExtra} />
       {show &&
         !show.preview &&
         bound(

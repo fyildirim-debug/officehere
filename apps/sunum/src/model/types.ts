@@ -198,6 +198,8 @@ export interface ShapeBase {
    * "#slide:<kimlik>", "#next", "#prev", "#first", "#last".
    */
   link?: string;
+  /** Fare üzerine gelince izlenecek köprü (Eylem Ayarları › Fare Üzerine Gelme). */
+  hoverLink?: string;
 }
 
 export interface PathCmd {
@@ -259,6 +261,16 @@ export interface PicShape extends ShapeBase {
   effects?: Effects;
   adjust?: PicAdjust;
   ph?: Placeholder;
+  /** Yakınlaştırma (Slayt / Özet): gösteride tıklanınca hedef slayda yakınlaşarak gidilir. */
+  zoom?: ZoomInfo;
+}
+
+export interface ZoomInfo {
+  slideId: string;
+  /** Özet yakınlaştırma: hedef bölüm oynatılır. */
+  summary?: boolean;
+  /** Hedef (bölüm) bitince yakınlaştırma slaydına dönülür. */
+  ret?: boolean;
 }
 
 export interface CellBorder {
@@ -278,7 +290,10 @@ export interface TableCell {
 }
 
 export interface TableRow {
+  /** Gerçek (içerikle büyümüş olabilen) satır yüksekliği; dosyaya yazılan. */
   h: number;
+  /** İçerik büyütmeden önceki en küçük yükseklik (yalnız oturum içinde; yoksa h). */
+  minH?: number;
   cells: TableCell[];
 }
 
@@ -309,6 +324,7 @@ export type ChartType = "col" | "bar" | "line" | "pie" | "doughnut" | "area" | "
 
 /** Sütun/çubuk/çizgi/alan gruplandırması (c:grouping). */
 export type ChartGrouping = "clustered" | "stacked" | "percentStacked";
+export type DataLabelPos = "ctr" | "inEnd" | "inBase" | "outEnd" | "bestFit" | "t" | "b" | "l" | "r" | "callout";
 
 export interface ChartSeries {
   name: string;
@@ -325,6 +341,14 @@ export interface ChartData {
   series: ChartSeries[];
   legend: "b" | "t" | "l" | "r" | "none";
   dataLabels?: boolean;
+  /** Veri etiketi konumu (c:dLblPos; "callout" = veri belirtme çizgisi). Yoksa türün varsayılanı. */
+  labelPos?: DataLabelPos;
+  /** Dağılım alt türü (yoksa yalnız işaretçiler). */
+  scatterStyle?: "lineMarker" | "line" | "smoothMarker" | "smooth";
+  /** Radar alt türü (yoksa yalnız çizgi). */
+  radarStyle?: "marker" | "filled";
+  /** Birleşik: çizgi serisi ikincil eksende. */
+  secondaryLine?: boolean;
   /** Yoksa kümelenmiş (çizgi/alan için standart). */
   grouping?: ChartGrouping;
   /** Grafik stili (1–8; c:style). */
@@ -366,7 +390,9 @@ export type TransitionType =
   | "blinds"
   | "wheel"
   | "wedge"
-  | "newsflash";
+  | "newsflash"
+  /** Dönüştür: aynı adlı/aynı metinli şekiller konum, boyut ve renk değiştirerek geçer. */
+  | "morph";
 
 export interface Transition {
   type: TransitionType;
@@ -441,6 +467,8 @@ export interface Layout {
   shapes: Shape[];
   background?: Fill;
   showMasterShapes: boolean;
+  /** Seçili slaytlara uygulanan ayrı tema (ikincil asıl slayt); yoksa sununun teması. */
+  theme?: Theme;
 }
 
 export interface TextStyles {

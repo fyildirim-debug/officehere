@@ -102,13 +102,16 @@ export function useClipboard(actions: Actions, blocked: () => boolean) {
 export async function pasteFromRibbon(actions: Actions) {
   const h = actions.textHandle;
   if (actions.s.editing && h) {
+    const paras = actions.store.clipboard?.paragraphs;
+    const plain = paras?.map((p) => p.runs.map((r) => r.text).join("")).join("\n").replace(/\v/g, "\n");
     try {
       const t = await navigator.clipboard.readText();
-      if (t) h.insert(t);
+      // Sistem panosu iç panoyla aynıysa biçimli paragraflar yapıştırılır.
+      if (paras && t.replace(/\r\n?/g, "\n") === plain) h.insertRich(paras);
+      else if (t) h.insert(t);
       return;
     } catch {
-      const paras = actions.store.clipboard?.paragraphs;
-      if (paras) h.insert(paras.map((p) => p.runs.map((r) => r.text).join("")).join("\n"));
+      if (paras) h.insertRich(paras);
       return;
     }
   }

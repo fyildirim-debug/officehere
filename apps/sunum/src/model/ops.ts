@@ -88,7 +88,7 @@ export function setBox<T extends Shape>(s: T, b: Box): T {
   if (s.kind === "table") {
     const sx = s.w ? b.w / s.w : 1;
     const sy = s.h ? b.h / s.h : 1;
-    return { ...s, ...b, cols: s.cols.map((c) => c * sx), rows: s.rows.map((r) => ({ ...r, h: r.h * sy })) } as T;
+    return { ...s, ...b, cols: s.cols.map((c) => c * sx), rows: s.rows.map((r) => ({ ...r, h: r.h * sy, minH: r.minH && r.minH * sy })) } as T;
   }
   return { ...s, ...b };
 }

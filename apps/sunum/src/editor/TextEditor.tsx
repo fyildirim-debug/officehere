@@ -13,11 +13,11 @@ import {
   insertParagraphs,
   insertText,
   isCollapsed,
-  nextPos,
   orderSel,
   paraLen,
-  prevPos,
   propsAt,
+  removeBackward,
+  removeForward,
   runPropsInRange,
   selectAll,
   sliceBody,
@@ -45,11 +45,15 @@ export interface TextEditorHandle {
   insert(text: string): void;
   /** Biçimli çalıştırma ekler (alan: slayt numarası vb.). */
   insertRun(text: string, props: RunProps): void;
+  /** Biçimli paragrafları yapıştırır. */
+  insertRich(paras: Paragraph[]): void;
   selectAll(): void;
   selection(): Sel;
   setSelection(sel: Sel): void;
   selectedText(): string;
   focus(): void;
+  /** Ekran noktasına en yakın konuma imleç koyar (metin bloğu dışındaki tıklamalar için). */
+  placeCaret(x: number, y: number): void;
 }
 
 export interface TextEditorProps {
@@ -209,8 +213,9 @@ export function TextEditor(props: TextEditorProps) {
           break;
         }
         case "insertParagraph": {
+          // Enter ayrı bir geri alma adımıdır.
           const r = splitParagraph(b, sel, insProps());
-          commit(r.body, caret(r.caret.p, r.caret.o), "text");
+          commit(r.body, caret(r.caret.p, r.caret.o));
           break;
         }
         case "insertLineBreak": {
@@ -228,19 +233,22 @@ export function TextEditor(props: TextEditorProps) {
         case "deleteHardLineForward":
         case "deleteContent":
         case "deleteByCut": {
+          if (e.inputType === "deleteContentBackward" || e.inputType === "deleteContentForward") {
+            const r = e.inputType === "deleteContentBackward" ? removeBackward(b, sel) : removeForward(b, sel);
+            if (r.body !== b) commit(r.body, caret(r.caret.p, r.caret.o), "del");
+            break;
+          }
           let a = from;
           let z = to;
           if (isCollapsed(sel)) {
-            if (e.inputType === "deleteContentBackward") a = prevPos(b, from);
-            else if (e.inputType === "deleteContentForward") z = nextPos(b, from);
-            else if (e.inputType === "deleteWordBackward") a = wordBoundary(b, from, -1);
+            if (e.inputType === "deleteWordBackward") a = wordBoundary(b, from, -1);
             else if (e.inputType === "deleteWordForward") z = wordBoundary(b, from, 1);
             else if (e.inputType.endsWith("LineBackward")) a = { p: from.p, o: 0 };
             else if (e.inputType.endsWith("LineForward")) z = { p: from.p, o: paraLen(b.paragraphs[from.p]) };
           }
           if (cmpPos(a, z) === 0) return;
           const nb = deleteRange(b, a, z);
-          commit(nb, caret(a.p, a.o), "text");
+          commit(nb, caret(a.p, a.o), "del");
           break;
         }
         case "historyUndo":
@@ -266,7 +274,9 @@ export function TextEditor(props: TextEditorProps) {
       } else restoreSel();
     };
     const onCopy = (e: ClipboardEvent, cut: boolean) => {
-      const sel = selRef.current;
+      // selectionchange gecikebilir: kopyalanacak aralık her zaman DOM seçiminden alınır.
+      const sel = (!composing.current && domSelToSel(el)) || selRef.current;
+      selRef.current = sel;
       if (isCollapsed(sel)) return;
       e.preventDefault();
       const [a, z] = orderSel(sel);
@@ -279,6 +289,8 @@ export function TextEditor(props: TextEditorProps) {
     const onPaste = (e: ClipboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      const ds = domSelToSel(el);
+      if (ds) selRef.current = ds;
       const rich = e.clipboardData?.getData(RICH_MIME);
       let paras: Paragraph[] | null = null;
       if (rich) {
@@ -396,6 +408,11 @@ export function TextEditor(props: TextEditorProps) {
         const r = insertText(bodyRef.current, selRef.current, text, insProps());
         commit(r.body, caret(r.caret.p, r.caret.o), "text");
       },
+      insertRich(paras) {
+        sync();
+        const r = insertParagraphs(bodyRef.current, selRef.current, paras);
+        commit(r.body, caret(r.caret.p, r.caret.o), "paste");
+      },
       insertRun(text, props) {
         sync();
         const r = insertText(bodyRef.current, selRef.current, text, { ...insProps(), ...props });
@@ -421,6 +438,21 @@ export function TextEditor(props: TextEditorProps) {
       focus() {
         ref.current?.focus({ preventScroll: true });
         restoreSel();
+      },
+      placeCaret(x, y) {
+        const el = ref.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        // Metin bloğunun dışındaki nokta bloğun kenarına çekilir.
+        const cx = Math.max(r.left + 1, Math.min(r.right - 1, x));
+        const cy = Math.max(r.top + 1, Math.min(r.bottom - 1, y));
+        const b = bodyRef.current;
+        const last = b.paragraphs.length - 1;
+        const p = posFromPoint(el, cx, cy) ?? (y < r.top ? { p: 0, o: 0 } : { p: last, o: paraLen(b.paragraphs[last]) });
+        selRef.current = { anchor: p, focus: p };
+        el.focus({ preventScroll: true });
+        restoreSel();
+        propsRef.current.onSelectionChange();
       },
     };
     const insProps = () => pendingRef.current ?? propsAt(bodyRef.current, orderSel(selRef.current)[0]);

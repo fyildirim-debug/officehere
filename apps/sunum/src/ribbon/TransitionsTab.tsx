@@ -99,6 +99,16 @@ export function TransitionIcon({ type }: { type: TransitionType }) {
     case "newsflash":
       art = <rect x="11" y="9" width="10" height="10" fill={a} transform="rotate(25 16 14)" />;
       break;
+    case "morph":
+      // Dönüştür: küçük şekil büyüğe dönüşür (yay ok).
+      art = (
+        <>
+          <rect x="6" y="14" width="6" height="6" fill={b} />
+          <circle cx="22" cy="12" r="5" fill={a} />
+          <path d="M9 12 Q12 6 17 8" fill="none" stroke="#7a7a7a" strokeWidth="1" />
+        </>
+      );
+      break;
   }
   return (
     <svg width="32" height="28" viewBox="0 0 32 28" aria-hidden="true">

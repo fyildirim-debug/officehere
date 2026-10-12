@@ -62,7 +62,7 @@ async function locate(c: CommandEntry): Promise<HTMLElement | null> {
   return body.querySelector<HTMLElement>(sel);
 }
 
-export function CommandSearch({ ctx, tabs, collapsed, onExpand }: { ctx: RibbonCtx; tabs: RibbonTabDef[]; collapsed: boolean; onExpand: () => void }) {
+export function CommandSearch({ ctx, tabs, collapsed, onExpand, extra }: { ctx: RibbonCtx; tabs: RibbonTabDef[]; collapsed: boolean; onExpand: () => void; extra?: CommandEntry[] }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -95,9 +95,12 @@ export function CommandSearch({ ctx, tabs, collapsed, onExpand }: { ctx: RibbonC
   // Dizin: gizli kapta çizilen sekmelerden çıkarılır.
   useLayoutEffect(() => {
     if (!indexing || !hiddenRef.current) return;
-    setIndex(scrape(hiddenRef.current, tabs));
+    const scraped = scrape(hiddenRef.current, tabs);
+    // Şeritteki komutlar önce; aynı adlı ek komutlar (galeri öğesi ile şerit düğmesi) tekrarlanmaz.
+    const names = new Set(scraped.map((c) => `${c.tabLabel}|${c.title}`));
+    setIndex([...scraped, ...(extra ?? []).filter((c) => !names.has(`${c.tabLabel}|${c.title}`))]);
     setIndexing(false);
-  }, [indexing, tabs]);
+  }, [indexing, tabs, extra]);
 
   const ensureIndex = () => {
     if (!index && !indexing) setIndexing(true);
@@ -112,6 +115,10 @@ export function CommandSearch({ ctx, tabs, collapsed, onExpand }: { ctx: RibbonC
     setOpen(false);
     setQ("");
     inputRef.current?.blur();
+    if (c.run) {
+      c.run();
+      return;
+    }
     if (collapsed) onExpand();
     ctx.actions.store.set({ ribbonTab: c.tabId });
     await nextFrame();

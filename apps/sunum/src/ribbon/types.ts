@@ -21,7 +21,11 @@ export type DialogKind =
   | "shortcuts"
   | "about"
   | "lineSpacing"
-  | "icons";
+  | "icons"
+  | "action"
+  | "slideZoom"
+  | "summaryZoom"
+  | "compress";
 
 export interface AppCommands {
   paste: (mode?: "keep" | "text" | "dest") => void;
