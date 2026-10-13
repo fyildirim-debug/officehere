@@ -110,14 +110,12 @@ function PopoverLayer({ onClose, anchor, point, placement = "bottom-start", clas
       const inside = !!now && [layer, ...layers.slice(Math.max(0, i))].some((l) => l.el?.contains(now));
       const to = layer.restoreTo;
       if (!inside || !to?.isConnected || to.matches(":disabled")) return;
-      if (!to.isContentEditable) return to.focus({ preventScroll: true });
-      // Düzenleyiciye yerel focus() eski DOM seçimini geri getirir ve menü komutunun
-      // bir kare sonraya ertelenen odaklamasıyla yarışır (yazı eski imlece gider).
-      // Bir kare bekle; komut odağı almadıysa geri ver.
-      requestAnimationFrame(() => {
-        const a = document.activeElement;
-        if ((!a || a === document.body) && to.isConnected) to.focus({ preventScroll: true });
-      });
+      // Düzenleyiciye yerel focus() eski DOM seçimini geri getirir; menü komutunun kurduğu
+      // seçim (ör. yeni metin kutusu) kaybolur, yazı eski imlece gider. Tiptap kök öğeye
+      // kendini bağlar (dom.editor): görünümün focus()'u güncel seçimi DOM'a yazarak odaklar.
+      const view = (to as HTMLElement & { editor?: { view?: { focus(): void } } }).editor?.view;
+      if (view) view.focus();
+      else to.focus({ preventScroll: true });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
