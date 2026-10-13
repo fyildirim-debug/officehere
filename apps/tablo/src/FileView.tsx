@@ -1,137 +1,14 @@
-/** Dosya görünümü (Backstage) ve dosya eylemleri: Yeni, Aç, Kaydet, Farklı Kaydet, Yazdır, Dışarı Aktar. */
-import { useMemo } from "react";
-import { DocumentPdf24Regular, DocumentTable24Regular, Globe24Regular, ArrowDownload24Regular } from "@fluentui/react-icons";
-import { OfficeBackstage, isDirectSave, trackSave, type BackstageTemplate } from "@officehere/ui";
-import { addRecentFile, baseName, downloadBlob, extensionOf, getNative, openFile, readPath, saveFile, saveFileAs, type FileFilter, type RecentFile } from "@officehere/core";
+/** Dosya görünümü (Backstage): Yeni, Aç, Kaydet, Farklı Kaydet, Yazdır, Dışarı Aktar. */
+import { ArrowDownload24Regular, DocumentPdf24Regular, DocumentTable24Regular, Globe24Regular } from "@fluentui/react-icons";
+import { OfficeBackstage, type BackstageTemplate } from "@officehere/ui";
+import { getNative } from "@officehere/core";
 import type { Controller } from "./controller";
-import { readXlsx, writeXlsx } from "./io/xlsx";
-import { readCsv, writeCsv } from "./io/csv";
-import { exportPdf, printRange, rangeToHtml } from "./io/print";
-import { buildTemplate, TEMPLATES } from "./templates";
-import type { WorkbookModel } from "./model/workbook";
+import { printRange, rangeToHtml } from "./io/print";
+import { TEMPLATES } from "./templates";
 import { PrintPage } from "./PrintPage";
-import { printWithOptions } from "./io/printPages";
+import type { FileActions } from "./app/fileActions";
 
-const XLSX_FILTER: FileFilter = { name: "Çalışma Kitabı (.xlsx)", extensions: ["xlsx"] };
-const CSV_FILTER: FileFilter = { name: "CSV (Noktalı virgülle ayrılmış)", extensions: ["csv"] };
-const OPEN_FILTERS: FileFilter[] = [{ name: "Tüm Çalışma Kitapları", extensions: ["xlsx", "xlsm", "csv", "txt"] }, XLSX_FILTER, CSV_FILTER];
-
-export interface FileActions {
-  save: () => Promise<boolean>;
-  saveAs: () => Promise<boolean>;
-  open: () => Promise<void>;
-  openPath: (p: string) => Promise<void>;
-  openRecent: (f: RecentFile) => Promise<void>;
-  newBook: (templateId: string) => Promise<void>;
-  exportAs: (kind: string) => Promise<void>;
-  print: () => void;
-  loadData: (name: string, data: ArrayBuffer, path?: string) => Promise<void>;
-  confirmDiscard: () => Promise<boolean>;
-}
-
-async function workbookFromData(name: string, data: ArrayBuffer): Promise<WorkbookModel> {
-  const ext = extensionOf(name);
-  if (ext === "csv" || ext === "txt") return readCsv(data, baseName(name));
-  return readXlsx(data);
-}
-
-export function useFileActions(ctl: Controller): FileActions {
-  return useMemo(() => {
-    const actions: FileActions = {
-      confirmDiscard: async () => true,
-      async loadData(name, data, path) {
-        try {
-          const wb = await workbookFromData(name, data);
-          ctl.load(wb, name, { name, path });
-          void addRecentFile({ path: path ?? name, name, app: "tablo", openedAt: Date.now() });
-        } catch (e) {
-          ctl.alert(`"${name}" dosyası açılamadı. Dosya biçimi geçersiz ya da dosya bozuk olabilir.\n\n${(e as Error).message ?? ""}`);
-        }
-      },
-      async open() {
-        if (!(await actions.confirmDiscard())) return;
-        const f = await openFile(OPEN_FILTERS);
-        if (!f) return;
-        await actions.loadData(f.name, f.data, f.path);
-        if (f.handle) ctl.fileRef = { name: f.name, handle: f.handle, path: f.path };
-      },
-      async openPath(p) {
-        const native = getNative();
-        if (native && !ctl.pristine) {
-          await native.newWindow("tablo", p);
-          return;
-        }
-        const f = await readPath(p);
-        if (f) await actions.loadData(f.name, f.data, f.path);
-      },
-      async openRecent(f) {
-        if (getNative()) await actions.openPath(f.path);
-        else await actions.open();
-      },
-      async save() {
-        if (ctl.edit && !ctl.commitEdit(null)) return false;
-        const name = ctl.fileName.includes(".") ? ctl.fileName : `${ctl.fileName}.xlsx`;
-        const isCsv = extensionOf(name) === "csv";
-        const target = ctl.fileRef;
-        const ref = await trackSave(isDirectSave(target), async () => saveFile(target, name, isCsv ? [CSV_FILTER] : [XLSX_FILTER], isCsv ? writeCsv(ctl.wb, ctl.sheet) : await writeXlsx(ctl.wb)));
-        if (!ref) return false;
-        ctl.fileRef = ref;
-        ctl.fileName = ref.name;
-        ctl.dirty = false;
-        void addRecentFile({ path: ref.path ?? ref.name, name: ref.name, app: "tablo", openedAt: Date.now() });
-        ctl.emit();
-        return true;
-      },
-      async saveAs() {
-        if (ctl.edit && !ctl.commitEdit(null)) return false;
-        const name = `${baseName(ctl.fileName)}.xlsx`;
-        const ref = await trackSave(false, async () => saveFileAs(name, [XLSX_FILTER], await writeXlsx(ctl.wb)));
-        if (!ref) return false;
-        ctl.fileRef = ref;
-        ctl.fileName = ref.name;
-        ctl.dirty = false;
-        void addRecentFile({ path: ref.path ?? ref.name, name: ref.name, app: "tablo", openedAt: Date.now() });
-        ctl.emit();
-        return true;
-      },
-      async newBook(id) {
-        if (!(await actions.confirmDiscard())) return;
-        const wb = buildTemplate(id);
-        const n = nextBookNumber();
-        const name = id === "blank" ? `Kitap${n}` : `${TEMPLATES.find((t) => t.id === id)?.label ?? "Kitap"}`;
-        ctl.load(wb, name, null);
-        ctl.pristine = id === "blank";
-      },
-      async exportAs(kind) {
-        const base = baseName(ctl.fileName);
-        if (kind === "csv") {
-          await saveFileAs(`${base}.csv`, [CSV_FILTER], writeCsv(ctl.wb, ctl.sheet));
-        } else if (kind === "csv-comma") {
-          await saveFileAs(`${base}.csv`, [{ name: "CSV (Virgülle ayrılmış)", extensions: ["csv"] }], writeCsv(ctl.wb, ctl.sheet, { delimiter: "," }));
-        } else if (kind === "pdf") {
-          await exportPdf(ctl.wb, ctl.sheet, `${base}.pdf`);
-        } else if (kind === "html") {
-          const r = printRange(ctl.wb, ctl.sheet);
-          const body = r ? rangeToHtml(ctl.wb, ctl.sheet, r, { gridlines: true, objects: true }) : "";
-          const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${base}</title><style>table{border-collapse:collapse;table-layout:fixed;font-family:Calibri,Carlito,sans-serif}td{padding:0 4px;border:1px solid #d4d4d4;overflow:hidden;white-space:nowrap}.tb-print-sheet{position:relative;display:inline-block}.tb-print-obj{position:absolute;overflow:hidden}.tb-chart-tip{display:none}</style></head><body>${body}</body></html>`;
-          downloadBlob(new Blob([html], { type: "text/html" }), `${base}.html`);
-        } else if (kind === "xlsx") {
-          const data = await writeXlsx(ctl.wb);
-          downloadBlob(new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${base}.xlsx`);
-        }
-      },
-      print() {
-        printWithOptions(ctl.wb, ctl.sheet, {});
-      },
-    };
-    return actions;
-  }, [ctl]);
-}
-
-let bookCounter = 1;
-function nextBookNumber(): number {
-  return ++bookCounter;
-}
+export { useFileActions, type FileActions } from "./app/fileActions";
 
 function TemplatePreview({ id }: { id: string }) {
   if (id === "blank") {
@@ -208,10 +85,13 @@ export function FileView({ ctl, files, page, onClose }: { ctl: Controller; files
       }}
       exports={[
         { id: "xlsx", title: "Çalışma kitabını indir (.xlsx)", description: "Çalışma kitabının bir kopyasını Office Open XML biçiminde indirir.", icon: <ArrowDownload24Regular /> },
+        { id: "ods", title: "OpenDocument Hesap Tablosu (.ods)", description: "Tüm sayfaları açık standart ODF biçiminde kaydeder; bazı özellikler (grafikler, özet tablolar) aktarılmaz.", icon: <DocumentTable24Regular /> },
         { id: "csv", title: "CSV (Noktalı virgülle ayrılmış)", description: "Etkin sayfayı UTF-8 ve ; ayırıcıyla metin dosyası olarak kaydeder.", icon: <DocumentTable24Regular /> },
         { id: "csv-comma", title: "CSV (Virgülle ayrılmış)", description: "Etkin sayfayı virgül ayırıcıyla kaydeder.", icon: <DocumentTable24Regular /> },
+        { id: "tsv", title: "Metin (Sekmeyle ayrılmış) (.tsv)", description: "Etkin sayfanın değerlerini sekmeyle ayrılmış metin olarak kaydeder.", icon: <DocumentTable24Regular /> },
         { id: "pdf", title: "PDF/XPS Belgesi Oluştur", description: getNative()?.exportPdf ? "Etkin sayfayı Sayfa Yapısı ayarlarıyla PDF dosyası olarak kaydeder." : "Yazdırma iletişim kutusunda “PDF olarak kaydet” seçeneğini kullanın.", icon: <DocumentPdf24Regular /> },
-        { id: "html", title: "Web Sayfası (.html)", description: "Kullanılan aralığı HTML tablosu olarak dışarı aktarır.", icon: <Globe24Regular /> },
+        { id: "html", title: "Web Sayfası (.html)", description: "Etkin sayfanın kullanılan aralığını biçimleriyle HTML tablosu olarak dışarı aktarır.", icon: <Globe24Regular /> },
+        { id: "html-all", title: "Web Sayfası — tüm sayfalar (.html)", description: "Görünür tüm sayfaları başlıklarıyla tek bir HTML sayfasında dışarı aktarır.", icon: <Globe24Regular /> },
       ]}
       onExport={(id) => {
         if (id === "pdf") onClose();
