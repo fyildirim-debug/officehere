@@ -74,7 +74,26 @@ class BelgeTableView implements NodeView {
     if (a.align) this.table.setAttribute("data-align", a.align as string);
     else this.table.removeAttribute("data-align");
     this.dom.style.justifyContent = a.align === "center" ? "center" : a.align === "right" ? "flex-end" : "";
+    this.applyIndent();
     updateColumns(this.node, this.colgroup, this.table, this.cellMinWidth);
+  }
+
+  /**
+   * Sol girinti (yalnız sola yaslı tabloda). Boyutlandırma sürerken (data-bl-anchor) tablo sol kenarı
+   * ölçülen yerde tutulur: ortalı/sağa yaslı tablo sağ kenarından küçültülünce yeniden ortalanmaz.
+   */
+  private applyIndent() {
+    const anchor = this.table.dataset.blAnchor;
+    const indent = Number(this.node.attrs.indent) || 0;
+    if (indent) this.table.setAttribute("data-indent", String(indent));
+    else this.table.removeAttribute("data-indent");
+    if (anchor !== undefined) {
+      this.table.style.marginLeft = `${anchor}px`;
+      this.table.style.marginRight = "auto";
+    } else {
+      this.table.style.marginLeft = (!this.node.attrs.align || this.node.attrs.align === "left") && indent ? `${indent}px` : "";
+      this.table.style.marginRight = "";
+    }
   }
 
   update(node: PMNode) {
@@ -87,6 +106,22 @@ class BelgeTableView implements NodeView {
   ignoreMutation(m: ViewMutationRecord) {
     return m.type === "attributes" && (m.target === this.table || this.colgroup.contains(m.target as globalThis.Node));
   }
+}
+
+/**
+ * Boyutlandırma sürerken tablonun sol kenarını sarmalayıcıya göre `px` uzaklıkta tutar (null: bırakır).
+ * Yalnız <table> öğesinin öznitelikleri değişir (düğüm görünümü bu değişiklikleri yok sayar).
+ */
+export function anchorTableLeft(table: HTMLElement, px: number | null) {
+  if (px === null) {
+    delete table.dataset.blAnchor;
+    table.style.marginLeft = "";
+    table.style.marginRight = "";
+    return;
+  }
+  table.dataset.blAnchor = String(Math.round(px * 100) / 100);
+  table.style.marginLeft = `${table.dataset.blAnchor}px`;
+  table.style.marginRight = "auto";
 }
 
 export function updateColumns(node: PMNode, colgroup: HTMLElement, table: HTMLTableElement, cellMinWidth: number, overrideCol?: number, overrideValue?: number) {
@@ -137,6 +172,12 @@ export const BelgeTable = Table.extend({
       firstColumn: { default: false, parseHTML: (el) => el.getAttribute("data-first-col") === "true", renderHTML: (a) => ({ "data-first-col": String(a.firstColumn) }) },
       totalRow: { default: false, parseHTML: (el) => el.getAttribute("data-total-row") === "true", renderHTML: (a) => ({ "data-total-row": String(a.totalRow) }) },
       align: { default: null, parseHTML: (el) => el.getAttribute("data-align"), renderHTML: (a) => (a.align ? { "data-align": a.align } : {}) },
+      /** Soldan girinti (px; tblInd). Yalnız sola yaslı tabloda uygulanır. */
+      indent: {
+        default: 0,
+        parseHTML: (el) => Math.round(Number(el.getAttribute("data-indent")) || 0),
+        renderHTML: (a) => (a.indent ? { "data-indent": String(a.indent), ...(a.align && a.align !== "left" ? {} : { style: `margin-left:${a.indent}px` }) } : {}),
+      },
       /** Başlık Satırlarını Yinele: ilk satır her sayfanın başında yinelenir. */
       repeatHeader: { default: false, parseHTML: (el) => el.getAttribute("data-repeat-header") === "true", renderHTML: (a) => (a.repeatHeader ? { "data-repeat-header": "true" } : {}) },
       /** Varsayılan hücre kenar boşlukları (pt; null: 0 / 0,19 cm). */

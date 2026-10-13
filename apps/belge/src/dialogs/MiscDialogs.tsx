@@ -343,13 +343,16 @@ export function TablePropsDialog({ onClose }: { onClose: () => void }) {
   const info = tableInfo(editor);
   const a = info?.node.attrs ?? {};
   const [align, setAlign] = useState<string>((a.align as string | null) ?? "left");
+  const [indent, setIndent] = useState(((Number(a.indent) || 0) / (96 / 2.54)).toFixed(2).replace(".", ","));
   const [headerRow, setHeaderRow] = useState(!!a.headerRow);
   const [repeat, setRepeat] = useState(!!a.repeatHeader);
   const apply = () => {
+    const cm = parseFloat(indent.replace(",", "."));
+    const indentPx = align === "left" && Number.isFinite(cm) ? Math.round((cm * 96) / 2.54) : (Number(a.indent) || 0);
     editor
       .chain()
       .focus()
-      .updateAttributes("table", { align: align === "left" ? null : align, headerRow, repeatHeader: repeat })
+      .updateAttributes("table", { align: align === "left" ? null : align, indent: indentPx, headerRow, repeatHeader: repeat })
       .run();
     onClose();
   };
@@ -367,6 +370,9 @@ export function TablePropsDialog({ onClose }: { onClose: () => void }) {
             </button>
           ))}
         </div>
+        <Field label="Soldan girinti (cm):" inline>
+          <input type="text" aria-label="Soldan girinti" value={indent} disabled={align !== "left"} onChange={(e) => setIndent(e.target.value)} />
+        </Field>
       </FieldSet>
       <FieldSet legend="Satır">
         <Check label="Üst bilgi satırı olarak biçimlendir" v={headerRow} set={setHeaderRow} />

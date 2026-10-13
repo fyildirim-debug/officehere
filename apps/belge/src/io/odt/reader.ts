@@ -520,9 +520,11 @@ export class OdtReader {
     }
     if (!content.length) content.push({ type: "tableRow", content: [{ type: "tableCell", attrs: { colspan: 1, rowspan: 1 }, content: [{ type: "paragraph" }] }] });
     const align = tStyle?.table.align;
+    // Soldan girinti: sola yaslı ("left") tabloda fo:margin-left ("margins" kenarlara yayılır).
+    const indent = align === "left" && tStyle?.table.marginLeft ? Math.round(ptPx(tStyle.table.marginLeft)) : 0;
     return {
       type: "table",
-      attrs: { tableStyle: anyBorder ? "grid" : "none", headerRow: true, repeatHeader: header, align: align === "center" ? "center" : align === "right" ? "right" : null },
+      attrs: { tableStyle: anyBorder ? "grid" : "none", headerRow: true, repeatHeader: header, align: align === "center" ? "center" : align === "right" ? "right" : null, ...(indent ? { indent } : {}) },
       content,
     };
   }

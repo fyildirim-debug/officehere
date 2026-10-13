@@ -34,7 +34,7 @@ export interface OdtStyle {
   para: ParaProps;
   /** Tablo / hücre / sütun özellikleri. */
   cell: { bg?: string; valign?: string; border?: boolean };
-  table: { width?: number; align?: string; breakBefore?: boolean };
+  table: { width?: number; align?: string; breakBefore?: boolean; marginLeft?: number };
   column: { width?: number; rel?: number };
   graphic: { wrap?: string };
 }
@@ -296,6 +296,8 @@ export class OdtStyles {
       const w = lengthPt(a(tbl, "width"));
       if (w) table.width = w;
       table.align = a(tbl, "align") ?? undefined;
+      const ml = lengthPt(tbl.getAttributeNS(NS_FO, "margin-left"));
+      if (ml) table.marginLeft = ml;
       if (tbl.getAttributeNS(NS_FO, "break-before") === "page") table.breakBefore = true;
     }
     const column: OdtStyle["column"] = {};

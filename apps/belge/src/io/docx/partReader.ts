@@ -496,6 +496,11 @@ export class PartReader {
       return el && w !== null && attr(el, "type") !== "pct" ? w / 20 : def;
     };
     const cellMargins = mar ? { top: pt("top", "top", 0), bottom: pt("bottom", "bottom", 0), left: pt("left", "start", 5.4), right: pt("right", "end", 5.4) } : null;
+    const align = jc === "center" || jc === "right" ? jc : jc === "end" ? "right" : null;
+    // Soldan girinti (tblInd, twip → px); yüzde ve "nil" girintisi yok sayılır.
+    const ind = kid(tblPr, "tblInd");
+    const indType = attr(ind, "type");
+    const indent = ind && (!indType || indType === "dxa") ? Math.round((attrNum(ind, "w") ?? 0) / 15) || 0 : 0;
     return {
       type: "table",
       attrs: {
@@ -504,7 +509,8 @@ export class PartReader {
         bandedRows: !flag("noHBand", 0x200),
         firstColumn: flag("firstColumn", 0x80),
         totalRow: flag("lastRow", 0x40),
-        align: jc === "center" || jc === "right" ? jc : jc === "end" ? "right" : null,
+        align,
+        ...(indent && !align ? { indent } : {}),
         repeatHeader,
         cellMargins,
       },

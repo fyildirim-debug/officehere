@@ -167,6 +167,9 @@ export function fieldNowText(field: unknown, d = new Date()): string | null {
   return null;
 }
 
+/** Alanı Güncelleştir: tarih/saat alanları şimdiki zamanla yeniden yazılır. */
+export const FIELD_REFRESH_EVENT = "officehere:refresh-fields";
+
 /** Üst/alt bilgideki sayfa numarası alanı. Statik çizimde jeton metni sayfa numarasıyla değiştirilir. */
 export const PAGE_TOKEN = "⁠#SAYFA#⁠";
 export const NUMPAGES_TOKEN = "⁠#TOPLAM#⁠";
@@ -192,7 +195,9 @@ export const PageField = Node.create({
       const now = fieldNowText(node.attrs.field);
       if (now) {
         dom.textContent = now;
-        return { dom, update: (n) => n.type.name === "pageField" && n.attrs.field === node.attrs.field };
+        const refresh = () => (dom.textContent = fieldNowText(node.attrs.field) ?? dom.textContent);
+        window.addEventListener(FIELD_REFRESH_EVENT, refresh);
+        return { dom, update: (n) => n.type.name === "pageField" && n.attrs.field === node.attrs.field, destroy: () => window.removeEventListener(FIELD_REFRESH_EVENT, refresh) };
       }
       const total = node.attrs.field === "NUMPAGES";
       dom.textContent = total ? "#" : "1";

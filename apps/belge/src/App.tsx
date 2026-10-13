@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useEditor, useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
-import { NodeSelection, TextSelection } from "@tiptap/pm/state";
+import { NodeSelection } from "@tiptap/pm/state";
 import { AppShell, MessageBar, Ribbon, getUserName, useContextMenu, useDocumentLifecycle, useHotkeys, type OfficeBackstagePage } from "@officehere/ui";
 import { defaultSettings, emptyDoc, type DocSettings } from "./model/document";
 import { setActiveNoteEditor, useActiveNoteEditor } from "./state/activeNote";
@@ -42,7 +42,7 @@ import { useEditorClicks } from "./state/useEditorClicks";
 import { useFormatPainter } from "./state/useFormatPainter";
 import { ReadMode } from "./views/ReadMode";
 import { BelgeStatusBar } from "./views/BelgeStatusBar";
-import { buildContextMenu } from "./views/contextMenu";
+import { ContextMenuContent, menuPointForSelection, selectContextTarget, showsMiniBar, targetOfSelection } from "./views/contextMenu";
 import { DialogHost } from "./dialogs/DialogHost";
 import { HomeTab } from "./ribbon/HomeTab";
 import { InsertTab } from "./ribbon/InsertTab";
@@ -297,7 +297,8 @@ export function App() {
 
   /* ---------------- Ekle yardımcıları ---------------- */
 
-  const insertImageFromFile = useCallback(() => imageInput.current?.click(), []);
+  const { onImageFile, pickImage } = useImageInsert({ editor, active, settings, notify, setTab, insertRef: insertImageFileRef, input: imageInput });
+  const insertImageFromFile = useCallback(() => pickImage(null), [pickImage]);
 
   const updateToc = useFieldSync(editor, controller, settings);
 
@@ -361,21 +362,23 @@ export function App() {
   // Ctrl+tıklama ile köprüyü aç.
   const openLink = useEditorClicks(editor);
 
-  // Odak modu ve Okuma Modu'nda şerit gizlenir.
+  /**
+   * Sağ tık (ya da Shift+F10 / Menü tuşu): tıklanan nesne seçilir ve ona özgü menü açılır; metinde imleç
+   * seçimin dışındaysa tıklanan yere taşınır. Klavyeyle açılınca (olay düzenleyici köküne gelir) hedef
+   * geçerli seçimdir ve menü seçimin yanında belirir.
+   */
   const onContextMenu = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest(".bl-comments")) return;
     const t = e.target as HTMLElement;
-    if (t.closest(".ProseMirror")) {
-      // Sağ tık imleci seçimin dışındaysa oraya taşı.
-      const hit = editor.view.posAtCoords({ left: e.clientX, top: e.clientY });
-      const { from, to } = editor.state.selection;
-      if (hit && (hit.pos < from || hit.pos > to) && !(editor.state.selection instanceof NodeSelection)) {
-        editor.view.dispatch(editor.state.tr.setSelection(TextSelection.near(editor.state.doc.resolve(hit.pos))));
-      }
-    }
-    ctxMenu.open(e, buildContextMenu({ editor: active, openDialog, newComment, notify, openLink }));
-    // Word'deki gibi bağlam menüsünün üstünde mini araç çubuğu.
-    if (t.closest(".ProseMirror")) miniBar.current?.({ x: e.clientX, y: e.clientY, context: true });
+    if (t.closest(".bl-comments")) return;
+    const ed = active.view.dom.contains(t) ? active : editor.view.dom.contains(t) ? editor : null;
+    // Klavyeyle açılan menünün olayı odaktaki düzenleyici köküne gelir (fare düğmesi yok).
+    const keyboard = !!ed && t === ed.view.dom && e.button !== 2;
+    const target = !ed ? targetOfSelection(active.state) : keyboard ? targetOfSelection(ed.state) : selectContextTarget(ed.view, t, { left: e.clientX, top: e.clientY });
+    const at = keyboard && ed ? menuPointForSelection(ed.view) : { x: e.clientX, y: e.clientY };
+    const deps = { editor: ed ?? active, openLink, replaceImage: () => pickImage(ed ?? active) };
+    ctxMenu.open({ clientX: at.x, clientY: at.y, preventDefault: () => e.preventDefault() }, <ContextMenuContent target={target} deps={deps} />);
+    // Word'deki gibi metin menüsünün üstünde mini araç çubuğu (nesne menülerinde yok).
+    if (ed && showsMiniBar(target.kind)) miniBar.current?.({ x: at.x, y: at.y, context: true });
   };
 
   const editHeaderFooter = useCallback(
@@ -450,7 +453,6 @@ export function App() {
   useEffect(() => setTab((t) => (view.mode === "outline" ? "outline" : t === "outline" ? "view" : t)), [view.mode]);
   useHeaderFooterReturn(editor, hfEditing, setTab, hfReturn);
 
-  const onImageFile = useImageInsert({ editor, active, settings, notify, setTab, insertRef: insertImageFileRef });
 
   const openLocalFile = async (file: File) => {
     if (!(await confirmDiscard())) return;
