@@ -148,8 +148,24 @@ function tableStyleIds(shapes: Shape[], out: Set<string>) {
   for (const s of flatShapes(shapes)) if (s.kind === "table") out.add(s.style.styleId);
 }
 
-/** Sunuyu PPTX bayt dizisine yazar. */
-export async function writePptx(pres: Presentation): Promise<Uint8Array> {
+/** Ana bölüm içerik türleri: sunu, slayt gösterisi (.ppsx), şablon (.potx). */
+export const MAIN_CT = {
+  presentation: CT.presentation,
+  slideshow: "application/vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml",
+  template: "application/vnd.openxmlformats-officedocument.presentationml.template.main+xml",
+} as const;
+
+const PACKAGE_MIME = {
+  presentation: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  slideshow: "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+  template: "application/vnd.openxmlformats-officedocument.presentationml.template",
+} as const;
+
+export type PptxKind = keyof typeof MAIN_CT;
+
+/** Sunuyu PPTX bayt dizisine yazar (kind: .pptx / .ppsx / .potx paketi). */
+export async function writePptx(pres: Presentation, opts: { kind?: PptxKind } = {}): Promise<Uint8Array> {
+  const kind = opts.kind ?? "presentation";
   const zip = new JSZip();
   // OPC okuyucularının çoğu içerik türleri parçasını ilk sırada bekler.
   zip.file("[Content_Types].xml", "");
@@ -261,7 +277,7 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
     }
     add(
       path,
-      `<p:sld ${NS_DECL}${attrs({ show: slide.hidden ? "0" : undefined, showMasterSp: slide.hideMasterShapes ? "0" : undefined })}><p:cSld>${bgXml(slide.background, ctx)}${tree}</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${trans}${timing}${ext}</p:sld>`,
+      `<p:sld ${NS_DECL}${attrs({ show: slide.hidden ? "0" : undefined, showMasterSp: slide.hideMasterShapes ? "0" : undefined })}><p:cSld${attrs({ name: slide.name })}>${bgXml(slide.background, ctx)}${tree}</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${trans}${timing}${ext}</p:sld>`,
       CT.slide,
     );
     zip.file(`ppt/slides/_rels/slide${i + 1}.xml.rels`, ctx.rels.xml());
@@ -286,7 +302,7 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
       .join("");
     add("ppt/commentAuthors.xml", `<p:cmAuthorLst ${NS_DECL}>${list}</p:cmAuthorLst>`, CT.commentAuthors);
   }
-  add("ppt/presentation.xml", presentationXml(pres, masterRids.map((rid, i) => [masterIds[i], rid] as [number, string]), notesRid, slideRids, pctx), CT.presentation);
+  add("ppt/presentation.xml", presentationXml(pres, masterRids.map((rid, i) => [masterIds[i], rid] as [number, string]), notesRid, slideRids, pctx), MAIN_CT[kind]);
   zip.file("ppt/_rels/presentation.xml.rels", pctx.rels.xml());
   add("ppt/presProps.xml", PRES_PROPS, CT.presProps);
   add("ppt/viewProps.xml", VIEW_PROPS, CT.viewProps);
@@ -331,7 +347,7 @@ export async function writePptx(pres: Presentation): Promise<Uint8Array> {
   const ov = overrides.map(([p, c]) => `<Override PartName="${p}" ContentType="${c}"/>`).join("");
   zip.file("[Content_Types].xml", `${XML_HEAD}<Types xmlns="${NS.ct}">${defaults}${ov}</Types>`);
 
-  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 }, mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 }, mimeType: PACKAGE_MIME[kind] });
 }
 
 /** Asıl/düzen alt bilgi yer tutucularına alan (slayt numarası, tarih) ekler. */

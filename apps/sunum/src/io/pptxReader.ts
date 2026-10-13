@@ -326,6 +326,7 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
     const shapes = readShapeList(kid(cSld, "spTree"), sctx);
     const slide: Slide = {
       id: uid("sl"),
+      ...(attr(cSld, "name") ? { name: attr(cSld, "name") } : {}),
       layoutId: layout.id,
       shapes,
       background: readBg(cSld, sctx),
@@ -359,12 +360,16 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
       if (nxml) {
         const ndoc = parseXml(nxml).documentElement;
         const nctx = mkCtx(parseRels(await text(relsPathFor(nrel.target)), nrel.target));
-        for (const nsp of kids(kidPath(ndoc, "cSld", "spTree"), "sp")) {
+        const nsps = kids(kidPath(ndoc, "cSld", "spTree"), "sp");
+        const phType = (nsp: Element) => {
           const ph = kidPath(nsp, "nvSpPr", "nvPr", "ph");
-          if (attr(ph, "type") !== "body") continue;
+          return ph ? (attr(ph, "type") ?? "body") : undefined;
+        };
+        // Not gövdesi yer tutucusu; yoksa (bazı yazıcılar) yer tutucu olmayan ilk metin kutusu.
+        const nsp = nsps.find((n) => phType(n) === "body") ?? nsps.find((n) => phType(n) === undefined && !!kid(n, "txBody"));
+        if (nsp) {
           const body = readTextBody(kid(nsp, "txBody"), nctx);
           slide.notes = body ? body.paragraphs.map((p) => p.runs.map((r) => r.text.replace(/\v/g, "\n")).join("")).join("\n").replace(/\s+$/, "") : "";
-          break;
         }
       }
     }

@@ -37,6 +37,9 @@ import { buildRibbonTabs } from "./app/ribbonTabs";
 import { ErrorBoundary } from "./app/ErrorBoundary";
 import { forgetOwnDraft, useAutoRecover } from "./app/useAutoRecover";
 import { useFileAutoSave } from "./app/useFileAutoSave";
+import { FormatAskHost } from "./app/formatAsk";
+import { isSaveFormat, OPEN_EXTENSIONS } from "./io/formats";
+import { extensionOf } from "@officehere/core";
 import { extraCommands } from "./app/extraCommands";
 import "./styles/slide.css";
 import "./styles/editor.css";
@@ -150,7 +153,7 @@ export function App() {
     const files = Array.from(e.dataTransfer.files ?? []);
     if (!files.length) return;
     e.preventDefault();
-    const pptx = files.find((f) => f.name.toLowerCase().endsWith(".pptx"));
+    const pptx = files.find((f) => OPEN_EXTENSIONS.includes(extensionOf(f.name)));
     if (pptx) {
       void (async () => {
         if (await lifecycle.confirmDiscard()) await openBytes(a, await pptx.arrayBuffer(), pptx.name, null);
@@ -357,7 +360,24 @@ export function App() {
             <>
               {autoRecover.bar}
               {state.message && (
-                <MessageBar kind={state.message.kind} onClose={() => a.store.set({ message: null })}>
+                <MessageBar
+                  kind={state.message.kind}
+                  onClose={() => a.store.set({ message: null })}
+                  actions={
+                    state.message.action === "startShow" ? (
+                      <button
+                        type="button"
+                        className="oh-btn is-primary"
+                        onClick={() => {
+                          a.store.set({ message: null });
+                          cmd.startShow("start");
+                        }}
+                      >
+                        Slayt Gösterisini Başlat
+                      </button>
+                    ) : undefined
+                  }
+                >
                   {state.message.text}
                 </MessageBar>
               )}
@@ -401,7 +421,7 @@ export function App() {
                 else if (id === "png") await exportPngs(doc, base, "current", Math.min(state.masterBase?.slideIdx ?? state.slideIdx, doc.slides.length - 1));
                 else if (id === "pngAll") await exportPngs(doc, base, "all", 0);
                 else if (id === "outline") downloadBlob(new Blob([outlineText(doc)], { type: "text/plain;charset=utf-8" }), `${base}-AnaHat.txt`);
-                else if (id === "pptx") void save(a, true);
+                else if (isSaveFormat(id)) void save(a, true, id);
                 setBackstage(false);
               }}
               onClose={async () => {
@@ -458,6 +478,7 @@ export function App() {
       )}
       {ctxMenu.element}
       {lifecycle.dialog}
+      <FormatAskHost />
       <AppDialogs a={a} state={state} info={info} cmd={cmd} dialog={dialog} closeDialog={closeDialog} extra={extra} setExtra={setExtra} showSettings={showSettings} setShowSettings={setShowSettings} findQuery={findQuery} />
     </>
   );
