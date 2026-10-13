@@ -17,7 +17,8 @@ import { useKeyboard } from "./app/keyboard";
 import { insertImageFiles, useClipboard } from "./app/clipboard";
 import { loadPresentation, newFromTemplate, openBytes, openDialog, openFromPath, openRecent, save } from "./app/fileOps";
 import { exportPdfNative, exportPngs, outlineText, PrintRoot } from "./app/exporting";
-import { masterMenu, sectionMenu, shapeMenu, slideAreaMenu, thumbMenu } from "./app/menus";
+import { masterMenu, objectMenu, sectionMenu, slideAreaMenu, thumbMenu } from "./app/menus";
+import { keyboardMenuTarget, type CanvasMenuKind } from "./editor/contextKind";
 import { tableCellMenu, textEditMenu } from "./app/textMenus";
 import { MasterThumbPane } from "./panes/MasterThumbPane";
 import { documentPres } from "./state/masterActions";
@@ -111,6 +112,10 @@ export function App() {
     replace: () => setDialog("replace"),
     link: () => cmd.insertLink(),
     spelling: () => cmd.spelling(),
+    contextMenu: () => {
+      const t = keyboardMenuTarget(a.s);
+      canvasMenu({ clientX: t.x, clientY: t.y, preventDefault: () => {} }, t.kind);
+    },
     isBlocked: () => blockedRef.current,
   });
   useClipboard(a, useCallback(() => blockedRef.current, []));
@@ -200,12 +205,13 @@ export function App() {
           : "Çizmek için slaytta sürükleyin. Bitirmek için Esc."
         : null;
 
-  const canvasMenu = (e: React.MouseEvent, kind: "shape" | "slide" | "text" | "cell") => {
+  // Sağ tıklanan nesnenin türüne göre menü (resim, grafik, tablo, metin kutusu, çizgi, grup, çoklu seçim...).
+  const canvasMenu = (e: { clientX: number; clientY: number; preventDefault: () => void }, kind: CanvasMenuKind) => {
     const one = a.selectedShapes()[0];
-    if (kind === "text") ctxMenu.open(e, textEditMenu(a, cmd, openDialogFn));
-    else if (kind === "cell" && one?.kind === "table") ctxMenu.open(e, tableCellMenu(a, cmd, openDialogFn, one));
-    else if (kind === "shape" || kind === "cell") ctxMenu.open(e, shapeMenu(a, cmd, () => setDialog("sizePos")));
-    else ctxMenu.open(e, slideAreaMenu(a, cmd, () => a.store.set({ showRuler: !a.s.showRuler }), a.s.showRuler));
+    if (kind === "text") return ctxMenu.open(e, textEditMenu(a, cmd, openDialogFn));
+    if (kind === "cell" && one?.kind === "table") return ctxMenu.open(e, tableCellMenu(a, cmd, openDialogFn, one));
+    const obj = kind === "shape" || kind === "cell" ? objectMenu({ a, cmd, openDialog: openDialogFn }) : null;
+    ctxMenu.open(e, obj ?? slideAreaMenu(a, cmd, () => a.store.set({ showRuler: !a.s.showRuler }), a.s.showRuler));
   };
 
   const bound = (region: string, node: React.ReactNode, onReset?: () => void) => (

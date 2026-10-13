@@ -1,7 +1,7 @@
 /**
  * Metin düzenlerken ve tablo hücresinde sağ tık menüleri: Kes/Kopyala,
  * Yapıştırma Seçenekleri, Yazı Tipi, Paragraf, Madde İşaretleri,
- * Numaralandırma, Köprü; tabloda ayrıca Ekle / Sil / Seç / Birleştir / Böl.
+ * Numaralandırma, Köprü; tabloda ayrıca Ekle / Sil / Seç / Birleştir / Böl / Hücre Hizalaması.
  */
 import {
   ClipboardPaste20Regular,
@@ -18,19 +18,25 @@ import {
   TableCellsSplit20Regular,
   TableDeleteRow20Regular,
   TableInsertRow20Regular,
+  TextAlignCenter20Regular,
+  TextAlignLeft20Regular,
+  TextAlignRight20Regular,
+  TextboxAlignBottom20Regular,
+  TextboxAlignMiddle20Regular,
+  TextboxAlignTop20Regular,
   TextBulletListLtr20Regular,
   TextFont20Regular,
   TextNumberListLtr20Regular,
   TextParagraph20Regular,
 } from "@fluentui/react-icons";
 import { getUserName, Menu, MenuItem, MenuSeparator } from "@officehere/ui";
-import { deleteCols, deleteRows, insertCol, insertRow, mergeCells, normRange, splitCell, type CellRange } from "../model/tableOps";
+import { deleteCols, deleteRows, insertCol, insertRow, mapCells, mergeCells, normRange, splitCell, type CellRange } from "../model/tableOps";
 import type { TableShape } from "../model/types";
 import { BulletGrid } from "../ribbon/HomeTab";
 import type { AppCommands, DialogKind } from "../ribbon/types";
 import type { Actions } from "../state/actions";
 import { currentLink } from "../state/linkActions";
-import { setListStyle, textInfo } from "../state/textActions";
+import { setListStyle, setParaProps, textInfo } from "../state/textActions";
 
 /** Menüden çağrılan pano komutu: önce düzenleyiciye odak ve seçim geri verilir. */
 function clip(a: Actions, op: "cut" | "copy") {
@@ -123,6 +129,7 @@ export function tableCellMenu(a: Actions, cmd: AppCommands, openDialog: (d: Dial
   const hasSel = editing && !!a.textHandle && a.textHandle.selectedText().length > 0;
   const cell = t.rows[r.r1]?.cells[r.c1];
   const multi = r.r1 !== r.r2 || r.c1 !== r.c2;
+  const para = textInfo(a)?.para;
   const leave = () => a.store.set({ editing: null, cellSel: null });
   return (
     <Menu>
@@ -165,6 +172,21 @@ export function tableCellMenu(a: Actions, cmd: AppCommands, openDialog: (d: Dial
       />
       <MenuItem icon={<TableCellsMerge20Regular />} label="Hücreleri Birleştir" disabled={!multi} onClick={() => (leave(), updateTable(a, t, (x) => mergeCells(x, r)))} />
       <MenuItem icon={<TableCellsSplit20Regular />} label="Hücreleri Böl" disabled={!(cell?.gridSpan || cell?.rowSpan)} onClick={() => updateTable(a, t, (x) => splitCell(x, r.r1, r.c1))} />
+      <MenuItem
+        icon={<TextboxAlignMiddle20Regular />}
+        label="Hücre Hizalaması"
+        submenu={
+          <Menu>
+            <MenuItem icon={<TextAlignLeft20Regular />} label="Sola Hizala" checked={para?.align === "l" || !para?.align} onClick={() => setParaProps(a, { align: "l" })} />
+            <MenuItem icon={<TextAlignCenter20Regular />} label="Ortala" checked={para?.align === "ctr"} onClick={() => setParaProps(a, { align: "ctr" })} />
+            <MenuItem icon={<TextAlignRight20Regular />} label="Sağa Hizala" checked={para?.align === "r"} onClick={() => setParaProps(a, { align: "r" })} />
+            <MenuSeparator />
+            {(["t", "ctr", "b"] as const).map((v) => (
+              <MenuItem key={v} icon={v === "t" ? <TextboxAlignTop20Regular /> : v === "ctr" ? <TextboxAlignMiddle20Regular /> : <TextboxAlignBottom20Regular />} label={v === "t" ? "Üste Hizala" : v === "ctr" ? "Dikey Ortala" : "Alta Hizala"} checked={(cell?.anchor ?? "t") === v} onClick={() => updateTable(a, t, (x) => mapCells(x, r, (c) => ({ ...c, anchor: v })))} />
+            ))}
+          </Menu>
+        }
+      />
       <MenuSeparator />
       {formatItems(a, openDialog)}
       {editing && (

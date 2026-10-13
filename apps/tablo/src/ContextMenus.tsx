@@ -1,4 +1,4 @@
-/** Sağ tık menüleri: hücre, satır/sütun başlığı, sayfa sekmesi, yüzen nesne. */
+/** Sağ tık menüleri: hücre, satır/sütun başlığı, sayfa sekmesi (yüzen nesneler: ObjectMenus.tsx). */
 import {
   ArrowSortDownLines20Regular,
   ArrowSortUpLines20Regular,
@@ -15,15 +15,12 @@ import {
   TableInsertColumn20Regular,
   TableInsertRow20Regular,
 } from "@fluentui/react-icons";
-import { ColorPalette, LayerIcon, Menu, MenuHeader, MenuItem, MenuSeparator } from "@officehere/ui";
+import { ColorPalette, Menu, MenuHeader, MenuItem, MenuSeparator } from "@officehere/ui";
 import { paletteOf } from "./model/theme";
 import type { Controller } from "./controller";
 import * as E from "./actions/edit";
 import * as D from "./actions/data";
 import { displayText } from "./model/display";
-import { deleteObject } from "./charts/FloatingLayer";
-import { copyObject, hasObjectClip, pasteObject, startShapeEdit } from "./actions/objectClip";
-import { reorderObject } from "./actions/objects";
 import { requestDeleteSheet } from "./dialogs/MiscDialogs";
 import { openLink } from "./grid/Grid";
 import type { TableDef } from "./model/types";
@@ -268,35 +265,6 @@ export function TabMenu({ ctl, index }: { ctl: Controller; index: number }) {
       <MenuSeparator />
       <MenuItem label="Gizle" disabled={locked || ctl.wb.sheets.filter((s) => !s.hidden).length <= 1} onClick={() => ctl.ops.setSheetHidden(index, true)} />
       <MenuItem label="Göster..." disabled={locked || !ctl.wb.sheets.some((s) => s.hidden)} onClick={() => ctl.openDialog("unhideSheet")} />
-    </Menu>
-  );
-}
-
-export function ObjectMenu({ ctl, kind, id }: { ctl: Controller; kind: "chart" | "image" | "shape"; id: string }) {
-  const select = () => {
-    ctl.selObj = { kind, id };
-  };
-  return (
-    <Menu width={240}>
-      <MenuItem icon={<Cut20Regular />} label="Kes" onClick={() => (select(), copyObject(ctl, true))} />
-      <MenuItem icon={<Copy20Regular />} label="Kopyala" onClick={() => (select(), copyObject(ctl, false))} />
-      <MenuItem icon={<ClipboardPaste20Regular />} label="Yapıştır" disabled={!hasObjectClip()} onClick={() => pasteObject(ctl)} />
-      <MenuSeparator />
-      {kind === "chart" && (
-        <>
-          <MenuItem label="Grafik Türünü Değiştir..." onClick={() => ctl.openDialog("chartType")} />
-          <MenuItem label="Veri Seç..." onClick={() => ctl.openDialog("chartData")} />
-          <MenuItem label="Grafiği Taşı..." onClick={() => ctl.openDialog("moveChart")} />
-          <MenuSeparator />
-          <MenuItem label="Grafik Alanını Biçimlendir..." onClick={() => (select(), ctl.openDialog("chartFormat"))} />
-          <MenuSeparator />
-        </>
-      )}
-      {kind === "shape" && <MenuItem label="Metni Düzenle" onClick={() => startShapeEdit(ctl, id, "")} />}
-      <MenuItem icon={<LayerIcon kind="forward" />} label="Öne Getir" onClick={() => reorderObject(ctl, kind, id, true)} />
-      <MenuItem icon={<LayerIcon kind="backward" />} label="Arkaya Gönder" onClick={() => reorderObject(ctl, kind, id, false)} />
-      <MenuSeparator />
-      <MenuItem icon={<Delete20Regular />} label="Sil" onClick={() => deleteObject(ctl, kind, id)} />
     </Menu>
   );
 }

@@ -143,6 +143,15 @@ export function FloatingLayer({ ctl, layout }: { ctl: Controller; layout: GridLa
               else if (obj.kind === "shape") startShapeEdit(ctl, o.id, "");
             }}
             onKeyDown={(e) => {
+              // Shift+F10 / Menü tuşu: nesnenin bağlam menüsü nesnenin üzerinde açılır.
+              if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10" && !e.ctrlKey && !e.altKey)) {
+                e.preventDefault();
+                e.stopPropagation();
+                const r = e.currentTarget.getBoundingClientRect();
+                ctl.selObj = { kind: obj.kind, id: o.id };
+                ctl.openDialog("objectMenu", { x: r.left + Math.min(r.width / 2, 40), y: r.top + Math.min(r.height / 2, 40), kind: obj.kind, id: o.id });
+                return;
+              }
               if (e.key === "Escape") {
                 ctl.selObj = null;
                 ctl.emit();

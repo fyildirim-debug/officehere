@@ -26,7 +26,7 @@ import { AlignIcon, LayerIcon, Menu, MenuHeader, MenuItem, MenuSeparator, Ribbon
 import { cssColor } from "../model/color";
 import type { Color, PicShape, Shape } from "../model/types";
 import { applyRun } from "../state/textActions";
-import { readImageFile } from "../app/clipboard";
+import { replacePicture } from "../app/pictureCmds";
 import { cm, fromCm, InlineShapeGallery, ShapeGalleryMenu, ThemeColorSplit } from "./common";
 import { QUICK_STYLES, WORDART_PRESETS } from "./presets";
 import { AlignItems, applyQuickStyle, QuickStylePreview, RotateItems, ShapeEffectsMenu, ShapeFillButton, ShapeOutlineButton } from "./shapeMenus";
@@ -357,22 +357,7 @@ export function PictureFormatTab({ ctx }: { ctx: RibbonCtx }) {
             icon={<ImageEdit20Regular />}
             label="Resmi Değiştir"
             disabled={!pic}
-            onClick={() => {
-              const input = document.createElement("input");
-              input.type = "file";
-              input.accept = "image/*";
-              input.onchange = async () => {
-                const f = input.files?.[0];
-                if (!f) return;
-                const img = await readImageFile(f);
-                a.updateShapes((s) => {
-                  if (s.kind !== "pic") return s;
-                  const sc = Math.min(s.w / img.w, s.h / img.h);
-                  return { ...s, src: img.src, crop: undefined, w: img.w * sc, h: img.h * sc };
-                });
-              };
-              input.click();
-            }}
+            onClick={() => replacePicture(a)}
           />
           <RibbonButton icon={<ImageArrowCounterclockwise20Regular />} label="Resmi Sıfırla" disabled={!pic} onClick={() => a.updateShapes((s) => (s.kind === "pic" ? { ...s, adjust: undefined, crop: undefined, effects: undefined, geom: undefined, line: { fill: { type: "none" }, width: 1, dash: "solid" } } : s))} />
         </RibbonStack>
