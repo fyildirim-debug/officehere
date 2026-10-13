@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { formatValue } from "@officehere/formula";
 import type { Controller } from "../controller";
 import { filterAt, filtersOf } from "../actions/data";
-import { MAX_COLS, MAX_ROWS, rectCols, rectRows } from "../model/rect";
+import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import type { Rect } from "../model/types";
 import type { SheetModel } from "../model/workbook";
 import type { GridLayout } from "./layout";
@@ -88,15 +88,16 @@ export function selectedLines(ctl: Controller, axis: "row" | "col", fallback: nu
   return out.length ? out : [fallback];
 }
 
-export function fillTipText(ctl: Controller, src: Rect, target: Rect): string {
-  const vertical = target.c1 === src.c1 && target.c2 === src.c2;
-  const count = vertical ? rectRows(target) - rectRows(src) : rectCols(target) - rectCols(src);
-  const v = ctl.wb.getValue(ctl.sheet, src.r2, src.c2);
-  if (typeof v === "number") {
-    const n = rectRows(src) * rectCols(src) === 1 ? v : v + count;
-    return formatValue(n, ctl.wb.styleAt(ctl.sheet, src.r2, src.c2).numFmt).text;
-  }
-  return typeof v === "string" ? v : "";
+/**
+ * Doldurma tutamacı ipucu: bırakınca hedefin en uç hücresine yazılacak değer (doldurmayla aynı
+ * seri kuralı). Formül kopyalanırken ve içeri sürüklemede ipucu yoktur.
+ */
+export function fillTipText(ctl: Controller, src: Rect, target: Rect, copy = false): string {
+  const p = ctl.ops.fillPreview(ctl.sheet, src, target, copy ? "copy" : "series");
+  if (!p) return "";
+  const v = p.input;
+  if (v === null || (typeof v === "object" && "formula" in v)) return "";
+  return formatValue(v, p.numFmt).text;
 }
 
 export function openLink(ctl: Controller, link: string): void {

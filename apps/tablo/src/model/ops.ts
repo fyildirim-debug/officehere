@@ -419,41 +419,48 @@ export class Ops extends OpsSheets {
 
   /* --------------------------- Doldurma --------------------------- */
 
+  /** Doldurmanın bir satırı/sütunu: kaynak konumları, hedef konumu ve üretilen değerler. */
+  private fillLine(sheet: SheetModel, src: Rect, dst: Rect, mode: "series" | "copy" | "formats" | "values", l: number) {
+    const wb = this.wb;
+    const vertical = dst.c1 === src.c1 && dst.c2 === src.c2;
+    const reverse = vertical ? dst.r1 < src.r1 : dst.c1 < src.c1;
+    const srcLen = vertical ? rectRows(src) : rectCols(src);
+    const count = (vertical ? rectRows(dst) : rectCols(dst)) - srcLen;
+    const sources: FillSource[] = [];
+    const srcPos: [number, number][] = [];
+    for (let i = 0; i < srcLen; i++) {
+      const row = vertical ? src.r1 + i : src.r1 + l;
+      const col = vertical ? src.c1 + l : src.c1 + i;
+      srcPos.push([row, col]);
+      sources.push({ input: wb.getInput(sheet, row, col), numFmt: wb.styleAt(sheet, row, col).numFmt });
+    }
+    const targetPos = (i: number): [number, number] => {
+      if (vertical) return [reverse ? src.r1 - 1 - i : src.r2 + 1 + i, src.c1 + l];
+      return [src.r1 + l, reverse ? src.c1 - 1 - i : src.c2 + 1 + i];
+    };
+    const sourceIndex = (i: number) => (reverse ? srcLen - 1 - (i % srcLen) : i % srcLen);
+    const values =
+      mode === "formats" || count <= 0
+        ? []
+        : generateFill(sources, count, reverse, mode === "copy", (i, si) => {
+            const [tr, tc] = targetPos(i);
+            const [sr, sc] = srcPos[si];
+            return [tr - sr, tc - sc];
+          });
+    return { count, values, srcPos, targetPos, sourceIndex };
+  }
+
   /** Kaynak aralıktan hedef aralığa doldurur (hedef kaynağı içerir). */
   fill(sheet: SheetModel, src: Rect, dst: Rect, mode: "series" | "copy" | "formats" | "values" = "series"): void {
     const wb = this.wb;
     const vertical = dst.c1 === src.c1 && dst.c2 === src.c2;
-    const reverse = vertical ? dst.r1 < src.r1 : dst.c1 < src.c1;
     this.cellsOp(sheet, [dst], "Otomatik Doldurma", () => {
       const lines = vertical ? rectCols(src) : rectRows(src);
-      const srcLen = vertical ? rectRows(src) : rectCols(src);
-      const count = (vertical ? rectRows(dst) : rectCols(dst)) - srcLen;
-      if (count <= 0) return;
       for (let l = 0; l < lines; l++) {
-        const sources: FillSource[] = [];
-        const srcPos: [number, number][] = [];
-        for (let i = 0; i < srcLen; i++) {
-          const row = vertical ? src.r1 + i : src.r1 + l;
-          const col = vertical ? src.c1 + l : src.c1 + i;
-          srcPos.push([row, col]);
-          sources.push({ input: wb.getInput(sheet, row, col), numFmt: wb.styleAt(sheet, row, col).numFmt });
-        }
-        const targetPos = (i: number): [number, number] => {
-          if (vertical) return [reverse ? src.r1 - 1 - i : src.r2 + 1 + i, src.c1 + l];
-          return [src.r1 + l, reverse ? src.c1 - 1 - i : src.c2 + 1 + i];
-        };
-        const values =
-          mode === "formats"
-            ? []
-            : generateFill(sources, count, reverse, mode === "copy", (i, si) => {
-                const [tr, tc] = targetPos(i);
-                const [sr, sc] = srcPos[si];
-                return [tr - sr, tc - sc];
-              });
+        const { count, values, srcPos, targetPos, sourceIndex } = this.fillLine(sheet, src, dst, mode, l);
         for (let i = 0; i < count; i++) {
           const [row, col] = targetPos(i);
-          const si = reverse ? srcLen - 1 - (i % srcLen) : i % srcLen;
-          const [sr, sc] = srcPos[si];
+          const [sr, sc] = srcPos[sourceIndex(i)];
           if (mode !== "formats") {
             let v = values[i];
             if (mode === "values" && v !== null && typeof v === "object" && "formula" in v) v = wb.getValue(sheet, sr, sc);
@@ -465,6 +472,19 @@ export class Ops extends OpsSheets {
         }
       }
     });
+  }
+
+  /**
+   * Doldurma tutamacı ipucu: bırakınca hedefin en uç hücresine yazılacak girdi ve kaynağının
+   * sayı biçimi. fill() ile aynı üretimi kullanır; hedef kaynaktan büyük değilse null.
+   */
+  fillPreview(sheet: SheetModel, src: Rect, dst: Rect, mode: "series" | "copy" = "series"): { input: CellInput; numFmt?: string } | null {
+    const vertical = dst.c1 === src.c1 && dst.c2 === src.c2;
+    const lines = vertical ? rectCols(src) : rectRows(src);
+    const { count, values, srcPos, sourceIndex } = this.fillLine(sheet, src, dst, mode, lines - 1);
+    if (count <= 0) return null;
+    const [sr, sc] = srcPos[sourceIndex(count - 1)];
+    return { input: values[count - 1] ?? null, numFmt: this.wb.styleAt(sheet, sr, sc).numFmt };
   }
 
   /* ----------------------- Not ve köprü ----------------------- */

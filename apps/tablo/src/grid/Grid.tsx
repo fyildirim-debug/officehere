@@ -59,6 +59,8 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
   const [, force] = useState(0);
   const drag = useRef<Drag | null>(null);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
+  // Doldurma sürüklenirken Ctrl basılı mı (seri yerine kopya; ipucu da buna göre).
+  const fillCopy = useRef(false);
   const autoScroll = useRef<number | null>(null);
   const syncing = useRef(false);
   const raf = useRef(0);
@@ -401,7 +403,8 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         d.target = target;
         if (target) {
           // İpucu: son değer
-          setTip({ x: x + 14, y: y + 14, text: fillTipText(ctl, s, target) });
+          const text = fillTipText(ctl, s, target, fillCopy.current);
+          setTip(text ? { x: x + 14, y: y + 14, text } : null);
         } else setTip(null);
         draw();
         return;
@@ -434,6 +437,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
     const { x, y } = local(e);
     if (drag.current) {
       lastPointer.current = { x, y };
+      fillCopy.current = e.ctrlKey;
       applyDrag(x, y);
       // Kenarlarda otomatik kaydırma
       const L = layoutRef.current!;

@@ -127,6 +127,18 @@ test.describe("OfficeHere Tablo uçtan uca", () => {
     await page.mouse.move(a6.x + a6.w / 2, a6.y + a6.h / 2, { steps: 8 });
     await page.mouse.up();
     expect((await cell(page, "A6"))!.value).toBe(6);
+
+    // Adımlı seride sürüklerken ipucu, bırakınca yazılacak değerle aynı (5, 10 → A8 = 40)
+    await fillData(page, [["5"], ["10"]]);
+    await clickCell(page, "A1");
+    await page.keyboard.press("Shift+ArrowDown");
+    const a8 = (await page.evaluate(() => window.__ohTablo!.cellRect("A8")))!;
+    await page.mouse.move(a2.x + a2.w - 1, a2.y + a2.h - 1);
+    await page.mouse.down();
+    await page.mouse.move(a8.x + a8.w / 2, a8.y + a8.h / 2, { steps: 8 });
+    await expect(page.locator(".tb-tip")).toHaveText("40");
+    await page.mouse.up();
+    expect((await cell(page, "A8"))!.value).toBe(40);
     await clickCell(page, "B1");
     const b1 = (await page.evaluate(() => window.__ohTablo!.cellRect("B1")))!;
     const b3 = (await page.evaluate(() => window.__ohTablo!.cellRect("B3")))!;
