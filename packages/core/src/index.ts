@@ -6,3 +6,4 @@ export * from "./colors";
 export * from "./fonts";
 export * from "./i18n";
 export * from "./history";
+export * from "./cfb";
