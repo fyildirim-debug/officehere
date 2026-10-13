@@ -219,7 +219,7 @@ function tableXml(t: TableShape, ctx: ShapeWriteCtx): string {
 export function shapesXml(shapes: Shape[], ctx: ShapeWriteCtx): string {
   let out = "";
   for (const s of shapes) {
-    if (s.hidden) continue;
+    const before = out.length;
     switch (s.kind) {
       case "sp":
         out += spXml(s, ctx);
@@ -238,6 +238,8 @@ export function shapesXml(shapes: Shape[], ctx: ShapeWriteCtx): string {
       case "chart":
         break;
     }
+    // Gizli şekil: LibreOffice uzantı özniteliğiyle saklanır (görünmez ama korunur).
+    if (s.hidden && out.length > before) out = out.slice(0, before) + out.slice(before).replace(/^<([\w:-]+)/, '<$1 drawooo:display="none"');
   }
   return out;
 }

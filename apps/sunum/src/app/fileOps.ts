@@ -171,7 +171,7 @@ export async function save(a: Actions, forceAs = false, as?: SaveFormat): Promis
     });
     if (!ref) return false;
     const ext = extensionOf(ref.path ?? ref.name);
-    a.store.set({ fileRef: ref.path || ref.handle ? ref : null, fileName: baseName(ref.name), dirty: false, fileFormat: isSaveFormat(ext) ? ext : format, formatAsked: asked });
+    a.store.set({ fileRef: ref.path || ref.handle ? ref : null, fileName: baseName(ref.name), dirty: false, fileFormat: isSaveFormat(ext) ? ext : format, formatAsked: asked || !inPlace });
     void addRecentFile({ path: ref.path ?? ref.name, name: ref.name, app: "sunum", openedAt: Date.now() });
     a.message("Sunu kaydedildi.", "success");
     window.setTimeout(() => {

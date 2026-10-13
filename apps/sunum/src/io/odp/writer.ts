@@ -13,7 +13,7 @@ import { shapesXml, type ShapeWriteCtx } from "./writeShapes";
 import { odpTransitionAttrs, transitionTimingXml } from "./transitions";
 import { listStyleXml, textBodyXml } from "./writeText";
 
-const EXTRA_NS = 'xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0"';
+const EXTRA_NS = 'xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" xmlns:drawooo="http://openoffice.org/2010/draw"';
 
 function levelBody(lv: LevelStyle, sh: Shared, list?: string): string {
   const g = `<style:graphic-properties draw:stroke="none" draw:fill="none">${list ?? ""}</style:graphic-properties>`;

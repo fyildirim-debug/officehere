@@ -278,7 +278,7 @@ export async function readPpt(data: ArrayBuffer | Uint8Array): Promise<Presentat
     ts.body = merge(ts.body, primary.styles.get(1));
     const theme: Theme = {
       ...pres.theme,
-      name: "Asıl",
+      name: "İçe Aktarılan Tema",
       id: undefined,
       variant: undefined,
       colors: { ...pres.theme.colors, lt1: primary.scheme[0], dk1: primary.scheme[1], lt2: primary.scheme[2], dk2: primary.scheme[3], accent1: primary.scheme[4], accent2: primary.scheme[5], accent3: primary.scheme[6], hlink: primary.scheme[6], folHlink: primary.scheme[7] },

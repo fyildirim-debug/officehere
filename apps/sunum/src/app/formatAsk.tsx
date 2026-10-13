@@ -5,12 +5,19 @@ import { Dialog, DialogButton } from "@officehere/ui";
 export type FormatChoice = "keep" | "native" | "cancel";
 
 let asker: ((ext: string) => Promise<FormatChoice>) | null = null;
+let pending = false;
 
 const LABELS: Record<string, string> = { odp: "OpenDocument Sunu" };
 
 /** Soruyu gösterir; uygulama kökü bağlı değilse (testler) biçim korunur. */
 export function askKeepFormat(ext: string): Promise<FormatChoice> {
-  return asker ? asker(ext) : Promise.resolve("keep");
+  if (!asker) return Promise.resolve("keep");
+  // Soru açıkken gelen ikinci kayıt isteği (ör. yeniden Ctrl+S) yok sayılır.
+  if (pending) return Promise.resolve("cancel");
+  pending = true;
+  return asker(ext).finally(() => {
+    pending = false;
+  });
 }
 
 export function FormatAskHost() {

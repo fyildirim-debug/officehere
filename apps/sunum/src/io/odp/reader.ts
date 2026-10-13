@@ -223,7 +223,9 @@ export async function readOdp(data: ArrayBuffer | Uint8Array): Promise<Presentat
     try {
       const meta = kid(parse(metaXml, "Özellikler"), "meta");
       const val = (n: string) => kid(meta, n)?.textContent?.trim() || undefined;
-      pres.props = { title: val("title"), subject: val("subject"), creator: val("initial-creator") ?? val("creator"), created: val("creation-date"), modified: val("date") };
+      // Kesirli saniyeler 3 haneye indirilir (Date.parse uyumu).
+      const date = (n: string) => val(n)?.replace(/(\.\d{3})\d+/, "$1");
+      pres.props = { title: val("title"), subject: val("subject"), creator: val("initial-creator") ?? val("creator"), created: date("creation-date"), modified: date("date") };
     } catch {
       // Özellikler okunamazsa boş kalır.
     }

@@ -162,6 +162,17 @@ describe("ODP yazma", () => {
     expect(back.slides[2].shapes.some((s) => s.kind === "pic")).toBe(true);
   });
 
+  it("gizli şekil ve slayt, belge özellikleri korunur", async () => {
+    const src = await readOdp(load("lo-bicim.odp"));
+    src.slides[2] = { ...src.slides[2], hidden: true, shapes: src.slides[2].shapes.map((s) => (s.name === "Kırmızı Kutu" ? { ...s, hidden: true } : s)) };
+    src.props = { ...src.props, title: "Biçim Örneği", creator: "Ayşe Yılmaz" };
+    const back = await readOdp(await writeOdp(src));
+    expect(back.slides[2].hidden).toBe(true);
+    expect(back.slides[2].shapes.find((s) => s.name === "Kırmızı Kutu")?.hidden).toBe(true);
+    expect(back.props).toMatchObject({ title: "Biçim Örneği", creator: "Ayşe Yılmaz" });
+    expect(Number.isFinite(Date.parse(back.props.created!))).toBe(true);
+  });
+
   it("geçişler ve otomatik ilerleme gidiş-dönüşte korunur", async () => {
     const src = TEMPLATES.find((t) => t.id === "blank")!.build();
     const s0 = src.slides[0];
