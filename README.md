@@ -51,6 +51,9 @@ Arayüz tamamen Türkçedir; Renkli, Beyaz, Koyu Gri ve Siyah temaları vardır.
 - Metni kaydır, resim kırpma, Stiller bölmesi, sekme durakları, Otomatik Düzelt, mini araç çubuğu
 - Adres mektup birleştirme (CSV/XLSX), belge karşılaştırma, düzenleme koruması
 - Bul ve Değiştir (Türkçe İ/i, I/ı duyarlı), Anahat/Taslak/Okuma/Web görünümleri, ayrıntılı yazdırma ayarları
+- Büyük İlk Harf, biçimli ve otomatik güncellenen tarih/saat, Simge (son kullanılanlar), Alt+X kod dönüşümü
+- Sesli Oku (okunan sözcük vurgulanır, hız ve ses seçimi), Sözcük Sayısı (seçim istatistikleri)
+- Numaralandırmaya yeniden başla / devam et / değer ayarla
 - Bilinen klavye kısayolları, sağ tık menüleri, otomatik kurtarma ve çökme koruması
 
 ### Tablo
@@ -62,7 +65,9 @@ Arayüz tamamen Türkçedir; Renkli, Beyaz, Koyu Gri ve Siyah temaları vardır.
 - Tablo olarak biçimlendirme ve yapısal başvurular (`=TOPLA(Tablo1[Tutar])`), Özet Tablo, Dilimleyici
 - Sıralama, filtre, gelişmiş filtre, veri doğrulama, Anahat/Alt Toplam, Hedef Ara, Senaryo Yöneticisi, Veri Tablosu
 - Formül Denetimi (etkileyen/etkilenen okları, Formülü Değerlendir), Akıllı Doldurma, simge kümeleri
-- Grafikler ve mini grafikler, resimler, şekiller, notlar, sayfa ve kitap koruma
+- Grafikler ve mini grafikler, resimler, şekiller, notlar, sayfa ve kitap koruma, hücre içi onay kutusu
+- Dinamik diziler (FİLTRE, SIRALA, BENZERSİZ, ÇAPRAZARA, LET, LAMBDA), REGEX işlevleri, veritabanı ve mühendislik işlevleri, DOT/EĞİLİM
+- Otomatik Doldurma Seçenekleri, Yinelenenleri Kaldır, Metni Sütunlara Dönüştür, Birleştir, Bağlantıyı Yapıştır
 - Sayfa Düzeni ve Sayfa Sonu Önizleme, yazdırma ayarları ve PDF; 100 bin satırda akıcı filtre/sıralama
 - Python/openpyxl, LibreOffice ve diğer araçların ürettiği XLSX dosyalarıyla uyum
 
@@ -75,7 +80,8 @@ Arayüz tamamen Türkçedir; Renkli, Beyaz, Koyu Gri ve Siyah temaları vardır.
 - Gerçekten oynayan geçişler ve animasyonlar, Animasyon Bölmesi
 - Tam ekran slayt gösterisi, iki pencereli sunucu görünümü, kalem/vurgulayıcı/lazer işaretçi
 - Dönüştür geçişi, hareket yolları, eylem düğmeleri, özet ve slayt yakınlaştırma, zamanlama provası
-- Şekilleri birleştirme, noktaları düzenleme, resimleri sıkıştırma, erişilebilirlik denetleyicisi
+- Şekilleri birleştirme, noktaları düzenleme, resimleri sıkıştırma, erişilebilirlik denetleyicisi, damlalık
+- Yazdırma düzenleri: tam sayfa, not sayfaları, ana hat ve dinleyici notları (1–9 slayt); videoya aktarma (WebM)
 
 ## Kurulum
 
