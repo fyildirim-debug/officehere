@@ -1,5 +1,5 @@
 /** Bağımlılık dizini: hücre → bağımlı formüller; aralıklar blok ızgarasında tutulur. */
-import { walk, type Node } from "./ast";
+import { CALL_FN, walk, type Node } from "./ast";
 import { gk, gkLocal, gkSheet, keyCol, keyRow, type RangeDep } from "./engine-types";
 import { getFunction } from "./functions/registry";
 import { MAX_COLS, MAX_ROWS } from "./references";
@@ -124,18 +124,23 @@ export function analyzeDeps(ast: Node, g: number, sheet: number, ctx: DepContext
     if (r.r1 === r.r2 && r.c1 === r.c2) cellDeps.push(gk(r.sheet, r.r1, r.c1));
     else rangeDeps.push({ sheet: r.sheet, r1: r.r1, c1: r.c1, r2: r.r2, c2: r.c2, f: g });
   };
+  const useName = (name: string, depth: number, table: boolean) => {
+    usesNames = true;
+    const key = name.toLocaleUpperCase("tr-TR");
+    if (seenNames.has(key) || depth > 8) return;
+    seenNames.add(key);
+    const ast = ctx.definedName(name, sheet);
+    if (ast) walk(ast, (m) => visit(m, depth + 1));
+    else if (table) addStruct({ items: ["#Data"], table: name });
+  };
   const visit = (n: Node, depth: number) => {
     if (n.type === "func") {
       const def = getFunction(n.name);
       if (def?.volatile) volatile = true;
+      // İşlev değilse LAMBDA tanımlı ad çağrısı olabilir (=KARE(3)): adın başvuruları da izlenir
+      else if (!def && n.name !== CALL_FN) useName(n.name, depth, false);
     } else if (n.type === "name") {
-      usesNames = true;
-      const key = n.name.toLocaleUpperCase("tr-TR");
-      if (seenNames.has(key) || depth > 8) return;
-      seenNames.add(key);
-      const ast = ctx.definedName(n.name, sheet);
-      if (ast) walk(ast, (m) => visit(m, depth + 1));
-      else addStruct({ items: ["#Data"], table: n.name });
+      useName(n.name, depth, true);
     } else if (n.type === "structref") {
       addStruct(n.ref);
     } else if (n.type === "ref") {

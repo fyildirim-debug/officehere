@@ -24,9 +24,9 @@ export interface FindHit {
 
 /** Arama deseni (joker karakterler: * ? ~). */
 export function findPattern(o: Pick<FindOptions, "query" | "matchCase" | "wholeCell">, global = false): RegExp {
-  const re = wildcardToRegExp(o.query, o.wholeCell);
-  const flags = "u" + (o.matchCase ? "" : "i") + (global ? "g" : "");
-  return new RegExp(re.source, flags);
+  // Büyük/küçük harf duyarsızlık Türkçe kurallarla desenin içinde (i/İ, ı/I); "i" bayrağı kullanılmaz
+  const re = wildcardToRegExp(o.query, o.wholeCell, o.matchCase);
+  return new RegExp(re.source, "u" + (global ? "g" : ""));
 }
 
 /** Aranacak hücre metni. */

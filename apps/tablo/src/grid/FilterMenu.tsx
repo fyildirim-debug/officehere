@@ -4,6 +4,7 @@ import { ArrowSortDownLines20Regular, ArrowSortUpLines20Regular, FilterDismiss20
 import { DialogButton, Menu, MenuItem, MenuSeparator, Popover } from "@officehere/ui";
 import type { Controller } from "../controller";
 import * as D from "../actions/data";
+import { textMatcher } from "@officehere/formula";
 import { displayText } from "../model/display";
 import type { FilterCriteria } from "../model/types";
 
@@ -32,7 +33,8 @@ export function FilterMenu({ ctl, row, col, x, y, onClose }: { ctl: Controller; 
     }
     return n >= t;
   })();
-  const shown = values.filter((v) => !q || v.toLocaleLowerCase("tr-TR").includes(q.toLocaleLowerCase("tr-TR")));
+  const match = q ? textMatcher(q, "contains") : null;
+  const shown = values.filter((v) => !match || match(v));
   const allChecked = shown.every((v) => checked.has(v)) && (!hasBlank || checked.has("\u0000blank"));
   const apply = () => {
     const vals = values.filter((v) => checked.has(v));

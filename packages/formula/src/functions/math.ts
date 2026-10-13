@@ -222,6 +222,11 @@ export const mathFunctions: FnDef[] = [
     const s = Math.abs(optNum(a[1], 1, c));
     return s === 0 ? 0 : fixZero(Math.ceil(quot(x, s)) * s);
   }, { lift: true, xlfn: true }),
+  fn("ISO.CEILING", "ISO.TAVAN", "math", "sayı; [anlam]", "Sayıyı işaretinden bağımsız olarak anlamın en yakın katına yukarı yuvarlar.", 1, 2, (a, c) => {
+    const x = num(a[0], c);
+    const s = Math.abs(optNum(a[1], 1, c));
+    return s === 0 ? 0 : fixZero(Math.ceil(quot(x, s)) * s);
+  }, { lift: true }),
   fn("FLOOR", "TABANAYUVARLA", "math", "sayı; anlam", "Sayıyı anlamın en yakın katına aşağı yuvarlar.", 2, 2, (a, c) => fixZero(floorExcel(num(a[0], c), num(a[1], c))), { lift: true }),
   fn(
     "FLOOR.MATH",

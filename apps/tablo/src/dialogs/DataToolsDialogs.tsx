@@ -1,7 +1,7 @@
 /** Veri araçları iletişim kutuları: Gruplandır (satır/sütun), Alt Toplam, Hedef Ara ve sonucu. */
 import { useState } from "react";
 import { Dialog, DialogButton, Field } from "@officehere/ui";
-import { addr } from "@officehere/formula";
+import { addr, quoteSheetName } from "@officehere/formula";
 import type { Controller } from "../controller";
 import { parseRangeLoose } from "../controller";
 import { addSubtotals, groupSelection, removeSubtotals, ungroupSelection } from "../actions/outline";
@@ -9,6 +9,8 @@ import { applyGoalSeek, runGoalSeek } from "../actions/whatIf";
 import { displayText } from "../model/display";
 import { SUBTOTAL_FUNCS } from "../model/outline";
 import { currentRegion } from "../model/selection";
+import { rectToA1 } from "../model/rect";
+import { CONSOLIDATE_FNS, consolidate, parseSourceRef, type ConsolidateFn } from "../actions/consolidate";
 import { Check, Radio, SimpleDialog, parseTrNumber } from "./common";
 
 type P = { ctl: Controller; onClose: () => void; arg?: unknown };
@@ -191,5 +193,69 @@ export function GoalSeekStatusDialog({ ctl, onClose, arg }: P) {
       <p className="oh-dialog-message">Hedef değer: {fmt(a.goal)}</p>
       <p className="oh-dialog-message">Geçerli değer: {fmt(a.result)}</p>
     </Dialog>
+  );
+}
+
+/** Birleştir: işlev, kaynak başvuruları listesi ve etiket seçenekleri; sonuç etkin hücreden başlar. */
+export function ConsolidateDialog({ ctl, onClose }: { ctl: Controller; onClose: () => void }) {
+  const [fn, setFn] = useState<ConsolidateFn>("SUM");
+  const [ref, setRef] = useState(() => `${quoteSheetName(ctl.sheet.name)}!${rectToA1(ctl.range).replace(/([A-Z]+)(\d+)/g, "$$$1$$$2")}`);
+  const [refs, setRefs] = useState<string[]>([]);
+  const [sel, setSel] = useState(-1);
+  const [top, setTop] = useState(false);
+  const [left, setLeft] = useState(false);
+  const add = () => {
+    const t = ref.trim();
+    if (!t) return;
+    if (!parseSourceRef(ctl, t)) return ctl.alert("Başvuru geçerli değil.");
+    if (!refs.some((r) => r.toLocaleUpperCase("tr-TR") === t.toLocaleUpperCase("tr-TR"))) setRefs([...refs, t]);
+  };
+  const ok = () => {
+    const all = refs.length ? refs : ref.trim() ? [ref.trim()] : [];
+    const err = consolidate(ctl, all, fn, top, left, { ...ctl.sel.active });
+    if (err) return ctl.alert(err);
+    onClose();
+  };
+  return (
+    <SimpleDialog title="Birleştir" onClose={onClose} onOk={ok} width={420}>
+      <Field label="İşlev:">
+        <select value={fn} onChange={(e) => setFn(e.target.value as ConsolidateFn)} aria-label="İşlev">
+          {CONSOLIDATE_FNS.map(([k, l]) => (
+            <option key={k} value={k}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Başvuru:">
+        <div style={{ display: "flex", gap: 6 }}>
+          <input type="text" value={ref} onChange={(e) => setRef(e.target.value)} aria-label="Başvuru" data-autofocus="true" style={{ flex: 1 }} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())} />
+          <DialogButton onClick={add}>Ekle</DialogButton>
+        </div>
+      </Field>
+      <Field label="Tüm başvurular:">
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+          <div className="tb-list" style={{ height: 96, flex: 1 }} role="listbox" aria-label="Tüm başvurular">
+            {refs.map((r, i) => (
+              <div key={r} role="option" aria-selected={i === sel} className={`tb-list-item${i === sel ? " is-selected" : ""}`} onClick={() => (setSel(i), setRef(r))}>
+                {r}
+              </div>
+            ))}
+          </div>
+          <DialogButton disabled={sel < 0} onClick={() => (setRefs(refs.filter((_, i) => i !== sel)), setSel(-1))}>
+            Sil
+          </DialogButton>
+        </div>
+      </Field>
+      <fieldset className="oh-fieldset">
+        <legend>Etiket kullan</legend>
+        <Check checked={top} onChange={setTop}>
+          Üst satır
+        </Check>
+        <Check checked={left} onChange={setLeft}>
+          Sol sütun
+        </Check>
+      </fieldset>
+    </SimpleDialog>
   );
 }

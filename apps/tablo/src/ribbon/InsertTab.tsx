@@ -14,10 +14,12 @@ import {
   Table24Regular,
   Textbox24Regular,
   ChartMultiple24Regular,
+  CheckboxChecked24Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, RibbonButton, RibbonGroup, RibbonMenuButton } from "@officehere/ui";
 import type { Controller } from "../controller";
 import { insertChart, insertShape, pickAndInsertImage, SHAPE_KINDS } from "../actions/objects";
+import { insertCheckboxes } from "../actions/checkbox";
 import { CHART_FAMILIES, ChartTypeIcon } from "../dialogs/ChartDialogs";
 import type { ShapeDef } from "../model/types";
 import { PivotGlyph, SparkGlyph } from "./glyphs";
@@ -95,6 +97,9 @@ export function InsertTab({ ctl }: { ctl: Controller }) {
       </RibbonGroup>
       <RibbonGroup label="Filtreler" icon={<Filter24Regular />}>
         <RibbonButton size="large" icon={<Filter24Regular />} label="Dilimleyici" description="Tablo ya da özet tablo verilerini görsel olarak filtrelemek için düğmeli filtre ekler." onClick={() => ctl.openDialog("insertSlicer")} />
+      </RibbonGroup>
+      <RibbonGroup label="Denetimler" icon={<CheckboxChecked24Regular />}>
+        <RibbonButton size="large" icon={<CheckboxChecked24Regular />} label="Onay Kutusu" description="Seçili hücrelere onay kutusu ekler. Kutunun değeri DOĞRU ya da YANLIŞ'tır; tıklayarak ya da Ara Çubuğu ile işaretleyin, formüllerde kullanın." onClick={() => insertCheckboxes(ctl)} />
       </RibbonGroup>
       <RibbonGroup label="Bağlantılar" icon={<Link24Regular />}>
         <RibbonButton size="large" icon={<Link24Regular />} label="Bağlantı" shortcut="Ctrl+K" description="Web sayfasına ya da bu belgedeki bir yere bağlantı ekler." onClick={() => ctl.openDialog("hyperlink")} />

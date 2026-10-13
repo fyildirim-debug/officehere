@@ -13,6 +13,7 @@ import type { CellPos, Rect } from "../model/types";
 import { widthPxToChars, pxToPt, type AxisSizes } from "../model/axis";
 import { CellEditor } from "./CellEditor";
 import { handleGridKey } from "./keys";
+import { toggleCheckboxAt } from "../actions/checkbox";
 import { GridOverlays } from "./GridOverlays";
 import { sizeSelection } from "../actions/format";
 import { handleOutlineClick } from "../actions/outline";
@@ -21,7 +22,7 @@ import { GridLayout } from "./layout";
 import { measureText, renderGrid, type RenderState } from "./render";
 import { SheetTabs } from "./SheetTabs";
 import { autoFitCols, autoFitRows } from "./autofit";
-import { cursorFor, fillTipText, hitTestGrid, openLink, selectedLines, useDarkUi, type Hit } from "./gridUtil";
+import { checkboxHit, cursorFor, fillTipText, hitTestGrid, openLink, selectedLines, useDarkUi, type Hit } from "./gridUtil";
 import { pivotButtons } from "../pivot/pivotOps";
 import { computePageBreaks } from "../io/print";
 import { pageBreakCursor, pageBreakDrop, pageBreakHit, pageBreakMove, type PageBreakDrag } from "./pageBreakDrag";
@@ -36,7 +37,9 @@ type Drag =
   | { kind: "fill"; src: Rect; target: Rect | null }
   | { kind: "point"; anchor: CellPos; sheetId: number }
   | { kind: "move"; src: Rect; grab: CellPos; target: Rect | null; copy: boolean }
-  | { kind: "pagebreak"; pb: PageBreakDrag };
+  | { kind: "pagebreak"; pb: PageBreakDrag }
+  /** Dokunmatik: tek parmakla kaydırma; parmak kımıldamadan kalkarsa dokunulan hücre seçilir. */
+  | { kind: "pan"; startX: number; startY: number; sx: number; sy: number; moved: boolean; row: number; col: number; x: number; y: number };
 
 export interface GridProps {
   ctl: Controller;
@@ -246,7 +249,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (!fromGrid(e)) return;
-    if ((e.target as HTMLElement).closest(".tb-float, .tb-editor.is-visible, .tb-assist, .tb-errtag")) return;
+    if ((e.target as HTMLElement).closest(".tb-float, .tb-editor.is-visible, .tb-assist, .tb-errtag, .tb-filltag")) return;
     const { x, y } = local(e);
     // Anahat şeritleri (düzey ve +/- düğmeleri)
     if (e.button === 0 && handleOutlineClick(ctl, layoutRef.current!, x, y)) {
@@ -322,6 +325,18 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         }
         if (hit.selBorder) {
           drag.current = { kind: "move", src: { ...ctl.range }, grab: { row: hit.row, col: hit.col }, target: null, copy: add };
+          return;
+        }
+        // Dokunmatik ekranda parmakla sürüklemek sayfayı kaydırır (seçim genişletmez)
+        if (e.pointerType === "touch" && !e.shiftKey && !add) {
+          const s0 = scroll();
+          drag.current = { kind: "pan", startX: x, startY: y, sx: s0.x, sy: s0.y, moved: false, row: hit.row, col: hit.col, x, y };
+          return;
+        }
+        // Onay kutusu: kutunun üzerine tıklamak hücreyi seçer ve durumunu değiştirir
+        if (!e.shiftKey && !add && checkboxHit(ctl, layoutRef.current!, hit.row, hit.col, x, y)) {
+          ctl.selectCell(hit.row, hit.col, false);
+          toggleCheckboxAt(ctl, hit.row, hit.col);
           return;
         }
         // Köprü: Ctrl olmadan tek tıkla açılır (Excel)
@@ -429,6 +444,14 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         pageBreakMove(L, d.pb, x, y);
         draw();
         return;
+      case "pan": {
+        const dx = x - d.startX;
+        const dy = y - d.startY;
+        if (!d.moved && Math.hypot(dx, dy) < 8) return;
+        d.moved = true;
+        setScroll(d.sx - dx, d.sy - dy);
+        return;
+      }
     }
   };
 
@@ -468,7 +491,8 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
     }
     // İmleç ve not ipucu
     const hit = hitTest(x, y);
-    const cur = (sheet.viewMode === "pageBreak" && pageBreakCursor(ctl, layoutRef.current!, x, y)) || cursorFor(hit, sheet);
+    const onBox = hit.area === "cell" && !hit.fillHandle && !hit.selBorder && checkboxHit(ctl, layoutRef.current!, hit.row, hit.col, x, y);
+    const cur = (sheet.viewMode === "pageBreak" && pageBreakCursor(ctl, layoutRef.current!, x, y)) || (onBox ? "pointer" : cursorFor(hit, sheet));
     if (cur !== cursor) setCursor(cur);
     if (hit.area === "cell") {
       const m = sheet.mergeAt(hit.row, hit.col);
@@ -497,6 +521,19 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
     }
     if (!d) return;
     switch (d.kind) {
+      case "pan":
+        // Dokunma (kaydırmadan): tıklamayla aynı (onay kutusu, köprü ya da hücre seçimi)
+        if (!d.moved) {
+          if (checkboxHit(ctl, layoutRef.current!, d.row, d.col, d.x, d.y)) {
+            ctl.selectCell(d.row, d.col, false);
+            toggleCheckboxAt(ctl, d.row, d.col);
+          } else if (sheet.linkAt(d.row, d.col)) {
+            ctl.selectCell(d.row, d.col, false);
+            openLink(ctl, sheet.linkAt(d.row, d.col)!);
+          } else ctl.selectCell(d.row, d.col, false);
+          if (ctl.painter) ctl.applyPainter();
+        }
+        break;
       case "select":
         // Biçim Boyacısı tek tıkla da uygulanır (sürükleme setSelection'da uygulanmış olabilir)
         if (ctl.painter) ctl.applyPainter();
@@ -527,7 +564,12 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
             // İçeri sürükleme: aradaki hücreleri temizle
             const clearR = d.target.r2 < d.src.r2 ? rect(d.target.r2 + 1, d.src.c1, d.src.r2, d.src.c2) : rect(d.src.r1, d.target.c2 + 1, d.src.r2, d.src.c2);
             ctl.ops.clear(sheet, [clearR], "contents");
-          } else ctl.ops.fill(sheet, d.src, d.target, e.ctrlKey ? "copy" : "series");
+          } else {
+            const mode = e.ctrlKey ? "alt" : "series";
+            ctl.ops.fill(sheet, d.src, d.target, mode);
+            // Otomatik Doldurma Seçenekleri düğmesi hedefin sağ altında belirir
+            ctl.fillOptions = { sheetId: sheet.id, src: { ...d.src }, target: { ...d.target }, mode, undo: ctl.ops.history.undoCount };
+          }
           ctl.selectRange(d.target, ctl.sel.active);
         }
         break;
@@ -547,7 +589,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
   };
 
   const onDoubleClick = (e: React.MouseEvent) => {
-    if (!fromGrid(e) || (e.target as Element).closest(".tb-float, .tb-editor.is-visible, .tb-assist, .tb-errtag")) return;
+    if (!fromGrid(e) || (e.target as Element).closest(".tb-float, .tb-editor.is-visible, .tb-assist, .tb-errtag, .tb-filltag")) return;
     const { x, y } = local(e);
     const hit = hitTest(x, y);
     if (hit.area === "colHeader" && hit.colBorder !== undefined) {

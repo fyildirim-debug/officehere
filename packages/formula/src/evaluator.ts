@@ -2,7 +2,7 @@
  * AST değerlendiricisi: işleçler (dizi yayınımıyla), başvuru çözümleme,
  * adlar, fonksiyon çağrıları ve skaler fonksiyonların diziye uygulanması.
  */
-import type { BinaryOp, Node } from "./ast";
+import { CALL_FN, type BinaryOp, type Node } from "./ast";
 import { compareScalars, toNumber, toText } from "./coerce";
 import type { EvalHost, FnContext } from "./context";
 import type { LocaleInfo } from "./coerce";
@@ -336,15 +336,29 @@ function binary(op: BinaryOp, l: Value, r: Value, ctx: FnContext): Value {
 /* ------------------------------------------------------------------ */
 
 function callFunction(name: string, argNodes: Node[], ctx: FnContext): Value {
+  if (name === CALL_FN) {
+    // Doğrudan çağrı: LAMBDA(x;x*2)(4)
+    const callee = evalInner(argNodes[0], ctx);
+    if (isError(callee)) return callee;
+    if (!isLambda(callee)) return Errors.VALUE;
+    const rest = argNodes.slice(1);
+    return invokeLambda(callee, rest.map((n) => evalInner(n, ctx)), ctx, rest.map((n) => n.type === "missing"));
+  }
   const def = getFunction(name);
   if (!def) {
-    // LAMBDA değişkenine bağlı ad çağrısı (LET içinde)
+    // LAMBDA değişkenine (LET) ya da LAMBDA tanımlı ada bağlı ad çağrısı: =KARE(3)
     const key = name.toLocaleUpperCase("tr-TR");
-    const lam = ctx.scope?.get(key) ?? ctx.scope?.get(name.toUpperCase());
+    let lam: Value | undefined = ctx.scope?.get(key) ?? ctx.scope?.get(name.toUpperCase());
+    if (lam === undefined) {
+      const named = ctx.host.getDefinedName(name, ctx.sheet);
+      if (named) lam = evalInner(named, ctx);
+    }
     if (lam && isLambda(lam)) {
       const args = argNodes.map((n) => evalInner(n, ctx));
-      return invokeLambda(lam, args, ctx);
+      return invokeLambda(lam, args, ctx, argNodes.map((n) => n.type === "missing"));
     }
+    // Ad var ama LAMBDA değil: #DEĞER!
+    if (lam !== undefined) return isError(lam) ? lam : Errors.VALUE;
     return Errors.NAME;
   }
   if (argNodes.length < def.min || argNodes.length > def.max) return Errors.VALUE;
@@ -357,10 +371,22 @@ function callFunction(name: string, argNodes: Node[], ctx: FnContext): Value {
   return applyFunction(def, args, ctx);
 }
 
-export function invokeLambda(lam: { params: string[]; body: unknown; scope: Map<string, Value> | undefined }, args: Value[], ctx: FnContext): Value {
-  if (args.length !== lam.params.length) return Errors.VALUE;
+/** Kapsamda atlanan (boş bırakılan) LAMBDA parametresinin işareti (EKSİKMİ için). */
+export const OMITTED_KEY = "#OMIT:";
+
+/**
+ * LAMBDA'yı çağırır. omitted: boş bırakılan bağımsız değişkenler (LAMBDA(x;y;…)(1;)).
+ * Sondaki parametreler hiç verilmezse de atlanmış sayılır; fazlası #DEĞER! verir.
+ */
+export function invokeLambda(lam: { params: string[]; body: unknown; scope: Map<string, Value> | undefined }, args: Value[], ctx: FnContext, omitted?: boolean[]): Value {
+  if (args.length > lam.params.length || (args.length < lam.params.length && !omitted)) return Errors.VALUE;
   const scope = new Map(lam.scope ?? ctx.scope ?? []);
-  lam.params.forEach((p, i) => scope.set(p, args[i]));
+  lam.params.forEach((p, i) => {
+    const skip = i >= args.length || !!omitted?.[i];
+    scope.set(p, skip ? null : args[i]);
+    if (skip) scope.set(OMITTED_KEY + p, true);
+    else scope.delete(OMITTED_KEY + p);
+  });
   return evalInner(lam.body as Node, { ...ctx, scope });
 }
 

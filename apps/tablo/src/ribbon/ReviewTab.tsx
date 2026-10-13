@@ -20,7 +20,7 @@ export function ReviewTab({ ctl }: { ctl: Controller }) {
           description="Sayfadaki metinleri sırayla denetler; hatalı sözcüklerin altı sistemin Türkçe yazım denetleyicisiyle çizilir."
           onClick={() => ctl.openDialog("spelling")}
         />
-        <RibbonButton size="large" icon={<TextNumberFormat24Regular />} label="Çalışma Kitabı İstatistikleri" description="Geçerli sayfa ve çalışma kitabı hakkında istatistikleri gösterir." onClick={() => ctl.openDialog("workbookStats")} />
+        <RibbonButton size="large" className="tb-wide" icon={<TextNumberFormat24Regular />} label="Çalışma Kitabı İstatistikleri" description="Geçerli sayfa ve çalışma kitabı hakkında istatistikleri gösterir." onClick={() => ctl.openDialog("workbookStats")} />
       </RibbonGroup>
       <RibbonGroup label="Notlar" icon={<NoteAdd24Regular />}>
         <RibbonButton size="large" icon={note ? <NoteEdit24Regular /> : <NoteAdd24Regular />} label={note ? "Notu Düzenle" : "Yeni Not"} shortcut="Shift+F2" onClick={() => ctl.openDialog("note")} />
@@ -44,6 +44,7 @@ export function ReviewTab({ ctl }: { ctl: Controller }) {
       <RibbonGroup label="Koruma" icon={<LockClosed24Regular />}>
         <RibbonButton
           size="large"
+          className="tb-wide"
           icon={sheet.protected ? <LockOpen24Regular /> : <LockClosed24Regular />}
           label={sheet.protected ? "Sayfa Korumasını Kaldır" : "Sayfayı Koru"}
           description="Kilitli hücrelerde istenmeyen değişiklikleri önler."
@@ -51,6 +52,7 @@ export function ReviewTab({ ctl }: { ctl: Controller }) {
         />
         <RibbonButton
           size="large"
+          className="tb-wide"
           icon={<ShieldLock24Regular />}
           label={ctl.wb.protection?.structure ? "Çalışma Kitabı Korumasını Kaldır" : "Çalışma Kitabını Koru"}
           checked={!!ctl.wb.protection?.structure}

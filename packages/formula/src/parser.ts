@@ -3,7 +3,7 @@
  * Öncelik (düşükten yükseğe): karşılaştırma, &, + -, * /, ^, %, tekli - +, boşluk (kesişim), : (aralık).
  * Excel'de tekli eksi ^'den önce uygulanır: =-2^2 → 4.
  */
-import { ParseError, type BinaryOp, type Node } from "./ast";
+import { CALL_FN, ParseError, type BinaryOp, type Node } from "./ast";
 import { EN_SYNTAX, tokenize, type SyntaxLocale, type Token } from "./lexer";
 import type { ErrorCode } from "./values";
 
@@ -142,8 +142,15 @@ class Parser {
         return { type: "structref", ref: t.sref! };
       case "name":
         return { type: "name", name: t.value as string };
-      case "func":
-        return this.parseCall(t);
+      case "func": {
+        let node = this.parseCall(t);
+        // Doğrudan çağrı: LAMBDA(x;x*2)(4) — parantezli bağımsız değişken listesi işlevin ardından gelir
+        while (this.peek()?.type === "lparen") {
+          const args = this.parseArgs();
+          node = { type: "func", name: CALL_FN, args: [node, ...args] };
+        }
+        return node;
+      }
       case "lparen": {
         const first = this.parseExpr(0);
         const items = [first];
@@ -164,13 +171,19 @@ class Parser {
 
   private parseCall(t: Token): Node {
     const raw = stripFunctionPrefix(t.value as string);
-    const name = this.resolve(raw) ?? raw.toUpperCase();
+    // Bilinmeyen ad (LAMBDA tanımlı ad ya da LET değişkeni olabilir) Türkçe büyük harfe çevrilir
+    const name = this.resolve(raw) ?? raw.toLocaleUpperCase("tr-TR");
+    return { type: "func", name, args: this.parseArgs() };
+  }
+
+  /** "(" ... ")" bağımsız değişken listesi (boş bağımsız değişkenler "missing"). */
+  private parseArgs(): Node[] {
     const lp = this.next();
     if (lp.type !== "lparen") throw new ParseError('"(" bekleniyordu', lp.pos);
     const args: Node[] = [];
     if (this.peek()?.type === "rparen") {
       this.i++;
-      return { type: "func", name, args };
+      return args;
     }
     for (;;) {
       const p = this.peek();
@@ -184,7 +197,7 @@ class Parser {
       if (sep.type === "rparen") break;
       if (sep.type !== "sep") throw new ParseError(`Beklenmeyen "${sep.text}"`, sep.pos);
     }
-    return { type: "func", name, args };
+    return args;
   }
 
   private parseArray(): Node {

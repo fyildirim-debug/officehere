@@ -272,6 +272,8 @@ function tTest(a: Value[], c: FnContext): number {
       df = (s1 + s2) ** 2 / (s1 ** 2 / (x.length - 1) + s2 ** 2 / (y.length - 1));
     }
   }
+  // Fark/örnek varyansı sıfırsa t tanımsızdır (Excel: #SAYI/0!)
+  if (!Number.isFinite(t)) throw Errors.DIV0;
   const one = tTail(t, df);
   return tails === 1 ? one : 2 * one;
 }

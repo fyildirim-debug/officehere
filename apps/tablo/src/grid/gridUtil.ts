@@ -7,6 +7,7 @@ import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import type { Rect } from "../model/types";
 import type { SheetModel } from "../model/workbook";
 import type { GridLayout } from "./layout";
+import { checkboxRect } from "./renderCell";
 
 export interface Hit {
   area: "corner" | "colHeader" | "rowHeader" | "cell" | "none";
@@ -29,6 +30,17 @@ export function cursorFor(hit: Hit, sheet: SheetModel): string {
   if (hit.selBorder) return "move";
   if (hit.filterButton) return "default";
   return hit.area === "cell" && sheet.linkAt(hit.row, hit.col) ? "pointer" : "cell";
+}
+
+/** Nokta hücredeki onay kutusunun üzerinde mi (kutunun çevresinde birkaç piksel pay)? */
+export function checkboxHit(ctl: Controller, L: GridLayout, row: number, col: number, x: number, y: number): boolean {
+  const st = ctl.wb.styleAt(ctl.sheet, row, col);
+  if (!st.checkbox || ctl.sheet.showFormulas) return false;
+  const m = ctl.sheet.mergeAt(row, col);
+  const rc = m ? L.cellRect(m.r1, m.c1, m.r2, m.c2) : L.cellRect(row, col);
+  const b = checkboxRect(rc, st, L.z);
+  const pad = 3 * L.z;
+  return x >= b.x - pad && x <= b.x + b.s + pad && y >= b.y - pad && y <= b.y + b.s + pad;
 }
 
 export function hitTestGrid(L: GridLayout, ctl: Controller, sheet: SheetModel, x: number, y: number): Hit {
@@ -90,10 +102,11 @@ export function selectedLines(ctl: Controller, axis: "row" | "col", fallback: nu
 
 /**
  * Doldurma tutamacı ipucu: bırakınca hedefin en uç hücresine yazılacak değer (doldurmayla aynı
- * seri kuralı). Formül kopyalanırken ve içeri sürüklemede ipucu yoktur.
+ * seri kuralı). ctrl: Ctrl basılı sürükleme (tek sayı birer artar, diğerleri kopyalanır).
+ * Formül kopyalanırken ve içeri sürüklemede ipucu yoktur.
  */
-export function fillTipText(ctl: Controller, src: Rect, target: Rect, copy = false): string {
-  const p = ctl.ops.fillPreview(ctl.sheet, src, target, copy ? "copy" : "series");
+export function fillTipText(ctl: Controller, src: Rect, target: Rect, ctrl = false): string {
+  const p = ctl.ops.fillPreview(ctl.sheet, src, target, ctrl ? "alt" : "series");
   if (!p) return "";
   const v = p.input;
   if (v === null || (typeof v === "object" && "formula" in v)) return "";

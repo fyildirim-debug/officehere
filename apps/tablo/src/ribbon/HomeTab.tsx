@@ -52,12 +52,13 @@ import { formatValue } from "@officehere/formula";
 import type { Controller } from "../controller";
 import * as F from "../actions/format";
 import * as E from "../actions/edit";
+import type { PasteOptions } from "../model/clipboard";
 import { DEFAULT_FONT, DEFAULT_SIZE, NUMBER_FORMATS } from "../model/styles";
 import { StylesGroup, CellsGroup, EditingGroup } from "./HomeTab2";
 import { useThemePalette } from "../themeContext";
 
 export function PasteMenu({ ctl }: { ctl: Controller }) {
-  const p = (what: "all" | "values" | "formulas" | "formats" | "widths" | "allExceptBorders" | "valuesAndFormats" | "formulasAndFormats", transpose = false) => () => E.pasteFromButton(ctl, { what, transpose });
+  const p = (what: PasteOptions["what"], transpose = false) => () => E.pasteFromButton(ctl, { what, transpose });
   return (
     <Menu width={230}>
       <MenuHeader>Yapıştır</MenuHeader>
@@ -73,6 +74,7 @@ export function PasteMenu({ ctl }: { ctl: Controller }) {
       <MenuItem label="Değerler ve Sayı Biçimlendirmesi" onClick={p("valuesAndFormats")} />
       <MenuHeader>Diğer Yapıştırma Seçenekleri</MenuHeader>
       <MenuItem label="Biçimlendirme" onClick={p("formats")} />
+      <MenuItem label="Bağlantıyı Yapıştır" description="Kopyalanan hücrelere başvuran formüller yapıştırır; kaynak değişince güncellenir." onClick={p("link")} />
       <MenuSeparator />
       <MenuItem label="Özel Yapıştır..." shortcut="Ctrl+Alt+V" onClick={() => ctl.openDialog("pasteSpecial")} />
     </Menu>

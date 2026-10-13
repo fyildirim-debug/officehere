@@ -2,17 +2,37 @@
  * Geri alınabilir çalışma kitabı işlemleri. Her işlem değişen hücrelerin
  * önceki/sonraki durumunu (ya da yapısal işlemlerde anlık görüntüyü) kaydeder.
  */
-import { cellKey, keyCol, keyRow, parseCellInput, qualifyStructRefs, type Scalar } from "@officehere/formula";
+import { cellKey, isDateFormat, keyCol, keyRow, parseCellInput, qualifyStructRefs, serialToDate, type Scalar } from "@officehere/formula";
 import { OpsSheets, uniqueTableName } from "./opsSheets";
 import { MAX_COLS, MAX_ROWS, contains, intersects, isFullCols, isFullRows, rect, rectCols, rectRows } from "./rect";
 import type { CellStyle } from "./styles";
 import type { Rect } from "./types";
-import { generateFill, type FillSource } from "./fill";
+import { addDate, generateFill, type FillSource } from "./fill";
 import type { CellInput, SheetModel } from "./workbook";
 import { copySparkline } from "../sparkline/sparkOps";
 import { inheritedFormat } from "./formatInherit";
 
 export type StylePatch = Partial<CellStyle> | ((s: CellStyle) => Partial<CellStyle>);
+
+/**
+ * Doldurma kipi: seri, kopya, Ctrl ile sürükleme (varsayılanın tersi), yalnız biçim, değerler;
+ * Otomatik Doldurma Seçenekleri'nden: tek sayıda da artan seri, biçimsiz seri ve tarih birimleri.
+ */
+export type FillMode = "series" | "copy" | "alt" | "formats" | "values" | "seriesStep" | "noFormats" | "days" | "weekdays" | "months" | "years";
+
+const DATE_UNIT: Partial<Record<FillMode, "day" | "weekday" | "month" | "year">> = { days: "day", weekdays: "weekday", months: "month", years: "year" };
+
+/** a'dan b'ye (b dahil) hafta içi gün sayısı; b < a ise negatif. */
+function weekdaysBetween(a: number, b: number): number {
+  const sign = b >= a ? 1 : -1;
+  let n = 0;
+  for (let d = Math.floor(a) + sign; sign > 0 ? d <= Math.floor(b) : d >= Math.floor(b); d += sign) {
+    const wd = (((d - 1) % 7) + 7) % 7; // 0 = Pazar (1900 sistemi)
+    if (wd !== 0 && wd !== 6) n++;
+    if (Math.abs(d - a) > 3660) break;
+  }
+  return sign * n;
+}
 
 export class Ops extends OpsSheets {
   /* ------------------------------ İçerik ------------------------------ */
@@ -290,6 +310,11 @@ export class Ops extends OpsSheets {
           if (w !== undefined) sheet.cols.set(c, w);
           if (cs !== undefined) sheet.colStyles.set(c, cs);
         }
+        // Yeni sütunlar soldaki sütunun hücre biçimlerini alır (satır eklemedeki gibi)
+        for (const [k, id] of [...sheet.styles]) {
+          if (keyCol(k) !== at - 1) continue;
+          for (let c = at; c < at + count; c++) sheet.styles.set(cellKey(keyRow(k), c), id);
+        }
       }
     });
   }
@@ -419,8 +444,12 @@ export class Ops extends OpsSheets {
 
   /* --------------------------- Doldurma --------------------------- */
 
-  /** Doldurmanın bir satırı/sütunu: kaynak konumları, hedef konumu ve üretilen değerler. */
-  private fillLine(sheet: SheetModel, src: Rect, dst: Rect, mode: "series" | "copy" | "formats" | "values", l: number) {
+  /**
+   * Doldurmanın bir satırı/sütunu: kaynak konumları, hedef konumu ve üretilen değerler.
+   * "alt" (Ctrl ile sürükleme) varsayılanı tersine çevirir: tek sayı (tarih değil) birer
+   * artar, diğer her şey kopyalanır.
+   */
+  private fillLine(sheet: SheetModel, src: Rect, dst: Rect, mode: FillMode, l: number) {
     const wb = this.wb;
     const vertical = dst.c1 === src.c1 && dst.c2 === src.c2;
     const reverse = vertical ? dst.r1 < src.r1 : dst.c1 < src.c1;
@@ -439,19 +468,46 @@ export class Ops extends OpsSheets {
       return [src.r1 + l, reverse ? src.c1 - 1 - i : src.c2 + 1 + i];
     };
     const sourceIndex = (i: number) => (reverse ? srcLen - 1 - (i % srcLen) : i % srcLen);
+    const plainNumber = srcLen === 1 && typeof sources[0].input === "number" && !(sources[0].numFmt && isDateFormat(sources[0].numFmt));
+    const increment = (mode === "alt" || mode === "seriesStep") && plainNumber;
+    const unit = DATE_UNIT[mode];
+    const nums = sources.map((x) => x.input);
+    if (unit && count > 0 && nums.every((x) => typeof x === "number")) {
+      // Tarih birimleriyle seri: tek tarihte bir birim; iki ve daha çok tarihte son iki tarih arasındaki birim farkı
+      const ns = nums as number[];
+      let step = 1;
+      if (ns.length >= 2) {
+        const a = ns[ns.length - 2];
+        const b = ns[ns.length - 1];
+        const da = serialToDate(a);
+        const db = serialToDate(b);
+        step = unit === "year" ? db.y - da.y : unit === "month" ? (db.y - da.y) * 12 + (db.m - da.m) : unit === "weekday" ? weekdaysBetween(a, b) : b - a;
+        if (step === 0) step = 1;
+      }
+      const base = reverse ? ns[0] : ns[ns.length - 1];
+      const values: CellInput[] = Array.from({ length: count }, (_, i) => addDate(base, unit, (reverse ? -1 : 1) * step * (i + 1)));
+      return { count, values, srcPos, targetPos, sourceIndex };
+    }
     const values =
       mode === "formats" || count <= 0
         ? []
-        : generateFill(sources, count, reverse, mode === "copy", (i, si) => {
-            const [tr, tc] = targetPos(i);
-            const [sr, sc] = srcPos[si];
-            return [tr - sr, tc - sc];
-          });
+        : generateFill(
+            sources,
+            count,
+            reverse,
+            mode === "copy" || (mode === "alt" && !increment),
+            (i, si) => {
+              const [tr, tc] = targetPos(i);
+              const [sr, sc] = srcPos[si];
+              return [tr - sr, tc - sc];
+            },
+            increment,
+          );
     return { count, values, srcPos, targetPos, sourceIndex };
   }
 
   /** Kaynak aralıktan hedef aralığa doldurur (hedef kaynağı içerir). */
-  fill(sheet: SheetModel, src: Rect, dst: Rect, mode: "series" | "copy" | "formats" | "values" = "series"): void {
+  fill(sheet: SheetModel, src: Rect, dst: Rect, mode: FillMode = "series"): void {
     const wb = this.wb;
     const vertical = dst.c1 === src.c1 && dst.c2 === src.c2;
     this.cellsOp(sheet, [dst], "Otomatik Doldurma", () => {
@@ -466,9 +522,9 @@ export class Ops extends OpsSheets {
             if (mode === "values" && v !== null && typeof v === "object" && "formula" in v) v = wb.getValue(sheet, sr, sc);
             wb.setInputRaw(sheet, row, col, v ?? null);
           }
-          if (mode !== "values") wb.setStyleRaw(sheet, row, col, sheet.styles.get(cellKey(sr, sc)));
+          if (mode !== "values" && mode !== "noFormats") wb.setStyleRaw(sheet, row, col, sheet.styles.get(cellKey(sr, sc)));
           // Mini grafik aynı gruba göreli veri aralığıyla kopyalanır
-          if ((mode === "series" || mode === "copy") && sheet.sparklines.length) copySparkline(sheet, { row: sr, col: sc }, { row, col }, wb);
+          if ((mode === "series" || mode === "copy" || mode === "alt" || mode === "seriesStep") && sheet.sparklines.length) copySparkline(sheet, { row: sr, col: sc }, { row, col }, wb);
         }
       }
     });
@@ -478,7 +534,7 @@ export class Ops extends OpsSheets {
    * Doldurma tutamacı ipucu: bırakınca hedefin en uç hücresine yazılacak girdi ve kaynağının
    * sayı biçimi. fill() ile aynı üretimi kullanır; hedef kaynaktan büyük değilse null.
    */
-  fillPreview(sheet: SheetModel, src: Rect, dst: Rect, mode: "series" | "copy" = "series"): { input: CellInput; numFmt?: string } | null {
+  fillPreview(sheet: SheetModel, src: Rect, dst: Rect, mode: "series" | "copy" | "alt" = "series"): { input: CellInput; numFmt?: string } | null {
     const vertical = dst.c1 === src.c1 && dst.c2 === src.c2;
     const lines = vertical ? rectCols(src) : rectRows(src);
     const { count, values, srcPos, sourceIndex } = this.fillLine(sheet, src, dst, mode, lines - 1);

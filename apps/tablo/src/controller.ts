@@ -5,7 +5,7 @@
 import { addr, colToName, findRefSpans, parseLocalFormula, TR_SYNTAX, quoteSheetName, cycleAbsolute, renderRefToken, tokenize, shiftFormula, MAX_COLS, MAX_ROWS } from "@officehere/formula";
 import type { FileRef } from "@officehere/core";
 import { CondFormatter } from "./model/condfmt";
-import { Ops } from "./model/ops";
+import { Ops, type FillMode } from "./model/ops";
 import { intersects as intersectsRect, rect, rectToA1 } from "./model/rect";
 import { isPivotCell, PIVOT_EDIT_MESSAGE } from "./pivot/pivotOps";
 import { expandForMerges, extendTo, jumpCell, nextInSelection, singleSelection, stepCell } from "./model/selection";
@@ -89,6 +89,11 @@ export class Controller {
   showWatch = false;
   /** Şeridin geçmesi istenen sekme (ör. PivotTable oluşturulunca "Özet Tablo Analizi"). */
   requestTab: string | null = null;
+  /**
+   * Son doldurma tutamacı işlemi (Otomatik Doldurma Seçenekleri düğmesi için).
+   * undo: işlemden sonraki geri al sayısı; başka bir değişiklik olunca düğme kaybolur.
+   */
+  fillOptions: { sheetId: number; src: Rect; target: Rect; mode: FillMode; undo: number } | null = null;
   /** Veri doğrulama açılan listesi açık mı. */
   listDropdown = false;
   /** Uygulamanın Kaydet eylemi (çökme uyarısından çağrılır). */

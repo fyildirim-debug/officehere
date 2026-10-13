@@ -4,7 +4,7 @@
  * "Ege" (ile başlar, * ? joker), "=Ege" (tam eşit), ">100", "<>Ege", ">=01.01.2026"
  * ve boş hücre (koşul yok). "Yalnızca benzersiz kayıtlar" yinelenen satırları atar.
  */
-import { hasWildcards, parseCellInput, wildcardToRegExp, type Scalar } from "@officehere/formula";
+import { hasWildcards, parseCellInput, textMatcher, type Scalar } from "@officehere/formula";
 import { displayText } from "./display";
 import type { Rect } from "./types";
 import type { SheetModel, WorkbookModel } from "./workbook";
@@ -20,8 +20,8 @@ function operandValue(s: string): Scalar {
 
 function match(c: Cond, v: Scalar, text: string): boolean {
   if (c.op === "begins") {
-    if (hasWildcards(c.operand)) return wildcardToRegExp(c.operand + "*", true).test(text);
-    return up(text).startsWith(up(c.operand));
+    // Türkçe büyük/küçük harf duyarsız "ile başlar" (Bul ve EĞERSAY ile aynı)
+    return textMatcher(c.operand, "begins")(text);
   }
   if (c.operand === "") {
     const blank = v === null || text === "";
@@ -47,16 +47,13 @@ function match(c: Cond, v: Scalar, text: string): boolean {
   }
   const a = up(text);
   const b = up(String(o));
-  if ((c.op === "=" || c.op === "<>") && hasWildcards(c.operand)) {
-    const hit = wildcardToRegExp(c.operand, true).test(text);
+  if (c.op === "=" || c.op === "<>") {
+    // Eşitlik: joker karakterler ve Türkçe büyük/küçük harf (i/İ, ı/I) EĞERSAY ile aynı
+    const hit = textMatcher(String(c.operand), "equals", hasWildcards(c.operand))(text);
     return c.op === "=" ? hit : !hit;
   }
   const cmp = a.localeCompare(b, "tr");
   switch (c.op) {
-    case "=":
-      return cmp === 0;
-    case "<>":
-      return cmp !== 0;
     case ">":
       return cmp > 0;
     case "<":

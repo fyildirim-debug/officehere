@@ -22,7 +22,9 @@ const NS =
   'xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" ' +
   'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" ' +
   'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" ' +
-  'xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" xmlns:tableooo="http://openoffice.org/2009/table" office:version="1.3"';
+  'xmlns:of="urn:oasis:names:tc:opendocument:xmlns:of:1.2" xmlns:tableooo="http://openoffice.org/2009/table" ' +
+  // Yabancı öznitelik (ODF §3.17): hücre içi onay kutusu; başka uygulamalar yok sayar, değer DOĞRU/YANLIŞ kalır
+  'xmlns:ohtablo="urn:officehere:tablo:1.0" office:version="1.3"';
 
 /** Sütun sayısı: LibreOffice'in eski sürümleri de açabilsin diye en az 1024. */
 const COLS_TOTAL = 1024;

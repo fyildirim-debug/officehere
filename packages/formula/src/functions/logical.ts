@@ -1,9 +1,9 @@
 /** Mantıksal ve bilgi fonksiyonları. */
 import { compareScalars, toBool } from "../coerce";
 import type { FnContext } from "../context";
-import { broadcast, broadcastMany, invokeLambda } from "../evaluator";
+import { OMITTED_KEY, broadcast, broadcastMany, invokeLambda } from "../evaluator";
 import { addr } from "../references";
-import { Errors, FormulaError, isError, isLambda, isRef, makeArray, type Scalar, type Value } from "../values";
+import { Errors, FormulaError, isArray, isError, isLambda, isRef, makeArray, type Scalar, type Value } from "../values";
 import { check, forEachValue, isMulti, matrix, num, optText, scalar } from "./helpers";
 import { fn, lazyFn, type FnDef, type Thunk } from "./registry";
 
@@ -129,6 +129,11 @@ export const logicalFunctions: FnDef[] = [
     }
     return { kind: "lambda", params, body: nodes[nodes.length - 1], scope: c.scope };
   }, { xlfn: true }),
+  lazyFn("ISOMITTED", "EKSİKMİ", "logical", "bağımsız_değişken", "LAMBDA parametresinin çağrıda boş bırakılıp bırakılmadığını sınar.", 1, 1, (_t, c, nodes) => {
+    const n = nodes[0];
+    if (n.type !== "name") return false;
+    return c.scope?.get(OMITTED_KEY + n.name.toLocaleUpperCase("tr-TR")) === true;
+  }, { xlfn: true }),
 ];
 
 /* ------------------------------------------------------------------ */
@@ -164,7 +169,8 @@ export const infoFunctions: FnDef[] = [
   fn("NA", "YOKSAY", "info", "", "#YOK hata değerini verir.", 0, 0, () => Errors.NA),
   fn("TYPE", "TÜR", "info", "değer", "Değerin veri türünü gösteren sayıyı verir.", 1, 1, (a, c) => {
     const v = a[0];
-    if (isMulti(v)) return 64;
+    // Dizi sabiti tek öğeli olsa da dizidir ({1} → 64); çok hücreli başvuru da öyle
+    if (isMulti(v) || isArray(v)) return 64;
     const s = scalar(v, c);
     if (typeof s === "number" || s === null) return 1;
     if (typeof s === "string") return 2;

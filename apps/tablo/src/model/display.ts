@@ -17,6 +17,8 @@ export interface CellView {
   fillChar?: { index: number; char: string };
   bar?: CondResult["bar"];
   icon?: CondResult["icon"];
+  /** Hücre içi onay kutusu: işaretli mi (değer DOĞRU). */
+  checkbox?: boolean;
 }
 
 const EMPTY_STYLE: CellStyle = {};
@@ -65,6 +67,9 @@ export function computeView(wb: WorkbookModel, sheet: SheetModel, row: number, c
   }
   // Simge kümesi "Yalnızca Simgeyi Göster"
   if (condRes?.icon?.only) text = "";
+  // Onay kutusu: DOĞRU/YANLIŞ metni yerine kutu çizilir (formüller gösterilirken metin)
+  const checkbox = style.checkbox && !sheet.showFormulas ? value === true : undefined;
+  if (checkbox !== undefined) text = "";
   let align: CellView["align"] = "left";
   const h = style.hAlign;
   if (h === "center" || h === "centerContinuous" || h === "distributed") align = "center";
@@ -84,6 +89,7 @@ export function computeView(wb: WorkbookModel, sheet: SheetModel, row: number, c
     fillChar,
     bar: condRes?.bar,
     icon: condRes?.icon,
+    checkbox,
   };
 }
 

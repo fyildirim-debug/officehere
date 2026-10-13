@@ -154,19 +154,48 @@ export function compareScalars(a: Scalar, b: Scalar, locale: LocaleInfo = TR_LOC
 
 export type Criteria = (v: Scalar) => boolean;
 
-/** Joker karakterli deseni (* ? ~) düzenli ifadeye çevirir. */
-export function wildcardToRegExp(pattern: string, whole = true): RegExp {
-  let re = "";
-  for (let i = 0; i < pattern.length; i++) {
-    const c = pattern[i];
-    if (c === "~" && i + 1 < pattern.length && "*?~".includes(pattern[i + 1])) {
-      re += "\\" + pattern[++i];
-    } else if (c === "*") re += "[\\s\\S]*";
-    else if (c === "?") re += "[\\s\\S]";
-    else re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
-  }
-  return new RegExp(whole ? `^${re}$` : re, "iu");
+/**
+ * Büyük/küçük harf duyarsız eşleşme için harfin karakter sınıfı. Türkçe çiftler
+ * (i/İ, ı/I) ile metinEşit'teki gibi İngilizce çiftler (i/I) birlikte kabul edilir.
+ */
+function caseClass(ch: string): string {
+  const set = new Set([ch, ch.toLocaleLowerCase("tr-TR"), ch.toLocaleUpperCase("tr-TR"), ch.toLowerCase(), ch.toUpperCase()].filter((x) => [...x].length === 1));
+  return set.size > 1 ? `[${[...set].join("")}]` : ch;
 }
+
+/**
+ * Joker karakterli deseni (* ? ~) düzenli ifadeye çevirir. Büyük/küçük harf duyarsız
+ * eşleşme Türkçe kurallarla yapılır ("istanbul" "İSTANBUL"u, "ışık" "IŞIK"ı bulur).
+ */
+export function wildcardToRegExp(pattern: string, whole = true, caseSensitive = false): RegExp {
+  let re = "";
+  for (const c0 of pattern.match(/~[*?~]|[\s\S]/gu) ?? []) {
+    if (c0[0] === "~" && c0.length === 2) re += "\\" + c0[1];
+    else if (c0 === "*") re += "[\\s\\S]*";
+    else if (c0 === "?") re += "[\\s\\S]";
+    else if (!caseSensitive && /\p{L}/u.test(c0)) re += caseClass(c0);
+    else re += c0.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  }
+  return new RegExp(whole ? `^${re}$` : re, "u");
+}
+
+/**
+ * Metin eşleyici: eşittir / ile başlar / ile biter / içerir. Joker karakterler (* ? ~) ve
+ * Türkçe büyük/küçük harf duyarsızlığı EĞERSAY, Bul ve filtrelerle aynıdır.
+ */
+export function textMatcher(pattern: string, mode: "equals" | "begins" | "ends" | "contains", wildcards = true): (s: string) => boolean {
+  const key = `${mode}${wildcards ? 1 : 0}\u0000${pattern}`;
+  let re = matcherCache.get(key);
+  if (!re) {
+    const body = wildcardToRegExp(wildcards ? pattern : pattern.replace(/[*?~]/g, "~$&"), false).source;
+    re = new RegExp(mode === "equals" ? `^${body}$` : mode === "begins" ? `^${body}` : mode === "ends" ? `${body}$` : body, "u");
+    if (matcherCache.size > 500) matcherCache.clear();
+    matcherCache.set(key, re);
+  }
+  const r = re;
+  return (s) => r.test(s);
+}
+const matcherCache = new Map<string, RegExp>();
 
 export function hasWildcards(s: string): boolean {
   return /[*?]/.test(s.replace(/~[*?~]/g, ""));

@@ -10,7 +10,7 @@ import {
   TextSortDescending20Regular,
   ArrowSort24Regular,
   TextColumnTwo24Regular,
-  TableDismiss24Regular,
+  TableDismiss20Regular,
   CheckboxChecked24Regular,
   Target24Regular,
   Group24Regular,
@@ -18,7 +18,8 @@ import {
   TableCalculator20Regular,
   AddSquare20Regular,
   SubtractSquare20Regular,
-  Flash24Regular,
+  Flash20Regular,
+  TableStackBelow20Regular,
 } from "@fluentui/react-icons";
 import { openFile } from "@officehere/core";
 import { Menu, MenuItem, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack } from "@officehere/ui";
@@ -62,8 +63,11 @@ export function DataTab({ ctl }: { ctl: Controller }) {
       </RibbonGroup>
       <RibbonGroup label="Veri Araçları" icon={<CheckboxChecked24Regular />}>
         <RibbonButton size="large" icon={<TextColumnTwo24Regular />} label="Metni Sütunlara Dönüştür" className="tb-wide" description="Tek bir sütundaki metni ayırıcıya göre birden çok sütuna böler." onClick={() => ctl.openDialog("textToColumns")} />
-        <RibbonButton size="large" icon={<Flash24Regular />} label="Akıllı Doldurma" shortcut="Ctrl+E" description="Yazdığınız örneklerdeki deseni bulur ve sütunun geri kalanını otomatik doldurur." onClick={() => flashFill(ctl)} />
-        <RibbonButton size="large" icon={<TableDismiss24Regular />} label="Yinelenenleri Kaldır" description="Sayfadaki yinelenen satırları siler." onClick={() => ctl.openDialog("removeDuplicates")} />
+        <RibbonStack>
+          <RibbonButton icon={<Flash20Regular />} label="Akıllı Doldurma" shortcut="Ctrl+E" description="Yazdığınız örneklerdeki deseni bulur ve sütunun geri kalanını otomatik doldurur." onClick={() => flashFill(ctl)} />
+          <RibbonButton icon={<TableDismiss20Regular />} label="Yinelenenleri Kaldır" description="Sayfadaki yinelenen satırları siler." onClick={() => ctl.openDialog("removeDuplicates")} />
+          <RibbonButton icon={<TableStackBelow20Regular />} label="Birleştir" description="Birden çok aralığın (başka sayfalardakiler de) değerlerini tek bir tabloda toplar, ortalamasını alır ya da sayar." onClick={() => ctl.openDialog("consolidate")} />
+        </RibbonStack>
         <RibbonSplitButton
           size="large"
           icon={<CheckboxChecked24Regular />}

@@ -285,3 +285,44 @@ export function drawFilterButton(ctx: CanvasRenderingContext2D, x: number, y: nu
 /* ------------------------------------------------------------------ */
 /* Seçim ve vurgu katmanları                                            */
 /* ------------------------------------------------------------------ */
+
+/** Hücre içi onay kutusunun dikdörtgeni: yatay hizalamaya göre (varsayılan ortada), dikeyde ortada. */
+export function checkboxRect(cell: { x: number; y: number; w: number; h: number }, s: CellStyle, z: number): { x: number; y: number; s: number } {
+  const size = Math.max(6, Math.min(13 * z, cell.h - 4 * z, cell.w - 4 * z));
+  const pad = 3 * z + (s.indent ?? 0) * 9 * z;
+  const x = s.hAlign === "left" ? cell.x + pad : s.hAlign === "right" ? cell.x + cell.w - pad - size : cell.x + (cell.w - size) / 2;
+  const y = s.vAlign === "top" ? cell.y + 2 * z : s.vAlign === "bottom" ? cell.y + cell.h - size - 2 * z : cell.y + (cell.h - size) / 2;
+  return { x, y, s: size };
+}
+
+/** Onay kutusunu çizer: boşken yazı rengiyle çerçeve, işaretliyken yazı rengiyle dolu kutuda beyaz onay işareti. */
+export function drawCheckbox(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, checked: boolean, color: string, dpr: number): void {
+  const px = 1 / dpr;
+  const r = Math.max(1.5, s * 0.18);
+  const bx = snap(x, dpr) + px / 2;
+  const by = snap(y, dpr) + px / 2;
+  const bs = Math.round(s * dpr) / dpr - px;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(bx, by, bs, bs, r);
+  if (checked) {
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = "#FFFFFF";
+    ctx.lineWidth = Math.max(1.5, s * 0.14);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(bx + bs * 0.24, by + bs * 0.52);
+    ctx.lineTo(bx + bs * 0.43, by + bs * 0.72);
+    ctx.lineTo(bx + bs * 0.77, by + bs * 0.3);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(px, s / 13);
+    ctx.stroke();
+  }
+  ctx.restore();
+}

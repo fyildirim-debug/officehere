@@ -224,7 +224,10 @@ export const textFunctions: FnDef[] = [
   fn("NUMBERVALUE", "SAYIDEĞERİ", "text", "metin; [ondalık_ayırıcı]; [grup_ayırıcı]", "Metni yerel ayardan bağımsız olarak sayıya çevirir.", 1, 3, (a, c) => {
     let s = text(a[0], c).replace(/\s/g, "");
     const dec = optText(a[1], c.locale.decimal, c)[0] ?? ".";
-    const grp = optText(a[2], c.locale.decimal === "," ? "." : ",", c)[0] ?? ",";
+    // Grup ayırıcısı verilmezse yerel ayarınki; ondalık ayırıcısıyla çakışırsa diğeri
+    // (Türkçe ayarda SAYIDEĞERİ("1.5";".") 1,5 olur, 15 değil)
+    const localGrp = c.locale.decimal === "," ? "." : ",";
+    const grp = optText(a[2], localGrp === dec ? (dec === "." ? "," : ".") : localGrp, c)[0] ?? ",";
     if (s === "") return 0;
     let pct = 0;
     while (s.endsWith("%")) {

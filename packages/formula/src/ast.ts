@@ -20,6 +20,12 @@ export type Node =
   | { type: "array"; rows: Node[][] }
   | { type: "missing" };
 
+/**
+ * Doğrudan çağrı düğümünün iç adı: "LAMBDA(x;x*2)(4)" → func(CALL_FN, [LAMBDA(...), 4]).
+ * Kullanıcı adı "#" ile başlayamadığı için hiçbir işlev ya da adla çakışmaz.
+ */
+export const CALL_FN = "#CALL";
+
 export class ParseError extends Error {
   constructor(
     message: string,

@@ -821,6 +821,10 @@
 
 /* Dar pencere (ör. telefonda web sürümü): sekmeler yatay kaydırılır, sayfa yana taşmaz. */
 @media (max-width: 760px) {
+  .oh-ribbon-tabs {
+    min-width: 0;
+  }
+
   .oh-ribbon-tablist {
     min-width: 0;
     overflow-x: auto;

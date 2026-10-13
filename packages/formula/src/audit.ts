@@ -4,7 +4,7 @@
  * değerlendirme. Değerlendirme her adımda özgün alt ağacı motorun kendi
  * bağlamında hesaplar; gösterimde o alt ağaç sonucuyla değiştirilir.
  */
-import type { Node } from "./ast";
+import { CALL_FN, type Node } from "./ast";
 import type { FormulaEngine } from "./engine";
 import { cellKey, gk, gkLocal, gkSheet, keyCol, keyRow, safeParse } from "./engine-types";
 import { createContext, evaluateNode } from "./evaluator";
@@ -240,6 +240,17 @@ export class FormulaStepper {
       case "missing":
         break;
       case "func":
+        if (n.name === CALL_FN) {
+          // Doğrudan çağrı: LAMBDA(x;x*2)(4)
+          child(d.kids[0], 0);
+          out += "(";
+          d.kids.slice(1).forEach((k, i) => {
+            if (i) out += ";";
+            child(k, 0);
+          });
+          out += ")";
+          break;
+        }
         out += trNameOf(n.name.toUpperCase()) + "(";
         d.kids.forEach((k, i) => {
           if (i) out += ";";
@@ -335,6 +346,7 @@ function printPlain(n: Node): string {
     case "name":
       return n.name;
     case "func":
+      if (n.name === CALL_FN) return printPlain(n.args[0]) + "(" + n.args.slice(1).map(printPlain).join(";") + ")";
       return trNameOf(n.name.toUpperCase()) + "(" + n.args.map(printPlain).join(";") + ")";
     case "unary":
       return n.op + printPlain(n.arg);

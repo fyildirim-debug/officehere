@@ -451,12 +451,31 @@ export function PasteSpecialDialog({ ctl, onClose }: P) {
   const [op, setOp] = useState<NonNullable<PasteOptions["op"]>>("none");
   const [skip, setSkip] = useState(false);
   const [transpose, setTranspose] = useState(false);
+  // Notlar, doğrulama ve sütun genişliklerinde işlem uygulanmaz
+  const noOp = what === "comments" || what === "validation" || what === "widths" || what === "formats";
   const ok = () => {
     onClose();
-    E.pasteData(ctl, "", undefined, { what, op, skipBlanks: skip, transpose });
+    E.pasteData(ctl, "", undefined, { what, op: noOp ? "none" : op, skipBlanks: skip, transpose });
+  };
+  const link = () => {
+    onClose();
+    E.pasteData(ctl, "", undefined, { what: "link" });
   };
   return (
-    <SimpleDialog title="Özel Yapıştır" onClose={onClose} onOk={ok} width={440}>
+    <Dialog
+      open
+      title="Özel Yapıştır"
+      onClose={onClose}
+      width={460}
+      onSubmit={ok}
+      footer={
+        <>
+          <DialogButton onClick={link}>Bağlantıyı Yapıştır</DialogButton>
+          <span style={{ flex: 1 }} />
+          <OkCancel onOk={ok} onCancel={onClose} />
+        </>
+      }
+    >
       <fieldset className="oh-fieldset">
         <legend>Yapıştır</legend>
         <div className="tb-dialog-grid">
@@ -470,6 +489,8 @@ export function PasteSpecialDialog({ ctl, onClose }: P) {
               ["formulasAndFormats", "Formüller ve sayı biçimleri"],
               ["formats", "Biçimler"],
               ["valuesAndFormats", "Değerler ve sayı biçimleri"],
+              ["comments", "Notlar"],
+              ["validation", "Doğrulama"],
             ] as const
           ).map(([k, l]) => (
             <Radio key={k} name="pw" value={k} current={what} onChange={setWhat}>
@@ -478,7 +499,7 @@ export function PasteSpecialDialog({ ctl, onClose }: P) {
           ))}
         </div>
       </fieldset>
-      <fieldset className="oh-fieldset">
+      <fieldset className="oh-fieldset" disabled={noOp}>
         <legend>İşlem</legend>
         <div className="tb-dialog-grid">
           {(
@@ -501,10 +522,10 @@ export function PasteSpecialDialog({ ctl, onClose }: P) {
           Boşlukları atla
         </Check>
         <Check checked={transpose} onChange={setTranspose}>
-          İşlem sırasını değiştir
+          Devrik dönüşüm
         </Check>
       </div>
-    </SimpleDialog>
+    </Dialog>
   );
 }
 

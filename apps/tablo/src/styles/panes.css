@@ -365,6 +365,28 @@
   background: #f3f3f3;
 }
 
+/* Otomatik Doldurma Seçenekleri */
+.tb-filltag {
+  position: absolute;
+  z-index: 6;
+  width: 24px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #444444;
+  border: 1px solid #c8c8c8;
+  border-radius: 2px;
+  background: #ffffff;
+  cursor: pointer;
+}
+.tb-filltag:hover,
+.tb-filltag[aria-expanded="true"] {
+  border-color: #8a8a8a;
+  background: #f3f3f3;
+}
+
 /* Formülü Değerlendir */
 .tb-eval-head,
 .tb-eval-row {

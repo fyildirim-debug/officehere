@@ -245,7 +245,7 @@ export function StylesGroup({ ctl }: { ctl: Controller }) {
           </Menu>
         }
       />
-      <RibbonMenuButton size="large" icon={<Table24Regular />} label={"Tablo\u00a0Olarak Biçimlendir"} menu={<TableGallery onPick={(id) => ctl.openDialog("createTable", { style: id })} />} />
+      <RibbonMenuButton size="large" className="tb-wide-s" icon={<Table24Regular />} label={"Tablo\u00a0Olarak Biçimlendir"} menu={<TableGallery onPick={(id) => ctl.openDialog("createTable", { style: id })} />} />
       <RibbonMenuButton size="large" icon={<CellStylesGlyph />} label="Hücre Stilleri" menu={<CellStyleGallery ctl={ctl} />} />
     </RibbonGroup>
   );

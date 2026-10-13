@@ -11,13 +11,34 @@ const OF_TO_XL: Record<string, string> = {
   "USDOLLAR": "DOLLAR",
   "CEILING.XCL": "CEILING",
   "FLOOR.XCL": "FLOOR",
-  "CHISQDIST": "CHIDIST",
 };
 
-/** Yazarken önek isteyen eski/uyumluluk işlevleri. */
-const LEGACY = new Set(["NORMSDIST", "NORMSINV", "CHIDIST", "CHIINV", "FDIST", "FINV", "TDIST", "TINV", "CHITEST", "FTEST"]);
-/** Yazarken "COM.MICROSOFT." öneki: anlamı OpenFormula'dakinden farklı olanlar. */
-const MS_PREFIX = new Set(["CEILING", "FLOOR"]);
+/**
+ * Öneksiz yazıldığında OpenFormula anlamı taşıyan adlar: FDIST/FINV/CHISQDIST/CHISQINV
+ * sol kuyruklu (F.DAĞ, F.TERS, KİKARE.DAĞ, KİKARE.TERS); eski sağ kuyruklu
+ * sürümler "LEGACY." önekiyle yazılır. FORMULA = FORMÜLMETNİ.
+ */
+const OF_NATIVE_TO_XL: Record<string, string> = {
+  "FDIST": "F.DIST",
+  "FINV": "F.INV",
+  "CHISQDIST": "CHISQ.DIST",
+  "CHISQINV": "CHISQ.INV",
+  "FORMULA": "FORMULATEXT",
+};
+/** OpenFormula'da kümülatif bağımsız değişkeni isteğe bağlı (varsayılan DOĞRU) olan işlevlerin motordaki zorunlu sayısı. */
+const CUMULATIVE_ARGS: Record<string, number> = { "F.DIST": 4, "CHISQ.DIST": 3 };
+
+/** Yazarken "LEGACY." önekiyle yazılan eski işlevler. */
+const LEGACY = new Set(["NORMSDIST", "NORMSINV", "CHIDIST", "CHIINV", "FDIST", "FINV", "TDIST", "CHITEST"]);
+/**
+ * Yazarken "COM.MICROSOFT." öneki: anlamı OpenFormula'dakinden farklı olanlar ve OOXML'de
+ * öneksiz yazılsa da OpenFormula'da önekli bilinen .INTL işlevleri (LibreOffice ile doğrulandı).
+ */
+const MS_PREFIX = new Set(["CEILING", "FLOOR", "NETWORKDAYS.INTL", "WORKDAY.INTL", "ISO.CEILING"]);
+/** Dosyada _xlfn. önekli olsa da OpenFormula'nın kendi işlevleri: öneksiz yazılır. */
+const OF_NATIVE = new Set(["COT", "CSC", "SEC", "COMBINA", "ARABIC", "BASE", "DECIMAL", "MUNIT", "GAMMA", "PHI", "GAUSS", "PERMUTATIONA", "PDURATION", "RRI", "XOR", "IFNA", "ISFORMULA", "SHEET", "SHEETS", "NUMBERVALUE", "UNICHAR", "UNICODE", "ISOWEEKNUM", "DAYS", "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT"]);
+/** OpenFormula'da başka adla bilinen işlevler (yazma yönü). */
+const XL_TO_OF: Record<string, string> = { "FORMULATEXT": "FORMULA" };
 
 /** Dosyadaki sayfa adı → modeldeki (düzeltilmiş) ad. */
 export type SheetMap = (raw: string) => string;
@@ -111,7 +132,10 @@ export function ofRefToA1(inner: string, mapSheet: SheetMap = (s) => s): string 
 
 /** İşlev adını motorun kanonik adına çevirir; bilinmiyorsa undefined. */
 export function ofFunctionName(raw: string): string | undefined {
-  let n = raw.toUpperCase().replace(/^(COM\.MICROSOFT\.|_XLFN\.|_XLWS\.|LEGACY\.|ORG\.OPENOFFICE\.|ORG\.LIBREOFFICE\.)+/, "");
+  const up = raw.toUpperCase();
+  let n = up.replace(/^(COM\.MICROSOFT\.|_XLFN\.|_XLWS\.|LEGACY\.|ORG\.OPENOFFICE\.|ORG\.LIBREOFFICE\.)+/, "");
+  // Öneksiz ad OpenFormula anlamındadır (ör. FDIST = F.DAĞ); önekliler motorun adıyla aynı
+  if (n === up) n = OF_NATIVE_TO_XL[n] ?? n;
   n = OF_TO_XL[n] ?? n;
   return FUNCTIONS.has(n) ? n : undefined;
 }
@@ -137,6 +161,8 @@ export function odfFormulaToA1(src: string, mapSheet?: SheetMap): string | undef
   let i = 0;
   // Parantez/küme yığını: "f" işlev çağrısı, "p" parantez, "a" dizi sabiti
   const stack: string[] = [];
+  // İşlev çağrıları: ad ve üst düzey ayırıcı sayısı (eksik kümülatif bağımsız değişkeni tamamlamak için)
+  const calls: { name: string; seps: number }[] = [];
   while (i < f.length) {
     const c = f[i];
     if (c === '"') {
@@ -187,6 +213,7 @@ export function odfFormulaToA1(src: string, mapSheet?: SheetMap): string | undef
       continue;
     }
     if (c === ";") {
+      if (stack[stack.length - 1] === "f") calls[calls.length - 1].seps++;
       out += ",";
       i++;
       continue;
@@ -216,7 +243,11 @@ export function odfFormulaToA1(src: string, mapSheet?: SheetMap): string | undef
       continue;
     }
     if (c === ")") {
-      stack.pop();
+      if (stack.pop() === "f") {
+        const call = calls.pop()!;
+        const need = CUMULATIVE_ARGS[call.name];
+        if (need && call.seps + 1 === need - 1) out += ",TRUE";
+      }
       out += c;
       i++;
       continue;
@@ -240,6 +271,7 @@ export function odfFormulaToA1(src: string, mapSheet?: SheetMap): string | undef
         if (!fnName && up !== "TRUE" && up !== "FALSE") return undefined;
         out += (fnName ?? up) + "(";
         stack.push("f");
+        calls.push({ name: fnName ?? up, seps: 0 });
         i = j + 1;
         continue;
       }
@@ -299,6 +331,8 @@ function refToOf(ref: RefToken): string {
 function functionToOf(name: string): string {
   const up = name.toUpperCase().replace(/^_XLFN\./, "");
   if (LEGACY.has(up)) return "LEGACY." + up;
+  if (XL_TO_OF[up]) return XL_TO_OF[up];
+  if (OF_NATIVE.has(up)) return up;
   if (MS_PREFIX.has(up) || FUNCTIONS.get(up)?.xlfn) return "COM.MICROSOFT." + up;
   return up;
 }
@@ -325,7 +359,8 @@ export function a1FormulaToOdf(formula: string): string | undefined {
         out += functionToOf(String(t.value ?? t.text));
         break;
       case "lparen":
-        stack.push(toks[k - 1]?.type === "func" ? "f" : "p");
+        // LAMBDA(...)(4) gibi doğrudan çağrıda ")" ardından gelen parantez de bağımsız değişken listesidir
+        stack.push(toks[k - 1]?.type === "func" || toks[k - 1]?.type === "rparen" ? "f" : "p");
         out += "(";
         break;
       case "rparen":

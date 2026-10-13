@@ -162,6 +162,7 @@ export class OdsStyleSheet {
       if (a > 0 && a <= 90) st.rotation = Math.round(a);
       else if (a >= 270) st.rotation = Math.round(a - 360);
     }
+    if (cp["ohtablo:checkbox"] === "true") st.checkbox = true;
     const prot = cp["style:cell-protect"];
     if (prot === "none") st.locked = false;
     if (prot && /hidden/.test(prot)) st.hidden = true;
@@ -216,6 +217,7 @@ export function cellStyleXml(name: string, s: CellStyle, dataStyle: string | und
   else if (s.rotation) cp.push(`style:rotation-angle="${s.rotation > 0 ? s.rotation : 360 + s.rotation}"`);
   if (s.hAlign && s.hAlign !== "general") cp.push('style:text-align-source="fix"');
   if (s.locked === false || s.hidden) cp.push(`style:cell-protect="${s.hidden ? (s.locked === false ? "formula-hidden" : "hidden-and-protected") : "none"}"`);
+  if (s.checkbox) cp.push('ohtablo:checkbox="true"');
   const pp: string[] = [];
   if (s.hAlign && s.hAlign !== "general") {
     const ta = s.hAlign === "left" ? "start" : s.hAlign === "right" ? "end" : s.hAlign === "justify" || s.hAlign === "distributed" ? "justify" : "center";

@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import type { Controller } from "../controller";
 import type { FileActions } from "../FileView";
 import { GoToSpecialDialog, SpellingDialog, ValidationErrorDialog } from "./Round3Dialogs";
-import { GoalSeekDialog, GoalSeekStatusDialog, GroupAxisDialog, SubtotalDialog } from "./DataToolsDialogs";
+import { ConsolidateDialog, GoalSeekDialog, GoalSeekStatusDialog, GroupAxisDialog, SubtotalDialog } from "./DataToolsDialogs";
 import * as D from "../actions/data";
 import * as M from "./MiscDialogs";
 import { FormatCellsDialog } from "./FormatCellsDialog";
@@ -130,6 +130,8 @@ function OneDialog({ ctl, state, onClose, files, onBackstage }: { ctl: Controlle
       return <DataTableDialog {...p} />;
     case "advancedFilter":
       return <AdvancedFilterDialog {...p} />;
+    case "consolidate":
+      return <ConsolidateDialog {...p} />;
     case "protectWorkbook":
       return <ProtectWorkbookDialog {...p} />;
     case "insertSlicer":

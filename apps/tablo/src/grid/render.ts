@@ -12,7 +12,7 @@ import { contains, intersects, MAX_COLS, MAX_ROWS } from "../model/rect";
 import type { Rect, Selection } from "../model/types";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
 import type { GridLayout, Quadrant } from "./layout";
-import { cellFont, drawBorder, drawCellText, drawFilterButton, drawPattern, measureText, snap } from "./renderCell";
+import { cellFont, checkboxRect, drawBorder, drawCellText, drawCheckbox, drawFilterButton, drawPattern, measureText, snap } from "./renderCell";
 import { drawArrows, drawErrorTriangles } from "./renderAudit";
 import { drawIcon } from "./icons";
 import { drawOutline } from "./renderOutline";
@@ -327,9 +327,33 @@ function drawQuadrant(ctx: CanvasRenderingContext2D, st: RenderState, q: Quadran
   for (const m of merges) {
     if (st.editing && st.editing.row === m.r1 && st.editing.col === m.c1) continue;
     const v = computeView(wb, sheet, m.r1, m.c1, st.cf);
-    if (!v.text) continue;
     const rc = L.cellRect(m.r1, m.c1, m.r2, m.c2);
+    if (v.checkbox !== undefined) {
+      const b = checkboxRect(rc, v.style, z);
+      drawCheckbox(ctx, b.x, b.y, b.s, v.checkbox, v.color, dpr);
+      continue;
+    }
+    if (!v.text) continue;
     drawCellText(ctx, v, rc.x, rc.y, rc.w, rc.h, rc.x, rc.w, z, dpr);
+  }
+  // Hücre içi onay kutuları
+  for (let i = 0; i < rows.length; i++) {
+    const r = q.r1 + i;
+    const rv = rows[i];
+    if (!rv.views.length) continue;
+    for (let c = q.c1; c <= q.c2; c++) {
+      const v = rv.views[c - c0];
+      if (v?.checkbox === undefined || L.colW(c) === 0 || inMerge(r, c)) continue;
+      if (st.editing && st.editing.row === r && st.editing.col === c) continue;
+      const rc = L.cellRect(r, c);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rc.x, rc.y, rc.w, rc.h);
+      ctx.clip();
+      const b = checkboxRect(rc, v.style, z);
+      drawCheckbox(ctx, b.x, b.y, b.s, v.checkbox, v.color, dpr);
+      ctx.restore();
+    }
   }
 
   // Not işaretleri (kırmızı üçgen)

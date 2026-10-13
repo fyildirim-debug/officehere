@@ -17,6 +17,8 @@ import { writeDefinedNamesInto } from "./xlsxNames";
 import { writeSheetExtras, writeWorkbookExtras } from "./xlsxExtras";
 import { writeDataTablesInto } from "./xlsxWhatIf";
 import { writeSlicersInto } from "./xlsxSlicers";
+import { writeDynamicArrayMeta } from "./xlsxDynamic";
+import { writeCheckboxesInto } from "./xlsxCheckbox";
 import { patchThemeXml } from "../model/theme";
 
 /** Paketteki XML parçalarının önbelleği: her parça bir kez ayrıştırılır, sonda sırasıyla yazılır. */
@@ -141,6 +143,8 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise
   await writePageBreaksInto(wb, paths, parts);
   await writeSheetExtras(wb, paths, parts);
   await writeDataTablesInto(wb, paths, parts);
+  await writeDynamicArrayMeta(zip, wb, paths, parts);
+  await writeCheckboxesInto(zip, wb, paths, parts);
   await writeDefinedNamesInto(wb, parts);
   await writeWorkbookExtras(wb, parts);
   parts.flush();

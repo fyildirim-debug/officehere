@@ -179,6 +179,12 @@ export function Ribbon({ tabs, activeTab, onTabChange, onFileClick, fileLabel = 
                 className={`oh-ribbon-tab${selected && showBody ? " is-active" : ""}${t.contextual ? " is-contextual" : ""}`}
                 data-group={showGroup ? t.contextualGroup : undefined}
                 onKeyDown={(e) => onTabKey(e, i)}
+                // Fareyle sekme değiştirmek klavye odağını belgeden/ızgaradan almaz (yazma ve
+                // ok tuşları belgeye gitmeye devam eder); odak zaten şeritteyse olağan davranış.
+                onMouseDown={(e) => {
+                  const a = document.activeElement;
+                  if (e.button === 0 && a && a !== document.body && !e.currentTarget.closest(".oh-ribbon")?.contains(a)) e.preventDefault();
+                }}
                 onClick={() => {
                   onTabChange(t.id);
                   if (collapsed) setFloating(!(floating && t.id === active?.id));

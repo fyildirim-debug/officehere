@@ -2,7 +2,7 @@
  * Koşullu biçimlendirme değerlendirmesi. Kural istatistikleri (ortalama,
  * ilk 10, yinelenenler, min/maks) her hesap sürümünde bir kez çıkarılır.
  */
-import { cellKey, isError, jsDateToSerial, shiftFormula, toBool, weekdayOf, type Scalar } from "@officehere/formula";
+import { cellKey, isError, jsDateToSerial, shiftFormula, textMatcher, toBool, weekdayOf, type Scalar } from "@officehere/formula";
 import { contains } from "./rect";
 import type { CellStyle } from "./styles";
 import type { CondRule } from "./types";
@@ -182,9 +182,11 @@ export class CondFormatter {
       case "notContainsText":
       case "beginsWith":
       case "endsWith": {
-        const s = v === null ? "" : String(v).toLocaleUpperCase("tr-TR");
-        const t = (rule.text ?? "").toLocaleUpperCase("tr-TR");
-        const ok = rule.type === "containsText" ? s.includes(t) : rule.type === "notContainsText" ? !s.includes(t) : rule.type === "beginsWith" ? s.startsWith(t) : s.endsWith(t);
+        // Türkçe büyük/küçük harf duyarsız (i/İ, ı/I); joker karakterler BUL/MBUL'daki gibi
+        const s = v === null ? "" : String(v);
+        const t = rule.text ?? "";
+        const has = (mode: "begins" | "ends" | "contains") => textMatcher(t, mode)(s);
+        const ok = rule.type === "containsText" ? has("contains") : rule.type === "notContainsText" ? !has("contains") : rule.type === "beginsWith" ? has("begins") : has("ends");
         return ok && (v !== null || rule.type === "notContainsText") ? style : null;
       }
       case "duplicateValues":

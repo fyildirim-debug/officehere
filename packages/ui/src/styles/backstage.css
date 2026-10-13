@@ -733,4 +733,18 @@
   .oh-statusbar-right {
     flex: none;
   }
+
+  /* Dosya görünümü: içerik sığar (gezinti daralır, kenar boşlukları küçülür). */
+  .oh-backstage {
+    min-width: 0;
+  }
+
+  .oh-bs-nav {
+    width: 132px;
+  }
+
+  .oh-bs-content {
+    min-width: 0;
+    padding: 16px 14px 24px;
+  }
 }

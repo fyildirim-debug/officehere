@@ -7,6 +7,7 @@ import { PivotPlaceholders } from "../pivot/PivotPlaceholder";
 import { AllNotes, ValidationUi } from "./ValidationUi";
 import { TotalRowUi } from "./TotalRowUi";
 import { ErrorTag } from "./ErrorTag";
+import { FillOptionsTag } from "./FillOptionsTag";
 import type { GridLayout } from "./layout";
 import { FlashPreviewUi } from "./FlashPreviewUi";
 
@@ -20,6 +21,7 @@ export function GridOverlays({ ctl, layout }: { ctl: Controller; layout: GridLay
       <ValidationUi ctl={ctl} layout={layout} />
       <TotalRowUi ctl={ctl} layout={layout} />
       <ErrorTag ctl={ctl} layout={layout} />
+      <FillOptionsTag ctl={ctl} layout={layout} />
       <DrawOverlay ctl={ctl} layout={layout} />
       {ctl.edit && <FlashPreviewUi ctl={ctl} layout={layout} />}
     </>

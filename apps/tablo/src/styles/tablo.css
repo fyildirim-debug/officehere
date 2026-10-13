@@ -676,6 +676,10 @@
 .oh-rbtn-large.tb-wide {
   max-width: 100px;
 }
+/* İki satırlı etiketin sonundaki ok ikinci satıra sığsın (grup etiketinin üstüne taşmasın) */
+.oh-rbtn-large.tb-wide-s {
+  max-width: 86px;
+}
 
 /* Şerit taşma ölçümü: sağdaki "Şeridi Daralt" düğmesinin alanı içeriğin parçası sayılır,
    böylece gruplar o alana taşmadan zamanında küçülür */

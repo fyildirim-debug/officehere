@@ -1,5 +1,5 @@
 /** Veri eylemleri: sıralama, filtreleme, yinelenenleri kaldırma, metni sütunlara dönüştürme, tablolar, koşullu biçim. */
-import { compareText, formatValue, isError, numEquals, shiftFormula, type Scalar } from "@officehere/formula";
+import { compareText, formatValue, isError, numEquals, shiftFormula, textMatcher, type Scalar } from "@officehere/formula";
 import type { Controller } from "../controller";
 import { displayText } from "../model/display";
 import { uniqueTableName } from "../model/ops";
@@ -8,7 +8,7 @@ import { currentRegion } from "../model/selection";
 import { DEFAULT_TABLE_STYLE, tableCellStyle } from "../model/tablestyles";
 import type { AutoFilter, CondRule, FilterCriteria, Rect, TableDef } from "../model/types";
 import type { CellInput, CellState, SheetModel, WorkbookModel } from "../model/workbook";
-import { cellKey } from "@officehere/formula";
+import { cellKey, keyCol, keyRow } from "@officehere/formula";
 import { advancedMatches } from "../model/advancedFilter";
 
 /* ------------------------------ Sıralama ------------------------------ */
@@ -224,11 +224,13 @@ function testOp(op: string, arg: string, v: Scalar, text: string): boolean {
   const isNum = arg.trim() !== "" && Number.isFinite(n);
   const s = text.toLocaleUpperCase("tr-TR");
   const a = arg.toLocaleUpperCase("tr-TR");
+  // Metin işleçleri: joker karakterler (* ?) ve Türkçe büyük/küçük harf (i/İ, ı/I) Bul ve EĞERSAY ile aynı
+  const m = (mode: "equals" | "begins" | "ends" | "contains") => textMatcher(arg, mode)(text);
   switch (op) {
     case "eq":
-      return isNum && typeof v === "number" ? numEquals(v, n) : s === a;
+      return isNum && typeof v === "number" ? numEquals(v, n) : m("equals");
     case "ne":
-      return isNum && typeof v === "number" ? !numEquals(v, n) : s !== a;
+      return isNum && typeof v === "number" ? !numEquals(v, n) : !m("equals");
     case "gt":
       return typeof v === "number" && isNum ? v > n : s > a;
     case "ge":
@@ -238,13 +240,13 @@ function testOp(op: string, arg: string, v: Scalar, text: string): boolean {
     case "le":
       return typeof v === "number" && isNum ? v <= n : s <= a;
     case "begins":
-      return s.startsWith(a);
+      return m("begins");
     case "ends":
-      return s.endsWith(a);
+      return m("ends");
     case "contains":
-      return s.includes(a);
+      return m("contains");
     case "notContains":
-      return !s.includes(a);
+      return !m("contains");
     case "aboveAvg":
     case "belowAvg":
       return true;
@@ -381,31 +383,45 @@ export function columnValues(wb: WorkbookModel, sheet: SheetModel, f: AutoFilter
 export function removeDuplicates(ctl: Controller, r: Rect, cols: number[], hasHeader: boolean): { removed: number; kept: number } {
   const { wb, sheet } = ctl;
   const data = hasHeader ? { ...r, r1: r.r1 + 1 } : r;
-  let removed = 0;
-  let kept = 0;
-  ctl.ops.cellsOp(sheet, [data], "Yinelenenleri Kaldır", () => {
-    const seen = new Set<string>();
-    const rows: CellState[][] = [];
-    for (let row = data.r1; row <= data.r2; row++) {
-      const key = cols.map((c) => keyText(wb.getValue(sheet, row, c))).join("\u0001");
-      if (seen.has(key)) {
-        removed++;
-        continue;
-      }
+  const seen = new Set<string>();
+  const keep: number[] = [];
+  const drop: number[] = [];
+  for (let row = data.r1; row <= data.r2; row++) {
+    const key = cols.map((c) => keyText(wb.getValue(sheet, row, c))).join("\u0001");
+    if (seen.has(key)) drop.push(row - data.r1);
+    else {
       seen.add(key);
-      const cells: CellState[] = [];
-      for (let c = data.c1; c <= data.c2; c++) cells.push(wb.cellState(sheet, cellKey(row, c)));
-      rows.push(cells);
+      keep.push(row - data.r1);
     }
-    kept = rows.length;
-    for (let i = 0; i <= data.r2 - data.r1; i++) {
-      for (let c = data.c1; c <= data.c2; c++) {
-        const k = cellKey(data.r1 + i, c);
-        wb.applyCellState(sheet, k, i < rows.length ? rows[i][c - data.c1] : undefined);
+  }
+  if (!drop.length) return { removed: 0, kept: keep.length };
+  // Kalan satırlar yukarı kayar: formüller (sıralamadaki gibi) göreli kaydırılır, stil/not/köprü taşınır;
+  // aşağıda boşalan satırların içeriği silinir
+  const mark = ctl.ops.history.mark();
+  const vacated: Rect = { r1: data.r1 + keep.length, c1: data.c1, r2: data.r2, c2: data.c2 };
+  if (ctl.ops.permuteRowsOp(sheet, data, [...keep, ...drop], "Yinelenenleri Kaldır")) {
+    ctl.ops.cellsOp(sheet, [vacated], "Yinelenenleri Kaldır", () => {
+      for (const k of wb.cellKeysIn(sheet, vacated)) {
+        wb.setInputRaw(sheet, keyRow(k), keyCol(k), null);
+        sheet.notes.delete(k);
+        sheet.links.delete(k);
       }
+    });
+    ctl.ops.history.squash(mark, "Yinelenenleri Kaldır");
+    return { removed: drop.length, kept: keep.length };
+  }
+  // Kaydırma #BAŞV! üretecekse hücre durumları olduğu gibi taşınır
+  ctl.ops.cellsOp(sheet, [data], "Yinelenenleri Kaldır", () => {
+    const rows = keep.map((i) => {
+      const cells: CellState[] = [];
+      for (let c = data.c1; c <= data.c2; c++) cells.push(wb.cellState(sheet, cellKey(data.r1 + i, c)));
+      return cells;
+    });
+    for (let i = 0; i <= data.r2 - data.r1; i++) {
+      for (let c = data.c1; c <= data.c2; c++) wb.applyCellState(sheet, cellKey(data.r1 + i, c), i < rows.length ? rows[i][c - data.c1] : undefined);
     }
   });
-  return { removed, kept };
+  return { removed: drop.length, kept: keep.length };
 }
 
 function keyText(v: Scalar): string {

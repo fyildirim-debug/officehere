@@ -1,5 +1,6 @@
 /** Düzenleme yokken ızgara klavye kısayolları (Excel ile aynı). */
 import type { Controller } from "../controller";
+import { deleteOnCheckboxes, isCheckboxCell, toggleCheckboxes } from "../actions/checkbox";
 import * as F from "../actions/format";
 import * as E from "../actions/edit";
 import * as D from "../actions/data";
@@ -25,6 +26,8 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
   const sheet = ctl.sheet;
   // Seçili grafik/resim/şekil: Sil, Esc, ok tuşları, yazma
   if (ctl.selObj && handleObjectKey(ctl, ev)) return true;
+  // Onay kutusu: Ara Çubuğu seçimdeki kutuları değiştirir (yazmaya başlamaz)
+  if (key === " " && !ctrl && !shift && !alt && !ctl.edit && isCheckboxCell(ctl, ctl.sel.active.row, ctl.sel.active.col)) return toggleCheckboxes(ctl);
 
   switch (key) {
     case "ArrowUp":
@@ -75,7 +78,8 @@ export function handleGridKey(ctl: Controller, ev: KeyboardEvent | React.Keyboar
       ctl.startEdit(undefined);
       return true;
     case "Delete":
-      E.clearContents(ctl);
+      // İşaretli onay kutuları önce boşaltılır, boş kutular ikinci Delete'te kalkar
+      if (!deleteOnCheckboxes(ctl)) E.clearContents(ctl);
       return true;
     case "Backspace":
       // Excel: içerik boş metinle düzenlemeye girer; Esc'de eski içerik korunur

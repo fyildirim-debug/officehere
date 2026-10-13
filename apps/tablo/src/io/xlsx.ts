@@ -15,6 +15,8 @@ import { readCharts } from "./xlsxCharts";
 import { postProcess } from "./xlsxPost";
 import { compressCells, readCondRule, readValidation, writeCondRule } from "./xlsxRules";
 
+import { usesDynamicFunctions } from "./xlsxDynamic";
+import { readCheckboxesFromData } from "./xlsxCheckbox";
 import { addXlfnPrefixes, normalizeFileFormula, utcSerial } from "./xlsxFormula";
 
 export { compressCells, addXlfnPrefixes, normalizeFileFormula };
@@ -181,6 +183,11 @@ export async function readXlsx(input: ArrayBuffer): Promise<WorkbookModel> {
   } catch {
     warnings.push("filtre ölçütleri ve dilimleyiciler");
   }
+  try {
+    await readCheckboxesFromData(data, wb);
+  } catch {
+    warnings.push("onay kutuları");
+  }
   wb.loadWarnings = [...new Set(warnings)];
   return wb;
 }
@@ -205,6 +212,7 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
     if (st && Object.keys(st).length) sheet.colStyles.set(c - 1, wb.styles.intern(st));
   }
   const notesCells: { row: number; col: number; text: string; author?: string }[] = [];
+  const arrayAreas: (Rect & { row: number; col: number })[] = [];
   const validations = new Map<string, { rule: ValidationRule; cells: [number, number][]; rects: Rect[] }>();
   ws.eachRow({ includeEmpty: true }, (row: any, rn: number) => {
     const r = rn - 1;
@@ -216,6 +224,12 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
     row.eachCell({ includeEmpty: true }, (cell: any, cn: number) => {
       const c = cn - 1;
       readCell(wb, sheet, cell, r, c, cr);
+      // Dizi formülünün (dinamik dizi) kapladığı alan: ana hücre dışındakiler yalnız önbellek değeridir
+      const v = cell.value;
+      if (v && typeof v === "object" && v.shareType === "array" && typeof v.ref === "string") {
+        const ar = parseRangeAddress(v.ref.replace(/\$/g, ""));
+        if (ar && (ar.r1 !== ar.r2 || ar.c1 !== ar.c2)) arrayAreas.push({ ...ar, row: r, col: c });
+      }
       if (cell.note) {
         const n = cell.note;
         const text = typeof n === "string" ? n : (n.texts ?? []).map((t: any) => t.text).join("");
@@ -224,6 +238,10 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
     });
   });
   for (const n of notesCells) sheet.notes.set(cellKey(n.row, n.col), { text: n.text });
+  // Taşma alanındaki önbellek değerleri sabit olarak kalırsa formülün taşmasını engeller (#TAŞMA!)
+  for (const a of arrayAreas)
+    for (let i = a.r1; i <= a.r2; i++)
+      for (let j = a.c1; j <= a.c2; j++) if ((i !== a.row || j !== a.col) && !wb.getFormula(sheet, i, j)) wb.setInputRaw(sheet, i, j, null);
   // Veri doğrulama (hücre değeri olmasa da)
   for (const [key, dv] of Object.entries<any>(ws.dataValidations?.model ?? {})) {
     if (!dv?.type) continue;
@@ -541,6 +559,9 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
             const v = wb.getValue(sheet, r + i, c + j);
             if (v !== null) ws.getCell(r + i + 1, c + j + 1).value = cellResult(v);
           }
+      } else if (usesDynamicFunctions(rec.formula.text)) {
+        // Tek hücrelik dinamik dizi formülü (ör. ÇAPRAZARA): örtük kesişim (@) eklenmesin
+        cell.value = { formula: f, result, shareType: "array", ref: addr(r, c) };
       } else cell.value = result === undefined ? { formula: f } : { formula: f, result };
     } else {
       const v = rec.value;

@@ -67,12 +67,19 @@ export interface FillSource {
  * index: üretilecek konum (kaynak sonrası 0, 1, …); geriye doğru doldurmada negatif adım.
  * formulaOffset(i): i. hedefin kopyalandığı kaynağa göre (satır, sütun) uzaklığı.
  */
-export function generateFill(src: FillSource[], count: number, reverse: boolean, copyOnly: boolean, offset: (target: number, srcIndex: number) => [number, number]): CellInput[] {
+export function generateFill(src: FillSource[], count: number, reverse: boolean, copyOnly: boolean, offset: (target: number, srcIndex: number) => [number, number], increment = false): CellInput[] {
   const n = src.length;
   const out: CellInput[] = [];
   const inputs = src.map((s) => s.input);
   const allNumbers = inputs.every((v) => typeof v === "number");
   const isFormula = (v: CellInput): v is { formula: string } => v !== null && typeof v === "object" && "formula" in v;
+
+  // Ctrl ile sürüklenen tek sayı: birer artar (yukarı/sola doğru birer azalır)
+  if (increment && n === 1 && allNumbers) {
+    const v = inputs[0] as number;
+    for (let i = 0; i < count; i++) out.push(clean(v + (reverse ? -(i + 1) : i + 1)));
+    return out;
+  }
 
   // Tek sayı: kopyala (Excel davranışı); tarihse gün artır
   if (!copyOnly && allNumbers) {

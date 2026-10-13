@@ -3,12 +3,12 @@
  * için TSV/HTML üretimi; dışarıdan TSV/HTML ayrıştırma.
  */
 import { fontStack } from "@officehere/core";
-import { cellKey, keyCol, keyRow, parseCellInput, shiftFormula, type Scalar } from "@officehere/formula";
+import { addr, cellKey, keyCol, keyRow, parseCellInput, quoteSheetName, shiftFormula, type Scalar } from "@officehere/formula";
 import { displayText } from "./display";
 import type { Ops } from "./ops";
-import { rect, rectCols, rectRows } from "./rect";
+import { intersection, intersects, rect, rectCols, rectRows, subtractRects } from "./rect";
 import { DEFAULT_FONT, DEFAULT_SIZE, type BorderSide, type CellStyle } from "./styles";
-import type { Rect } from "./types";
+import type { Note, Rect, ValidationRule } from "./types";
 import type { CellInput, SheetModel, WorkbookModel } from "./workbook";
 import { copySparkline, moveSparklines } from "../sparkline/sparkOps";
 
@@ -17,6 +17,8 @@ export interface ClipCell {
   value: Scalar;
   style?: CellStyle;
   text: string;
+  note?: Note;
+  link?: string;
 }
 
 export interface ClipPayload {
@@ -30,6 +32,8 @@ export interface ClipPayload {
   colWidths: number[];
   rowHeights: number[];
   merges: Rect[];
+  /** Kaynaktaki veri doğrulama kuralları (aralıklar kaynağın sol üstüne göre). */
+  validations: { rule: ValidationRule; rects: Rect[] }[];
 }
 
 let lastPayload: ClipPayload | null = null;
@@ -52,11 +56,17 @@ export function buildClipboard(wb: WorkbookModel, sheet: SheetModel, r: Rect, re
       const cc = src.c1 + j;
       const input = wb.getInput(sheet, rr, cc);
       const styleId = wb.styleIdAt(sheet, rr, cc);
-      if (input === null && styleId === 0) {
+      const k = cellKey(rr, cc);
+      const note = sheet.notes.size ? sheet.notes.get(k) : undefined;
+      const link = sheet.links.size ? sheet.links.get(k) : undefined;
+      if (input === null && styleId === 0 && !note && !link) {
         row.push(null);
         continue;
       }
-      row.push({ input, value: wb.getValue(sheet, rr, cc), style: styleId ? wb.styles.get(styleId) : undefined, text: displayText(wb, sheet, rr, cc) });
+      const cell: ClipCell = { input, value: wb.getValue(sheet, rr, cc), style: styleId ? wb.styles.get(styleId) : undefined, text: displayText(wb, sheet, rr, cc) };
+      if (note) cell.note = { ...note };
+      if (link) cell.link = link;
+      row.push(cell);
     }
     cells.push(row);
   }
@@ -71,6 +81,12 @@ export function buildClipboard(wb: WorkbookModel, sheet: SheetModel, r: Rect, re
     colWidths: Array.from({ length: cols }, (_, j) => sheet.cols.rawSize(src.c1 + j)),
     rowHeights: Array.from({ length: rows }, (_, i) => sheet.rows.rawSize(src.r1 + i)),
     merges: sheet.mergesIn(src).map((m) => ({ r1: m.r1 - src.r1, c1: m.c1 - src.c1, r2: m.r2 - src.r1, c2: m.c2 - src.c1 })),
+    validations: sheet.validations
+      .map((v) => ({
+        rule: structuredClone(v.rule),
+        rects: v.ranges.map((r2) => intersection(r2, src)).filter((x): x is Rect => !!x).map((x) => ({ r1: x.r1 - src.r1, c1: x.c1 - src.c1, r2: x.r2 - src.r1, c2: x.c2 - src.c1 })),
+      }))
+      .filter((v) => v.rects.length),
   };
   if (remember) lastPayload = payload;
   return { payload, tsv: toTsv(cells), html: remember ? toHtml(payload) : "" };
@@ -234,7 +250,11 @@ function cssColor(c: string): string | undefined {
 }
 
 export interface PasteOptions {
-  what: "all" | "values" | "formulas" | "formats" | "widths" | "allExceptBorders" | "valuesAndFormats" | "formulasAndFormats";
+  /**
+   * Tümü (not, köprü ve doğrulama dahil), değerler, formüller, biçimler, sütun genişlikleri,
+   * kenarlıklar dışında tümü, değer/formül + yalnız sayı biçimi, notlar, doğrulama.
+   */
+  what: "all" | "values" | "formulas" | "formats" | "widths" | "allExceptBorders" | "valuesAndFormats" | "formulasAndFormats" | "comments" | "validation" | "link";
   op?: "none" | "add" | "sub" | "mul" | "div";
   skipBlanks?: boolean;
   transpose?: boolean;
@@ -250,17 +270,27 @@ export function pastePayload(ops: Ops, sheet: SheetModel, target: Rect, p: ClipP
     const dst = rect(target.r1, target.c1, target.r1 + p.rows - 1, target.c1 + p.cols - 1);
     ops.snapshotOp("Kes ve Yapıştır", () => {
       wb.engine.moveRange(srcSheet.id, p.src.r1, p.src.c1, p.src.r2, p.src.c2, sheet.id, dr, dc);
-      // Stiller, notlar, birleştirmeler
-      const styles: [number, number | undefined][] = [];
-      for (let i = 0; i < p.rows; i++)
-        for (let j = 0; j < p.cols; j++) {
-          const k = cellKey(p.src.r1 + i, p.src.c1 + j);
-          styles.push([cellKey(dst.r1 + i, dst.c1 + j), srcSheet.styles.get(k)]);
-          srcSheet.styles.delete(k);
+      // Stiller, notlar, köprüler, birleştirmeler ve doğrulama hücrelerle birlikte taşınır
+      const moveMap = <T,>(from: Map<number, T>, to: Map<number, T>) => {
+        const moved: [number, T | undefined][] = [];
+        for (let i = 0; i < p.rows; i++)
+          for (let j = 0; j < p.cols; j++) {
+            const k = cellKey(p.src.r1 + i, p.src.c1 + j);
+            moved.push([cellKey(dst.r1 + i, dst.c1 + j), from.get(k)]);
+            from.delete(k);
+          }
+        for (const [k, v] of moved) {
+          if (v === undefined) to.delete(k);
+          else to.set(k, v);
         }
-      for (const [k, id] of styles) {
-        if (id === undefined) sheet.styles.delete(k);
-        else sheet.styles.set(k, id);
+      };
+      moveMap(srcSheet.styles, sheet.styles);
+      moveMap(srcSheet.notes, sheet.notes);
+      moveMap(srcSheet.links, sheet.links);
+      if (p.validations.length || sheet.validations.some((v) => v.ranges.some((r) => intersects(r, dst)))) {
+        for (const v of srcSheet.validations) v.ranges = subtractRects(v.ranges, [p.src]);
+        srcSheet.validations = srcSheet.validations.filter((v) => v.ranges.length);
+        pasteValidations(sheet, p, dst, p.rows, p.cols, 1, 1, false, wb.newId.bind(wb));
       }
       if (srcSheet === sheet) moveSparklines(sheet, p.src, dr, dc, wb);
       srcSheet.merges = srcSheet.merges.filter((m) => !(m.r1 >= p.src.r1 && m.r2 <= p.src.r2 && m.c1 >= p.src.c1 && m.c2 <= p.src.c2));
@@ -287,8 +317,23 @@ export function pastePayload(ops: Ops, sheet: SheetModel, target: Rect, p: ClipP
             const cell = p.cells[si][sj];
             const row = dst.r1 + ri * srcRows + i;
             const col = dst.c1 + ci * srcCols + j;
-            if (opts.skipBlanks && (!cell || cell.input === null)) continue;
             const w = opts.what;
+            if (w === "comments") {
+              // Yalnız notlar: kaynakta not yoksa hedefteki korunur
+              if (cell?.note) sheet.notes.set(cellKey(row, col), { ...cell.note });
+              continue;
+            }
+            if (w === "validation") continue;
+            if (w === "link") {
+              // Bağlantıyı Yapıştır: kaynağa başvuran formül (tek hücrede mutlak, aralıkta göreli)
+              const single = p.rows === 1 && p.cols === 1;
+              const a0 = addr(p.src.r1 + si, p.src.c1 + sj);
+              const a = single ? "$" + a0.replace(/(\d)/, "$$$1") : a0;
+              const ref = srcSheet && srcSheet !== sheet ? `${quoteSheetName(srcSheet.name)}!${a}` : a;
+              wb.setInputRaw(sheet, row, col, { formula: "=" + ref });
+              continue;
+            }
+            if (opts.skipBlanks && (!cell || cell.input === null)) continue;
             if (w !== "formats" && w !== "widths") {
               let input: CellInput = cell?.input ?? null;
               const isF = input !== null && typeof input === "object" && "formula" in input;
@@ -308,10 +353,21 @@ export function pastePayload(ops: Ops, sheet: SheetModel, target: Rect, p: ClipP
               }
               wb.setInputRaw(sheet, row, col, input);
             }
-            if (w === "all" || w === "formats" || w === "valuesAndFormats" || w === "formulasAndFormats" || w === "allExceptBorders") {
+            if (w === "valuesAndFormats" || w === "formulasAndFormats") {
+              // Yalnız sayı biçimi gelir; hedefin yazı tipi, dolgu ve kenarlıkları korunur
+              wb.setStyleRaw(sheet, row, col, wb.styles.patch(wb.styleIdAt(sheet, row, col), { numFmt: cell?.style?.numFmt }) || undefined);
+            } else if (w === "all" || w === "formats" || w === "allExceptBorders") {
               let style = cell?.style;
               if (w === "allExceptBorders" && style) style = { ...style, bTop: undefined, bBottom: undefined, bLeft: undefined, bRight: undefined };
               wb.setStyleRaw(sheet, row, col, style ? wb.styles.intern(style) : undefined);
+            }
+            if (w === "all" || w === "allExceptBorders") {
+              // Tümünü yapıştır: notlar ve köprüler de hedefinkilerin yerine geçer
+              const k = cellKey(row, col);
+              if (cell?.note) sheet.notes.set(k, { ...cell.note });
+              else sheet.notes.delete(k);
+              if (cell?.link) sheet.links.set(k, cell.link);
+              else sheet.links.delete(k);
             }
             if (opts.what === "all" && !opts.transpose && srcSheet === sheet && sheet.sparklines.length) copySparkline(sheet, { row: p.src.r1 + si, col: p.src.c1 + sj }, { row, col }, wb);
           }
@@ -322,10 +378,31 @@ export function pastePayload(ops: Ops, sheet: SheetModel, target: Rect, p: ClipP
       sheet.merges = sheet.merges.filter((m) => !(m.r1 <= dst.r2 && dst.r1 <= m.r2 && m.c1 <= dst.c2 && dst.c1 <= m.c2));
       for (const m of p.merges) sheet.merges.push({ r1: m.r1 + dst.r1, c1: m.c1 + dst.c1, r2: m.r2 + dst.r1, c2: m.c2 + dst.c1 });
     }
+    if (withValidation) pasteValidations(sheet, p, dst, srcRows, srcCols, repR, repC, !!opts.transpose, wb.newId.bind(wb));
   };
-  if (opts.what === "widths" || (opts.what === "all" && (p.merges.length || sheet.mergesIn(dst).length))) ops.sheetOp(sheet, label, apply, [dst]);
+  // Doğrulama kuralları sayfa düzeyindedir: geri alma için sayfa anlık görüntüsü gerekir
+  const withValidation = (opts.what === "all" || opts.what === "allExceptBorders" || opts.what === "validation") && (p.validations.length > 0 || sheet.validations.some((v) => v.ranges.some((r) => intersects(r, dst))));
+  if (opts.what === "widths" || withValidation || (opts.what === "all" && (p.merges.length || sheet.mergesIn(dst).length))) ops.sheetOp(sheet, label, apply, [dst]);
   else ops.cellsOp(sheet, [dst], label, apply);
   return dst;
+}
+
+/** Hedef alandaki doğrulamayı kaldırıp kaynağın kurallarını (döşeme ve devrikle) hedefe kopyalar. */
+function pasteValidations(sheet: SheetModel, p: ClipPayload, dst: Rect, srcRows: number, srcCols: number, repR: number, repC: number, transpose: boolean, newId: (prefix: string) => string): void {
+  for (const v of sheet.validations) v.ranges = subtractRects(v.ranges, [dst]);
+  sheet.validations = sheet.validations.filter((v) => v.ranges.length);
+  for (const v of p.validations) {
+    const ranges: Rect[] = [];
+    for (let ri = 0; ri < repR; ri++)
+      for (let ci = 0; ci < repC; ci++)
+        for (const x of v.rects) {
+          const t = transpose ? { r1: x.c1, c1: x.r1, r2: x.c2, c2: x.r2 } : x;
+          const r0 = dst.r1 + ri * srcRows;
+          const c0 = dst.c1 + ci * srcCols;
+          ranges.push({ r1: r0 + t.r1, c1: c0 + t.c1, r2: r0 + t.r2, c2: c0 + t.c2 });
+        }
+    if (ranges.length) sheet.validations.push({ id: newId("dv"), rule: structuredClone(v.rule), ranges });
+  }
 }
 
 /** Dış metni (TSV/HTML) hedefe yapıştırır. */

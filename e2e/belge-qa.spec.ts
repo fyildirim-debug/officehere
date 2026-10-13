@@ -122,6 +122,18 @@ test.describe("OfficeHere Belge 5. tur", () => {
     return { other, otherErrors };
   };
 
+  test("şerit sekmesine fareyle tıklamak yazma odağını belgeden almaz", async ({ page }) => {
+    await start(page);
+    await page.keyboard.type("Bir");
+    await tab(page, "Ekle");
+    await expect(page.getByRole("tab", { name: "Ekle", exact: true }).first()).toHaveAttribute("aria-selected", "true");
+    await expect(body(page)).toBeFocused();
+    await page.keyboard.type(" iki");
+    await tab(page, "Giriş");
+    await page.keyboard.type(" üç");
+    expect((await paragraphs(page))[0]).toBe("Bir iki üç");
+  });
+
   test("Tümünü Seç + kopyala-yapıştır yeni bölüm (sayfa sonu) eklemez; geri al tek adımda", async ({ page }) => {
     await start(page);
     await page.keyboard.type("Önce ");

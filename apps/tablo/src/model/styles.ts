@@ -38,6 +38,8 @@ export interface CellStyle {
   bRight?: BorderSide;
   locked?: boolean;
   hidden?: boolean;
+  /** Hücre içi onay kutusu (Ekle > Onay Kutusu): değer DOĞRU/YANLIŞ, metin yerine kutu çizilir. */
+  checkbox?: boolean;
 }
 
 /** Tema gövde yazı tipi (yazı tipi belirtilmemiş hücreler); tema değişince güncellenir. */
