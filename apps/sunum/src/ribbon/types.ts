@@ -54,6 +54,8 @@ export interface AppCommands {
   /** Ekle > Medya > Video / Ses. */
   insertMedia: (kind: "video" | "audio") => void;
   playMedia: () => void;
+  /** Seçili nesnenin alternatif metni (Alternatif Metni Görüntüle). */
+  altText: () => void;
   /** Ekle > Bağlantı (Ctrl+K). */
   insertLink: () => void;
   openLink: () => void;

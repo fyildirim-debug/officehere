@@ -5,6 +5,7 @@ import { currentRegion } from "../model/selection";
 import type { ChartDef, ChartType, ImageDef, Rect, ShapeDef } from "../model/types";
 import { defaultSeriesInRows } from "../charts/chartData";
 import { STRUCTURE_MESSAGE, structureLocked } from "../model/protection";
+import { pickImage } from "./imageFile";
 
 function absRange(r: Rect): string {
   return `$${colToName(r.c1)}$${r.r1 + 1}:$${colToName(r.c2)}$${r.r2 + 1}`;
@@ -94,23 +95,7 @@ export function insertImage(ctl: Controller, name: string, src: string, natW: nu
 
 /** Dosya seçtirip resmi ekler (PNG, JPEG, GIF, SVG, WEBP). */
 export function pickAndInsertImage(ctl: Controller): void {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = "image/png,image/jpeg,image/gif,image/svg+xml,image/webp,image/bmp";
-  input.onchange = () => {
-    const f = input.files?.[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const src = String(reader.result);
-      const im = new Image();
-      im.onload = () => insertImage(ctl, f.name, src, im.naturalWidth || 200, im.naturalHeight || 150);
-      im.onerror = () => ctl.alert("Resim dosyası okunamadı.");
-      im.src = src;
-    };
-    reader.readAsDataURL(f);
-  };
-  input.click();
+  pickImage(ctl, (name, src, w, h) => insertImage(ctl, name, src, w, h));
 }
 
 export const SHAPE_KINDS: { kind: ShapeDef["kind"]; label: string }[] = [

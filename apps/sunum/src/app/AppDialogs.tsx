@@ -17,6 +17,7 @@ import type { ShowSettings } from "../show/settings";
 import type { RehearsalResult } from "../show/Rehearsal";
 import { LinkDialog } from "../dialogs/LinkDialog";
 import { RenameDialog, type RenameRequest } from "../dialogs/RenameDialog";
+import { AltTextDialog, type AltTextRequest } from "../dialogs/AltTextDialog";
 import { ChartDataDialog, InsertChartDialog } from "../dialogs/ChartDialogs";
 import { ActionDialog, CompressDialog, InsertZoomDialog } from "../dialogs/Round4Dialogs";
 
@@ -24,6 +25,7 @@ import { ActionDialog, CompressDialog, InsertZoomDialog } from "../dialogs/Round
 export type ExtraDialog =
   | { kind: "link"; ctx: LinkContext }
   | { kind: "rename"; req: RenameRequest }
+  | { kind: "altText"; req: AltTextRequest }
   | { kind: "ink"; ink: Record<string, ShowStroke[]> }
   | { kind: "chartType"; changeId?: string; current?: ChartData }
   | { kind: "chartData"; id: string; chart: ChartData }
@@ -99,6 +101,7 @@ export function AppDialogs({ a, state, info, cmd, dialog, closeDialog, extra, se
         <p style={{ margin: "4px 0 8px" }}>Mürekkep ek açıklamalarınızı tutmak istiyor musunuz?</p>
       </Dialog>
       <RenameDialog request={extra?.kind === "rename" ? extra.req : null} onClose={closeExtra} />
+      <AltTextDialog request={extra?.kind === "altText" ? extra.req : null} onClose={closeExtra} />
       <LinkDialog context={extra?.kind === "link" ? extra.ctx : null} pres={state.pres} onApply={(c, l, t) => applyLink(a, c, l, t)} onClose={closeExtra} />
       <InsertChartDialog
         open={extra?.kind === "chartType"}

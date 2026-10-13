@@ -17,6 +17,8 @@ export interface KeyHandlers {
   link: () => void;
   /** F7: Yazım Denetimi bölmesi. */
   spelling?: () => void;
+  /** Shift+F10 / Menü tuşu: slayt alanında seçime göre bağlam menüsü. */
+  contextMenu?: () => void;
   isBlocked: () => boolean;
 }
 
@@ -65,6 +67,12 @@ export function useKeyboard(actions: Actions, h: KeyHandlers) {
         fn();
       };
 
+      // Shift+F10 ve Menü tuşu: slayt alanındaki seçime (nesne, metin, hücre) göre bağlam menüsü.
+      if ((key === "ContextMenu" && !mod && !e.shiftKey) || (key === "F10" && e.shiftKey && !mod && !e.altKey)) {
+        const t = e.target as HTMLElement | null;
+        if (hd.contextMenu && !inField && s.focus === "canvas" && !t?.closest?.(".oh-ribbon, [role=dialog], .oh-popover, .thumb-pane, .notes-pane")) return run(() => hd.contextMenu!());
+        return;
+      }
       // Her yerde geçerli kısayollar.
       if (key === "F5") return run(() => (e.shiftKey ? hd.showFromCurrent() : hd.showFromStart()));
       if (key === "F12") return run(() => hd.saveAs());

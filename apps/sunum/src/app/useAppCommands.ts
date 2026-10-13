@@ -169,6 +169,12 @@ export function useAppCommands(d: CommandDeps): AppCommands {
       spelling: () => a.store.set((s) => ({ pane: s.pane === "spelling" ? null : "spelling" })),
       zoomTo: (z, fit) => a.store.set({ zoom: Math.max(10, Math.min(400, z)), fit: !!fit }),
       insertLink: () => setExtra({ kind: "link", ctx: linkContext(a) }),
+      altText: () => {
+        const sh = a.selectedShapes();
+        if (sh.length !== 1) return;
+        const id = sh[0].id;
+        setExtra({ kind: "altText", req: { value: sh[0].descr ?? "", onOk: (t) => a.updateShapes((s) => ({ ...s, descr: t || undefined }), [id]) } });
+      },
       insertChart: () => setExtra({ kind: "chartType" }),
       changeChartType: () => {
         const ch = selectedChart(a);

@@ -1,123 +1,29 @@
-/** Sağ tık menüleri: şekil, slayt alanı ve küçük resim bölmesi. */
+/** Slayt alanı, küçük resim bölmesi, bölüm başlığı ve Asıl görünüm sağ tık menüleri. */
 import {
   ArrowReset20Regular,
   ClipboardPaste20Regular,
   Copy20Regular,
   Cut20Regular,
   Delete20Regular,
-  Edit20Regular,
   EyeOff20Regular,
-  Group20Regular,
   PaintBucket20Regular,
   SlideAdd20Regular,
   SlideLayout20Regular,
   SlideMultiple20Regular,
   Ruler20Regular,
-  Link20Regular,
-  LinkDismiss20Regular,
-  LinkEdit20Regular,
-  Open20Regular,
   Rename20Regular,
   ArrowUp20Regular,
   ArrowDown20Regular,
   ArrowCollapseAll20Regular,
   ArrowExpandAll20Regular,
 } from "@fluentui/react-icons";
-import { LayerIcon, Menu, MenuItem, MenuSeparator } from "@officehere/ui";
-import { LayoutGallery } from "../ribbon/common";
-import type { Actions } from "../state/actions";
-import type { AppCommands } from "../ribbon/types";
-import { currentLink } from "../state/linkActions";
-import { sectionsOf } from "../model/sections";
-import { MASTER_SLIDE_ID } from "../model/masterView";
-import { collapseAllSections, moveSectionCmd, removeAllSectionsCmd, removeSectionCmd } from "../state/sectionActions";
-import { toCustomShape } from "../model/editPoints";
-import { isLineGeom } from "../render/geometry";
-
-
-export function shapeMenu(a: Actions, cmd: AppCommands, openDialog: (d: "sizePos") => void) {
-  const shapes = a.selectedShapes();
-  const sp = shapes.length === 1 && shapes[0].kind === "sp" ? shapes[0] : undefined;
-  const isPic = shapes.length === 1 && shapes[0].kind === "pic";
-  const link = currentLink(a);
-  return (
-    <Menu>
-      <MenuItem icon={<Cut20Regular />} label="Kes" shortcut="Ctrl+X" onClick={cmd.cut} />
-      <MenuItem icon={<Copy20Regular />} label="Kopyala" shortcut="Ctrl+C" onClick={cmd.copy} />
-      <MenuItem icon={<ClipboardPaste20Regular />} label="Yapıştır" shortcut="Ctrl+V" onClick={() => cmd.paste()} />
-      <MenuSeparator />
-      {sp && <MenuItem icon={<Edit20Regular />} label="Metni Düzenle" onClick={() => a.startEditing({ shapeId: sp.id, selectAll: true })} />}
-      {sp && !sp.ink && !isLineGeom(sp.geom) && (
-        <MenuItem
-          label="Noktaları Düzenle"
-          checked={a.s.pointEdit === sp.id}
-          onClick={() => {
-            a.updateShapes((s) => (s.kind === "sp" ? toCustomShape(s) : s), [sp.id]);
-            a.store.set({ pointEdit: sp.id, editing: null });
-          }}
-        />
-      )}
-      {shapes.length === 1 && shapes[0].kind === "pic" && shapes[0].zoom && (
-        <MenuItem
-          label="Yakınlaştırmaya Dön"
-          checked={!!shapes[0].zoom.ret}
-          onClick={() => a.updateShapes((s) => (s.kind === "pic" && s.zoom ? { ...s, zoom: { ...s.zoom, ret: s.zoom.ret ? undefined : true } } : s), [shapes[0].id])}
-        />
-      )}
-      {shapes.length === 1 && shapes[0].kind === "chart" && (
-        <>
-          <MenuItem label="Verileri Düzenle..." onClick={cmd.editChartData} />
-          <MenuItem label="Grafik Türünü Değiştir..." onClick={cmd.changeChartType} />
-        </>
-      )}
-      <MenuItem
-        icon={<Group20Regular />}
-        label="Grupla"
-        submenu={
-          <Menu>
-            <MenuItem label="Grupla" disabled={!a.canGroup()} onClick={() => a.groupSelection()} />
-            <MenuItem label="Grubu Çöz" disabled={!shapes.some((s) => s.kind === "group")} onClick={() => a.ungroupSelection()} />
-          </Menu>
-        }
-      />
-      <MenuItem
-        icon={<LayerIcon kind="forward" />}
-        label="Öne Getir"
-        submenu={
-          <Menu>
-            <MenuItem icon={<LayerIcon kind="front" />} label="En Öne Getir" onClick={() => a.reorderSelection("front")} />
-            <MenuItem icon={<LayerIcon kind="forward" />} label="Öne Getir" onClick={() => a.reorderSelection("forward")} />
-          </Menu>
-        }
-      />
-      <MenuItem
-        icon={<LayerIcon kind="backward" />}
-        label="Arkaya Gönder"
-        submenu={
-          <Menu>
-            <MenuItem icon={<LayerIcon kind="back" />} label="En Arkaya Gönder" onClick={() => a.reorderSelection("back")} />
-            <MenuItem icon={<LayerIcon kind="backward" />} label="Arkaya Gönder" onClick={() => a.reorderSelection("backward")} />
-          </Menu>
-        }
-      />
-      <MenuSeparator />
-      {link ? (
-        <>
-          <MenuItem icon={<LinkEdit20Regular />} label="Bağlantıyı Düzenle..." onClick={cmd.insertLink} />
-          <MenuItem icon={<Open20Regular />} label="Bağlantıyı Aç" onClick={cmd.openLink} />
-          <MenuItem icon={<LinkDismiss20Regular />} label="Bağlantıyı Kaldır" onClick={cmd.removeLink} />
-        </>
-      ) : (
-        <MenuItem icon={<Link20Regular />} label="Bağlantı..." shortcut="Ctrl+K" onClick={cmd.insertLink} />
-      )}
-      <MenuSeparator />
-      <MenuItem label="Boyut ve Konum..." onClick={() => openDialog("sizePos")} />
-      <MenuItem icon={<PaintBucket20Regular />} label={isPic ? "Resmi Biçimlendir..." : shapes.length === 1 && shapes[0].kind === "chart" ? "Grafik Alanını Biçimlendir..." : "Şekli Biçimlendir..."} onClick={() => cmd.togglePane("shape")} />
-      <MenuSeparator />
-      <MenuItem icon={<Delete20Regular />} label="Sil" shortcut="Delete" onClick={() => a.deleteSelection()} />
-    </Menu>
-  );
-}
+import { Menu, MenuItem, MenuSeparator } from "@officehere/ui";
+import { LayoutGallery } from "../../ribbon/common";
+import type { Actions } from "../../state/actions";
+import type { AppCommands } from "../../ribbon/types";
+import { sectionsOf } from "../../model/sections";
+import { MASTER_SLIDE_ID } from "../../model/masterView";
+import { collapseAllSections, moveSectionCmd, removeAllSectionsCmd, removeSectionCmd } from "../../state/sectionActions";
 
 export function slideAreaMenu(a: Actions, cmd: AppCommands, toggleRuler: () => void, rulerOn: boolean) {
   const s = a.s;
