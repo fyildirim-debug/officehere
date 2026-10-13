@@ -109,7 +109,15 @@ function PopoverLayer({ onClose, anchor, point, placement = "bottom-start", clas
       const now = document.activeElement;
       const inside = !!now && [layer, ...layers.slice(Math.max(0, i))].some((l) => l.el?.contains(now));
       const to = layer.restoreTo;
-      if (inside && to?.isConnected && !to.matches(":disabled")) to.focus({ preventScroll: true });
+      if (!inside || !to?.isConnected || to.matches(":disabled")) return;
+      if (!to.isContentEditable) return to.focus({ preventScroll: true });
+      // Düzenleyiciye yerel focus() eski DOM seçimini geri getirir ve menü komutunun
+      // bir kare sonraya ertelenen odaklamasıyla yarışır (yazı eski imlece gider).
+      // Bir kare bekle; komut odağı almadıysa geri ver.
+      requestAnimationFrame(() => {
+        const a = document.activeElement;
+        if ((!a || a === document.body) && to.isConnected) to.focus({ preventScroll: true });
+      });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
