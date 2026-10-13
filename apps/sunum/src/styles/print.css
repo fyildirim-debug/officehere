@@ -38,3 +38,278 @@
     print-color-adjust: exact;
   }
 }
+
+/* ---------- Yazdırma sayfaları (önizleme ve baskı ortak) ---------- */
+.pp-page {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  color: #000;
+  font-family: "Aptos", "Segoe UI", "Carlito", "Calibri", "Liberation Sans", Arial, sans-serif;
+}
+
+.pp-page.is-gray .pp-content,
+.pp-page.is-gray .pp-slide {
+  filter: grayscale(1);
+}
+
+.pp-page.is-bw .pp-content,
+.pp-page.is-bw .pp-slide {
+  filter: grayscale(1) contrast(6) brightness(1.15);
+}
+
+.pp-content {
+  position: absolute;
+  inset: 0;
+}
+
+.pp-frame {
+  position: absolute;
+  inset: 0;
+  border: 1px solid #000;
+  pointer-events: none;
+}
+
+.pp-slide {
+  position: absolute;
+  overflow: hidden;
+}
+
+/* Not sayfası ve dinleyici notu slaytları ince çizgiyle; "Slaytları Çerçevele" koyu çerçeve. */
+.pp-slide.is-bordered,
+.pp-page.is-handout .pp-slide {
+  box-shadow: 0 0 0 1px #9a9a9a;
+}
+
+.pp-page.is-framed .pp-slide {
+  box-shadow: 0 0 0 1px #000;
+}
+
+.pp-hf {
+  position: absolute;
+  left: 48px;
+  right: 48px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  line-height: 16px;
+  color: #000;
+}
+
+.pp-hf.is-top {
+  top: 24px;
+}
+
+.pp-hf.is-bottom {
+  bottom: 24px;
+}
+
+.pp-notes {
+  position: absolute;
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.pp-notes p {
+  margin: 0 0 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 3'lü dinleyici notu: not satırları */
+.pp-lines {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+}
+
+.pp-line {
+  flex: none;
+  box-sizing: border-box;
+  border-bottom: 1px solid #8a8a8a;
+}
+
+.pp-outline {
+  position: absolute;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.pp-outline-slide {
+  margin-bottom: 10px;
+}
+
+.pp-outline-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 24px;
+  overflow-wrap: anywhere;
+}
+
+.pp-outline-num {
+  width: 18px;
+  text-align: right;
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.pp-outline-icon {
+  flex: none;
+  width: 18px;
+  height: 12px;
+  border: 1px solid #555;
+  border-radius: 1px;
+}
+
+.pp-outline-line {
+  overflow-wrap: anywhere;
+}
+
+.pp-outline-line::before {
+  content: "•";
+  display: inline-block;
+  width: 14px;
+}
+
+/* ---------- Dosya › Yazdır sayfası ---------- */
+.su-printpage {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+  min-height: 0;
+}
+
+.su-printpage-side {
+  width: 300px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.su-printpage-side select,
+.su-printpage-side input[type="text"] {
+  height: 30px;
+  border: 1px solid var(--oh-border);
+  border-radius: 3px;
+  background: var(--oh-surface);
+  color: var(--oh-text);
+  padding: 0 6px;
+}
+
+.su-printpage-side input[aria-invalid="true"] {
+  border-color: #c42b1c;
+}
+
+.su-printpage-top {
+  display: flex;
+  gap: 12px;
+}
+
+.su-printpage-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 96px;
+  height: 84px;
+  border: 1px solid var(--oh-border);
+  border-radius: 4px;
+  background: var(--oh-surface);
+  color: var(--oh-text);
+  cursor: pointer;
+  text-align: center;
+  font-size: 12px;
+}
+
+.su-printpage-btn:hover:not(:disabled) {
+  background: var(--oh-hover);
+}
+
+.su-printpage-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.su-printpage-label {
+  margin-top: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.su-printpage-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.su-printpage-range input {
+  flex: 1;
+  min-width: 0;
+}
+
+.su-printpage-error {
+  color: #c42b1c;
+  font-size: 12px;
+}
+
+.su-printpage-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.su-printpage-link {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: var(--oh-accent, #0f6cbd);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.su-printpage-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--oh-surface-2, #e8e8e8);
+  border-radius: 4px;
+}
+
+.su-printpage-paper {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+@media (max-width: 760px) {
+  .su-printpage {
+    flex-direction: column;
+  }
+
+  .su-printpage-side {
+    width: 100%;
+  }
+
+  .su-printpage-preview {
+    align-self: stretch;
+    padding: 8px;
+  }
+
+  .su-printpage-top {
+    flex-wrap: wrap;
+  }
+}

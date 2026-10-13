@@ -3,12 +3,14 @@ import type { AppState, PaneKind, ViewMode } from "../state/store";
 import type { TextInfo } from "../state/textActions";
 import type { ShapeCatalogItem } from "../render/geometry";
 import type { ShowSettings } from "../show/settings";
+import type { PrintJob } from "../app/printLayout";
 
 export type DialogKind =
   | "font"
   | "paragraph"
   | "insertTable"
   | "headerFooter"
+  | "headerFooterNotes"
   | "slideSize"
   | "find"
   | "replace"
@@ -37,6 +39,8 @@ export interface AppCommands {
   print: () => void;
   /** Dosya > Dışarı Aktar > PDF (masaüstünde doğrudan, tarayıcıda yazdırma penceresiyle). */
   exportPdf: () => void;
+  /** Yazdır sayfasından: seçilen düzen ve slaytlarla yazdır ya da PDF olarak kaydet. */
+  printJob: (job: PrintJob) => void;
   previewTransition: () => void;
   previewAnimations: () => void;
   setView: (v: ViewMode) => void;

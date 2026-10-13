@@ -1,5 +1,5 @@
 /** Tema, asıl slayt, düzen, not asıl sayfası, tablo stilleri ve paket parçaları. */
-import type { LevelStyle, Presentation, SpShape, TextStyles, Theme } from "../model/types";
+import type { LevelStyle, NotesHeaderFooter, Presentation, SpShape, TextStyles, Theme } from "../model/types";
 import { TABLE_STYLES, tableStyleById, type BorderSpec, type PartStyle } from "../render/tableStyles";
 import { colorXml, pPrXml, type WriteCtx } from "./writeDrawing";
 import { attrs, esc, NS, SECTION_EXT_URI } from "./xml";
@@ -120,14 +120,40 @@ export function tableStylesXml(used: Set<string>, ctx: WriteCtx): string {
 const NOTES_W = 6858000;
 const NOTES_H = 9144000;
 
-export function notesMasterXml(): string {
+/** Not asıl sayfası üst/alt bilgi yer tutucusu (köşelerde yarım genişlikte kutular). */
+function notesHfPh(id: number, name: string, type: string, idx: number | undefined, right: boolean, bottom: boolean, para: string): string {
+  const w = 2971800;
+  const h = 458788;
+  const x = right ? NOTES_W - w : 0;
+  const y = bottom ? NOTES_H - h : 0;
+  return (
+    `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${esc(name)}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph${attrs({ type, sz: "quarter", idx })}/></p:nvPr></p:nvSpPr>` +
+    `<p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>` +
+    `<p:txBody><a:bodyPr vert="horz" lIns="91440" tIns="45720" rIns="91440" bIns="45720" rtlCol="0" anchor="${bottom ? "b" : "t"}"/><a:lstStyle><a:lvl1pPr algn="${right ? "r" : "l"}"><a:defRPr sz="1200"/></a:lvl1pPr></a:lstStyle>${para}</p:txBody></p:sp>`
+  );
+}
+
+const NOTES_FLD = (n: number) => `{6F0F1C5E-0F1C-4E7E-9B0B-00000000000${n}}`;
+
+/** Not asıl sayfası; hf verilirse üst/alt bilgi, tarih ve sayfa numarası yer tutucuları ve p:hf yazılır. */
+export function notesMasterXml(hf?: NotesHeaderFooter): string {
+  const run = (t: string) => (t ? `<a:p><a:r><a:rPr lang="tr-TR"/><a:t>${esc(t)}</a:t></a:r></a:p>` : '<a:p><a:endParaRPr lang="tr-TR"/></a:p>');
+  const hfShapes = hf
+    ? notesHfPh(4, "Üst Bilgi Yer Tutucusu 3", "hdr", undefined, false, false, run(hf.headerText)) +
+      notesHfPh(5, "Tarih Yer Tutucusu 4", "dt", 1, true, false, hf.dateAuto ? `<a:p><a:fld id="${NOTES_FLD(1)}" type="datetime1"><a:rPr lang="tr-TR"/><a:t>${esc(hf.dateFixed || " ")}</a:t></a:fld></a:p>` : run(hf.dateFixed)) +
+      notesHfPh(6, "Alt Bilgi Yer Tutucusu 5", "ftr", 4, false, true, run(hf.footerText)) +
+      notesHfPh(7, "Slayt Numarası Yer Tutucusu 6", "sldNum", 5, true, true, `<a:p><a:fld id="${NOTES_FLD(2)}" type="slidenum"><a:rPr lang="tr-TR"/><a:t>‹#›</a:t></a:fld></a:p>`)
+    : "";
+  // p:hf öznitelikleri varsayılan olarak açıktır; yalnız kapalılar yazılır.
+  const hfEl = hf ? `<p:hf${attrs({ sldNum: hf.pageNumber ? undefined : "0", hdr: hf.header ? undefined : "0", ftr: hf.footer ? undefined : "0", dt: hf.dateTime ? undefined : "0" })}/>` : "";
   const tree =
     '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>' +
+    hfShapes +
     `<p:sp><p:nvSpPr><p:cNvPr id="2" name="Slayt Görüntüsü Yer Tutucusu 1"/><p:cNvSpPr><a:spLocks noGrp="1" noRot="1" noChangeAspect="1"/></p:cNvSpPr><p:nvPr><p:ph type="sldImg" idx="2"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="685800" y="1143000"/><a:ext cx="5486400" cy="3086100"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/><a:ln w="12700"><a:solidFill><a:prstClr val="black"/></a:solidFill></a:ln></p:spPr></p:sp>` +
     `<p:sp><p:nvSpPr><p:cNvPr id="3" name="Not Yer Tutucusu 2"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" sz="quarter" idx="3"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="685800" y="4400550"/><a:ext cx="5486400" cy="3600450"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr vert="horz" lIns="91440" tIns="45720" rIns="91440" bIns="45720" rtlCol="0"/><a:lstStyle/><a:p><a:pPr lvl="0"/><a:r><a:rPr lang="tr-TR"/><a:t>Asıl metin stillerini düzenlemek için tıklayın</a:t></a:r></a:p></p:txBody></p:sp>` +
     "</p:spTree>";
   const style = `<p:notesStyle><a:lvl1pPr marL="0" algn="l" defTabSz="914400" rtl="0" eaLnBrk="1" latinLnBrk="0" hangingPunct="1"><a:defRPr sz="1200" kern="1200"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/></a:defRPr></a:lvl1pPr></p:notesStyle>`;
-  return `<p:notesMaster ${NS_DECL}><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>${tree}</p:cSld>${CLR_MAP}${style}</p:notesMaster>`;
+  return `<p:notesMaster ${NS_DECL}><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>${tree}</p:cSld>${CLR_MAP}${hfEl}${style}</p:notesMaster>`;
 }
 
 export function notesSlideXml(text: string): string {
@@ -152,7 +178,7 @@ export function presentationXml(pres: Presentation, masters: [number, string][],
     (notesRid ? `<p:notesMasterIdLst><p:notesMasterId r:id="${notesRid}"/></p:notesMasterIdLst>` : "") +
     (sldIds ? `<p:sldIdLst>${sldIds}</p:sldIdLst>` : "") +
     `<p:sldSz cx="${Math.round(pres.width * 9525)}" cy="${Math.round(pres.height * 9525)}"${type}/>` +
-    `<p:notesSz cx="${NOTES_W}" cy="${NOTES_H}"/>` +
+    (pres.printSettings?.orientation === "landscape" ? `<p:notesSz cx="${NOTES_H}" cy="${NOTES_W}"/>` : `<p:notesSz cx="${NOTES_W}" cy="${NOTES_H}"/>`) +
     customShowsXml(pres, slideRids) +
     defaultTextStyleXml(pres.master.textStyles, ctx) +
     sectionsXml(pres) +
@@ -221,5 +247,4 @@ export function appXml(pres: Presentation): string {
   return `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>OfficeHere Sunum</Application><PresentationFormat>${fmt}</PresentationFormat><Slides>${pres.slides.length}</Slides><Notes>${pres.slides.filter((s) => s.notes).length}</Notes><HiddenSlides>${pres.slides.filter((s) => s.hidden).length}</HiddenSlides><AppVersion>16.0000</AppVersion></Properties>`;
 }
 
-export const PRES_PROPS = `<p:presentationPr ${NS_DECL}/>`;
 export const VIEW_PROPS = `<p:viewPr ${NS_DECL}><p:normalViewPr><p:restoredLeft sz="15620"/><p:restoredTop sz="94660"/></p:normalViewPr><p:gridSpacing cx="72008" cy="72008"/></p:viewPr>`;

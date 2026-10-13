@@ -67,7 +67,8 @@ import {
 import type { FluentIcon } from "@fluentui/react-icons";
 import { Dialog, DialogButton, DialogTabs, Field } from "@officehere/ui";
 import { makeSp, NO_LINE } from "../model/factory";
-import type { CustomPath, HeaderFooter } from "../model/types";
+import type { CustomPath, HeaderFooter, NotesHeaderFooter } from "../model/types";
+import { DEFAULT_NOTES_HF } from "../model/presentation";
 import { svgPathToCmds } from "../render/svgPath";
 import type { Actions } from "../state/actions";
 
@@ -101,17 +102,29 @@ const DATE_FORMATS: ((d: Date) => string)[] = [
   (d) => new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(d),
 ];
 
-export function HeaderFooterDialog({ open, onClose, actions: a }: { open: boolean; onClose: () => void; actions: Actions }) {
+export function HeaderFooterDialog({ open, onClose, actions: a, initialTab = "slide" }: { open: boolean; onClose: () => void; actions: Actions; initialTab?: "slide" | "notes" }) {
   const [hf, setHf] = useState<HeaderFooter>(a.pres.headerFooter);
+  const [nhf, setNhf] = useState<NotesHeaderFooter>(a.pres.notesHeaderFooter ?? DEFAULT_NOTES_HF);
+  const [tab, setTab] = useState<"slide" | "notes">(initialTab);
   const [lastOpen, setLastOpen] = useState(false);
   const [fmt, setFmt] = useState(0);
+  const [nfmt, setNfmt] = useState(0);
   if (open !== lastOpen) {
     setLastOpen(open);
-    if (open) setHf(a.pres.headerFooter);
+    if (open) {
+      setHf(a.pres.headerFooter);
+      setNhf(a.pres.notesHeaderFooter ?? DEFAULT_NOTES_HF);
+      setTab(initialTab);
+    }
   }
   const now = new Date();
+  const applyNotes = () => {
+    const next = { ...nhf, dateFixed: nhf.dateAuto ? "" : nhf.dateFixed || DATE_FORMATS[nfmt](now) };
+    if (JSON.stringify(next) !== JSON.stringify(a.pres.notesHeaderFooter ?? DEFAULT_NOTES_HF)) a.store.commit((p) => ({ ...p, notesHeaderFooter: next }));
+  };
   const apply = (all: boolean) => {
-    a.applyHeaderFooter({ ...hf, dateFixed: hf.dateFixed || DATE_FORMATS[fmt](now) }, all);
+    if (tab === "notes") applyNotes();
+    else a.applyHeaderFooter({ ...hf, dateFixed: hf.dateFixed || DATE_FORMATS[fmt](now) }, all);
     onClose();
   };
   return (
@@ -122,7 +135,7 @@ export function HeaderFooterDialog({ open, onClose, actions: a }: { open: boolea
       width={460}
       footer={
         <>
-          <DialogButton onClick={() => apply(false)}>Uygula</DialogButton>
+          {tab === "slide" && <DialogButton onClick={() => apply(false)}>Uygula</DialogButton>}
           <DialogButton primary onClick={() => apply(true)}>
             Tümüne Uygula
           </DialogButton>
@@ -130,40 +143,77 @@ export function HeaderFooterDialog({ open, onClose, actions: a }: { open: boolea
         </>
       }
     >
-      <DialogTabs tabs={[{ id: "slide", label: "Slayt" }]} active="slide" onChange={() => {}} />
-      <fieldset className="oh-fieldset">
-        <legend>Slayta ekle</legend>
-        <label className="fp-radio" style={{ marginLeft: 0 }}>
-          <input type="checkbox" checked={hf.dateTime} onChange={(e) => setHf({ ...hf, dateTime: e.target.checked })} /> Tarih ve saat
-        </label>
-        <div style={{ marginLeft: 22, opacity: hf.dateTime ? 1 : 0.5 }}>
+      <DialogTabs
+        tabs={[
+          { id: "slide", label: "Slayt" },
+          { id: "notes", label: "Notlar ve Dinleyici Notları" },
+        ]}
+        active={tab}
+        onChange={(t) => setTab(t as "slide" | "notes")}
+      />
+      {tab === "slide" ? (
+        <>
+          <fieldset className="oh-fieldset">
+            <legend>Slayta ekle</legend>
+            <label className="fp-radio" style={{ marginLeft: 0 }}>
+              <input type="checkbox" checked={hf.dateTime} onChange={(e) => setHf({ ...hf, dateTime: e.target.checked })} /> Tarih ve saat
+            </label>
+            <DateChoice on={hf.dateTime} auto={hf.dateAuto} fixed={hf.dateFixed} fmt={fmt} setFmt={setFmt} now={now} onAuto={(v) => setHf({ ...hf, dateAuto: v, dateFixed: v ? hf.dateFixed : hf.dateFixed || DATE_FORMATS[fmt](now) })} onFixed={(t) => setHf({ ...hf, dateFixed: t })} />
+            <label className="fp-radio" style={{ marginLeft: 0 }}>
+              <input type="checkbox" checked={hf.slideNumber} onChange={(e) => setHf({ ...hf, slideNumber: e.target.checked })} /> Slayt numarası
+            </label>
+            <label className="fp-radio" style={{ marginLeft: 0 }}>
+              <input type="checkbox" checked={hf.footer} onChange={(e) => setHf({ ...hf, footer: e.target.checked })} /> Alt Bilgi
+            </label>
+            <input type="text" aria-label="Alt bilgi metni" disabled={!hf.footer} value={hf.footerText} onChange={(e) => setHf({ ...hf, footerText: e.target.value })} style={{ marginLeft: 22, height: 24, width: 300 }} />
+          </fieldset>
           <label className="fp-radio" style={{ marginLeft: 0 }}>
-            <input type="radio" disabled={!hf.dateTime} checked={hf.dateAuto} onChange={() => setHf({ ...hf, dateAuto: true })} /> Otomatik olarak güncelleştir
+            <input type="checkbox" checked={hf.hideOnTitle} onChange={(e) => setHf({ ...hf, hideOnTitle: e.target.checked })} /> Başlık slaytında gösterme
           </label>
-          <select disabled={!hf.dateTime || !hf.dateAuto} value={fmt} onChange={(e) => setFmt(Number(e.target.value))} style={{ marginLeft: 22, height: 24 }}>
-            {DATE_FORMATS.map((f, i) => (
-              <option key={i} value={i}>
-                {f(now)}
-              </option>
-            ))}
-          </select>
+        </>
+      ) : (
+        <fieldset className="oh-fieldset">
+          <legend>Sayfaya ekle</legend>
           <label className="fp-radio" style={{ marginLeft: 0 }}>
-            <input type="radio" disabled={!hf.dateTime} checked={!hf.dateAuto} onChange={() => setHf({ ...hf, dateAuto: false, dateFixed: hf.dateFixed || DATE_FORMATS[fmt](now) })} /> Sabit
+            <input type="checkbox" checked={nhf.dateTime} onChange={(e) => setNhf({ ...nhf, dateTime: e.target.checked })} /> Tarih ve saat
           </label>
-          <input type="text" disabled={!hf.dateTime || hf.dateAuto} value={hf.dateFixed} onChange={(e) => setHf({ ...hf, dateFixed: e.target.value })} style={{ marginLeft: 22, height: 24, width: 260 }} />
-        </div>
-        <label className="fp-radio" style={{ marginLeft: 0 }}>
-          <input type="checkbox" checked={hf.slideNumber} onChange={(e) => setHf({ ...hf, slideNumber: e.target.checked })} /> Slayt numarası
-        </label>
-        <label className="fp-radio" style={{ marginLeft: 0 }}>
-          <input type="checkbox" checked={hf.footer} onChange={(e) => setHf({ ...hf, footer: e.target.checked })} /> Alt Bilgi
-        </label>
-        <input type="text" disabled={!hf.footer} value={hf.footerText} onChange={(e) => setHf({ ...hf, footerText: e.target.value })} style={{ marginLeft: 22, height: 24, width: 300 }} />
-      </fieldset>
-      <label className="fp-radio" style={{ marginLeft: 0 }}>
-        <input type="checkbox" checked={hf.hideOnTitle} onChange={(e) => setHf({ ...hf, hideOnTitle: e.target.checked })} /> Başlık slaytında gösterme
-      </label>
+          <DateChoice on={nhf.dateTime} auto={nhf.dateAuto} fixed={nhf.dateFixed} fmt={nfmt} setFmt={setNfmt} now={now} onAuto={(v) => setNhf({ ...nhf, dateAuto: v, dateFixed: v ? nhf.dateFixed : nhf.dateFixed || DATE_FORMATS[nfmt](now) })} onFixed={(t) => setNhf({ ...nhf, dateFixed: t })} />
+          <label className="fp-radio" style={{ marginLeft: 0 }}>
+            <input type="checkbox" checked={nhf.header} onChange={(e) => setNhf({ ...nhf, header: e.target.checked })} /> Üst Bilgi
+          </label>
+          <input type="text" aria-label="Üst bilgi metni" disabled={!nhf.header} value={nhf.headerText} onChange={(e) => setNhf({ ...nhf, headerText: e.target.value })} style={{ marginLeft: 22, height: 24, width: 300 }} />
+          <label className="fp-radio" style={{ marginLeft: 0 }}>
+            <input type="checkbox" checked={nhf.pageNumber} onChange={(e) => setNhf({ ...nhf, pageNumber: e.target.checked })} /> Sayfa numarası
+          </label>
+          <label className="fp-radio" style={{ marginLeft: 0 }}>
+            <input type="checkbox" checked={nhf.footer} onChange={(e) => setNhf({ ...nhf, footer: e.target.checked })} /> Alt Bilgi
+          </label>
+          <input type="text" aria-label="Notlar alt bilgi metni" disabled={!nhf.footer} value={nhf.footerText} onChange={(e) => setNhf({ ...nhf, footerText: e.target.value })} style={{ marginLeft: 22, height: 24, width: 300 }} />
+        </fieldset>
+      )}
     </Dialog>
+  );
+}
+
+/** Tarih ve saat: otomatik güncelleştir (biçim seçimi) ya da sabit metin. */
+function DateChoice({ on, auto, fixed, fmt, setFmt, now, onAuto, onFixed }: { on: boolean; auto: boolean; fixed: string; fmt: number; setFmt: (i: number) => void; now: Date; onAuto: (v: boolean) => void; onFixed: (t: string) => void }) {
+  return (
+    <div style={{ marginLeft: 22, opacity: on ? 1 : 0.5 }}>
+      <label className="fp-radio" style={{ marginLeft: 0 }}>
+        <input type="radio" disabled={!on} checked={auto} onChange={() => onAuto(true)} /> Otomatik olarak güncelleştir
+      </label>
+      <select disabled={!on || !auto} value={fmt} onChange={(e) => setFmt(Number(e.target.value))} style={{ marginLeft: 22, height: 24 }}>
+        {DATE_FORMATS.map((f, i) => (
+          <option key={i} value={i}>
+            {f(now)}
+          </option>
+        ))}
+      </select>
+      <label className="fp-radio" style={{ marginLeft: 0 }}>
+        <input type="radio" disabled={!on} checked={!auto} onChange={() => onAuto(false)} /> Sabit
+      </label>
+      <input type="text" aria-label="Sabit tarih" disabled={!on || auto} value={fixed} onChange={(e) => onFixed(e.target.value)} style={{ marginLeft: 22, height: 24, width: 260 }} />
+    </div>
   );
 }
 

@@ -18,6 +18,12 @@
   background: #1f1f1f;
 }
 
+/* Şeritten önizleme fareyi yakalamaz; basılınca durur, tıklama slayta gider. */
+.show-root.is-preview,
+.show-root.is-preview * {
+  pointer-events: none !important;
+}
+
 .show-root.no-cursor,
 .show-root.no-cursor * {
   cursor: none !important;

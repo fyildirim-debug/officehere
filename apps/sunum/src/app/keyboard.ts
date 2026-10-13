@@ -1,7 +1,7 @@
 /** Klavye kısayolları (odak alanına göre: slaytlar bölmesi, slayt alanı, metin düzenleme). */
 import { useEffect, useRef } from "react";
 import type { Actions } from "../state/actions";
-import { applyRun, growFont, setParaProps } from "../state/textActions";
+import { applyRun, changeLevel, growFont, setParaProps } from "../state/textActions";
 import { captureFormat, applyFormatPainter } from "../state/painter";
 
 export interface KeyHandlers {
@@ -154,6 +154,8 @@ export function useKeyboard(actions: Actions, h: KeyHandlers) {
         const step = mod ? 1 : (96 / 2.54) * 0.2;
         const dx = key === "ArrowLeft" ? -step : key === "ArrowRight" ? step : 0;
         const dy = key === "ArrowUp" ? -step : key === "ArrowDown" ? step : 0;
+        // Alt+Shift+Sol/Sağ: seçili metin kutularının tüm paragraflarını yükselt/düşür.
+        if (e.altKey && e.shiftKey && (key === "ArrowLeft" || key === "ArrowRight")) return run(() => changeLevel(actions, key === "ArrowRight" ? 1 : -1));
         if (e.altKey) return run(() => actions.rotateSelection(key === "ArrowLeft" ? -15 : key === "ArrowRight" ? 15 : 0));
         return run(() => actions.moveSelection(dx, dy, "nudge"));
       }

@@ -69,6 +69,15 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
     return [{ key: `l${++layerSeq}`, index: idx, fromEnd: false }];
   });
   const previewStage = useRef(0);
+  /** Bileşen hâlâ takılı mı (zamanlayıcı ve söz devamları için). */
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      window.clearTimeout(autoTimer.current);
+    };
+  }, []);
   const [step, setStep] = useState(0);
   const [ended, setEnded] = useState(false);
   const [screen, setScreen] = useState<"none" | "black" | "white">("none");
@@ -135,6 +144,17 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preview, grid]);
 
+  // Önizleme fareyi yakalamaz: slayta (ya da başka bir yere) basılınca önizleme durur ve
+  // tıklama alttaki öğeye gider (seçim/çizim kaybolmaz).
+  const onExitRef = useRef(onExit);
+  onExitRef.current = onExit;
+  useEffect(() => {
+    if (!preview) return;
+    const stop = () => onExitRef.current(stateRef.current.index);
+    window.addEventListener("pointerdown", stop, true);
+    return () => window.removeEventListener("pointerdown", stop, true);
+  }, [preview]);
+
   // Odak gösterinin dışına düşerse (ör. kapanan menü/ızgara) tuşlar yine gösteriye gider.
   const keyRef = useRef<(e: React.KeyboardEvent) => void>(() => undefined);
   useEffect(() => {
@@ -191,7 +211,9 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
         const { kf, easing } = animationKeyframes(e.anim, g, pres.width, pres.height);
         const dur = Math.max(1, e.anim.duration * 1000);
         if (e.anim.cls === "entr") target.style.visibility = "visible";
-        const anim = target.animate(kf, { duration: dur, delay: e.start * 1000, fill: "forwards", easing });
+        // Giriş efektleri gecikme süresince ilk karede (görünmez) bekler: "both" olmadan şekil
+        // gecikme boyunca tam görünür, sonra efekt baştan oynar (titreme).
+        const anim = target.animate(kf, { duration: dur, delay: e.start * 1000, fill: e.anim.cls === "entr" ? "both" : "forwards", easing });
         running.current.push(anim);
         if (instant) anim.finish();
         promises.push(anim.finished.catch(() => undefined));
@@ -257,22 +279,28 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
     const dur = zr ? 900 : Math.max(0.05, sl.transition?.duration ?? 1) * 1000;
     const afterTransition = () => {
       setLayers((ls) => (ls.length > 1 ? [ls[ls.length - 1]] : ls));
+      // Kapandıktan sonra (ör. önizleme tıklamayla durdurulup gösteri açıldı) gecikmeli
+      // devamlar çalışmaz; yoksa eski önizlemenin onExit'i yeni gösteriyi kapatır.
       if (preview === "transition") {
         previewStage.current += 1;
-        if (previewStage.current === 1) window.setTimeout(() => goTo(Math.max(0, Math.min(pres.slides.length - 1, startIndex))), 150);
-        else window.setTimeout(() => onExit(top.index), 400);
+        if (previewStage.current === 1) window.setTimeout(() => alive.current && goTo(Math.max(0, Math.min(pres.slides.length - 1, startIndex))), 150);
+        else window.setTimeout(() => alive.current && onExit(top.index), 400);
         return;
       }
       if (preview === "animations") {
         void (async () => {
           await runEffects(top.key, st.auto, false);
-          for (const step of st.clicks) await runEffects(top.key, step, false);
-          window.setTimeout(() => onExit(top.index), 500);
+          for (const step of st.clicks) {
+            if (!alive.current) return;
+            await runEffects(top.key, step, false);
+          }
+          window.setTimeout(() => alive.current && onExit(top.index), 500);
         })();
         return;
       }
       if (startStep === 0) {
         void runEffects(top.key, st.auto, false).then(() => {
+          if (!alive.current) return;
           const adv = sl.transition?.advanceAfter;
           const auto = adv !== undefined && !opts.manual && !opts.rehearse && !followRef.current;
           if (auto) autoTimer.current = window.setTimeout(() => advance(true), adv * 1000);

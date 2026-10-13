@@ -294,9 +294,9 @@ export function alignShapes(shapes: Shape[], ids: string[], op: AlignOp, toSlide
 /* Çoğaltma, slayt işlemleri                                           */
 /* ------------------------------------------------------------------ */
 
-export function duplicateShapes(shapes: Shape[], ids: string[], offset = 16): { shapes: Shape[]; newIds: string[] } {
+export function duplicateShapes(shapes: Shape[], ids: string[], offset = 16, offsetY = offset): { shapes: Shape[]; newIds: string[] } {
   const set = new Set(ids);
-  const copies = shapes.filter((s) => set.has(s.id)).map((s) => moveShape(cloneShape(s), offset, offset));
+  const copies = shapes.filter((s) => set.has(s.id)).map((s) => moveShape(cloneShape(s), offset, offsetY));
   return { shapes: [...shapes, ...copies], newIds: copies.map((c) => c.id) };
 }
 

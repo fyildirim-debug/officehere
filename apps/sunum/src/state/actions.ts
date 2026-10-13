@@ -432,14 +432,15 @@ export class Actions {
     this.store.commit((p) => updateSlide(p, i, (sl) => pruneAnimations({ ...sl, shapes: removeShapes(sl.shapes, set) })), { sel: [], editing: null });
   }
 
-  duplicateSelection() {
+  /** Seçimi çoğaltır (Ctrl+D: 24 px kaydırarak; Ctrl+sürükle: bırakılan yere, tek geri alma adımı). */
+  duplicateSelection(dx = 24, dy = dx) {
     const sel = this.s.sel;
     if (!sel.length) return;
     const i = this.s.slideIdx;
     let newIds: string[] = [];
     this.store.commit((p) =>
       updateSlideShapes(p, i, (list) => {
-        const r = duplicateShapes(list, sel, 24);
+        const r = duplicateShapes(list, sel, dx, dy);
         newIds = r.newIds;
         return r.shapes;
       }),

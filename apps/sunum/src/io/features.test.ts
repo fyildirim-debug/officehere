@@ -126,6 +126,8 @@ describe("video ve ses", () => {
     const xml = await zip.file("ppt/slides/slide2.xml")!.async("string");
     expect(xml).toContain("<a:audioFile");
     expect(xml).toContain("p14:media");
+    // PowerPoint 2010 gömülü ortam uzantısının kimliği (MS-PPTX); yanlış kimlikte gömülü ortam tanınmaz.
+    expect(xml).toContain('<p:ext uri="{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}"><p14:media');
     const r = await readPptx(bytes);
     const ra = r.slides[1].shapes.find((s): s is PicShape => s.kind === "pic")!;
     expect(ra.media?.kind).toBe("audio");

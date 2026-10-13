@@ -113,7 +113,14 @@ export function SelectionOverlay({ shapes, overrides, zoom: z, editingId, parent
         <div key={`c${i}`} className="cell-sel" style={{ left: r.x * z, top: r.y * z, width: r.w * z, height: r.h * z }} />
       ))}
       {guides.map((g, i) =>
-        g.dir === "v" ? (
+        g.gap ? (
+          // Eşit aralık işareti: iki nesne arasındaki boşluk, uçları çentikli.
+          <div
+            key={`g${i}`}
+            className={`smart-gap ${g.dir === "h" ? "is-h" : "is-v"}`}
+            style={g.dir === "h" ? { top: g.pos * z, left: g.from * z, width: (g.to - g.from) * z } : { left: g.pos * z, top: g.from * z, height: (g.to - g.from) * z }}
+          />
+        ) : g.dir === "v" ? (
           <div key={`g${i}`} className="smart-guide is-v" style={{ left: g.pos * z, top: g.from * z, height: (g.to - g.from) * z }} />
         ) : (
           <div key={`g${i}`} className="smart-guide is-h" style={{ top: g.pos * z, left: g.from * z, width: (g.to - g.from) * z }} />

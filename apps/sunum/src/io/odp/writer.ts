@@ -11,6 +11,7 @@ import { cm, ODF_NS, ODF_NS_DECL, ODP_MIME, odfAttrs } from "./common";
 import { AutoStyles, fillAttrs, paraProps, Shared, textProps } from "./writeStyles";
 import { shapesXml, type ShapeWriteCtx } from "./writeShapes";
 import { odpTransitionAttrs, transitionTimingXml } from "./transitions";
+import { odpSettingsXml } from "./showSettings";
 import { listStyleXml, textBodyXml } from "./writeText";
 
 const EXTRA_NS = 'xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" xmlns:drawooo="http://openoffice.org/2010/draw"';
@@ -126,7 +127,7 @@ export async function writeOdp(pres: Presentation): Promise<Uint8Array> {
     `<style:default-style style:family="graphic"><style:graphic-properties svg:stroke-color="#3465a4" draw:fill-color="#729fcf"/>${textProps({ size: 18, font: minor }, sh)}</style:default-style>` +
     `<style:style style:name="standard" style:family="graphic"><style:graphic-properties draw:stroke="none" draw:fill="none"/>${textProps({ size: 18, font: minor }, sh)}</style:style>`;
 
-  const content = `${XML_HEAD}<office:document-content ${ODF_NS_DECL} ${EXTRA_NS} office:version="1.3">${sh.fontDecls()}<office:automatic-styles>${auto.xml()}</office:automatic-styles><office:body><office:presentation>${pages}</office:presentation></office:body></office:document-content>`;
+  const content = `${XML_HEAD}<office:document-content ${ODF_NS_DECL} ${EXTRA_NS} office:version="1.3">${sh.fontDecls()}<office:automatic-styles>${auto.xml()}</office:automatic-styles><office:body><office:presentation>${pages}${odpSettingsXml(pres, names)}</office:presentation></office:body></office:document-content>`;
   const styles = `${XML_HEAD}<office:document-styles ${ODF_NS_DECL} ${EXTRA_NS} office:version="1.3">${sh.fontDecls()}<office:styles>${sh.named.join("")}${common}${presStyles}</office:styles><office:automatic-styles>${pageLayout}${mauto.xml()}</office:automatic-styles><office:master-styles>${masters}</office:master-styles></office:document-styles>`;
 
   const now = new Date().toISOString().replace(/\.\d+Z$/, "");

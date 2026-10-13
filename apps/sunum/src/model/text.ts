@@ -267,6 +267,20 @@ export function applyParaProps(body: TextBody, fromP: number, toP: number, patch
   return { ...body, paragraphs: body.paragraphs.map((p, i) => (i >= fromP && i <= toP ? patch(p) : p)) };
 }
 
+/**
+ * fromP..toP paragraflarını bir paragraf yukarı (dir=-1) ya da aşağı (dir=1) taşır
+ * (Alt+Shift+Yukarı/Aşağı). Sınırda değişiklik yoksa null.
+ */
+export function moveParagraphs(body: TextBody, fromP: number, toP: number, dir: -1 | 1): TextBody | null {
+  if (fromP > toP) [fromP, toP] = [toP, fromP];
+  const ps = body.paragraphs;
+  if ((dir < 0 && fromP === 0) || (dir > 0 && toP >= ps.length - 1)) return null;
+  const block = ps.slice(fromP, toP + 1);
+  const rest = ps.slice(0, fromP).concat(ps.slice(toP + 1));
+  const at = fromP + dir;
+  return { ...body, paragraphs: [...rest.slice(0, at), ...block, ...rest.slice(at)] };
+}
+
 export function setParaProps(body: TextBody, fromP: number, toP: number, props: Partial<ParaProps>): TextBody {
   return applyParaProps(body, fromP, toP, (p) => ({ ...p, props: clean({ ...p.props, ...props }) as ParaProps }));
 }

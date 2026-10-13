@@ -5,6 +5,8 @@
  * düzen, asıl slayt, tema renk yuvaları, metin düzeyleri).
  */
 
+import type { ShowSettings } from "../show/settings";
+
 export type SchemeColorName =
   | "dk1"
   | "lt1"
@@ -507,12 +509,40 @@ export interface HeaderFooter {
   hideOnTitle: boolean;
 }
 
+/** Not sayfaları ve dinleyici notlarının üst/alt bilgisi (not asıl sayfası p:hf ve yer tutucuları). */
+export interface NotesHeaderFooter {
+  dateTime: boolean;
+  dateAuto: boolean;
+  dateFixed: string;
+  header: boolean;
+  headerText: string;
+  pageNumber: boolean;
+  footer: boolean;
+  footerText: string;
+}
+
 export interface DocProps {
   title?: string;
   subject?: string;
   creator?: string;
   created?: string;
   modified?: string;
+}
+
+/** Yazdırılacak düzen (p:prnPr prnWhat): tam sayfa slaytlar, not sayfaları, ana hat ya da dinleyici notları. */
+export type PrintWhat = "slides" | "notes" | "outline" | "handouts1" | "handouts2" | "handouts3" | "handouts4" | "handouts6" | "handouts9";
+
+/** Yazdırma ayarları (p:prnPr; yönlendirme p:notesSz ile saklanır). */
+export interface PrintSettings {
+  what: PrintWhat;
+  /** clr: renkli, gray: gri tonlama, bw: saf siyah beyaz. */
+  color: "clr" | "gray" | "bw";
+  hiddenSlides: boolean;
+  frameSlides: boolean;
+  /** Not sayfaları, dinleyici notları ve ana hat sayfalarının yönü. */
+  orientation: "portrait" | "landscape";
+  /** Dinleyici notlarında sıra: yatay (satır satır) ya da dikey (sütun sütun). Dosyaya yazılmaz. */
+  order?: "horz" | "vert";
 }
 
 /** Özel slayt gösterisi (p:custShow): adlandırılmış slayt listesi. */
@@ -535,4 +565,10 @@ export interface Presentation {
   masterEdited?: boolean;
   /** Özel slayt gösterileri. */
   customShows?: CustomShow[];
+  /** Slayt Gösterisini Ayarla (p:showPr); yoksa varsayılanlar. */
+  showSettings?: ShowSettings;
+  /** Yazdırma ayarları (p:prnPr); yoksa varsayılanlar. */
+  printSettings?: PrintSettings;
+  /** Not sayfaları ve dinleyici notları üst/alt bilgisi; yoksa yalnız sayfa numarası. */
+  notesHeaderFooter?: NotesHeaderFooter;
 }

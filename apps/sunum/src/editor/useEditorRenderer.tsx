@@ -50,6 +50,7 @@ export function useEditorRenderer(actions: Actions, getState: () => AppState) {
             actions.textHandle = h;
           }}
           onSelectionChange={() => actions.store.set((s) => ({ textTick: s.textTick + 1 }))}
+          onCaretMove={() => actions.store.breakMerge()}
           onTab={
             cell && shape.kind === "table"
               ? (shift) => {

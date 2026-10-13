@@ -15,7 +15,7 @@ export const NS = {
 /** p:presentation/p:extLst içindeki bölüm listesi uzantısı. */
 export const SECTION_EXT_URI = "{521415D9-36F7-43E2-AB2F-B90AF26B5E84}";
 /** p:nvPr/p:extLst içindeki gömülü ortam (p14:media) uzantısı. */
-export const MEDIA_EXT_URI = "{DAA4B4D4-6D71-4841-9C94-3DE6BF3C1D3E}";
+export const MEDIA_EXT_URI = "{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}";
 
 export const REL = {
   officeDocument: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",

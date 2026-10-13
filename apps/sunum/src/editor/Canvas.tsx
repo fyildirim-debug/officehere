@@ -25,6 +25,8 @@ import { PointEditor } from "./PointEditor";
 import { SunumMiniToolbar } from "./MiniToolbar";
 import { useViewportZoom } from "./useViewportZoom";
 import { useEditorRenderer } from "./useEditorRenderer";
+import { EyedropperOverlay } from "./Eyedropper";
+import { slideToCanvas } from "../app/exporting";
 
 export interface CanvasProps {
   state: AppState;
@@ -537,8 +539,8 @@ export function Canvas(props: CanvasProps) {
           const g0 = d.geoms.get(d.ids[0])!;
           const dx = first.x - g0.x;
           const dy = first.y - g0.y;
-          actions.duplicateSelection();
-          actions.moveSelection(dx - 24, dy - 24);
+          // Kopya bırakılan yere tek adımda konur (geri al kopyayı tümden kaldırır).
+          actions.duplicateSelection(dx, dy);
           return;
         }
         actions.setGeometries(map);
@@ -695,6 +697,7 @@ export function Canvas(props: CanvasProps) {
         </div>
       </div>
       <SunumMiniToolbar state={state} actions={actions} slideRef={slideRef} />
+      <EyedropperOverlay pres={pres} slideIdx={state.slideIdx} toSlide={toSlide} rasterize={slideToCanvas} />
     </div>
   );
 }

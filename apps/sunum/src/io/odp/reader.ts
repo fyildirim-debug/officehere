@@ -13,6 +13,7 @@ import { DISPLAYABLE, IMAGE_MIME, lengthPx, OdpError, toBase64 } from "./common"
 import { readFillProps, readShapes, type ShapeReadCtx } from "./shapes";
 import { type Resolved, StyleSheet } from "./styles";
 import { readOdpTransition, transitionDur } from "./transitions";
+import { readOdpSettings } from "./showSettings";
 import { listLevel, paragraphsText, paraPropsOf, readParagraphs, runPropsOf } from "./text";
 
 const MAX_SLIDES = 2000;
@@ -216,6 +217,8 @@ export async function readOdp(data: ArrayBuffer | Uint8Array): Promise<Presentat
     pres.slides.push(slide);
   });
   if (!pres.slides.length) throw new OdpError("Sunuda slayt bulunamadı.");
+  // Özel gösteriler ve gösteri ayarları.
+  Object.assign(pres, readOdpSettings(body, byName, slideIds));
 
   // Belge özellikleri.
   const metaXml = await text("meta.xml");

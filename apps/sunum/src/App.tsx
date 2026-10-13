@@ -5,6 +5,8 @@ import { AppShell, CommandSearch, MessageBar, QatButton, Ribbon, TitleBar, useCo
 import { downloadBlob } from "@officehere/core";
 import { blankPresentation } from "./model/presentation";
 import { Canvas } from "./editor/Canvas";
+import { useEyedropper } from "./editor/Eyedropper";
+import { useNarrow } from "./app/useNarrow";
 import { ThumbnailPane } from "./panes/ThumbnailPane";
 import { NotesPane, Splitter } from "./panes/NotesPane";
 import { BackgroundPane, ShapePane } from "./panes/FormatPanes";
@@ -16,7 +18,9 @@ import { textInfo } from "./state/textActions";
 import { useKeyboard } from "./app/keyboard";
 import { insertImageFiles, useClipboard } from "./app/clipboard";
 import { loadPresentation, newFromTemplate, openBytes, openDialog, openFromPath, openRecent, save } from "./app/fileOps";
-import { exportPdfNative, exportPngs, outlineText, PrintRoot } from "./app/exporting";
+import { exportPdfNative, exportPngs, outlineText } from "./app/exporting";
+import { PrintRoot } from "./app/PrintPages";
+import { buildPrintPages, paperSize, type PrintJob } from "./app/printLayout";
 import { masterMenu, objectMenu, sectionMenu, slideAreaMenu, thumbMenu } from "./app/menus";
 import { keyboardMenuTarget, type CanvasMenuKind } from "./editor/contextKind";
 import { tableCellMenu, textEditMenu } from "./app/textMenus";
@@ -57,13 +61,24 @@ export function App() {
   const [backstage, setBackstage] = useState<false | true | OfficeBackstagePage>(false);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   const [show, setShow] = useState<ShowState | null>(null);
-  const [printing, setPrinting] = useState<null | "print" | "pdf">(null);
+  const [printing, setPrinting] = useState<PrintJob | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [guides, setGuides] = useState({ h: [360], v: [640] });
   const [extra, setExtra] = useState<ExtraDialog | null>(null);
-  const [showSettings, setShowSettings] = useState<ShowSettings>(DEFAULT_SHOW_SETTINGS);
+  // Gösteri ayarları sunuyla birlikte saklanır (presProps.xml p:showPr).
+  const showSettings = state.pres.showSettings ?? DEFAULT_SHOW_SETTINGS;
+  const setShowSettings = useCallback(
+    (s: ShowSettings) => {
+      if (JSON.stringify(s) !== JSON.stringify(a.s.pres.showSettings ?? DEFAULT_SHOW_SETTINGS)) a.store.commit((p) => ({ ...p, showSettings: s }));
+    },
+    [a],
+  );
   const [findQuery, setFindQuery] = useState("");
   const ctxMenu = useContextMenu();
+  const eyedropper = useEyedropper();
+  // Telefon genişliğinde küçük resim bölmesi daralır (slayt alanına yer kalsın).
+  const narrow = useNarrow(600);
+  const thumbWidth = narrow ? Math.min(state.thumbWidth, 106) : state.thumbWidth;
   const blockedRef = useRef(false);
   blockedRef.current = !!dialog || !!extra || !!backstage || (!!show && !show.preview);
   const recovery = useMemo(() => recoveryHandlers(), []);
@@ -91,6 +106,10 @@ export function App() {
 
   const openDialogFn = useCallback((d: DialogKind) => setDialog(d), []);
   const cmd = useAppCommands({ a, setDialog, setExtra, setShow, setBackstage, setPrinting, setFindQuery, showSettings });
+  const openPrintPage = useCallback(() => {
+    a.stopEditing();
+    setBackstage("print");
+  }, [a]);
 
   const newDoc = useCallback(async () => {
     if (!(await lifecycle.confirmDiscard())) return;
@@ -105,7 +124,8 @@ export function App() {
       if (await lifecycle.confirmDiscard()) await openDialog(a);
     },
     newDoc: () => void newDoc(),
-    print: cmd.print,
+    // Ctrl+P Dosya › Yazdır sayfasını açar (düzen ve slayt seçimi orada; Belge ve Tablo ile aynı).
+    print: openPrintPage,
     showFromStart: () => cmd.startShow("start"),
     showFromCurrent: () => cmd.startShow("current"),
     find: () => cmd.find(),
@@ -130,7 +150,7 @@ export function App() {
         {
           save: () => void save(a),
           saveAs: () => void save(a, true),
-          print: cmd.print,
+          print: openPrintPage,
           exportPdf: cmd.exportPdf,
           newDoc: () => void newDoc(),
           open: async () => {
@@ -144,7 +164,7 @@ export function App() {
         },
         cmd.previewTransition,
       ),
-    [a, cmd, newDoc, lifecycle],
+    [a, cmd, newDoc, lifecycle, openPrintPage],
   );
   const ctx: RibbonCtx = { state, actions: a, text: info, openDialog: openDialogFn, cmd, show: { settings: showSettings, set: setShowSettings } };
   const tabs = buildRibbonTabs(ctx);
@@ -193,17 +213,19 @@ export function App() {
   })();
 
   // Kip ipuçları slayt alanının üstünde yüzer (yerleşimi kaydırmaz).
-  const canvasHint = state.insert
-    ? state.insert.kind === "textbox"
-      ? "Metin kutusu eklemek için slayta tıklayın ya da sürükleyin."
-      : "Şekli çizmek için slaytta sürükleyin (Shift: oranı koru). Vazgeçmek için Esc."
-    : state.cropId
-      ? "Kırpmak için kenar tutamaçlarını, resmi kaydırmak için içini sürükleyin. Bitirmek için Esc."
-      : state.ink
-        ? state.ink.tool === "eraser"
-          ? "Silmek için mürekkep çizimlerinin üzerinden geçin. Bitirmek için Esc."
-          : "Çizmek için slaytta sürükleyin. Bitirmek için Esc."
-        : null;
+  const canvasHint = eyedropper
+    ? "Rengi almak için slayttaki bir noktaya tıklayın. Vazgeçmek için Esc."
+    : state.insert
+      ? state.insert.kind === "textbox"
+        ? "Metin kutusu eklemek için slayta tıklayın ya da sürükleyin."
+        : "Şekli çizmek için slaytta sürükleyin (Shift: oranı koru). Vazgeçmek için Esc."
+      : state.cropId
+        ? "Kırpmak için kenar tutamaçlarını, resmi kaydırmak için içini sürükleyin. Bitirmek için Esc."
+        : state.ink
+          ? state.ink.tool === "eraser"
+            ? "Silmek için mürekkep çizimlerinin üzerinden geçin. Bitirmek için Esc."
+            : "Çizmek için slaytta sürükleyin. Bitirmek için Esc."
+          : null;
 
   // Sağ tıklanan nesnenin türüne göre menü (resim, grafik, tablo, metin kutusu, çizgi, grup, çoklu seçim...).
   const canvasMenu = (e: { clientX: number; clientY: number; preventDefault: () => void }, kind: CanvasMenuKind) => {
@@ -265,11 +287,11 @@ export function App() {
         {bound(
           "Küçük resim bölmesi",
           masterView ? (
-            <MasterThumbPane state={state} actions={a} width={state.thumbWidth} onContextMenu={(e) => ctxMenu.open(e, masterMenu(a, cmd))} />
+            <MasterThumbPane state={state} actions={a} width={thumbWidth} onContextMenu={(e) => ctxMenu.open(e, masterMenu(a, cmd))} />
           ) : state.view === "outline" ? (
-            <OutlinePane state={state} actions={a} width={Math.max(300, state.thumbWidth * 1.5)} />
+            <OutlinePane state={state} actions={a} width={narrow ? 160 : Math.max(300, state.thumbWidth * 1.5)} />
           ) : (
-            <ThumbnailPane state={state} actions={a} width={state.thumbWidth} onContextMenu={(e, onSlide) => ctxMenu.open(e, thumbMenu(a, cmd, onSlide))} onSectionMenu={(e, id) => ctxMenu.open(e, sectionMenu(a, cmd, id))} onRenameSection={cmd.renameSection} />
+            <ThumbnailPane state={state} actions={a} width={thumbWidth} onContextMenu={(e, onSlide) => ctxMenu.open(e, thumbMenu(a, cmd, onSlide))} onSectionMenu={(e, id) => ctxMenu.open(e, sectionMenu(a, cmd, id))} onRenameSection={cmd.renameSection} />
           ),
         )}
         <Splitter dir="v" onDrag={(d) => a.store.set((s) => ({ thumbWidth: Math.max(110, Math.min(420, s.thumbWidth + (s.view === "outline" ? d / 1.5 : d))) }))} />
@@ -313,7 +335,7 @@ export function App() {
               {canvasHint}
             </div>
           )}
-          {show?.preview && bound("Önizleme", <SlideShow pres={state.pres} startIndex={show.start} mode="window" preview={show.preview} frame={show.frame} onExit={() => setShow(null)} />, () => setShow(null))}
+          {show?.preview && bound("Önizleme", <SlideShow key={show.seq} pres={state.pres} startIndex={show.start} mode="window" preview={show.preview} frame={show.frame} onExit={() => setShow((cur) => (cur?.preview ? null : cur))} />, () => setShow(null))}
         </div>
       </>
     );
@@ -420,12 +442,18 @@ export function App() {
                 if (await save(a, true)) setBackstage(false);
               }}
               onPrint={cmd.print}
+              onPrintJob={cmd.printJob}
+              onHeaderFooter={() => {
+                setBackstage(false);
+                setDialog("headerFooterNotes");
+              }}
               onExport={async (id) => {
                 const base = state.fileName;
                 const doc = documentPres(a);
                 if (id === "pdf") cmd.exportPdf();
                 else if (id === "png") await exportPngs(doc, base, "current", Math.min(state.masterBase?.slideIdx ?? state.slideIdx, doc.slides.length - 1));
                 else if (id === "pngAll") await exportPngs(doc, base, "all", 0);
+                else if (id === "video") setExtra({ kind: "video" });
                 else if (id === "outline") downloadBlob(new Blob([outlineText(doc)], { type: "text/plain;charset=utf-8" }), `${base}-AnaHat.txt`);
                 else if (isSaveFormat(id)) void save(a, true, id);
                 setBackstage(false);
@@ -467,12 +495,15 @@ export function App() {
       {printing && (
         <PrintRoot
           pres={state.pres}
+          pages={buildPrintPages(state.pres, printing.settings, printing.indices)}
+          size={paperSize(state.pres, printing.settings.what, printing.settings.orientation)}
+          settings={printing.settings}
           onDone={() => setPrinting(null)}
           onReady={
-            printing === "pdf"
+            printing.pdf
               ? async () => {
                   try {
-                    const name = await exportPdfNative(a.s.pres, a.s.fileName);
+                    const name = await exportPdfNative(paperSize(a.s.pres, printing.settings.what, printing.settings.orientation), a.s.fileName);
                     if (name) a.message(`PDF olarak kaydedildi: ${name}`, "success");
                   } catch (e) {
                     a.message(`PDF oluşturulamadı: ${(e as Error).message}`, "error");

@@ -1,6 +1,5 @@
 /** Dosya menüsü: şablonlar, dışa aktarma ve Bilgi özellikleri. */
-import { ArrowDownload24Regular, DocumentPdf24Regular, DocumentSave24Regular, Image24Regular, ImageMultiple24Regular, SlidePlay24Regular, SlideTextMultiple24Regular, TextBulletListLtr24Regular } from "@fluentui/react-icons";
-import { useLayoutEffect, useRef, useState } from "react";
+import { ArrowDownload24Regular, DocumentPdf24Regular, DocumentSave24Regular, Image24Regular, ImageMultiple24Regular, SlidePlay24Regular, SlideTextMultiple24Regular, TextBulletListLtr24Regular, Video24Regular } from "@fluentui/react-icons";
 import { OfficeBackstage, type BackstageExport, type OfficeBackstagePage } from "@officehere/ui";
 import type { RecentFile } from "@officehere/core";
 import { formatDateTime, isDesktop } from "@officehere/core";
@@ -10,6 +9,8 @@ import type { Actions } from "../state/actions";
 import type { AppState } from "../state/store";
 import { TEMPLATES } from "../templates/templates";
 import { cm } from "../ribbon/common";
+import { PrintPage } from "./PrintPage";
+import type { PrintJob } from "./printLayout";
 
 const built = new Map<string, Presentation>();
 function templatePres(id: string): Presentation {
@@ -30,6 +31,7 @@ const EXPORTS: BackstageExport[] = [
   },
   { id: "png", title: "Geçerli Slaytı Resim Olarak Kaydet", description: "Geçerli slaydı PNG resmi olarak indirir.", icon: <Image24Regular /> },
   { id: "pngAll", title: "Tüm Slaytları Resim Olarak Kaydet", description: "Her slaydı PNG olarak bir ZIP arşivinde indirir.", icon: <ImageMultiple24Regular /> },
+  { id: "video", title: "Video Oluştur", description: "Sunuyu geçişler, animasyon adımları ve zamanlamalarla bir video dosyasına (.webm) dönüştürün.", icon: <Video24Regular /> },
   { id: "outline", title: "Ana Hat Olarak Kaydet", description: "Slayt başlıkları ve metinleri düz metin dosyası olarak.", icon: <TextBulletListLtr24Regular /> },
   { id: "pptx", title: "Sunu (.pptx) Olarak Kaydet", description: "Açık XML sunu biçiminde farklı kaydet.", icon: <ArrowDownload24Regular /> },
   { id: "odp", title: "OpenDocument Sunu (.odp) Olarak Kaydet", description: "Açık belge biçiminde kaydedin; bazı efektler ve grafikler aktarılmayabilir.", icon: <DocumentSave24Regular /> },
@@ -48,6 +50,10 @@ export function FileBackstage(props: {
   onSave: () => void;
   onSaveAs: () => void;
   onPrint: () => void;
+  /** Yazdır sayfasındaki ayarlarla yazdır / PDF olarak kaydet. */
+  onPrintJob: (job: PrintJob) => void;
+  /** Not ve dinleyici notu üst/alt bilgisi (Üst Bilgi ve Alt Bilgi iletişim kutusu). */
+  onHeaderFooter: () => void;
   onExport: (id: string) => void;
   onClose: () => void;
 }) {
@@ -88,7 +94,7 @@ export function FileBackstage(props: {
       onClose={props.onClose}
       onBack={props.onBack}
       info={info}
-      printPreview={pres.slides[0] ? <PrintPreview pres={pres} start={state.slideIdx} /> : undefined}
+      printPage={<PrintPage state={state} actions={props.actions} onPrint={props.onPrintJob} onHeaderFooter={props.onHeaderFooter} />}
       extraOptions={
         <>
           <label className="oh-field is-inline">
@@ -102,40 +108,5 @@ export function FileBackstage(props: {
         </>
       }
     />
-  );
-}
-
-/** Yazdır sayfasındaki baskı önizlemesi: bir sayfa, altta sayfa gezinmesi (gizli slaytlar basılmaz). */
-function PrintPreview({ pres, start }: { pres: Presentation; start: number }) {
-  const pages = pres.slides.map((s, i) => ({ s, i })).filter(({ s }) => !s.hidden);
-  const ref = useRef<HTMLDivElement>(null);
-  const [w, setW] = useState(480);
-  const [page, setPage] = useState(() => Math.max(0, pages.findIndex((p) => p.i >= start)));
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setW(Math.max(160, Math.min(900, el.clientWidth - 2))));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  if (!pages.length) return <div className="print-prev-empty">Yazdırılacak slayt yok (tüm slaytlar gizli).</div>;
-  const cur = pages[Math.min(page, pages.length - 1)];
-  return (
-    <div className="print-prev" ref={ref}>
-      <div className="thumb-box" style={{ width: w }}>
-        <ScaledSlide pres={pres} slide={cur.s} slideNumber={cur.i + 1} width={w} />
-      </div>
-      <div className="print-prev-nav">
-        <button type="button" aria-label="Önceki Sayfa" disabled={page <= 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-          ◀
-        </button>
-        <span>
-          {Math.min(page, pages.length - 1) + 1} / {pages.length}
-        </span>
-        <button type="button" aria-label="Sonraki Sayfa" disabled={page >= pages.length - 1} onClick={() => setPage((p) => Math.min(pages.length - 1, p + 1))}>
-          ▶
-        </button>
-      </div>
-    </div>
   );
 }

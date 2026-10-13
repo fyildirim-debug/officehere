@@ -92,7 +92,13 @@ export interface ShowState {
   opts?: ShowRunOptions;
   /** Sunucu Görünümü: izleyici penceresi bağlantısı. */
   link?: PresenterLink;
+  /** Önizleme kimliği: yeni önizleme öncekinin yerine yeniden başlar. */
+  seq?: number;
 }
+
+let previewSeq = 0;
+/** Önizleme durumları için artan kimlik. */
+export const nextPreviewSeq = () => ++previewSeq;
 
 /** Önizleme için slayt alanının .app-center içindeki konumu. */
 export function stageFrame(): ShowState["frame"] {

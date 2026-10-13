@@ -8,6 +8,8 @@ import type { Color, Layout, Presentation, SchemeColorName, Slide, Theme } from 
 import { SCHEME_ORDER } from "../model/types";
 import { presetGeometry, SHAPE_CATALOG, type ShapeCatalogItem } from "../render/geometry";
 import { SlideView } from "../render/SlideView";
+import { eyedropperAvailable, startEyedropper } from "../editor/Eyedropper";
+import { Eyedropper20Regular } from "@fluentui/react-icons";
 
 /* ------------------------------------------------------------------ */
 /* Tema renk paleti                                                     */
@@ -92,6 +94,12 @@ export function ThemePalette({ theme, onSelect, noneLabel, autoLabel, extra, val
         onClick={() => inputRef.current?.click()}
       />
       <input ref={inputRef} type="color" className="oh-hidden-input" onChange={(e) => pick({ rgb: e.target.value.toUpperCase() })} />
+      <MenuItem
+        icon={<Eyedropper20Regular />}
+        label="Damlalık"
+        disabled={!eyedropperAvailable()}
+        onClick={() => startEyedropper((hex) => onSelect({ rgb: hex }))}
+      />
       {extra}
     </div>
   );

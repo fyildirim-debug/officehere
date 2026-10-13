@@ -20,6 +20,7 @@ import { RenameDialog, type RenameRequest } from "../dialogs/RenameDialog";
 import { AltTextDialog, type AltTextRequest } from "../dialogs/AltTextDialog";
 import { ChartDataDialog, InsertChartDialog } from "../dialogs/ChartDialogs";
 import { ActionDialog, CompressDialog, InsertZoomDialog } from "../dialogs/Round4Dialogs";
+import { VideoExportDialog } from "../dialogs/VideoExportDialog";
 
 /** Parametreli iletişim kutuları. */
 export type ExtraDialog =
@@ -32,7 +33,8 @@ export type ExtraDialog =
   | { kind: "media"; shape: PicShape }
   | { kind: "customShows" }
   | { kind: "rehearsal"; result: RehearsalResult }
-  | { kind: "scaleChoice"; w: number; h: number };
+  | { kind: "scaleChoice"; w: number; h: number }
+  | { kind: "video" };
 
 export interface AppDialogsProps {
   a: Actions;
@@ -60,7 +62,7 @@ export function AppDialogs({ a, state, info, cmd, dialog, closeDialog, extra, se
       <FontDialog open={dialog === "font"} onClose={closeDialog} actions={a} info={info} />
       <ParagraphDialog open={dialog === "paragraph"} onClose={closeDialog} actions={a} info={info} />
       <InsertTableDialog open={dialog === "insertTable"} onClose={closeDialog} actions={a} />
-      <HeaderFooterDialog open={dialog === "headerFooter"} onClose={closeDialog} actions={a} />
+      <HeaderFooterDialog open={dialog === "headerFooter" || dialog === "headerFooterNotes"} onClose={closeDialog} actions={a} initialTab={dialog === "headerFooterNotes" ? "notes" : "slide"} />
       <SymbolDialog open={dialog === "symbol"} onClose={closeDialog} onInsert={insertText} />
       <DateTimeDialog open={dialog === "dateTime"} onClose={closeDialog} onInsert={insertText} />
       <IconsDialog open={dialog === "icons"} onClose={closeDialog} actions={a} />
@@ -71,6 +73,7 @@ export function AppDialogs({ a, state, info, cmd, dialog, closeDialog, extra, se
       <SizePosDialog open={dialog === "sizePos"} onClose={closeDialog} actions={a} />
       <ShowSetupDialog open={dialog === "showSetup"} onClose={closeDialog} value={showSettings} onChange={setShowSettings} pres={state.pres} />
       <CustomShowsDialog open={extra?.kind === "customShows"} onClose={closeExtra} actions={a} onShow={cmd.startCustomShow} />
+      <VideoExportDialog open={extra?.kind === "video"} onClose={closeExtra} actions={a} />
       <RehearsalDialog result={extra?.kind === "rehearsal" ? extra.result : null} onClose={closeExtra} actions={a} />
       <ScaleChoiceDialog req={extra?.kind === "scaleChoice" ? { w: extra.w, h: extra.h } : null} onClose={closeExtra} actions={a} />
       <ShortcutsDialog open={dialog === "shortcuts"} onClose={closeDialog} />

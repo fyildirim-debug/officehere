@@ -202,11 +202,17 @@ function flyOffset(dir: string, g: ShapeGeomInfo, W: number, H: number): [number
 const reverse = (k: KF): KF => k.slice().reverse().map((f, i, arr) => ({ ...f, offset: f.offset !== undefined ? 1 - (f.offset as number) : i / Math.max(1, arr.length - 1) }));
 
 /** Animasyonun anahtar kareleri. Giriş efektleri görünmezden başlar. */
+/** Belir/Kaybol: sürenin ortasında anlık geçiş (bitişte değer kesin olarak son karedir). */
+const INSTANT_IN: KF = [{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.5 }, { opacity: 1, offset: 0.5 }, { opacity: 1, offset: 1 }];
+const INSTANT_OUT: KF = [{ opacity: 1, offset: 0 }, { opacity: 1, offset: 0.5 }, { opacity: 0, offset: 0.5 }, { opacity: 0, offset: 1 }];
+
 export function animationKeyframes(a: Animation, g: ShapeGeomInfo, W: number, H: number): { kf: KF; easing: string } {
   const opt = a.option ?? "";
   switch (a.effect) {
     case "appear":
-      return { kf: [{ opacity: 0 }, { opacity: 1 }], easing: "step-end" };
+      // Adım yumuşatması (step-end) kullanılmaz: gecikmeli oynatmada bitiş anı kayan noktayla
+      // 0,999… çıkar ve şekil hiç görünmez. Aynı konumlu iki kare anlık geçiştir.
+      return { kf: INSTANT_IN, easing: "linear" };
     case "fade":
       return { kf: [{ opacity: 0 }, { opacity: 1 }], easing: "linear" };
     case "flyIn": {
@@ -256,7 +262,7 @@ export function animationKeyframes(a: Animation, g: ShapeGeomInfo, W: number, H:
     case "transparency":
       return { kf: [{ opacity: 1 }, { opacity: 0.5 }], easing: "linear" };
     case "disappear":
-      return { kf: [{ opacity: 1 }, { opacity: 0 }], easing: "step-end" };
+      return { kf: INSTANT_OUT, easing: "linear" };
     case "fadeOut":
       return { kf: [{ opacity: 1 }, { opacity: 0 }], easing: "linear" };
     case "flyOut": {

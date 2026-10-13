@@ -1,7 +1,7 @@
 import { buildMasterAndLayouts } from "../themes/build";
 import { getThemeDef, THEMES } from "../themes/themes";
 import { emptyBody, uid } from "./factory";
-import type { HeaderFooter, Layout, LayoutType, Presentation, Shape, Slide, SpShape, Theme } from "./types";
+import type { HeaderFooter, Layout, NotesHeaderFooter, LayoutType, Presentation, Shape, Slide, SpShape, Theme } from "./types";
 import { findPlaceholder } from "./textStyle";
 
 export const SLIDE_16_9 = { width: 1280, height: 720 };
@@ -15,6 +15,18 @@ export const DEFAULT_HF: HeaderFooter = {
   footer: false,
   footerText: "",
   hideOnTitle: true,
+};
+
+/** Not sayfaları ve dinleyici notlarında varsayılan: yalnız sayfa numarası. */
+export const DEFAULT_NOTES_HF: NotesHeaderFooter = {
+  dateTime: false,
+  dateAuto: true,
+  dateFixed: "",
+  header: false,
+  headerText: "",
+  pageNumber: true,
+  footer: false,
+  footerText: "",
 };
 
 export function themeFromDef(id: string, variant = 0): Theme {

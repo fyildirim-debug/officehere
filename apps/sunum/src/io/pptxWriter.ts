@@ -7,7 +7,8 @@ import { flatShapes } from "../model/ops";
 import type { ChartData, Layout, Master, Presentation, Shape, SpShape, Theme } from "../model/types";
 import { bgXml, spTreeXml, type ChartStore, type MediaStore, type WriteCtx } from "./writeDrawing";
 import { chartWorkbook, chartXml } from "./writeChart";
-import { appXml, CLR_MAP, coreXml, notesMasterXml, notesSlideXml, NS_DECL, presentationXml, PRES_PROPS, samplePrompt, tableStylesXml, themeXml, txStylesXml, VIEW_PROPS } from "./writeParts";
+import { appXml, CLR_MAP, coreXml, notesMasterXml, notesSlideXml, NS_DECL, presentationXml, samplePrompt, tableStylesXml, themeXml, txStylesXml, VIEW_PROPS } from "./writeParts";
+import { presPropsXml } from "./presProps";
 import { slideExtXml, timingXml, transitionXml } from "./writeTiming";
 import { attrs, esc, NS, REL, RelsBuilder, XML_HEAD } from "./xml";
 
@@ -226,9 +227,10 @@ export async function writePptx(pres: Presentation, opts: { kind?: PptxKind } = 
   });
 
   // Not asıl sayfası
-  const hasNotes = pres.slides.some((s) => s.notes.trim());
+  // Not sayfası/dinleyici notu üst-alt bilgisi ayarlıysa not asıl sayfası notsuz sunuda da yazılır.
+  const hasNotes = pres.slides.some((s) => s.notes.trim()) || !!pres.notesHeaderFooter;
   if (hasNotes) {
-    add("ppt/notesMasters/notesMaster1.xml", notesMasterXml(), CT.notesMaster);
+    add("ppt/notesMasters/notesMaster1.xml", notesMasterXml(pres.notesHeaderFooter), CT.notesMaster);
     const r = new RelsBuilder();
     r.add(REL.theme, "../theme/theme2.xml");
     zip.file("ppt/notesMasters/_rels/notesMaster1.xml.rels", r.xml());
@@ -304,7 +306,7 @@ export async function writePptx(pres: Presentation, opts: { kind?: PptxKind } = 
   }
   add("ppt/presentation.xml", presentationXml(pres, masterRids.map((rid, i) => [masterIds[i], rid] as [number, string]), notesRid, slideRids, pctx), MAIN_CT[kind]);
   zip.file("ppt/_rels/presentation.xml.rels", pctx.rels.xml());
-  add("ppt/presProps.xml", PRES_PROPS, CT.presProps);
+  add("ppt/presProps.xml", presPropsXml(pres), CT.presProps);
   add("ppt/viewProps.xml", VIEW_PROPS, CT.viewProps);
   add("ppt/tableStyles.xml", tableStylesXml(tableStyles, pctx), CT.tableStyles);
 

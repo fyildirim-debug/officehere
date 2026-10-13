@@ -13,7 +13,7 @@ export function StatusArea({ state, actions: a, onSetView, onStartShow, onCommen
         <>
           <StatusItem>{state.view === "master" ? "Asıl Slayt" : n ? `Slayt ${state.slideIdx + 1} / ${n}` : "Slayt yok"}</StatusItem>
           <StatusItem tip="Dil (yazım denetimi)" onClick={() => a.store.set((s) => ({ pane: s.pane === "spelling" ? null : "spelling" }))}>
-            <span className="status-btn">
+            <span className="status-btn status-lang">
               <Globe20Regular /> {langLabel(state.proofLang)}
             </span>
           </StatusItem>

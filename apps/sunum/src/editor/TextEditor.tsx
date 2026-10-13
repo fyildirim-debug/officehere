@@ -13,6 +13,7 @@ import {
   insertParagraphs,
   insertText,
   isCollapsed,
+  moveParagraphs,
   orderSel,
   paraLen,
   propsAt,
@@ -64,6 +65,8 @@ export interface TextEditorProps {
   onExit: () => void;
   register: (h: TextEditorHandle | null) => void;
   onSelectionChange: () => void;
+  /** Kullanıcı imleci/seçimi taşıdı (ok tuşu, tıklama): yazma geri alma adımı kapanır. */
+  onCaretMove?: () => void;
   onTab?: (shift: boolean) => boolean;
   onUndo: () => void;
   onRedo: () => void;
@@ -176,6 +179,7 @@ export function TextEditor(props: TextEditorProps) {
       if (cmpPos(s.anchor, selRef.current.anchor) !== 0 || cmpPos(s.focus, selRef.current.focus) !== 0) {
         selRef.current = s;
         pendingRef.current = null;
+        propsRef.current.onCaretMove?.();
         propsRef.current.onSelectionChange();
       }
     };
@@ -461,6 +465,18 @@ export function TextEditor(props: TextEditorProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Bekleyen selectionchange olayını beklemeden seçimi DOM'dan eşitler. */
+  const syncDomSel = () => {
+    const el = ref.current;
+    if (!el || composing.current) return;
+    const s = domSelToSel(el);
+    if (s && (cmpPos(s.anchor, selRef.current.anchor) !== 0 || cmpPos(s.focus, selRef.current.focus) !== 0)) {
+      selRef.current = s;
+      pendingRef.current = null;
+      propsRef.current.onCaretMove?.();
+    }
+  };
+
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -468,10 +484,32 @@ export function TextEditor(props: TextEditorProps) {
       props.onExit();
       return;
     }
+    // Alt+Shift+Sol/Sağ: liste düzeyini yükselt/düşür; Alt+Shift+Yukarı/Aşağı: paragrafları taşı.
+    if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && e.key.startsWith("Arrow")) {
+      e.preventDefault();
+      e.stopPropagation();
+      syncDomSel();
+      const sel = selRef.current;
+      const [a, z] = orderSel(sel);
+      const b = bodyRef.current;
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        const max = props.maxLevel ?? 8;
+        const d = e.key === "ArrowRight" ? 1 : -1;
+        const nb = applyParaProps(b, a.p, z.p, (pp) => ({ ...pp, level: Math.max(0, Math.min(max, pp.level + d)) }));
+        if (nb.paragraphs.some((p, i) => p.level !== b.paragraphs[i].level)) commit(nb, sel);
+        return;
+      }
+      const dir = e.key === "ArrowUp" ? -1 : 1;
+      const nb = moveParagraphs(b, a.p, z.p, dir);
+      if (nb) commit(nb, { anchor: { ...sel.anchor, p: sel.anchor.p + dir }, focus: { ...sel.focus, p: sel.focus.p + dir } });
+      return;
+    }
     if (e.key === "Tab" && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
       e.stopPropagation();
       if (props.onTab?.(e.shiftKey)) return;
+      // selectionchange gecikebilir: imleç hemen önce taşındıysa konum DOM'dan alınır.
+      syncDomSel();
       const sel = selRef.current;
       const [a, z] = orderSel(sel);
       const b = bodyRef.current;

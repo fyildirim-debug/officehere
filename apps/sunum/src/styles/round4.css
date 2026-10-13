@@ -132,3 +132,21 @@
   overflow: visible;
   z-index: 4;
 }
+
+/* Video Oluştur iletişim kutusu */
+.video-info {
+  color: var(--oh-text-muted);
+  margin: 10px 0 0;
+}
+
+.video-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.video-progress progress {
+  flex: 1;
+  height: 12px;
+}

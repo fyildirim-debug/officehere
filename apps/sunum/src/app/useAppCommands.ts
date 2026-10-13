@@ -15,17 +15,19 @@ import { pickMedia, selectedChart } from "../state/mediaActions";
 import { addSection, renameSectionCmd } from "../state/sectionActions";
 import type { PaneKind, ViewMode } from "../state/store";
 import type { ExtraDialog } from "./AppDialogs";
-import { stageFrame, type ShowState } from "./appState";
+import { nextPreviewSeq, stageFrame, type ShowState } from "./appState";
 import { insertImageFiles, pasteFromRibbon } from "./clipboard";
 import { importOutline } from "./outlineFile";
+import { printSlideIndices, type PrintJob } from "./printLayout";
+import { DEFAULT_PRINT_SETTINGS } from "../io/presProps";
 
 export interface CommandDeps {
   a: Actions;
   setDialog: (d: DialogKind | null) => void;
   setExtra: (d: ExtraDialog | null) => void;
-  setShow: (s: ShowState | null) => void;
+  setShow: (s: ShowState | null | ((cur: ShowState | null) => ShowState | null)) => void;
   setBackstage: (v: boolean) => void;
-  setPrinting: (v: null | "print" | "pdf") => void;
+  setPrinting: (v: PrintJob | null) => void;
   setFindQuery: (q: string) => void;
   showSettings: ShowSettings;
 }
@@ -115,23 +117,31 @@ export function useAppCommands(d: CommandDeps): AppCommands {
         a.stopEditing();
         if (a.s.masterBase) closeMasterView(a);
         setBackstage(false);
-        setPrinting("print");
+        const settings = a.s.pres.printSettings ?? DEFAULT_PRINT_SETTINGS;
+        setPrinting({ settings, indices: printSlideIndices(a.s.pres, settings, { kind: "all" }, a.s.slideIdx, []), pdf: false });
       },
-      exportPdf: () => {
-        if (!getNative()?.exportPdf) {
-          cmdRef.current?.print();
-          return;
-        }
+      printJob: (job) => {
+        if (job.pdf && !getNative()?.exportPdf) job = { ...job, pdf: false };
         a.stopEditing();
         if (a.s.masterBase) closeMasterView(a);
         setBackstage(false);
-        setPrinting("pdf");
+        setPrinting(job);
+      },
+      exportPdf: () => {
+        // Dışarı Aktar › PDF: tam sayfa slaytlar (gizli slaytlar hariç); düzen Yazdır sayfasından seçilir.
+        const settings = { ...DEFAULT_PRINT_SETTINGS };
+        const job = { settings, indices: printSlideIndices(a.s.pres, settings, { kind: "all" }, a.s.slideIdx, []), pdf: !!getNative()?.exportPdf };
+        a.stopEditing();
+        if (a.s.masterBase) closeMasterView(a);
+        setBackstage(false);
+        setPrinting(job);
       },
       previewTransition: () => {
-        if (a.s.pres.slides.length) setShow({ mode: "window", start: a.s.slideIdx, preview: "transition", frame: stageFrame() });
+        // Önizleme gecikmeli başlar; bu arada gösteri açıldıysa gösterinin yerine geçmez.
+        if (a.s.pres.slides.length) setShow((cur) => (cur && !cur.preview ? cur : { mode: "window", start: a.s.slideIdx, preview: "transition", frame: stageFrame(), seq: nextPreviewSeq() }));
       },
       previewAnimations: () => {
-        if (a.s.pres.slides.length) setShow({ mode: "window", start: a.s.slideIdx, preview: "animations", frame: stageFrame() });
+        if (a.s.pres.slides.length) setShow((cur) => (cur && !cur.preview ? cur : { mode: "window", start: a.s.slideIdx, preview: "animations", frame: stageFrame(), seq: nextPreviewSeq() }));
       },
       setView: (v: ViewMode) => {
         a.stopEditing();

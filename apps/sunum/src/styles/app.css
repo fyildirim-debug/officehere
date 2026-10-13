@@ -1282,3 +1282,46 @@
   color: var(--oh-text-muted);
   font-size: 12px;
 }
+
+/* ---------- Telefon genişliği (≤ 600 px) ---------- */
+@media (max-width: 600px) {
+  /* Şerit sekmeleri yatay kaydırılır; sayfa yatay kaymaz. */
+  .oh-ribbon-tabs {
+    min-width: 0;
+  }
+
+  .oh-ribbon-tablist {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .oh-ribbon-tablist::-webkit-scrollbar {
+    display: none;
+  }
+
+  .oh-ribbon-tab {
+    flex: none;
+  }
+
+  /* Durum çubuğunda yer kazanmak için dil, yakınlaştırma sürgüsü ve görünüm düğmeleri gizlenir. */
+  /* Dosya görünümü: içerik sığar (gezinti daralır, kenar boşlukları küçülür). */
+  .oh-backstage {
+    min-width: 0;
+  }
+
+  .oh-bs-nav {
+    width: 132px;
+  }
+
+  .oh-bs-content {
+    padding: 16px 14px 24px;
+  }
+
+  .oh-statusbar .oh-status-item:has(> .status-lang),
+  .oh-statusbar .oh-zoom-track,
+  .oh-statusbar .oh-zoom-btn,
+  .oh-statusbar .oh-viewswitch {
+    display: none;
+  }
+}

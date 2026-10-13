@@ -1,58 +1,10 @@
-/** Yazdırma/PDF (her slayt bir sayfa) ve PNG dışa aktarma. */
-import { useEffect } from "react";
-import { createPortal } from "react-dom";
+/** Slayt resmi (PNG) dışa aktarma, ana hat metni ve masaüstünde doğrudan PDF. */
 import { createRoot } from "react-dom/client";
 import JSZip from "jszip";
 import { downloadBlob, getNative } from "@officehere/core";
-import type { Presentation } from "../model/types";
+import type { Presentation, Shape } from "../model/types";
 import { SlideView } from "../render/SlideView";
 import slideCss from "../styles/slide.css?raw";
-
-/** Yazdırma kökü: yalnız yazdırmada görünür; @page boyutu slayt oranındadır. */
-export function PrintRoot({ pres, onDone, includeHidden = false, onReady }: { pres: Presentation; onDone: () => void; includeHidden?: boolean; onReady?: () => Promise<void> }) {
-  useEffect(() => {
-    const style = document.createElement("style");
-    style.textContent = `@page { size: ${(pres.width / 96) * 2.54}cm ${(pres.height / 96) * 2.54}cm; margin: 0; }`;
-    document.head.appendChild(style);
-    document.documentElement.classList.add("is-printing");
-    const after = () => onDone();
-    window.addEventListener("afterprint", after);
-    const imgs = Array.from(document.querySelectorAll<HTMLImageElement>(".print-root img"));
-    Promise.all(imgs.map((i) => (i.complete ? Promise.resolve() : new Promise((r) => ((i.onload = r), (i.onerror = r)))))).then(() =>
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          if (onReady) {
-            // Masaüstü: yazdırma CSS'iyle doğrudan PDF (pencere açmadan).
-            void onReady().finally(after);
-            return;
-          }
-          window.print();
-          // Bazı tarayıcılar afterprint göndermez.
-          window.setTimeout(after, 500);
-        }),
-      ),
-    );
-    return () => {
-      window.removeEventListener("afterprint", after);
-      style.remove();
-      document.documentElement.classList.remove("is-printing");
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return createPortal(
-    <div className="print-root">
-      {pres.slides
-        .map((s, i) => ({ s, i }))
-        .filter(({ s }) => includeHidden || !s.hidden)
-        .map(({ s, i }) => (
-          <div key={s.id} className="print-page" style={{ width: pres.width, height: pres.height }}>
-            <SlideView pres={pres} slide={s} slideNumber={i + 1} mode="print" />
-          </div>
-        ))}
-    </div>,
-    document.body,
-  );
-}
 
 async function waitImages(el: HTMLElement) {
   const imgs = Array.from(el.querySelectorAll("img"));
@@ -61,11 +13,20 @@ async function waitImages(el: HTMLElement) {
 
 /** Slaydı PNG'ye çizer (SVG foreignObject üzerinden). */
 export async function slideToPng(pres: Presentation, index: number, scale = 1.5): Promise<Blob | null> {
+  const canvas = await slideToCanvas(pres, index, scale);
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
+}
+
+/**
+ * Slaydı tuvale çizer (SVG foreignObject üzerinden). shapeClass ile şekillere sınıf
+ * verilebilir (ör. henüz görünmeyen animasyonlu şekilleri gizlemek için).
+ */
+export async function slideToCanvas(pres: Presentation, index: number, scale = 1.5, shapeClass?: (s: Shape) => string | undefined): Promise<HTMLCanvasElement> {
   const host = document.createElement("div");
   host.style.cssText = `position:fixed;left:-100000px;top:0;width:${pres.width}px;height:${pres.height}px;`;
   document.body.appendChild(host);
   const root = createRoot(host);
-  root.render(<SlideView pres={pres} slide={pres.slides[index]} slideNumber={index + 1} mode="print" />);
+  root.render(<SlideView pres={pres} slide={pres.slides[index]} slideNumber={index + 1} mode="print" shapeClass={shapeClass} />);
   await new Promise((r) => setTimeout(r, 60));
   await waitImages(host);
   const html = new XMLSerializer().serializeToString(host.firstElementChild!);
@@ -89,7 +50,7 @@ export async function slideToPng(pres: Presentation, index: number, scale = 1.5)
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"));
+  return canvas;
 }
 
 export async function exportPngs(pres: Presentation, baseName: string, which: "current" | "all", current: number) {
@@ -124,12 +85,12 @@ export function outlineText(pres: Presentation): string {
   return lines.join("\r\n");
 }
 
-/** Masaüstü kabuğunda slaytları doğrudan PDF'e yazar (her slayt bir yatay sayfa). */
-export async function exportPdfNative(pres: Presentation, baseName: string): Promise<string | null> {
+/** Masaüstü kabuğunda yazdırma sayfalarını doğrudan PDF'e yazar (size: sayfa boyutu, 96 dpi px). */
+export async function exportPdfNative(size: { w: number; h: number }, baseName: string): Promise<string | null> {
   const native = getNative();
   if (!native?.exportPdf) return null;
-  const w = pres.width / 96;
-  const h = pres.height / 96;
+  const w = size.w / 96;
+  const h = size.h / 96;
   // Kâğıt boyutu dikey verilir, yönlendirme "landscape" ile döndürülür; @page boyutu önceliklidir.
   const r = await native.exportPdf(`${baseName}.pdf`, { landscape: w >= h, pageSize: { width: Math.min(w, h), height: Math.max(w, h) } });
   return r?.name ?? null;

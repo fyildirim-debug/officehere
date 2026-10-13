@@ -246,6 +246,59 @@
   border-top: 1px dashed #e3341c;
 }
 
+/* Eşit aralık kılavuzu: boşluğu gösteren çift uçlu çizgi */
+.smart-gap {
+  position: absolute;
+  pointer-events: none;
+}
+
+.smart-gap.is-h {
+  height: 0;
+  border-top: 1px solid #e3341c;
+}
+
+.smart-gap.is-v {
+  width: 0;
+  border-left: 1px solid #e3341c;
+}
+
+.smart-gap::before,
+.smart-gap::after {
+  content: "";
+  position: absolute;
+  background: #e3341c;
+}
+
+.smart-gap.is-h::before,
+.smart-gap.is-h::after {
+  top: -5px;
+  width: 1px;
+  height: 9px;
+}
+
+.smart-gap.is-h::before {
+  left: 0;
+}
+
+.smart-gap.is-h::after {
+  right: 0;
+}
+
+.smart-gap.is-v::before,
+.smart-gap.is-v::after {
+  left: -5px;
+  height: 1px;
+  width: 9px;
+}
+
+.smart-gap.is-v::before {
+  top: 0;
+}
+
+.smart-gap.is-v::after {
+  bottom: 0;
+}
+
 .lasso {
   position: absolute;
   border: 1px solid rgba(80, 120, 200, 0.9);
@@ -538,4 +591,39 @@
 .ink-width:hover,
 .ink-width.is-selected {
   background: var(--oh-hover, rgba(0, 0, 0, 0.06));
+}
+
+/* Damlalık kipi: slayt alanının üstünde artı imleç ve renk ipucu */
+.eyedropper-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  cursor: progress;
+}
+
+.eyedropper-layer.is-ready {
+  cursor: crosshair;
+}
+
+.eyedropper-tip {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 4px;
+  border: 1px solid var(--oh-border, #c8c8c8);
+  border-radius: 3px;
+  background: var(--oh-surface, #fff);
+  color: var(--oh-text, #222);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+.eyedropper-swatch {
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 2px;
 }

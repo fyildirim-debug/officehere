@@ -292,3 +292,8 @@
 .media-audio.is-playing img {
   filter: drop-shadow(0 0 6px rgba(0, 120, 212, 0.8));
 }
+
+/* Videoya aktarma: henüz görünmeyen (animasyonu oynamamış) şekil. */
+.sh.sh-vhidden {
+  visibility: hidden !important;
+}

@@ -62,7 +62,7 @@ export function showOrder(pres: Presentation, range: ShowRange): number[] {
     const to = Math.max(from, Math.min(n, range.to));
     idx = [];
     for (let i = from - 1; i < to; i++) idx.push(i);
-  } else if (range.kind === "custom") {
+  } else if (range.kind === "custom" && pres.customShows?.some((c) => c.id === range.id)) {
     const cs = pres.customShows?.find((c) => c.id === range.id);
     const pos = new Map(pres.slides.map((s, i) => [s.id, i]));
     idx = (cs?.slideIds ?? []).map((id) => pos.get(id)).filter((i): i is number => i !== undefined);

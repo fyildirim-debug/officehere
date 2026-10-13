@@ -7,18 +7,49 @@ import JSZip from "jszip";
 import { uid } from "../model/factory";
 import { mapSlideLinks } from "../model/links";
 import { normalizeSections } from "../model/sections";
-import { DEFAULT_HF } from "../model/presentation";
+import { DEFAULT_HF, DEFAULT_NOTES_HF } from "../model/presentation";
 import { findPlaceholder, placeholderKind } from "../model/textStyle";
-import type { ChartData, CustomShow, Fill, Layout, LayoutType, LevelStyle, Master, Placeholder, Presentation, SchemeColorName, Shape, Slide, SpShape, TextStyles, Theme } from "../model/types";
+import type { ChartData, CustomShow, Fill, Layout, LayoutType, LevelStyle, Master, NotesHeaderFooter, Placeholder, Presentation, SchemeColorName, Shape, Slide, SpShape, TextStyles, Theme } from "../model/types";
 import { buildTextStyles, LAYOUT_NAMES } from "../themes/build";
 import { getThemeDef } from "../themes/themes";
 import { EXT_MIME, MEDIA_MIME } from "./pptxWriter";
 import { readChartXml } from "./readChart";
 import { DEFAULT_CLRMAP, readColor, readEffects, readFill, readLevels, readShapeList, readTextBody, type ReadCtx } from "./readDrawing";
 import { readAnimations, readTransition } from "./readTiming";
-import { attr, fromEmu, kid, kidPath, kids, numAttr, parseRels, parseXml, relId, relsPathFor, REL, type Rel } from "./xml";
+import { DEFAULT_PRINT_SETTINGS, notesOrientation, readPresProps } from "./presProps";
+import { attr, boolAttr, descendants, fromEmu, kid, kidPath, kids, numAttr, parseRels, parseXml, relId, relsPathFor, REL, type Rel } from "./xml";
 
 export class PptxError extends Error {}
+
+/** Not asıl sayfasındaki p:hf ve üst/alt bilgi metinleri; p:hf yoksa tanımsız (varsayılan). */
+function readNotesHf(xml: string): NotesHeaderFooter | undefined {
+  let root: Element;
+  try {
+    root = parseXml(xml).documentElement;
+  } catch {
+    return undefined;
+  }
+  const hf = kid(root, "hf");
+  if (!hf) return undefined;
+  const on = (k: string) => boolAttr(hf, k) !== false;
+  const phText = (type: string) => {
+    const sp = descendants(root, "sp").find((e) => attr(descendants(e, "ph")[0], "type") === type);
+    return sp ? descendants(sp, "p").map((p) => descendants(p, "t").map((t) => t.textContent ?? "").join("")).join(" ").trim() : "";
+  };
+  const dtSp = descendants(root, "sp").find((e) => attr(descendants(e, "ph")[0], "type") === "dt");
+  const dateAuto = !dtSp || descendants(dtSp, "fld").some((f) => (attr(f, "type") ?? "").startsWith("datetime"));
+  return {
+    ...DEFAULT_NOTES_HF,
+    pageNumber: on("sldNum"),
+    header: on("hdr"),
+    headerText: phText("hdr"),
+    footer: on("ftr"),
+    footerText: phText("ftr"),
+    dateTime: on("dt"),
+    dateAuto,
+    dateFixed: dateAuto ? "" : phText("dt"),
+  };
+}
 
 function bytesToBase64(bytes: Uint8Array): string {
   let s = "";
@@ -415,6 +446,7 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
 
   // Özel slayt gösterileri
   const customShows: CustomShow[] = [];
+  const customShowIds = new Map<string, string>();
   for (const cs of kids(kid(presDoc, "custShowLst"), "custShow")) {
     const ids = kids(kid(cs, "sldLst"), "sld")
       .map((e) => {
@@ -423,8 +455,22 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
         return sp ? slideByPath.get(sp)?.id : undefined;
       })
       .filter((x): x is string => !!x);
-    customShows.push({ id: uid("cs"), name: attr(cs, "name") ?? `Özel Gösteri ${customShows.length + 1}`, slideIds: ids });
+    const show = { id: uid("cs"), name: attr(cs, "name") ?? `Özel Gösteri ${customShows.length + 1}`, slideIds: ids };
+    if (attr(cs, "id") !== undefined) customShowIds.set(attr(cs, "id")!, show.id);
+    customShows.push(show);
   }
+
+  // Not sayfaları/dinleyici notları üst-alt bilgisi (not asıl sayfası p:hf ve yer tutucu metinleri).
+  const nmRid = relId(kid(kid(presDoc, "notesMasterIdLst"), "notesMasterId"));
+  const nmPath = (nmRid && presRels.get(nmRid)?.target) || [...presRels.values()].find((r) => r.type === REL.notesMaster)?.target;
+  const nmXml = nmPath ? await text(nmPath) : undefined;
+  const notesHeaderFooter = nmXml ? readNotesHf(nmXml) : undefined;
+
+  // Gösteri ve yazdırma ayarları (presProps.xml); not sayfası yönü p:notesSz'den.
+  const propsRel = [...presRels.values()].find((r) => r.type === REL.presProps);
+  const presProps = readPresProps(propsRel ? await text(propsRel.target) : undefined, customShowIds);
+  const notesSz = kid(presDoc, "notesSz");
+  if (notesOrientation(numAttr(notesSz, "cx"), numAttr(notesSz, "cy")) === "landscape") presProps.printSettings = { ...(presProps.printSettings ?? DEFAULT_PRINT_SETTINGS), orientation: "landscape" };
 
   // Belge özellikleri
   const props: Presentation["props"] = {};
@@ -450,5 +496,5 @@ export async function readPptx(data: ArrayBuffer | Uint8Array): Promise<Presenta
     footerText: ftr?.text ? ftr.text.paragraphs.map((p) => p.runs.map((r) => r.text).join("")).join(" ") : "",
   };
 
-  return { width, height, theme, master, layouts, slides, headerFooter, props, masterEdited, ...(customShows.length ? { customShows } : {}) };
+  return { width, height, theme, master, layouts, slides, headerFooter, props, masterEdited, ...(customShows.length ? { customShows } : {}), ...presProps, ...(notesHeaderFooter ? { notesHeaderFooter } : {}) };
 }
