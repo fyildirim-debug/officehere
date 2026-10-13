@@ -1,5 +1,5 @@
 // Dosya görünümü (Yeni, Aç, Bilgi, Kaydet, Farklı Kaydet, Yazdır, Dışarı Aktar, Kapat, Seçenekler).
-import { DocumentPdf24Regular, Code24Regular, DocumentText24Regular, Document24Regular } from "@fluentui/react-icons";
+import { DocumentPdf24Regular, Code24Regular, DocumentText24Regular, Document24Regular, DocumentOnePage24Regular, DocumentTextExtract24Regular, Markdown24Regular } from "@fluentui/react-icons";
 import { getNative } from "@officehere/core";
 import { OfficeBackstage, getUserName, type OfficeBackstagePage } from "@officehere/ui";
 import type { DocSettings } from "../model/document";
@@ -41,7 +41,7 @@ export function BelgeBackstage({ page, files, settings, pageCount, stats, printO
     <OfficeBackstage
       app="belge"
       initialPage={page}
-      fileName={files.fileName}
+      fileName={files.title}
       filePath={files.fileRef?.path}
       templates={TEMPLATES.map((t) => ({ id: t.id, label: t.label, preview: t.preview }))}
       onNew={async (id) => {
@@ -86,6 +86,9 @@ export function BelgeBackstage({ page, files, settings, pageCount, stats, printO
           icon: <DocumentPdf24Regular />,
         },
         { id: "docx", title: "Belge (.docx)", description: "Office Open XML belgesi olarak indirin.", icon: <Document24Regular /> },
+        { id: "odt", title: "OpenDocument Metin (.odt)", description: "Açık standart belge; LibreOffice ve diğer ofis paketleriyle paylaşın.", icon: <DocumentOnePage24Regular /> },
+        { id: "rtf", title: "Zengin Metin (.rtf)", description: "Biçimli metni hemen her kelime işlemcinin açabildiği biçimde kaydedin.", icon: <DocumentTextExtract24Regular /> },
+        { id: "md", title: "Markdown (.md)", description: "Başlıkları, listeleri, tabloları ve bağlantıları koruyan sade metin.", icon: <Markdown24Regular /> },
         { id: "html", title: "Web Sayfası (.html)", description: "Stilleriyle birlikte tek dosyalık web sayfası.", icon: <Code24Regular /> },
         { id: "txt", title: "Düz Metin (.txt)", description: "Biçimlendirme olmadan yalnızca metin (UTF-8).", icon: <DocumentText24Regular /> },
       ]}

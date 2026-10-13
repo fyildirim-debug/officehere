@@ -2,7 +2,7 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
 import type { Editor } from "@tiptap/core";
 
-const DOC_FILE = /\.(docx|docm|dotx|html?|txt)$/i;
+const DOC_FILE = /\.(docx|docm|dotx|dotm|doc|odt|ott|rtf|md|markdown|html?|txt)$/i;
 
 /** Pencereye bırakılan belge dosyası açılır (editör dışına bırakılsa da). */
 export function useWindowFileDrop(openFileRef: MutableRefObject<(f: File) => Promise<void>>) {

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Dialog, DialogButton, Field, FieldSet, getUserName } from "@officehere/ui";
 import { useBelge } from "../state/context";
-import { openDocument } from "../io";
+import { OPEN_ACCEPT, openDocument } from "../io";
 import type { BelgeDocument } from "../model/document";
 import { compareDocuments } from "../editor/compare";
 import { openInNewWindow } from "../mailmerge/data";
@@ -51,7 +51,7 @@ export function CompareDialog({ onClose }: { onClose: () => void }) {
         <input type="radio" name={name} checked={s.kind === "file"} onChange={() => set({ kind: "file", file: s.kind === "file" ? s.file : null })} /> Dosyadan:
         <input
           type="file"
-          accept=".docx,.docm,.dotx,.html,.htm,.txt"
+          accept={OPEN_ACCEPT}
           aria-label={`${label} dosyası`}
           // Dosya seçmek "Dosyadan" seçeneğini de seçer.
           onChange={(e) => set({ kind: "file", file: e.target.files?.[0] ?? null })}
