@@ -10,6 +10,7 @@ import { readPresentationFile, sniffFormat } from "../formats";
 import { dibToBmp } from "./blips";
 import { readPpt } from "./reader";
 import { writeCfb } from "./testCfb";
+import { buildTestPpt } from "./testPpt";
 
 const FIX = `${process.cwd()}/src/io/__fixtures__`;
 const load = (n: string) => new Uint8Array(readFileSync(`${FIX}/${n}`));
@@ -102,10 +103,30 @@ describe("PPT okuma", () => {
     expect(t[3]).toContain("Kalite Güvence");
     expect(t[6]).toContain("Teşekkürler");
     expect(p.slides[4].notes).toContain("Ekip üyelerini");
+    // Geçişler: ilk slayt soluklaştır, ikinci yukarı itme.
+    expect(p.slides[0].transition?.type).toBe("fade");
+    expect(p.slides[1].transition).toMatchObject({ type: "push", option: "u" });
     // Başlık yer tutucuları tanınır.
     expect(p.slides[1].shapes.some((s) => s.kind === "sp" && s.ph?.type === "title")).toBe(true);
     // Asıl slaytların arka plan/süsleri düzenlere taşınır.
     expect(p.master.shapes.some((s) => !(s.kind === "sp" && s.ph))).toBe(true);
+  });
+
+  it("anahat metni (OutlineTextRefAtom), TextBytesAtom ve yer tutucular", async () => {
+    const p = await readPpt(buildTestPpt("Baslik Ozet", "Birinci madde\rİkinci madde ğüşiöç"));
+    expect(p.slides).toHaveLength(1);
+    expect(Math.round(p.width)).toBe(960);
+    const shapes = p.slides[0].shapes.filter((s): s is SpShape => s.kind === "sp");
+    const title = shapes.find((s) => s.ph?.type === "title")!;
+    expect(plainText(title.text)).toBe("Baslik Ozet");
+    const body = shapes.find((s) => s.ph?.type === "obj")!;
+    expect(body.text!.paragraphs.map((x) => x.runs.map((r) => r.text).join(""))).toEqual(["Birinci madde", "İkinci madde ğüşiöç"]);
+    expect(body.text!.paragraphs[1].props.bullet).toMatchObject({ type: "char", char: "•" });
+    expect(body.text!.paragraphs[0].runs[0].props).toMatchObject({ bold: true, size: 28 });
+    expect(p.layouts.find((l) => l.id === p.slides[0].layoutId)?.type).toBe("obj");
+    // Konum: 576/inç → 1 inç = 96 px.
+    expect(title.x).toBeCloseTo(96, 3);
+    expect(title.y).toBeCloseTo(48, 3);
   });
 
   it("biçim tanıma: içerik imzası uzantıdan önce gelir", async () => {

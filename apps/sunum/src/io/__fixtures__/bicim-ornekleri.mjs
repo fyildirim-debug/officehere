@@ -2,7 +2,8 @@
 // Sunu biçimi test örneklerini LibreOffice ile üretir (yeniden üretilebilsin diye).
 // Kullanım: node apps/sunum/src/io/__fixtures__/bicim-ornekleri.mjs
 // Kaynak: elle yazılmış düz OpenDocument sunusu (.fodp) → .odp, .otp, .ppt, .ppsx;
-// ayrıca mevcut lo-proje.pptx → lo-proje.ppt (tablo ve notlu daha büyük örnek).
+// ayrıca mevcut lo-proje.pptx → lo-proje.ppt ve lo-proje.odp (tablo, notlar, çok ana sayfa).
+// .ppt çıktısındaki önizleme resmi atılır (CFB testCfb.ts ile yeniden yazılır).
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

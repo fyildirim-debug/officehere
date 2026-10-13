@@ -12,6 +12,7 @@ import { attr, kid, kids, parseXml } from "../xml";
 import { DISPLAYABLE, IMAGE_MIME, lengthPx, OdpError, toBase64 } from "./common";
 import { readFillProps, readShapes, type ShapeReadCtx } from "./shapes";
 import { type Resolved, StyleSheet } from "./styles";
+import { readOdpTransition, transitionDur } from "./transitions";
 import { listLevel, paragraphsText, paraPropsOf, readParagraphs, runPropsOf } from "./text";
 
 const MAX_SLIDES = 2000;
@@ -148,7 +149,7 @@ export async function readOdp(data: ArrayBuffer | Uint8Array): Promise<Presentat
     const name = attr(mp, "name") ?? "";
     const bgStyle = masterSheet.resolve("drawing-page", attr(mp, "style-name"));
     const bg = pageFill(bgStyle, masterSheet) ?? { type: "solid", color: { rgb: "#FFFFFF" } };
-    const shapes = readShapes(mp, { sheet: masterSheet, image, link, count, placeholderLevels: placeholderLevels(name) });
+    const shapes = readShapes(mp, { sheet: masterSheet, image, link, count: { n: 0 }, placeholderLevels: placeholderLevels(name) });
     masters.set(name, {
       key: name,
       display: attr(mp, "display-name") ?? name,
@@ -187,7 +188,7 @@ export async function readOdp(data: ArrayBuffer | Uint8Array): Promise<Presentat
   pages.forEach((page, i) => {
     const masterName = attr(page, "master-page-name");
     const ps = contentSheet.resolve("drawing-page", attr(page, "style-name"));
-    const shapes = readShapes(page, { sheet: contentSheet, image, link, count, placeholderLevels: placeholderLevels(masterName ?? primaryName) });
+    const shapes = readShapes(page, { sheet: contentSheet, image, link, count: { n: 0 }, placeholderLevels: placeholderLevels(masterName ?? primaryName) });
     const layout = layoutFor(masterName, chooseLayout(shapes));
     const notesEl = kid(page, "notes");
     let notes = "";
@@ -209,6 +210,8 @@ export async function readOdp(data: ArrayBuffer | Uint8Array): Promise<Presentat
     const bg = pageFill(ps, contentSheet);
     if (bg) slide.background = bg;
     if (ps.page["visibility"] === "hidden") slide.hidden = true;
+    const tr = readOdpTransition(ps.page, transitionDur(page));
+    if (tr) slide.transition = tr;
     if (ps.page["background-objects-visible"] === "false") slide.hideMasterShapes = true;
     pres.slides.push(slide);
   });

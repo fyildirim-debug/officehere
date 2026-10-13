@@ -98,6 +98,12 @@ describe("ODP okuma (LibreOffice örneği)", () => {
     expect(p.layouts.some((l) => l.background && !l.showMasterShapes)).toBe(true);
   });
 
+  it("slayt geçişleri okunur (soluklaştır, it)", async () => {
+    const p = await readOdp(load("lo-proje.odp"));
+    expect(p.slides[0].transition).toMatchObject({ type: "fade", duration: 1 });
+    expect(p.slides[1].transition).toMatchObject({ type: "push", option: "u", duration: 0.75 });
+  });
+
   it("şablon (.otp) tanınır ve okunur", async () => {
     const data = load("lo-bicim.otp");
     expect(await sniffFormat(data, "x.otp")).toBe("otp");
@@ -154,6 +160,22 @@ describe("ODP yazma", () => {
     expect(back.slides[0].notes).toBe(src.slides[0].notes);
     expect(back.slides[3].background).toEqual(src.slides[3].background);
     expect(back.slides[2].shapes.some((s) => s.kind === "pic")).toBe(true);
+  });
+
+  it("geçişler ve otomatik ilerleme gidiş-dönüşte korunur", async () => {
+    const src = TEMPLATES.find((t) => t.id === "blank")!.build();
+    const s0 = src.slides[0];
+    src.slides = [
+      { ...s0, transition: { type: "push", option: "l", duration: 0.5, advanceOnClick: true } },
+      { ...s0, id: "ikinci", transition: { type: "split", option: "horzIn", duration: 1.25, advanceOnClick: true, advanceAfter: 3 } },
+      { ...s0, id: "ucuncu", transition: { type: "shape", option: "circle", duration: 0.75, advanceOnClick: true } },
+    ];
+    const back = await readOdp(await writeOdp(src));
+    expect(back.slides.map((s) => s.transition)).toEqual([
+      { type: "push", option: "l", duration: 0.5, advanceOnClick: true },
+      { type: "split", option: "horzIn", duration: 1.25, advanceOnClick: true, advanceAfter: 3 },
+      { type: "shape", option: "circle", duration: 0.75, advanceOnClick: true },
+    ]);
   });
 
   it("hazır şablonlar ODP olarak yazılıp okunabilir (Türkçe metin)", async () => {

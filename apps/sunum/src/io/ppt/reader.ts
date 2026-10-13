@@ -7,7 +7,7 @@
 import { isCfb, readCfb, type CfbFile } from "@officehere/core";
 import { uid } from "../../model/factory";
 import { newPresentation } from "../../model/presentation";
-import type { LevelStyle, Presentation, Shape, Slide, SpShape, TextBody, Theme } from "../../model/types";
+import type { LevelStyle, Presentation, Shape, Slide, SpShape, TextBody, Theme, Transition } from "../../model/types";
 import { applyPrimaryMaster, chooseLayout, layoutResolver, type ImportMaster } from "../importBuild";
 import { blipStore } from "./blips";
 import { readDrawing, readProps, type DrawCtx } from "./drawing";
@@ -116,6 +116,46 @@ function schemeOf(doc: Stream, c: Rec | undefined): string[] | undefined {
 
 const DEFAULT_SCHEME = ["#FFFFFF", "#000000", "#808080", "#000000", "#BBE0E3", "#333399", "#009999", "#99CC00"];
 
+const DIR4 = ["l", "u", "r", "d"];
+
+/** SlideShowSlideInfoAtom → geçiş (tür, yön, hız, otomatik ilerleme). */
+function pptTransition(doc: Stream, r: Rec): Transition | undefined {
+  const time = doc.i32(r.start);
+  const dir = doc.u8(r.start + 8);
+  const effect = doc.u8(r.start + 9);
+  const flags = doc.u16(r.start + 10);
+  const speed = doc.u8(r.start + 12);
+  const after = flags & 0x400 && time >= 0 ? Math.min(86400, time / 1000) : undefined;
+  const t: Transition = { type: "none", duration: speed === 2 ? 0.5 : speed === 1 ? 0.75 : 1, advanceOnClick: true };
+  if (after !== undefined) t.advanceAfter = after;
+  const d4 = DIR4[dir] ?? "l";
+  const pick: Record<number, () => void> = {
+    1: () => (t.type = "fade"),
+    2: () => ((t.type = "blinds"), (t.option = dir ? "horz" : "vert")),
+    3: () => ((t.type = "checker"), (t.option = dir ? "vert" : "horz")),
+    4: () => ((t.type = "cover"), (t.option = d4)),
+    5: () => (t.type = "dissolve"),
+    6: () => ((t.type = "fade"), (t.option = dir ? "black" : "smooth")),
+    7: () => ((t.type = "uncover"), (t.option = d4)),
+    8: () => ((t.type = "randomBar"), (t.option = dir ? "vert" : "horz")),
+    9: () => ((t.type = "wipe"), (t.option = d4)),
+    10: () => ((t.type = "wipe"), (t.option = d4)),
+    11: () => ((t.type = "zoom"), (t.option = dir ? "out" : "in")),
+    13: () => ((t.type = "split"), (t.option = ["horzOut", "horzIn", "vertOut", "vertIn"][dir] ?? "vertOut")),
+    17: () => ((t.type = "shape"), (t.option = "diamond")),
+    18: () => ((t.type = "shape"), (t.option = "plus")),
+    19: () => (t.type = "wedge"),
+    20: () => ((t.type = "push"), (t.option = d4)),
+    21: () => ((t.type = "wipe"), (t.option = "l")),
+    22: () => (t.type = "newsflash"),
+    23: () => (t.type = "fade"),
+    26: () => (t.type = "wheel"),
+    27: () => ((t.type = "shape"), (t.option = "circle")),
+  };
+  pick[effect]?.();
+  return t.type === "none" && after === undefined ? undefined : t;
+}
+
 /** Metin türü → model metin stili grubu. */
 const KIND = (t: number): "title" | "body" | "other" => (t === 0 || t === 6 ? "title" : t === 1 || t === 5 || t === 7 || t === 8 ? "body" : "other");
 
@@ -176,7 +216,6 @@ export async function readPpt(data: ArrayBuffer | Uint8Array): Promise<Presentat
   const pres = newPresentation("varsayilan", 0, { width, height });
   pres.slides = [];
   pres.props = {};
-  const count = { n: 0 };
 
   // Asıl slaytlar.
   interface MasterData extends ImportMaster {
@@ -192,7 +231,7 @@ export async function readPpt(data: ArrayBuffer | Uint8Array): Promise<Presentat
     const scheme = schemeOf(doc, rec) ?? DEFAULT_SCHEME;
     const styles = new Map(docStyles);
     for (const r of doc.kids(rec)) if (r.type === RT.TextMasterStyleAtom) styles.set(r.inst, masterLevels(doc, r, { fonts, scheme }));
-    const ctx: DrawCtx = { s: doc, fonts, scheme, blip, defaults, outline: me.texts, levels: () => undefined, count };
+    const ctx: DrawCtx = { s: doc, fonts, scheme, blip, defaults, outline: me.texts, levels: () => undefined, count: { n: 0 } };
     const d = readDrawing(doc, doc.kid(rec, RT.Drawing), ctx);
     const phs = d.shapes.filter((s): s is SpShape => s.kind === "sp" && !!s.ph);
     masters.set(String(me.id), {
@@ -260,7 +299,7 @@ export async function readPpt(data: ArrayBuffer | Uint8Array): Promise<Presentat
     const flags = sa ? doc.u16(sa.start + 20) : 7;
     const m = masters.get(String(masterRef)) ?? primary;
     const scheme = (flags & 2 ? undefined : schemeOf(doc, rec)) ?? m?.scheme ?? DEFAULT_SCHEME;
-    const ctx: DrawCtx = { s: doc, fonts, scheme, blip, defaults, outline: se.texts, levels: toLevels(m), count };
+    const ctx: DrawCtx = { s: doc, fonts, scheme, blip, defaults, outline: se.texts, levels: toLevels(m), count: { n: 0 } };
     const d = readDrawing(doc, doc.kid(rec, RT.Drawing), ctx);
     const layout = layoutFor(m?.key, chooseLayout(d.shapes));
     const slide: Slide = { id: uid("sl"), layoutId: layout.id, shapes: d.shapes, notes: notesBySlide.get(se.id) ?? "", animations: [] };
@@ -268,6 +307,8 @@ export async function readPpt(data: ArrayBuffer | Uint8Array): Promise<Presentat
     if (!(flags & 1)) slide.hideMasterShapes = true;
     const info = doc.kid(rec, RT.SlideShowSlideInfoAtom);
     if (info && doc.u16(info.start + 10) & 0x4) slide.hidden = true;
+    const tr = info ? pptTransition(doc, info) : undefined;
+    if (tr) slide.transition = tr;
     pres.slides.push(slide);
   }
   if (!pres.slides.length) throw new PptError("Sunuda slayt bulunamadı.");

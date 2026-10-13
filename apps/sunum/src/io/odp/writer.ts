@@ -10,6 +10,7 @@ import { esc, XML_HEAD } from "../xml";
 import { cm, ODF_NS, ODF_NS_DECL, ODP_MIME, odfAttrs } from "./common";
 import { AutoStyles, fillAttrs, paraProps, Shared, textProps } from "./writeStyles";
 import { shapesXml, type ShapeWriteCtx } from "./writeShapes";
+import { odpTransitionAttrs, transitionTimingXml } from "./transitions";
 import { listStyleXml, textBodyXml } from "./writeText";
 
 const EXTRA_NS = 'xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0"';
@@ -88,6 +89,7 @@ export async function writeOdp(pres: Presentation): Promise<Uint8Array> {
         "presentation:display-footer": "true",
         "presentation:display-page-number": "false",
         "presentation:display-date-time": "true",
+        ...odpTransitionAttrs(slide.transition),
       })}/>`,
     );
     const ctx: ShapeWriteCtx = { sh, auto, pres, layout, master: mname, link };
@@ -98,7 +100,8 @@ export async function writeOdp(pres: Presentation): Promise<Uint8Array> {
       const ns = auto.style("presentation", "pr", `<style:graphic-properties draw:fill="none" draw:stroke="none"/>`, `${mname}-notes`);
       notes = `<presentation:notes><draw:page-thumbnail${odfAttrs({ "draw:layer": "layout", "svg:x": "2cm", "svg:y": "2cm", "svg:width": "17cm", "svg:height": cm(((17 * 96) / 2.54) * (pres.height / pres.width)), "draw:page-number": i + 1, "presentation:class": "page" })}/><draw:frame${odfAttrs({ "presentation:style-name": ns, "draw:layer": "layout", "svg:x": "2cm", "svg:y": "13.5cm", "svg:width": "17cm", "svg:height": "12cm", "presentation:class": "notes" })}><draw:text-box>${textBodyXml(body, { sh, auto, lvl, link })}</draw:text-box></draw:frame></presentation:notes>`;
     }
-    pages += `<draw:page${odfAttrs({ "draw:name": names[i], "draw:style-name": dp, "draw:master-page-name": mname })}>${shapesXml(slide.shapes, ctx)}${notes}</draw:page>`;
+    const timing = transitionTimingXml(slide.transition, `sayfa${i + 1}`);
+    pages += `<draw:page${odfAttrs({ "draw:name": names[i], "draw:style-name": dp, "draw:master-page-name": mname, "xml:id": timing ? `sayfa${i + 1}` : undefined, "draw:id": timing ? `sayfa${i + 1}` : undefined })}>${shapesXml(slide.shapes, ctx)}${timing}${notes}</draw:page>`;
   });
 
   // Ana sayfalar.
