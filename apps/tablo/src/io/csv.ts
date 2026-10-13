@@ -43,6 +43,19 @@ export function decodeText(data: ArrayBuffer | Uint8Array): string {
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return new TextDecoder("utf-8").decode(bytes.subarray(3));
   if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder("utf-16le").decode(bytes.subarray(2));
   if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder("utf-16be").decode(bytes.subarray(2));
+  // BOM'suz UTF-16: ASCII ağırlıklı metinde baytların yarısı sıfırdır
+  const sample = bytes.subarray(0, Math.min(bytes.length, 512)) as Uint8Array;
+  if (sample.length >= 4) {
+    let zeroOdd = 0;
+    let zeroEven = 0;
+    for (let i = 0; i + 1 < sample.length; i += 2) {
+      if (sample[i] === 0) zeroEven++;
+      if (sample[i + 1] === 0) zeroOdd++;
+    }
+    const pairs = Math.floor(sample.length / 2);
+    if (zeroOdd > pairs * 0.6 && zeroEven < pairs * 0.1) return new TextDecoder("utf-16le").decode(bytes);
+    if (zeroEven > pairs * 0.6 && zeroOdd < pairs * 0.1) return new TextDecoder("utf-16be").decode(bytes);
+  }
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {
@@ -141,11 +154,24 @@ export interface CsvImportOptions {
   asText?: boolean;
 }
 
+/** Sekme/dikey çizgi ayırıcılı metinde sayıların yerel ayarı: "1.234,5" mi "1,234.5" mi? */
+export function guessLocale(grid: string[][]): "tr" | "en" {
+  let tr = 0;
+  let en = 0;
+  for (const row of grid.slice(0, 200))
+    for (const f of row) {
+      const s = f.trim();
+      if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$|^-?\d+,\d+$/.test(s)) tr++;
+      else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$|^-?\d+\.\d+$/.test(s)) en++;
+    }
+  return en > tr ? "en" : "tr";
+}
+
 /** CSV metnini hücre girdilerine çevirir. */
 export function csvToInputs(text: string, opts: CsvImportOptions = {}): { rows: { input: CellInput; numFmt?: string }[][]; delimiter: string } {
   const d = opts.delimiter ?? detectDelimiter(text);
-  const locale = opts.locale ?? (d === "," ? "en" : "tr");
   const grid = parseCsv(text, d);
+  const locale = opts.locale ?? (d === "," ? "en" : d === ";" ? "tr" : guessLocale(grid));
   const rows = grid.map((r) =>
     r.map((s) => {
       if (opts.asText) return { input: s === "" ? null : s };

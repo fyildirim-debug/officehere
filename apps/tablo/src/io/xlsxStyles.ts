@@ -8,7 +8,8 @@ type XColor = { argb?: string; theme?: number; tint?: number; indexed?: number }
 /** Varsayılan Office teması (theme1.xml yoksa). Sıra: lt1, dk1, lt2, dk2, accent1..6, hlink, folHlink. */
 const DEFAULT_THEME_COLORS = ["FFFFFF", "000000", "E7E6E6", "44546A", "4472C4", "ED7D31", "A5A5A5", "FFC000", "5B9BD5", "70AD47", "0563C1", "954F72"];
 
-const INDEXED = [
+/** Dizinli renkler (varsayılan 64 renklik palet; .xls PALETTE kaydı 8–63'ü değiştirebilir). */
+export const INDEXED = [
   "000000", "FFFFFF", "FF0000", "00FF00", "0000FF", "FFFF00", "FF00FF", "00FFFF",
   "000000", "FFFFFF", "FF0000", "00FF00", "0000FF", "FFFF00", "FF00FF", "00FFFF",
   "800000", "008000", "000080", "808000", "800080", "008080", "C0C0C0", "808080",

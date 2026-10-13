@@ -16,6 +16,7 @@ import { ChartDataDialog, ChartTypeDialog, MoveChartDialog } from "./ChartDialog
 import { PageSetupDialog } from "./PageSetupDialog";
 import { ShortcutsDialog, WorkbookStatsDialog } from "./HelpDialogs";
 import { DialogErrorBoundary } from "./common";
+import { SaveFormatDialog } from "./SaveFormatDialog";
 import { DataTableDialog, ScenarioEditDialog, ScenarioManagerDialog, ScenarioSummaryDialog, ScenarioValuesDialog } from "./WhatIfDialogs";
 import { AdvancedFilterDialog, InsertSlicerDialog, ProtectWorkbookDialog } from "./Round4Dialogs";
 import { ErrorCheckDialog, ErrorOptionsDialog, EvaluateFormulaDialog } from "./AuditDialogs";
@@ -137,6 +138,8 @@ function OneDialog({ ctl, state, onClose, files, onBackstage }: { ctl: Controlle
       return <GoalSeekStatusDialog {...p} />;
     case "confirm":
       return <M.ConfirmDialog {...p} />;
+    case "saveFormat":
+      return <SaveFormatDialog {...p} />;
     case "formatCells":
       return <FormatCellsDialog {...p} />;
     case "insertFunction":
