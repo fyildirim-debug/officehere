@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- OfficeHere Belge biçim örneklerinin kaynağı (düz ODF). uret.sh bu dosyadan LibreOffice ile .odt, .doc, .rtf ve .docx üretir. -->
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.text">
+ <office:meta>
+  <dc:title>Biçim Örneği</dc:title>
+  <dc:subject>OfficeHere test belgesi</dc:subject>
+  <meta:initial-creator>OfficeHere</meta:initial-creator>
+ </office:meta>
+ <office:font-face-decls>
+  <style:font-face style:name="Liberation Serif" svg:font-family="'Liberation Serif'"/>
+  <style:font-face style:name="Liberation Sans" svg:font-family="'Liberation Sans'"/>
+ </office:font-face-decls>
+ <office:styles>
+  <style:default-style style:family="paragraph">
+   <style:text-properties style:font-name="Liberation Serif" fo:font-size="12pt" fo:language="tr" fo:country="TR"/>
+  </style:default-style>
+  <style:style style:name="Standard" style:family="paragraph" style:class="text"/>
+  <style:style style:name="Heading" style:family="paragraph" style:parent-style-name="Standard" style:class="text">
+   <style:paragraph-properties fo:margin-top="0.42cm" fo:margin-bottom="0.21cm" fo:keep-with-next="always"/>
+   <style:text-properties style:font-name="Liberation Sans" fo:font-size="14pt"/>
+  </style:style>
+  <style:style style:name="Heading_20_1" style:display-name="Heading 1" style:family="paragraph" style:parent-style-name="Heading" style:default-outline-level="1" style:class="text">
+   <style:text-properties fo:font-size="130%" fo:font-weight="bold"/>
+  </style:style>
+  <style:style style:name="Heading_20_2" style:display-name="Heading 2" style:family="paragraph" style:parent-style-name="Heading" style:default-outline-level="2" style:class="text">
+   <style:text-properties fo:font-size="115%" fo:font-weight="bold"/>
+  </style:style>
+  <style:style style:name="Title" style:family="paragraph" style:parent-style-name="Heading" style:class="chapter">
+   <style:paragraph-properties fo:text-align="center"/>
+   <style:text-properties fo:font-size="28pt" fo:font-weight="bold"/>
+  </style:style>
+  <style:style style:name="Footnote" style:family="paragraph" style:parent-style-name="Standard" style:class="extra">
+   <style:text-properties fo:font-size="10pt"/>
+  </style:style>
+  <style:style style:name="Header" style:family="paragraph" style:parent-style-name="Standard" style:class="extra"/>
+  <style:style style:name="Footer" style:family="paragraph" style:parent-style-name="Standard" style:class="extra"/>
+  <style:style style:name="Table_20_Contents" style:display-name="Table Contents" style:family="paragraph" style:parent-style-name="Standard" style:class="extra"/>
+  <style:style style:name="Internet_20_link" style:display-name="Internet link" style:family="text">
+   <style:text-properties fo:color="#000080" style:text-underline-style="solid" style:text-underline-width="auto" style:text-underline-color="font-color"/>
+  </style:style>
+ </office:styles>
+ <office:automatic-styles>
+  <style:style style:name="T1" style:family="text"><style:text-properties fo:font-weight="bold"/></style:style>
+  <style:style style:name="T2" style:family="text"><style:text-properties fo:font-style="italic"/></style:style>
+  <style:style style:name="T3" style:family="text"><style:text-properties style:text-underline-style="solid" style:text-underline-width="auto" style:text-underline-color="font-color"/></style:style>
+  <style:style style:name="T4" style:family="text"><style:text-properties style:text-line-through-style="solid"/></style:style>
+  <style:style style:name="T5" style:family="text"><style:text-properties fo:color="#c00000"/></style:style>
+  <style:style style:name="T6" style:family="text"><style:text-properties style:font-name="Liberation Sans" fo:font-size="14pt"/></style:style>
+  <style:style style:name="T7" style:family="text"><style:text-properties fo:background-color="#ffff00"/></style:style>
+  <style:style style:name="T8" style:family="text"><style:text-properties style:text-position="super 58%"/></style:style>
+  <style:style style:name="P1" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="center"/></style:style>
+  <style:style style:name="P2" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="end"/></style:style>
+  <style:style style:name="P3" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="justify" fo:margin-left="1cm" fo:text-indent="0.5cm"/></style:style>
+  <style:style style:name="P4" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:break-before="page"/></style:style>
+  <style:style style:name="P5" style:family="paragraph" style:parent-style-name="Standard"/>
+  <style:style style:name="Tbl" style:family="table"><style:table-properties style:width="15cm" table:align="left"/></style:style>
+  <style:style style:name="Tbl.A" style:family="table-column"><style:table-column-properties style:column-width="5cm"/></style:style>
+  <style:style style:name="Tbl.C" style:family="table-cell"><style:table-cell-properties fo:padding="0.1cm" fo:border="0.5pt solid #000000"/></style:style>
+  <style:style style:name="Tbl.H" style:family="table-cell"><style:table-cell-properties fo:padding="0.1cm" fo:border="0.5pt solid #000000" fo:background-color="#dae9f7"/></style:style>
+  <style:style style:name="fr1" style:family="graphic"><style:graphic-properties style:vertical-pos="top" style:vertical-rel="baseline"/></style:style>
+  <text:list-style style:name="L1">
+   <text:list-level-style-bullet text:level="1" text:bullet-char="•"><style:list-level-properties text:list-level-position-and-space-mode="label-alignment"><style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.27cm" fo:text-indent="-0.635cm" fo:margin-left="1.27cm"/></style:list-level-properties></text:list-level-style-bullet>
+   <text:list-level-style-bullet text:level="2" text:bullet-char="◦"><style:list-level-properties text:list-level-position-and-space-mode="label-alignment"><style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.905cm" fo:text-indent="-0.635cm" fo:margin-left="1.905cm"/></style:list-level-properties></text:list-level-style-bullet>
+  </text:list-style>
+  <text:list-style style:name="L2">
+   <text:list-level-style-number text:level="1" style:num-suffix="." style:num-format="1"><style:list-level-properties text:list-level-position-and-space-mode="label-alignment"><style:list-level-label-alignment text:label-followed-by="listtab" text:list-tab-stop-position="1.27cm" fo:text-indent="-0.635cm" fo:margin-left="1.27cm"/></style:list-level-properties></text:list-level-style-number>
+  </text:list-style>
+  <style:page-layout style:name="pm1">
+   <style:page-layout-properties fo:page-width="21cm" fo:page-height="29.7cm" style:print-orientation="portrait" fo:margin-top="1.25cm" fo:margin-bottom="1.25cm" fo:margin-left="2.5cm" fo:margin-right="2cm"/>
+   <style:header-style><style:header-footer-properties fo:min-height="0.6cm" fo:margin-bottom="0.4cm"/></style:header-style>
+   <style:footer-style><style:header-footer-properties fo:min-height="0.6cm" fo:margin-top="0.4cm"/></style:footer-style>
+  </style:page-layout>
+ </office:automatic-styles>
+ <office:master-styles>
+  <style:master-page style:name="Standard" style:page-layout-name="pm1">
+   <style:header><text:p text:style-name="Header">Üst bilgi — Sayfa <text:page-number text:select-page="current">1</text:page-number></text:p></style:header>
+   <style:footer><text:p text:style-name="Footer">Alt bilgi: Gizlilik İçerir</text:p></style:footer>
+  </style:master-page>
+ </office:master-styles>
+ <office:body>
+  <office:text>
+   <text:p text:style-name="Title">Biçim Örneği</text:p>
+   <text:h text:style-name="Heading_20_1" text:outline-level="1">Giriş ve Amaç</text:h>
+   <text:p text:style-name="P5">Bu paragrafta <text:span text:style-name="T1">kalın</text:span>, <text:span text:style-name="T2">italik</text:span>, <text:span text:style-name="T3">altı çizili</text:span>, <text:span text:style-name="T4">üstü çizili</text:span>, <text:span text:style-name="T5">kırmızı</text:span>, <text:span text:style-name="T6">büyük yazı tipi</text:span>, <text:span text:style-name="T7">vurgulu</text:span> ve x<text:span text:style-name="T8">2</text:span> metin var. Türkçe: İĞÜŞÖÇ ığüşöç.<text:note text:id="ftn1" text:note-class="footnote"><text:note-citation>1</text:note-citation><text:note-body><text:p text:style-name="Footnote">Dipnot açıklaması burada.</text:p></text:note-body></text:note></text:p>
+   <text:p text:style-name="Standard">Bağlantı: <text:a xlink:type="simple" xlink:href="https://ornek.com.tr/" text:style-name="Internet_20_link">ornek.com.tr</text:a> ve sekme<text:tab/>sonrası, satır<text:line-break/>sonu ve üç<text:s text:c="2"/>boşluk.</text:p>
+   <text:list text:style-name="L1">
+    <text:list-item><text:p text:style-name="Standard">Birinci madde</text:p></text:list-item>
+    <text:list-item><text:p text:style-name="Standard">İkinci madde</text:p>
+     <text:list><text:list-item><text:p text:style-name="Standard">İç madde</text:p></text:list-item></text:list>
+    </text:list-item>
+   </text:list>
+   <text:list text:style-name="L2">
+    <text:list-item><text:p text:style-name="Standard">Elma</text:p></text:list-item>
+    <text:list-item><text:p text:style-name="Standard">Armut</text:p></text:list-item>
+    <text:list-item><text:p text:style-name="Standard">Çilek</text:p></text:list-item>
+   </text:list>
+   <text:h text:style-name="Heading_20_2" text:outline-level="2">Tablo ve Resim</text:h>
+   <table:table table:name="Tablo1" table:style-name="Tbl">
+    <table:table-column table:style-name="Tbl.A" table:number-columns-repeated="3"/>
+    <table:table-row>
+     <table:table-cell table:style-name="Tbl.H" office:value-type="string"><text:p text:style-name="Table_20_Contents">Ad</text:p></table:table-cell>
+     <table:table-cell table:style-name="Tbl.H" office:value-type="string"><text:p text:style-name="Table_20_Contents">Şehir</text:p></table:table-cell>
+     <table:table-cell table:style-name="Tbl.H" office:value-type="string"><text:p text:style-name="Table_20_Contents">Not</text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Tbl.C" office:value-type="string"><text:p text:style-name="Table_20_Contents">Ayşe</text:p></table:table-cell>
+     <table:table-cell table:style-name="Tbl.C" office:value-type="string"><text:p text:style-name="Table_20_Contents">İzmir</text:p></table:table-cell>
+     <table:table-cell table:style-name="Tbl.C" table:number-rows-spanned="2" office:value-type="string"><text:p text:style-name="Table_20_Contents">Dikey birleşik</text:p></table:table-cell>
+    </table:table-row>
+    <table:table-row>
+     <table:table-cell table:style-name="Tbl.C" table:number-columns-spanned="2" office:value-type="string"><text:p text:style-name="Table_20_Contents">Yatay birleşik hücre</text:p></table:table-cell>
+     <table:covered-table-cell/>
+     <table:covered-table-cell/>
+    </table:table-row>
+   </table:table>
+   <text:p text:style-name="P1">Ortalanmış resim: <draw:frame draw:style-name="fr1" draw:name="Resim1" text:anchor-type="as-char" svg:width="1.6cm" svg:height="1.2cm" draw:z-index="0"><draw:image><office:binary-data>iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAFUlEQVR4nGM4oaFBEmIY1TCqATsCALRr0gH04WUkAAAAAElFTkSuQmCC</office:binary-data></draw:image></draw:frame></text:p>
+   <text:p text:style-name="P2">Sağa hizalı paragraf</text:p>
+   <text:p text:style-name="P4">Yeni sayfadaki paragraf.</text:p>
+   <text:p text:style-name="P3">İki yana yaslanmış, sol girintili ve ilk satırı içeri alınmış uzun bir paragraf; LibreOffice ile üretilen örneklerin girinti ve hizalama bilgisinin okunduğunu doğrulamak için yeterince uzun yazılmıştır.</text:p>
+  </office:text>
+ </office:body>
+</office:document>

@@ -17,6 +17,8 @@ import { setShowMarks } from "./editor/showMarks";
 import { annotateNotesHtml } from "./editor/notes";
 import { BelgeContext, type BelgeCtx, type DialogKind, type DialogState, type ViewOptions } from "./state/context";
 import { useFileOps } from "./state/useFileOps";
+import { useFormatPrompt } from "./state/useFormatPrompt";
+import { OPEN_ACCEPT } from "./io/formats";
 import { useDraftRecovery } from "./state/useDraftRecovery";
 import { forgetOwnDraft } from "./state/drafts";
 import { guardSettings, useProtection } from "./state/useProtection";
@@ -223,6 +225,8 @@ export function App() {
   const { activeComment, setActiveComment, newComment, deleteComment, deleteAllComments, toggleTrack } = useComments({ editor, updateSettings, setView, notify });
 
   const onLoaded = useCallback(() => {
+    // Önceki belgenin iletisi (ör. uyumluluk modu) yeni belgeye taşınmaz.
+    setNote(null);
     setHfEditing(null);
     setActiveComment(null);
     setVersion((v) => v + 1);
@@ -232,9 +236,10 @@ export function App() {
   // Belge yaşam döngüsü (masaüstü kabuğu ile kaydetme sorusu, dosya açma istekleri).
   const confirmRef = useRef<() => Promise<boolean>>(async () => true);
   const confirmStable = useCallback(() => confirmRef.current(), []);
-  const files = useFileOps({ editor, settings, setSettings: setSettingsState, dirty, setDirty, notify, confirmDiscard: confirmStable, autosave, onLoaded });
+  const formatPrompt = useFormatPrompt();
+  const files = useFileOps({ editor, settings, setSettings: setSettingsState, dirty, setDirty, notify, confirmDiscard: confirmStable, autosave, onLoaded, askFormat: formatPrompt.ask });
   const { dialog: lifecycleDialog, confirmDiscard } = useDocumentLifecycle({
-    title: files.fileName,
+    title: files.title,
     dirty,
     path: files.fileRef?.path,
     onOpenPath: (p) => void files.openPath(p),
@@ -511,7 +516,7 @@ export function App() {
       {view.mode === "read" && !printing && (
         <ReadMode
           html={annotateNotesHtml(editor.getHTML(), renderNoteHtml)}
-          title={files.fileName}
+          title={files.title}
           onExit={() => setView({ mode: "print" })}
           onFind={() => {
             setView({ mode: "print" });
@@ -524,7 +529,7 @@ export function App() {
           app="belge"
           titleBar={
             <AppTitleBar
-              title={files.fileName}
+              title={files.title}
               dirty={dirty}
               active={active}
               canUndo={!!fmt?.canUndo}
@@ -627,9 +632,10 @@ export function App() {
       )}
       {ctxMenu.element}
       {lifecycleDialog}
+      {formatPrompt.dialog}
       <input ref={imageInput} type="file" accept="image/*" className="oh-hidden-input" onChange={onImageFile} />
       {/* Dosya açma girişi (sürükle-bırak ve dosya seçicisi olmayan ortamlar için de kullanılır). */}
-      <input id="bl-open-input" type="file" accept=".docx,.docm,.dotx,.html,.htm,.txt" className="oh-hidden-input" aria-label="Belge aç" onChange={onOpenFile} />
+      <input id="bl-open-input" type="file" accept={OPEN_ACCEPT} className="oh-hidden-input" aria-label="Belge aç" onChange={onOpenFile} />
       {view.focusMode && (
         <button type="button" className="bl-focus-exit" onClick={() => setView({ focusMode: false })}>
           Odaktan çık (Esc)

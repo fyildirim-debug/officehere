@@ -204,7 +204,8 @@ export class PartReader {
       // Sayfa sonunun önündeki/arkasındaki boş parçalar paragraf oluşturmaz.
       if (empty && segments.length > 1 && (i === 0 || i === segments.length - 1)) return;
       const node: JSONContent = { type, attrs: { ...attrs }, ...(empty ? {} : { content: mergeText(content) }) };
-      out.push({ node, list: i === 0 && list && numId ? { numId, ilvl, sig: list.sig, start: list.start } : undefined });
+      // Başlıklar (anahat numaralandırması olsa da) listeye girmez: liste öğesi paragrafla başlamalıdır.
+      out.push({ node, list: i === 0 && list && numId && type !== "heading" ? { numId, ilvl, sig: list.sig, start: list.start } : undefined });
     });
     for (const e of extra) out.push({ node: e });
     // Paragrafa bağlı metin kutuları paragraftan önce yer alır.
