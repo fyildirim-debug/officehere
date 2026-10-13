@@ -1,7 +1,7 @@
 {
   "name": "officehere",
   "private": true,
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Açık kaynak ofis paketi: Belge, Tablo ve Sunum",
   "license": "MIT",
   "author": "Furkan YILDIRIM <posta@furkanyildirim.com>",
