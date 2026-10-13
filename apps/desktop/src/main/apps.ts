@@ -1,30 +1,11 @@
-import path from "node:path";
+import { appForFileName } from "../shared/formats.js";
 
 export type AppKind = "belge" | "tablo" | "sunum";
 export type WindowKind = AppKind | "baslangic";
 
-/** Uzantıya göre dosyayı açacak uygulama. */
-const EXT_APP: Record<string, AppKind> = {
-  docx: "belge",
-  docm: "belge",
-  dotx: "belge",
-  txt: "belge",
-  html: "belge",
-  htm: "belge",
-  md: "belge",
-  xlsx: "tablo",
-  xlsm: "tablo",
-  xltx: "tablo",
-  csv: "tablo",
-  tsv: "tablo",
-  pptx: "sunum",
-  pptm: "sunum",
-  potx: "sunum",
-};
-
+/** Uzantıya göre dosyayı açacak uygulama (biçim listesi: shared/formats.ts). */
 export function appForPath(filePath: string): AppKind | null {
-  const ext = path.extname(filePath).slice(1).toLowerCase();
-  return EXT_APP[ext] ?? null;
+  return appForFileName(filePath);
 }
 
 export function isSupportedFile(filePath: string): boolean {

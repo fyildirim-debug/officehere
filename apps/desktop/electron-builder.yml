@@ -63,6 +63,60 @@ fileAssociations:
     role: Editor
     icon: filetypes/sunum
     mimeType: application/vnd.openxmlformats-officedocument.presentationml.presentation
+  - ext: doc
+    name: OfficeHere.Belge97
+    description: Belge (97-2003)
+    role: Editor
+    icon: filetypes/belge
+    mimeType: application/msword
+  - ext: odt
+    name: OfficeHere.ODT
+    description: OpenDocument Metin
+    role: Editor
+    icon: filetypes/belge
+    mimeType: application/vnd.oasis.opendocument.text
+  - ext: rtf
+    name: OfficeHere.RTF
+    description: Zengin Metin Belgesi
+    role: Editor
+    icon: filetypes/belge
+    mimeType: application/rtf
+  - ext: xls
+    name: OfficeHere.Tablo97
+    description: Çalışma Kitabı (97-2003)
+    role: Editor
+    icon: filetypes/tablo
+    mimeType: application/vnd.ms-excel
+  - ext: ods
+    name: OfficeHere.ODS
+    description: OpenDocument Hesap Tablosu
+    role: Editor
+    icon: filetypes/tablo
+    mimeType: application/vnd.oasis.opendocument.spreadsheet
+  - ext: tsv
+    name: OfficeHere.TSV
+    description: Sekmeyle Ayrılmış Değerler
+    role: Editor
+    icon: filetypes/tablo
+    mimeType: text/tab-separated-values
+  - ext: ppt
+    name: OfficeHere.Sunum97
+    description: Sunu (97-2003)
+    role: Editor
+    icon: filetypes/sunum
+    mimeType: application/vnd.ms-powerpoint
+  - ext: ppsx
+    name: OfficeHere.Gosteri
+    description: Slayt Gösterisi
+    role: Editor
+    icon: filetypes/sunum
+    mimeType: application/vnd.openxmlformats-officedocument.presentationml.slideshow
+  - ext: odp
+    name: OfficeHere.ODP
+    description: OpenDocument Sunu
+    role: Editor
+    icon: filetypes/sunum
+    mimeType: application/vnd.oasis.opendocument.presentation
 
 win:
   icon: icon.ico

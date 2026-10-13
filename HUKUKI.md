@@ -25,6 +25,17 @@ sınırlar içinde geliştirildiğini ve katkıcıların uyması gereken kuralla
   yazılımlara karşı bu belirtimlerden doğan patent iddialarında bulunmayacağını
   taahhüt eder. Uzantı öğeleri (ör. `x14:dataBar`, `p14:sectionLst`) yalnız bu
   yayımlanmış belirtimlere göre yazılır.
+- Eski ikili biçimler (`.doc`, `.xls`, `.ppt`) yalnız **okunur**. Okuyucular
+  Microsoft'un yayımladığı açık belirtimlere ([MS-CFB], [MS-DOC], [MS-XLS],
+  [MS-PPT], [MS-ODRAW]) göre sıfırdan yazılmıştır; bu belirtimler de *Open
+  Specification Promise* kapsamındadır. Başka projelerin (LibreOffice, Apache
+  POI, SheetJS vb.) kaynak kodu kopyalanmamış ya da çevrilmemiştir.
+- **OpenDocument** (`.odt`, `.ods`, `.odp`) OASIS/ISO/IEC 26300 açık
+  standardıdır; telif ücreti ya da kısıtlama olmadan uygulanabilir.
+  **RTF** biçimi Microsoft'un yayımladığı RTF 1.9.1 belirtimine, **Markdown**
+  CommonMark belirtimine (CC BY-SA, yalnız okunup uygulanmıştır) dayanır.
+- Test örnek dosyaları projenin kendi içeriğinden LibreOffice ile dönüştürülerek
+  üretilmiştir; üçüncü taraf belgesi depoya eklenmemiştir.
 - Formül sözdizimi ve fonksiyon adları birlikte çalışabilirlik için gereklidir ve
   standardın parçasıdır. Türkçe fonksiyon adları (TOPLA, EĞER, DÜŞEYARA…) kısa,
   betimleyici sözcüklerdir; başka açık kaynak tablolama yazılımlarında da kullanılır.
@@ -137,7 +148,8 @@ değerlendirilmelidir:
 
 - **Patentler:** Komut şeridi arayüzüne ilişkin Microsoft patent başvuruları
   2004–2006 dönemindedir; 20 yıllık koruma süresinin büyük ölçüde dolduğu
-  varsayılmıştır. Dosya biçimleri Open Specification Promise kapsamındadır.
+  varsayılmıştır. OOXML ve eski ikili Office biçimleri Open Specification
+  Promise, OpenDocument ise açık ISO standardı kapsamındadır.
   Tek tek özellikler (ör. bir hesaplama ya da düzen davranışı) için patent
   araştırması yapılmamıştır.
 - **Görünüm (trade dress):** Arayüz, Office'e benzer bir düzen kullanır ancak

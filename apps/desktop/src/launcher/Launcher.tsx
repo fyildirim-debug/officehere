@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FolderOpen24Regular, Home20Regular, DocumentAdd20Regular, FolderOpen20Regular, Settings20Regular } from "@fluentui/react-icons";
 import { getNative, getRecentFiles, openFile, type AppKind, type RecentFile } from "@officehere/core";
+import { ALL_EXTENSIONS, FORMAT_GROUPS, appForFileName } from "../shared/formats";
 import {
   AppLogo,
   AppShell,
@@ -24,11 +25,6 @@ const APPS: { app: AppKind; label: string; name: string; shape: "portrait" | "la
   { app: "sunum", label: "Boş sunu", name: "Sunum", shape: "landscape" },
 ];
 
-const EXT_APP: Record<string, AppKind> = {
-  docx: "belge", dotx: "belge", txt: "belge", html: "belge", htm: "belge", md: "belge",
-  xlsx: "tablo", xltx: "tablo", csv: "tablo", tsv: "tablo",
-  pptx: "sunum", potx: "sunum",
-};
 
 function greeting() {
   const h = new Date().getHours();
@@ -124,15 +120,9 @@ export function Launcher() {
   }, []);
 
   const browse = async () => {
-    const f = await openFile([
-      { name: "Tüm desteklenen dosyalar", extensions: Object.keys(EXT_APP) },
-      { name: "Belgeler", extensions: ["docx", "dotx", "txt", "html", "md"] },
-      { name: "Çalışma kitapları", extensions: ["xlsx", "xltx", "csv", "tsv"] },
-      { name: "Sunular", extensions: ["pptx", "potx"] },
-    ]);
+    const f = await openFile([{ name: "Tüm desteklenen dosyalar", extensions: ALL_EXTENSIONS }, ...FORMAT_GROUPS.map(({ name, extensions }) => ({ name, extensions }))]);
     if (!f) return;
-    const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
-    const app = EXT_APP[ext];
+    const app = appForFileName(f.name);
     if (app && f.path) launch(app, f.path);
     else if (app) launch(app);
   };
