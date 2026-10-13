@@ -3,6 +3,7 @@ import type { Editor } from "@tiptap/core";
 import { MenuHeader, MenuItem, MenuSeparator, useMenuClose } from "@officehere/ui";
 import { BULLET_STYLES, MULTILEVEL_STYLES, NUMBER_STYLES } from "../editor/nodes";
 import { toggleList } from "../editor/listApply";
+import { canContinueNumbering, continueNumbering, orderedListAt, restartNumbering } from "../editor/listNumbering";
 
 function listNodeAttrs(editor: Editor, type: "bulletList" | "orderedList", attrs: Record<string, unknown>) {
   const { state } = editor;
@@ -92,7 +93,19 @@ export function BulletLibrary({ editor, current }: { editor: Editor; current: st
   );
 }
 
-export function NumberLibrary({ editor, current }: { editor: Editor; current: string | null }) {
+/** Numaralandırmaya Yeniden Başla / Devam Et / Değeri Ayarla (numaralı listedeyken etkin). */
+export function NumberingItems({ editor, openValue }: { editor: Editor; openValue?: () => void }) {
+  const inList = !!orderedListAt(editor.state);
+  return (
+    <>
+      <MenuItem label="Numaralandırmaya Yeniden Başla" disabled={!inList} onClick={() => restartNumbering(editor, 1)} />
+      <MenuItem label="Numaralandırmaya Devam Et" disabled={!canContinueNumbering(editor.state)} onClick={() => continueNumbering(editor)} />
+      {openValue && <MenuItem label="Numaralandırma Değerini Ayarla..." disabled={!inList} onClick={openValue} />}
+    </>
+  );
+}
+
+export function NumberLibrary({ editor, current, openValue }: { editor: Editor; current: string | null; openValue?: () => void }) {
   return (
     <div className="oh-menu bl-libmenu">
       <MenuHeader>Numaralandırma Kitaplığı</MenuHeader>
@@ -114,7 +127,7 @@ export function NumberLibrary({ editor, current }: { editor: Editor; current: st
         ))}
       </div>
       <MenuSeparator />
-      <MenuItem label="Numaralandırmaya Yeniden Başla" onClick={() => editor.chain().focus().updateAttributes("orderedList", { start: 1 }).run()} />
+      <NumberingItems editor={editor} openValue={openValue} />
     </div>
   );
 }

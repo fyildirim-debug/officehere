@@ -1,0 +1,211 @@
+/* 5. tur: Büyük İlk Harf iletişim kutusu, Sesli Oku denetim çubuğu, Simge iletişim kutusu eklentileri. */
+
+/* Büyük İlk Harf: konum seçenekleri ve küçük önizlemeler */
+.bl-dc-positions {
+  display: flex;
+  gap: 10px;
+}
+
+.bl-dc-pos {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.bl-dc-pos.is-selected {
+  border-color: var(--oh-accent);
+}
+
+.bl-dc-preview {
+  position: relative;
+  display: grid;
+  grid-template-rows: repeat(4, 6px);
+  gap: 5px;
+  width: 64px;
+  height: 52px;
+  padding: 6px 6px 6px 14px;
+  box-sizing: border-box;
+  border: 1px solid var(--oh-border);
+  background: var(--oh-surface, #fff);
+}
+
+.bl-dc-preview i {
+  display: block;
+  border-top: 2px solid currentColor;
+  opacity: 0.45;
+}
+
+.bl-dc-preview b {
+  position: absolute;
+  top: 3px;
+  font: 700 26px/1 Georgia, serif;
+}
+
+.bl-dc-preview.is-drop b {
+  left: 14px;
+}
+
+.bl-dc-preview.is-drop i:nth-of-type(-n + 3) {
+  margin-left: 18px;
+}
+
+.bl-dc-preview.is-margin b {
+  left: -2px;
+}
+
+.bl-dc-pos > span {
+  white-space: nowrap;
+}
+
+/* Sesli Oku: okunan paragraf ve sözcük */
+.bl-doc .bl-ra-para {
+  background-color: rgba(0, 120, 212, 0.06);
+}
+
+.bl-doc .bl-ra-word {
+  background-color: rgba(0, 120, 212, 0.28);
+  border-radius: 2px;
+}
+
+/* Sesli Oku denetim çubuğu */
+.bl-ra-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: var(--oh-surface, #fff);
+  border-bottom: 1px solid var(--oh-border);
+  color: var(--oh-text, inherit);
+  font: 12px var(--oh-font-ui);
+  min-height: 36px;
+  box-sizing: border-box;
+}
+
+.bl-ra-warn {
+  color: var(--oh-text-secondary, inherit);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.bl-ra-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.bl-ra-btn:hover:not(:disabled),
+.bl-ra-btn.is-on {
+  background: var(--oh-hover, rgba(0, 0, 0, 0.06));
+}
+
+.bl-ra-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.bl-ra-btn.is-main {
+  border-color: var(--oh-border);
+}
+
+.bl-ra-settings {
+  position: relative;
+}
+
+.bl-ra-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 260px;
+  padding: 12px;
+  background: var(--oh-surface, #fff);
+  border: 1px solid var(--oh-border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+.bl-ra-pop label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bl-ra-pop select {
+  max-width: 100%;
+}
+
+/* Tümünü Göster: bölünmez boşluk (°) */
+.bl-ws.is-nbsp {
+  background-image: radial-gradient(circle at 50% 35%, transparent 0.08em, #6b8fd6 0.09em, #6b8fd6 0.13em, transparent 0.14em);
+}
+
+/* Simge iletişim kutusu: son kullanılanlar ve Özel Karakterler */
+.bl-symrecent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.bl-symbols.is-recent {
+  max-height: none;
+  margin: 0;
+}
+
+.bl-special {
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid var(--oh-border);
+}
+
+.bl-special button {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: default;
+}
+
+.bl-special button:hover {
+  background: var(--oh-hover, rgba(0, 0, 0, 0.05));
+}
+
+.bl-special button.is-selected {
+  background: var(--oh-checked, rgba(0, 120, 212, 0.15));
+}
+
+.bl-special-ch {
+  text-align: center;
+  font-size: 16px;
+}
+
+.bl-special-key {
+  color: var(--oh-text-secondary, inherit);
+}

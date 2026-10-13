@@ -459,3 +459,14 @@ table[data-table-style="light-purple"][data-banded-rows="true"] tr:nth-child(eve
   outline: 2px solid #4a90e2;
   height: 4px;
 }
+
+/* Büyük İlk Harf: ilk harf --dc-lines satır boyunca (initial-letter). Kenar boşluğu kipinde harf, ölçülen
+   genişliği (--dc-w) kadar sola taşınır; metnin sol kenarı değişmez. */
+.bl-doc [data-dropcap]::first-letter {
+  initial-letter: var(--dc-lines, 3);
+  font-family: var(--dc-font, inherit);
+  margin-inline-end: var(--dc-dist, 0pt);
+}
+.bl-doc [data-dropcap="margin"]::first-letter {
+  margin-inline-start: calc(-1 * var(--dc-w, 0px));
+}

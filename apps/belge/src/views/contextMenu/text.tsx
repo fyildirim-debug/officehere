@@ -4,6 +4,7 @@ import { ArrowSync20Regular, Shapes20Regular, TextBulletListLtr20Regular, TextFo
 import { Menu, MenuItem, MenuSeparator } from "@officehere/ui";
 import { useBelge } from "../../state/context";
 import { toggleList } from "../../editor/listApply";
+import { NumberingItems } from "../../ribbon/lists";
 import { updateFields } from "../../editor/fields";
 import { FIELD_REFRESH_EVENT } from "../../editor/nodes";
 import { ClipboardItems, LinkCommentItems, type MenuDeps } from "./common";
@@ -35,10 +36,16 @@ export function TextMenu({ deps, target }: { deps: MenuDeps; target: MenuTarget 
       <MenuItem icon={<TextParagraph20Regular />} label="Paragraf..." onClick={() => openDialog("paragraph")} />
       <MenuItem icon={<TextBulletListLtr20Regular />} label="Madde İşaretleri" checked={editor.isActive("bulletList")} onClick={() => toggleList(editor, "bulletList")} />
       <MenuItem icon={<TextNumberListLtr20Regular />} label="Numaralandırma" checked={editor.isActive("orderedList")} onClick={() => toggleList(editor, "orderedList")} />
+      {editor.isActive("orderedList") && (
+        <>
+          <MenuSeparator />
+          <NumberingItems editor={editor} openValue={() => openDialog("numberingValue")} />
+        </>
+      )}
       {target.field && (
         <>
           <MenuSeparator />
-          <MenuItem icon={<ArrowSync20Regular />} label="Alanı Güncelleştir" onClick={updateField} />
+          <MenuItem icon={<ArrowSync20Regular />} label="Alanı Güncelleştir" shortcut="F9" onClick={updateField} />
         </>
       )}
       <MenuSeparator />

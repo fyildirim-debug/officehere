@@ -7,6 +7,8 @@ import { CropDialog } from "./CropDialog";
 import { ProtectDialog } from "./ProtectDialog";
 import { CompareDialog } from "./CompareDialog";
 import { InsertIndexDialog, MarkEntryDialog } from "./IndexDialogs";
+import { NumberingValueDialog } from "./NumberingValueDialog";
+import { DropCapDialog } from "./DropCapDialog";
 
 export function ExtraDialogs({ dialog, onClose }: { dialog: DialogState; onClose: () => void }) {
   switch (dialog.kind) {
@@ -26,6 +28,10 @@ export function ExtraDialogs({ dialog, onClose }: { dialog: DialogState; onClose
       return <MarkEntryDialog onClose={onClose} />;
     case "insertIndex":
       return <InsertIndexDialog onClose={onClose} />;
+    case "numberingValue":
+      return <NumberingValueDialog onClose={onClose} />;
+    case "dropCap":
+      return <DropCapDialog onClose={onClose} />;
     default:
       return null;
   }

@@ -312,7 +312,7 @@ export function HomeTab() {
               tip="Numaralandırma"
               checked={fmt.list === "ordered"}
               onClick={() => applyNumberMain(editor)}
-              menu={<NumberLibrary editor={editor} current={fmt.list === "ordered" ? fmt.listStyle : null} />}
+              menu={<NumberLibrary editor={editor} current={fmt.list === "ordered" ? fmt.listStyle : null} openValue={() => ctx.openDialog("numberingValue")} />}
             />
             <RibbonMenuButton size="small" icon={<TextBulletListTree20Regular />} tip="Çok Düzeyli Liste" menu={<MultilevelLibrary editor={editor} />} />
             <RibbonButton size="small" icon={<TextIndentDecreaseLtr20Regular />} tip="Girintiyi Azalt" shortcut="Ctrl+Shift+M" onClick={() => changeIndent(editor, -1)} />

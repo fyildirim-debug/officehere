@@ -5,7 +5,7 @@ import { NodeSelection } from "@tiptap/pm/state";
 import { FONT_LIST } from "@officehere/core";
 import { Dialog, DialogButton, Field, FieldSet } from "@officehere/ui";
 import { useBelge } from "../state/context";
-import { docStats, countWords, sortParagraphs } from "../editor/commands";
+import { docStats, sortParagraphs } from "../editor/commands";
 import type { PageBorder } from "../model/document";
 import { tableInfo } from "../ribbon/tableUtil";
 import { splitCellGrid, splitDefaults } from "../editor/tableSplit";
@@ -75,24 +75,56 @@ export function ZoomDialog({ current, onApply, onClose }: { current: number; onA
   );
 }
 
+/** Görünür satır sayısı: aralıktaki metnin satır kutuları (aynı satırdaki parçalar bir kez sayılır). */
+function countLines(view: import("@tiptap/pm/view").EditorView, from: number, to: number): number {
+  let n = 0;
+  const dom = view.dom as HTMLElement;
+  dom.querySelectorAll<HTMLElement>("p, h1, h2, h3, h4, h5, h6").forEach((el) => {
+    if (!el.textContent?.trim()) return;
+    let pos: number;
+    try {
+      pos = view.posAtDOM(el, 0);
+    } catch {
+      return;
+    }
+    const end = pos + (el.textContent?.length ?? 0);
+    // Seçimin yalnız dokunduğu (kesişmeyen) paragraflar sayılmaz.
+    if (end <= from || pos >= to) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    if (pos < from || end > to) {
+      // Kısmen seçili paragraf: yalnız seçili parçanın satırları.
+      try {
+        const a = view.domAtPos(Math.max(from, pos));
+        const b = view.domAtPos(Math.min(to, end));
+        range.setStart(a.node, a.offset);
+        range.setEnd(b.node, b.offset);
+      } catch {
+        // DOM konumu bulunamazsa tüm paragraf
+      }
+    }
+    const tops: number[] = [];
+    for (const r of Array.from(range.getClientRects())) {
+      if (r.width === 0 && r.height === 0) continue;
+      if (!tops.some((t) => Math.abs(t - r.top) < Math.max(2, r.height / 2))) tops.push(r.top);
+    }
+    n += Math.max(1, tops.length);
+  });
+  return n;
+}
+
 export function WordCountDialog({ pages, onClose }: { pages: number; onClose: () => void }) {
-  const { editor } = useBelge();
-  const st = useMemo(() => docStats(editor.state.doc), [editor]);
+  const { editor, controller } = useBelge();
+  const [withNotes, setWithNotes] = useState(true);
   const { from, to, empty } = editor.state.selection;
-  const selWords = empty ? null : countWords(editor.state.doc.textBetween(from, to, "\n", " "));
-  const lines = useMemo(() => {
-    const dom = editor.view.dom as HTMLElement;
-    let n = 0;
-    dom.querySelectorAll("p, h1, h2, h3, h4, h5, h6").forEach((el) => {
-      const lh = parseFloat(getComputedStyle(el).lineHeight) || 18;
-      const text = el.textContent?.trim();
-      if (text) n += Math.max(1, Math.round((el as HTMLElement).getBoundingClientRect().height / (lh * (dom.getBoundingClientRect().width / dom.offsetWidth || 1))));
-    });
-    return n;
-  }, [editor]);
+  const range = empty ? null : { from, to };
+  const st = useMemo(() => docStats(editor.state.doc, range, withNotes), [editor, withNotes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lines = useMemo(() => countLines(editor.view, range?.from ?? 0, range?.to ?? editor.state.doc.content.size), [editor]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Seçimde: seçimin yayıldığı sayfa sayısı.
+  const pageCount = range ? controller.pageOf(range.to) - controller.pageOf(range.from) + 1 : pages;
   const rows: [string, number][] = [
-    ["Sayfa", pages],
-    ["Sözcük", selWords ?? st.words],
+    ["Sayfa", Math.max(1, pageCount)],
+    ["Sözcük", st.words],
     ["Karakter (boşluksuz)", st.charsNoSpaces],
     ["Karakter (boşluklu)", st.chars],
     ["Paragraf", st.paragraphs],
@@ -102,7 +134,7 @@ export function WordCountDialog({ pages, onClose }: { pages: number; onClose: ()
     <Dialog
       open
       title="Sözcük Sayısı"
-      width={340}
+      width={360}
       onClose={onClose}
       onSubmit={onClose}
       footer={
@@ -111,7 +143,7 @@ export function WordCountDialog({ pages, onClose }: { pages: number; onClose: ()
         </DialogButton>
       }
     >
-      <p className="bl-dlg-note">İstatistikler{selWords !== null ? " (sözcük sayısı seçim için)" : ""}:</p>
+      <p className="bl-dlg-note">{range ? "İstatistikler (seçim):" : "İstatistikler:"}</p>
       <table className="bl-stats">
         <tbody>
           {rows.map(([k, v]) => (
@@ -122,6 +154,7 @@ export function WordCountDialog({ pages, onClose }: { pages: number; onClose: ()
           ))}
         </tbody>
       </table>
+      <Check label="Metin kutularını, dipnotları ve son notları dahil et" v={withNotes} set={setWithNotes} />
     </Dialog>
   );
 }
@@ -144,6 +177,10 @@ export const SHORTCUTS: [string, string][] = [
   ["Ctrl+Shift+> / Ctrl+Shift+<", "Yazı tipini büyült / küçült"],
   ["Ctrl+] / Ctrl+[", "Yazı tipi boyutunu 1 nk artır / azalt"],
   ["Shift+F3", "Büyük/küçük harf değiştir"],
+  ["F9", "Alanları güncelleştir"],
+  ["Ctrl+Alt+Boşluk", "Sesli Oku'yu başlat / kapat"],
+  ["Alt+X", "Onaltılık karakter kodu ↔ karakter"],
+  ["Ctrl+Shift+Boşluk", "Bölünmez boşluk"],
   ["Ctrl+Space", "Karakter biçimini temizle"],
   ["Ctrl+D", "Yazı Tipi iletişim kutusu"],
   ["Ctrl+L / Ctrl+E / Ctrl+R / Ctrl+J", "Sola hizala / Ortala / Sağa hizala / İki yana yasla"],

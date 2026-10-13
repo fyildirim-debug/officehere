@@ -818,3 +818,20 @@
     outline-offset: -2px;
   }
 }
+
+/* Dar pencere (ör. telefonda web sürümü): sekmeler yatay kaydırılır, sayfa yana taşmaz. */
+@media (max-width: 760px) {
+  .oh-ribbon-tablist {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .oh-ribbon-tablist::-webkit-scrollbar {
+    display: none;
+  }
+
+  .oh-ribbon-tab {
+    flex: none;
+  }
+}

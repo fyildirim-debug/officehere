@@ -36,7 +36,9 @@ function build(doc: PMNode): DecorationSet {
       const t = node.text ?? "";
       for (let i = 0; i < t.length; i++) {
         const ch = t[i];
-        if (ch === " " || ch === " ") decos.push(Decoration.inline(pos + i, pos + i + 1, { class: "bl-ws" }));
+        if (ch === " ") decos.push(Decoration.inline(pos + i, pos + i + 1, { class: "bl-ws" }));
+        // Bölünmez boşluk küçük bir halkayla (°) gösterilir.
+        else if (ch === "\u00a0") decos.push(Decoration.inline(pos + i, pos + i + 1, { class: "bl-ws is-nbsp" }));
         else if (ch === "\t") decos.push(Decoration.inline(pos + i, pos + i + 1, { class: "bl-tab" }));
       }
       return false;

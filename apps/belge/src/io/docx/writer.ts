@@ -243,11 +243,14 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
     if (!target) bodyXml += `<w:p><w:pPr>${xml}</w:pPr></w:p>`;
     body.sectTarget = null;
   });
-  // Kapanmamış açıklama aralıkları
+  // Kapanmamış açıklama aralıkları son paragrafın içinde kapanır (yeni boş paragraf eklenirse her
+  // kaydet-aç turunda belgenin sonuna bir paragraf daha eklenirdi).
+  let ends = "";
   for (const id of [...ctx.openComments]) {
     const num = ctx.commentNum(id);
-    bodyXml += `<w:p><w:commentRangeEnd w:id="${num}"/><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${num}"/></w:r></w:p>`;
+    ends += `<w:commentRangeEnd w:id="${num}"/><w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:commentReference w:id="${num}"/></w:r>`;
   }
+  if (ends) bodyXml = bodyXml.endsWith("</w:p>") ? `${bodyXml.slice(0, -"</w:p>".length)}${ends}</w:p>` : `${bodyXml}<w:p>${ends}</w:p>`;
   ctx.openComments.clear();
   const lastIsTable = /<\/w:tbl>$/.test(bodyXml) || /<\/w:sdt>$/.test(bodyXml);
   if (!bodyXml || lastIsTable) bodyXml += "<w:p/>";

@@ -3,12 +3,24 @@
 import type { JSONContent } from "@tiptap/core";
 import { defaultSettings, normalizeDoc, type BelgeDocument } from "../../model/document";
 import { noteText } from "../../editor/notes";
+import { fieldPicture } from "../../editor/nodes";
+import { pictureOfInstr } from "../../editor/dateFormat";
 import { charMarks, foldLists, noteNode, paragraphNode, stripStyleProps, styleChar, stylesOf, type CharProps, type FlowItem } from "../common";
 import { charsetCodepage, decodeBytes } from "./codepage";
 import { RtfTables } from "./tables";
 import { RtfPict } from "./pict";
 import { RtfLists } from "./lists";
 import { HL_COLORS, LINK_COLOR, SKIP_DESTS, charWord, newChr, newPar, paraWord, headingLevelOf, styleIdByName, applyInfo, type Chr, type Par } from "./state";
+
+/** Sayfa ve tarih/saat alanları (sonuç metni yerine alan düğümü okunur). */
+const PAGE_FIELD = /^\s*(PAGE|NUMPAGES|DATE|TIME)\b/i;
+
+/** Alan düğümü; tarih ve saatte \@ biçim resmi korunur (varsayılansa yazılmaz). */
+function pageFieldNode(field: string, instr: string): JSONContent {
+  if (field !== "DATE" && field !== "TIME") return { type: "pageField", attrs: { field } };
+  const pic = pictureOfInstr(instr);
+  return { type: "pageField", attrs: { field, format: pic && pic !== fieldPicture(field) ? pic : null } };
+}
 
 type Dest =
   | "body"
@@ -276,7 +288,7 @@ export class RtfReader {
   private bodyText(s: string) {
     const f = this.fields[this.fields.length - 1];
     if (f && !f.result) return;
-    if (f && f.result && /^\s*(PAGE|NUMPAGES)\b/i.test(f.instr)) return;
+    if (f && f.result && PAGE_FIELD.test(f.instr)) return;
     const c = this.g.chr;
     const font = this.fonts.get(c.f ?? this.deff);
     const props: CharProps = {
@@ -535,8 +547,8 @@ export class RtfReader {
             f.result = true;
             const href = /^\s*HYPERLINK\s+(?:"([^"]*)"|(\S+))(?:.*?\\l\s+"([^"]*)")?/i.exec(f.instr);
             if (href) g.chr.link = (href[1] ?? href[2] ?? "") + (href[3] ? `#${href[3]}` : "");
-            const kw = /^\s*(PAGE|NUMPAGES)\b/i.exec(f.instr);
-            if (kw) this.node({ type: "pageField", attrs: { field: kw[1].toUpperCase() } });
+            const kw = PAGE_FIELD.exec(f.instr);
+            if (kw) this.node(pageFieldNode(kw[1].toUpperCase(), f.instr));
           }
         }
         return true;
@@ -545,8 +557,8 @@ export class RtfReader {
         end(() => {
           const f = this.fields.pop();
           // Sonucu olmayan sayfa alanı
-          const kw = f && !f.result ? /^\s*(PAGE|NUMPAGES)\b/i.exec(f.instr) : null;
-          if (kw) this.node({ type: "pageField", attrs: { field: kw[1].toUpperCase() } });
+          const kw = f && !f.result ? PAGE_FIELD.exec(f.instr) : null;
+          if (kw && f) this.node(pageFieldNode(kw[1].toUpperCase(), f.instr));
         });
         return true;
       case "fldinst":

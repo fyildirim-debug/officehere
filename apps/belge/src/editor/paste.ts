@@ -1,6 +1,6 @@
 // Yapıştırma dönüştürücüleri: kelime işlemci (Office HTML) listeleri, gereksiz işaretler ve düz metin satırları.
 import { Extension } from "@tiptap/core";
-import { Fragment, Slice, type Schema } from "@tiptap/pm/model";
+import { Fragment, Slice, type Node as PMNode, type ResolvedPos, type Schema } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { syncDomSelection } from "./pagination";
@@ -158,6 +158,41 @@ export function textToSlice(schema: Schema, text: string): Slice {
   return new Slice(Fragment.from(paras), 1, 1);
 }
 
+/**
+ * Tek bölümün içinden kopyalanan içerik (ör. Ctrl+A ile tüm belge) bölüm düğümüyle gelir; olduğu gibi
+ * yapıştırılırsa yeni bir bölüm (bölüm sonu + yeni sayfa) eklenirdi. Word'deki gibi yalnız içerik
+ * yapıştırılır: bölüm sarmalı açılır ve kenardaki paragraflar imleçteki paragrafla birleşir.
+ * Birden çok bölüme yayılan kopyalar bölüm sonlarını korur.
+ */
+export function unwrapSectionSlice(slice: Slice): Slice {
+  const { content } = slice;
+  if (content.childCount !== 1 || content.firstChild!.type.name !== "section") return slice;
+  const inner = content.firstChild!.content;
+  if (!inner.size) return slice;
+  const openStart = slice.openStart > 0 ? slice.openStart - 1 : inner.firstChild!.isTextblock ? 1 : 0;
+  const openEnd = slice.openEnd > 0 ? slice.openEnd - 1 : inner.lastChild!.isTextblock ? 1 : 0;
+  return new Slice(inner, openStart, openEnd);
+}
+
+/**
+ * Liste öğesine birden çok paragraf yapıştırılınca her paragraf ayrı liste öğesi olur (Word, LibreOffice ve
+ * Google Dokümanlar'daki gibi); ilk paragraf imleçteki öğeyle, sonuncusu imleçten sonraki metinle birleşir.
+ */
+export function listifySlice(slice: Slice, $from: ResolvedPos): Slice {
+  const { content } = slice;
+  if (content.childCount < 2 || $from.depth < 2) return slice;
+  const item = $from.node($from.depth - 1);
+  if (item.type.name !== "listItem" || !$from.parent.isTextblock) return slice;
+  let plain = true;
+  content.forEach((n) => {
+    if (n.type.name !== "paragraph") plain = false;
+  });
+  if (!plain) return slice;
+  const items: PMNode[] = [];
+  content.forEach((n) => items.push(item.type.create(null, n)));
+  return new Slice(Fragment.from(items), 2, 2);
+}
+
 /** Uygulama içinde son kopyalanan/kesilen içerik (pano izni olmayan tarayıcıda şerit Yapıştır'ı için). */
 let lastCopied: Slice | null = null;
 export function lastInternalCopy(): Slice | null {
@@ -167,7 +202,7 @@ export function lastInternalCopy(): Slice | null {
 /** Kopyalanan seçimi saklar (klavyeyle hemen önce değişen DOM seçimi önce okunur). */
 function remember(view: EditorView) {
   syncDomSelection(view);
-  if (!view.state.selection.empty) lastCopied = view.state.selection.content();
+  if (!view.state.selection.empty) lastCopied = unwrapSectionSlice(view.state.selection.content());
 }
 
 export const PasteRules = Extension.create({
@@ -179,6 +214,7 @@ export const PasteRules = Extension.create({
         props: {
           transformPastedHTML: (html) => liftBlockStyles(cleanOfficeHtml(html)),
           clipboardTextParser: (text, _ctx, _plain, view) => textToSlice(view.state.schema, text),
+          transformPasted: (slice, view) => listifySlice(unwrapSectionSlice(slice), view.state.selection.$from),
           handleDOMEvents: {
             copy: (view) => {
               remember(view);

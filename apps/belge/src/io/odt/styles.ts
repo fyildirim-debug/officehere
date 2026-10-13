@@ -3,6 +3,7 @@
 import type { CharProps, UnderlineKind } from "../common";
 import { lengthPt, normColor } from "../common";
 import { attr, kid, kids } from "../docx/xml";
+import { odfToPicture } from "./dataStyles";
 
 export interface ParaProps {
   align?: string;
@@ -20,6 +21,8 @@ export interface ParaProps {
   breakAfter?: "page" | "column";
   borderBottom?: boolean;
   borderOther?: boolean;
+  /** style:drop-cap (satır sayısı, uzaklık pt, harf stili). */
+  dropCap?: { lines: number; distance: number; textStyle: string | null } | null;
 }
 
 export interface OdtStyle {
@@ -57,6 +60,8 @@ export interface PageLayout {
   columnGap?: number;
   header?: { minHeight: number; spacing: number };
   footer?: { minHeight: number; spacing: number };
+  /** Sayfa rengi (fo:background-color ya da draw:fill-color). */
+  background?: string | null;
 }
 
 export interface MasterPage {
@@ -148,7 +153,9 @@ export function parseTextProps(tp: Element | null, fonts: Map<string, string>): 
   const disp = a(tp, "display");
   if (disp) p.hidden = disp === "none";
   const ls = tp.getAttributeNS(NS_FO, "letter-spacing");
-  if (ls) p.spacing = ls === "normal" ? null : lengthPt(ls);
+  // cm → pt dönüşümünün yuvarlama artığı atılır (OOXML gibi 1/20 pt duyarlılık).
+  const lsPt = ls && ls !== "normal" ? lengthPt(ls) : null;
+  if (ls) p.spacing = lsPt === null ? null : Math.round(lsPt * 20) / 20;
   const sh = tp.getAttributeNS(NS_FO, "text-shadow");
   if (sh) p.shadow = sh !== "none";
   const ol = a(tp, "text-outline");
@@ -210,6 +217,11 @@ export function parseParaProps(pp: Element | null): ParaProps {
   const ba = fo("break-after");
   if (ba === "page" || ba === "column") p.breakAfter = ba;
   const vis = (v: string | null) => !!v && v !== "none" && !/^0(\.0+)?(pt|cm|in|mm)?\s/.test(v);
+  const dc = kid(pp, "drop-cap");
+  if (dc) {
+    const lines = Number(a(dc, "lines") ?? 1) || 1;
+    p.dropCap = lines > 1 && Number(a(dc, "length") ?? 1) !== 0 ? { lines, distance: lengthPt(a(dc, "distance")) ?? 0, textStyle: a(dc, "style-name") } : null;
+  }
   if (vis(fo("border-bottom"))) p.borderBottom = true;
   if (vis(fo("border")) || vis(fo("border-top")) || vis(fo("border-left")) || vis(fo("border-right"))) p.borderOther = true;
   return p;
@@ -224,6 +236,8 @@ export class OdtStyles {
   defaults = new Map<string, OdtStyle>();
   lists = new Map<string, ListLevel[]>();
   layouts = new Map<string, PageLayout>();
+  /** Tarih/saat veri stilleri: ad → biçim resmi. */
+  dataStyles = new Map<string, string>();
   masters = new Map<string, MasterPage>();
   masterOrder: string[] = [];
 
@@ -252,6 +266,10 @@ export class OdtStyles {
           } else if (s.localName === "page-layout") {
             const name = a(s, "name");
             if (name) this.layouts.set(name, parseLayout(s));
+          } else if (s.localName === "date-style" || s.localName === "time-style") {
+            const name = a(s, "name");
+            const pic = odfToPicture(s);
+            if (name && pic) this.dataStyles.set(name, pic);
           }
         }
       } else if (sec.localName === "master-styles") {
@@ -399,6 +417,8 @@ function parseLayout(s: Element): PageLayout {
     landscape: a(pp, "print-orientation") === "landscape",
     margin: { top: fo(pp, "margin-top") ?? all, bottom: fo(pp, "margin-bottom") ?? all, left: fo(pp, "margin-left") ?? all, right: fo(pp, "margin-right") ?? all },
   };
+  const bg = pp?.getAttributeNS(NS_FO, "background-color") || (a(pp, "fill") === "solid" ? a(pp, "fill-color") : null);
+  if (bg && bg !== "transparent") lay.background = normColor(bg);
   const cols = kid(pp, "columns");
   const cc = Number(cols?.getAttributeNS(NS_FO, "column-count") ?? 1);
   if (cc > 1) {

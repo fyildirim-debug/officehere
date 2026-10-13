@@ -2,9 +2,10 @@
 // değişiklikler, resimler, metin kutuları, tablolar, İçindekiler). İlişkiler (Rels) ve ortak sayaçlar (Ctx).
 import type { JSONContent } from "@tiptap/core";
 import type { DocSettings } from "../../model/document";
-import { type BorderSpec } from "../../model/styles";
+import { LINE_FACTOR, type BorderSpec } from "../../model/styles";
 import type { ParaBorders } from "../../editor/paragraphFormat";
-import { fieldNowText, type TocEntry } from "../../editor/nodes";
+import { fieldNowText, fieldPicture, type TocEntry } from "../../editor/nodes";
+import { firstGrapheme, normalizeDropCap, type DropCap } from "../../editor/dropCap";
 import { parseMath } from "../../editor/math/ast";
 import type { ChartData } from "../../editor/chart";
 import { CHART_NS, REL_CHART, chartSpaceXml } from "./chartXml";
@@ -261,9 +262,39 @@ export class PartWriter {
   }
 
   paragraph(n: JSONContent, list?: { numId: number; ilvl: number }, contIndent?: number): string {
+    // Büyük ilk harf: harf, Word'deki gibi çerçeveli ayrı bir paragrafa (w:framePr w:dropCap) yazılır.
+    const dc = list ? null : normalizeDropCap(n.attrs?.dropCap);
+    const first = n.content?.[0];
+    if (dc && first?.type === "text" && first.text) {
+      const letter = firstGrapheme(first.text);
+      if (letter.trim()) {
+        const restText = first.text.slice(letter.length);
+        const rest: JSONContent = { ...n, attrs: { ...n.attrs, dropCap: null }, content: [...(restText ? [{ ...first, text: restText }] : []), ...(n.content ?? []).slice(1)] };
+        if (this.sectTarget === n) this.sectTarget = rest;
+        return this.dropCapFrame(n, dc, { ...first, text: letter.trim() }) + this.paragraph(rest, list, contIndent);
+      }
+    }
     const drawings = this.pendingDrawings;
     this.pendingDrawings = "";
     return `<w:p>${this.pPr(n, list, contIndent)}${drawings}${this.inline(n.content ?? [])}</w:p>`;
+  }
+
+  /** Büyük ilk harf çerçevesi: harf boyutu, bırakılan satırların yüksekliğini kaplayacak biçimde hesaplanır. */
+  private dropCapFrame(n: JSONContent, dc: DropCap, letter: JSONContent): string {
+    const a = (n.attrs ?? {}) as Record<string, unknown>;
+    const ts = letter.marks?.find((m) => m.type === "textStyle")?.attrs ?? {};
+    const size = parseFloat(String(ts.fontSize ?? "")) || (n.type === "heading" ? 16 : 11);
+    const factor = (!a.lineRule || a.lineRule === "auto") && typeof a.lineHeight === "number" ? a.lineHeight : 1.08;
+    const line = a.lineRule === "exact" && typeof a.lineHeight === "number" ? a.lineHeight : size * LINE_FACTOR * factor;
+    // Büyük harf yüksekliği ≈ 0,7 em: ilk satırın büyük harf üstünden son bırakılan satırın taban çizgisine.
+    const capSize = Math.max(size, Math.round((((dc.lines - 1) * line + 0.7 * size) / 0.7) * 2) / 2);
+    const marks = [...(letter.marks ?? []).filter((m) => m.type !== "textStyle"), { type: "textStyle", attrs: { ...ts, fontSize: `${capSize}pt`, fontFamily: dc.font ?? ts.fontFamily ?? null } }];
+    let style = "";
+    if (n.type === "heading") style = `<w:pStyle w:val="Heading${a.level ?? 1}"/>`;
+    else if (a.styleId) style = `<w:pStyle w:val="${esc(String(a.styleId))}"/>`;
+    const frame = `<w:framePr w:dropCap="${dc.mode}" w:lines="${dc.lines}" w:hSpace="${ptTw(dc.distance)}" w:wrap="around" w:vAnchor="text" w:hAnchor="${dc.mode === "margin" ? "page" : "text"}"/>`;
+    const spacing = `<w:spacing w:before="0" w:after="0" w:line="${ptTw(dc.lines * line)}" w:lineRule="exact"/>`;
+    return `<w:p><w:pPr>${style}<w:keepNext/>${frame}${spacing}<w:textAlignment w:val="baseline"/></w:pPr>${this.inline([{ ...letter, marks }])}</w:p>`;
   }
 
   /** Satır içi içerik: köprü, izlenen değişiklik ve açıklama sarmalayıcılarıyla koşular. */
@@ -417,8 +448,9 @@ export class PartWriter {
         return `<w:r>${rpr}<w:br/></w:r>`;
       case "pageField": {
         const kind = node.attrs?.field;
-        const f = kind === "NUMPAGES" ? "NUMPAGES" : kind === "DATE" ? 'DATE \\@ "dd.MM.yyyy"' : kind === "TIME" ? 'TIME \\@ "HH:mm"' : "PAGE";
-        return `<w:fldSimple w:instr=" ${esc(f)} \\* MERGEFORMAT "><w:r>${rpr}<w:t>${esc(fieldNowText(kind) ?? "1")}</w:t></w:r></w:fldSimple>`;
+        const pic = fieldPicture(kind, node.attrs?.format);
+        const f = kind === "NUMPAGES" ? "NUMPAGES" : (kind === "DATE" || kind === "TIME") && pic ? `${kind} \\@ "${pic}"` : "PAGE";
+        return `<w:fldSimple w:instr=" ${esc(f)} \\* MERGEFORMAT "><w:r>${rpr}<w:t xml:space="preserve">${esc(fieldNowText(kind, new Date(), node.attrs?.format) ?? "1")}</w:t></w:r></w:fldSimple>`;
       }
       case "image":
         return this.image(node, rpr);

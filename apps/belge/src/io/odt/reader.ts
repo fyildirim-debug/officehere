@@ -3,9 +3,10 @@
 // köprüler, dipnotlar, metin kutuları, İçindekiler, sayfa sonları, üst/alt bilgi ve sayfa yapısı.
 import JSZip from "jszip";
 import type { JSONContent } from "@tiptap/core";
-import { defaultSettings, normalizeDoc, samePage, type BelgeDocument, type PageSetup } from "../../model/document";
-import type { TocEntry } from "../../editor/nodes";
+import { defaultSettings, normalizeDoc, samePage, type BelgeDocument, type CommentData, type PageSetup } from "../../model/document";
+import { fieldPicture, type TocEntry } from "../../editor/nodes";
 import { noteText } from "../../editor/notes";
+import { normalizeDropCap } from "../../editor/dropCap";
 import { bulletStyleAt, charMarks, foldLists, fromBase64, imageNode, noteNode, paragraphNode, stripStyleProps, styleChar, stylesOf, type CharProps, type FlowItem, type ListInfo } from "../common";
 import { attr, descendants, kid, kids, parseXml } from "../docx/xml";
 import type { StyleProps } from "../../model/styles";
@@ -78,6 +79,11 @@ export class OdtReader {
   /** Paragraf içi beyaz boşluk daraltma durumu. */
   private lastSpace = true;
   private extra: JSONContent[] = [];
+  /** Açıklamalar (office:annotation): okunanlar, açık aralıklar ve aralıksız (nokta) açıklama. */
+  private comments: Record<string, CommentData> = {};
+  private openComments = new Set<string>();
+  private commentByName = new Map<string, string>();
+  private pointComment: string | null = null;
 
   async read(data: ArrayBuffer | Uint8Array): Promise<BelgeDocument> {
     let zip: JSZip;
@@ -111,6 +117,8 @@ export class OdtReader {
     const firstMaster = this.firstMaster(text) ?? this.st.masterOrder[0] ?? "Standard";
     const defPage = this.page(firstMaster, settings.page);
     settings.page = defPage;
+    const firstLayout = this.st.masters.get(firstMaster)?.layout;
+    settings.pageColor = (firstLayout ? this.st.layouts.get(firstLayout)?.background : null) ?? null;
     const sections: JSONContent[] = [{ type: "section", attrs: { kind: "nextPage", page: null }, content: [] }];
     for (const n of folded) {
       if (n.type === "__master") {
@@ -120,6 +128,15 @@ export class OdtReader {
       }
       sections[sections.length - 1].content!.push(n);
     }
+    // Okunan açıklamalardan yalnız belgede bağlı olanlar (aralığı ya da noktası metne düşenler) tutulur.
+    const used = new Set<string>();
+    const walk = (n: JSONContent) => {
+      for (const m of n.marks ?? []) if (m.type === "comment") used.add(String(m.attrs?.id));
+      n.content?.forEach(walk);
+    };
+    sections.forEach(walk);
+    settings.comments = Object.fromEntries(Object.entries(this.comments).filter(([id]) => used.has(id)));
+    this.openComments.clear();
     this.readHeaders(firstMaster, settings);
     await this.readMeta(zip, settings);
     return { content: normalizeDoc({ type: "doc", content: sections }), settings };
@@ -209,6 +226,14 @@ export class OdtReader {
     this.lastSpace = true;
     this.extra = [];
     const content = this.inline(p, { props: this.st.mergeText(this.st.defaultText(), chain), charStyle: null, link: null }, base, []);
+    // Paragrafın sonundaki aralıksız açıklama son metne bağlanır.
+    if (this.pointComment) {
+      const lastText = [...content].reverse().find((n) => n.type === "text");
+      if (lastText) {
+        lastText.marks = [...(lastText.marks ?? []), { type: "comment", attrs: { id: this.pointComment } }];
+        this.pointComment = null;
+      }
+    }
     const last = content[content.length - 1];
     if (last?.type === "text" && last.text?.endsWith(" ") && this.lastSpace) last.text = last.text.replace(/ +$/, "");
     const boxes = this.extra;
@@ -234,6 +259,10 @@ export class OdtReader {
       }
     }
     if (pp.shading) attrs.shading = pp.shading;
+    if (pp.dropCap && !list) {
+      const font = pp.dropCap.textStyle ? this.st.mergeText({}, this.st.chain(pp.dropCap.textStyle, "text", this.scope)).font : null;
+      attrs.dropCap = normalizeDropCap({ mode: "drop", lines: pp.dropCap.lines, distance: Math.round(pp.dropCap.distance * 100) / 100, font: font ?? null });
+    }
     if (pp.keepNext && !base.keepNext) attrs.keepNext = true;
     if (pp.keepLines) attrs.keepLines = true;
     const hr = !content.length && !map.level && ((pp.borderBottom && !pp.borderOther) || chain.some((s) => lower(s) === "horizontal line"));
@@ -306,7 +335,38 @@ export class OdtReader {
     // Bağlantı stillerinin varsayılan renkleri biçim sayılmaz.
     if (ctx.link && (props.color === "#0563C1" || props.color === "#000080")) props.color = null;
     const marks = charMarks(props);
+    for (const id of this.openComments) marks.push({ type: "comment", attrs: { id } });
+    // Aralıksız açıklama ardından gelen ilk sözcüğe bağlanır.
+    const point = this.pointComment;
+    if (point) {
+      const m = /^\s*\S+/.exec(s);
+      const head = m ? m[0] : s;
+      this.pointComment = null;
+      out.push({ type: "text", text: head, marks: [...marks, { type: "comment", attrs: { id: point } }] });
+      if (head.length < s.length) out.push({ type: "text", text: s.slice(head.length), ...(marks.length ? { marks } : {}) });
+      return;
+    }
     out.push({ type: "text", text: s, ...(marks.length ? { marks } : {}) });
+  }
+
+  /** office:annotation → açıklama verisi; aralıklı açıklama annotation-end'e kadar açık kalır. */
+  private annotation(e: Element) {
+    if (this.scope !== "content") return;
+    const id = `c${Object.keys(this.comments).length}`;
+    const author = kid(e, "creator")?.textContent?.trim() ?? "";
+    const initials = kid(e, "creator-initials")?.textContent?.trim() || author.split(/\s+/).map((w) => w[0] ?? "").join("").toLocaleUpperCase("tr-TR").slice(0, 3);
+    const raw = kid(e, "date")?.textContent?.trim() ?? "";
+    const date = raw && !/Z|[+-]\d\d:\d\d$/.test(raw) ? `${raw.replace(/\.\d+$/, "")}Z` : raw;
+    const text = kids(e)
+      .flatMap((k) => (k.localName === "p" || k.localName === "h" ? [k] : k.localName === "list" ? descendants(k, "p") : []))
+      .map((k) => k.textContent ?? "")
+      .join("\n");
+    this.comments[id] = { id, author, initials, date, text, ...(attr(e, "resolved") === "true" ? { resolved: true } : {}) };
+    const name = attr(e, "name");
+    if (name) {
+      this.commentByName.set(name, id);
+      this.openComments.add(id);
+    } else this.pointComment = id;
   }
 
   private inline(el: Element, ctx: Ctx, base: ReturnType<typeof styleChar>["base"], out: JSONContent[]): JSONContent[] {
@@ -373,13 +433,34 @@ export class OdtReader {
           this.frame(e, out);
           this.lastSpace = false;
           break;
-        case "page-number":
-        case "page-count":
         case "date":
-        case "time":
-          out.push({ type: "pageField", attrs: { field: { "page-number": "PAGE", "page-count": "NUMPAGES", date: "DATE", time: "TIME" }[e.localName] } });
+        case "time": {
+          // Sabit tarih/saat (text:fixed="true") yazıldığı günün değerini korur: metin olarak okunur.
+          if (attr(e, "fixed") === "true") {
+            const txt = e.textContent ?? "";
+            if (txt) this.textNode(txt, ctx, base, out);
+          } else {
+            const ds = attr(e, "data-style-name");
+            const pic = ds ? (this.st.dataStyles.get(ds) ?? null) : null;
+            const field = e.localName === "date" ? "DATE" : "TIME";
+            out.push({ type: "pageField", attrs: { field, format: pic && pic !== fieldPicture(field) ? pic : null } });
+          }
           this.lastSpace = false;
           break;
+        }
+        case "page-number":
+        case "page-count":
+          out.push({ type: "pageField", attrs: { field: e.localName === "page-count" ? "NUMPAGES" : "PAGE" } });
+          this.lastSpace = false;
+          break;
+        case "annotation":
+          this.annotation(e);
+          break;
+        case "annotation-end": {
+          const id = this.commentByName.get(attr(e, "name") ?? "");
+          if (id) this.openComments.delete(id);
+          break;
+        }
         case "meta":
         case "meta-field":
         case "ruby":
@@ -635,7 +716,7 @@ export class OdtReader {
       p.keywords = descendants(x, "keyword")
         .map((k) => k.textContent?.trim())
         .filter(Boolean)
-        .join(", ");
+        .join("; ");
       p.author = get("initial-creator") || get("creator");
       p.created = get("creation-date") || p.created;
       p.modified = get("date") || p.modified;

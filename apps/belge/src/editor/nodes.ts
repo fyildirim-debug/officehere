@@ -2,12 +2,13 @@
 import { Extension, Node, mergeAttributes } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
+import { formatPicture } from "./dateFormat";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     pageBreak: { setPageBreak: () => ReturnType };
     toc: { insertToc: (entries: TocEntry[]) => ReturnType };
-    pageField: { insertPageField: (field: PageFieldKind) => ReturnType };
+    pageField: { insertPageField: (field: PageFieldKind, format?: string | null) => ReturnType };
     bookmark: { insertBookmark: (name: string) => ReturnType };
   }
 }
@@ -160,11 +161,18 @@ export const TableOfContents = Node.create({
 /** Sayfa/tarih alanları: PAGE, NUMPAGES, DATE (gg.aa.yyyy), TIME (SS:dd). */
 export type PageFieldKind = "PAGE" | "NUMPAGES" | "DATE" | "TIME";
 
-/** Tarih/saat alanının güncel değeri (diğer alanlar için null). */
-export function fieldNowText(field: unknown, d = new Date()): string | null {
+/** Tarih/saat alanının güncel değeri (diğer alanlar için null). format: biçim resmi (ör. "d MMMM yyyy"). */
+export function fieldNowText(field: unknown, d = new Date(), format?: unknown): string | null {
+  if (field !== "DATE" && field !== "TIME") return null;
+  if (typeof format === "string" && format) return formatPicture(format, d);
   if (field === "DATE") return d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric" });
-  if (field === "TIME") return d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
-  return null;
+  return d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Alanın varsayılan biçim resmi (yazıcılar için). */
+export function fieldPicture(field: unknown, format?: unknown): string | null {
+  if (typeof format === "string" && format) return format;
+  return field === "DATE" ? "dd.MM.yyyy" : field === "TIME" ? "HH:mm" : null;
 }
 
 /** Alanı Güncelleştir: tarih/saat alanları şimdiki zamanla yeniden yazılır. */
@@ -180,24 +188,28 @@ export const PageField = Node.create({
   inline: true,
   atom: true,
   addAttributes() {
-    return { field: { default: "PAGE", parseHTML: (el) => el.getAttribute("data-field") ?? "PAGE", renderHTML: (a) => ({ "data-field": a.field }) } };
+    return {
+      field: { default: "PAGE", parseHTML: (el) => el.getAttribute("data-field") ?? "PAGE", renderHTML: (a) => ({ "data-field": a.field }) },
+      // Tarih/saat alanının biçim resmi (null: varsayılan gg.aa.yyyy / SS:dd).
+      format: { default: null, parseHTML: (el) => el.getAttribute("data-format"), renderHTML: (a) => (a.format ? { "data-format": a.format } : {}) },
+    };
   },
   parseHTML() {
     return [{ tag: "span[data-field]" }];
   },
   renderHTML({ node, HTMLAttributes }) {
-    return ["span", mergeAttributes(HTMLAttributes, { class: "bl-field" }), fieldNowText(node.attrs.field) ?? (node.attrs.field === "NUMPAGES" ? NUMPAGES_TOKEN : PAGE_TOKEN)];
+    return ["span", mergeAttributes(HTMLAttributes, { class: "bl-field" }), fieldNowText(node.attrs.field, new Date(), node.attrs.format) ?? (node.attrs.field === "NUMPAGES" ? NUMPAGES_TOKEN : PAGE_TOKEN)];
   },
   addNodeView() {
     return ({ node, editor, getPos }) => {
       const dom = document.createElement("span");
       dom.className = "bl-field is-editing";
-      const now = fieldNowText(node.attrs.field);
+      const now = fieldNowText(node.attrs.field, new Date(), node.attrs.format);
       if (now) {
         dom.textContent = now;
-        const refresh = () => (dom.textContent = fieldNowText(node.attrs.field) ?? dom.textContent);
+        const refresh = () => (dom.textContent = fieldNowText(node.attrs.field, new Date(), node.attrs.format) ?? dom.textContent);
         window.addEventListener(FIELD_REFRESH_EVENT, refresh);
-        return { dom, update: (n) => n.type.name === "pageField" && n.attrs.field === node.attrs.field, destroy: () => window.removeEventListener(FIELD_REFRESH_EVENT, refresh) };
+        return { dom, update: (n) => n.type.name === "pageField" && n.attrs.field === node.attrs.field && n.attrs.format === node.attrs.format, destroy: () => window.removeEventListener(FIELD_REFRESH_EVENT, refresh) };
       }
       const total = node.attrs.field === "NUMPAGES";
       dom.textContent = total ? "#" : "1";
@@ -216,14 +228,14 @@ export const PageField = Node.create({
     };
   },
   renderText({ node }) {
-    return fieldNowText(node.attrs.field) ?? (node.attrs.field === "NUMPAGES" ? "#" : "1");
+    return fieldNowText(node.attrs.field, new Date(), node.attrs.format) ?? (node.attrs.field === "NUMPAGES" ? "#" : "1");
   },
   addCommands() {
     return {
       insertPageField:
-        (field) =>
+        (field, format = null) =>
         ({ commands }) =>
-          commands.insertContent({ type: "pageField", attrs: { field } }),
+          commands.insertContent({ type: "pageField", attrs: { field, format } }),
     };
   },
 });
@@ -303,7 +315,9 @@ export const ListStyles = Extension.create({
           multilevel: {
             default: null,
             parseHTML: (el) => el.getAttribute("data-multilevel"),
-            renderHTML: (a) => (a.multilevel ? { "data-multilevel": a.multilevel } : {}),
+            // Çok düzeyli (1.1.) numaralar CSS sayacıyla çizilir: başlangıç değeri sayacın sıfırlama değeridir.
+            renderHTML: (a) =>
+              a.multilevel ? { "data-multilevel": a.multilevel, ...(a.multilevel === "outline" && Number(a.start) > 1 ? { style: `counter-reset: bl-outline ${Number(a.start) - 1}` } : {}) } : {},
           },
         },
       },

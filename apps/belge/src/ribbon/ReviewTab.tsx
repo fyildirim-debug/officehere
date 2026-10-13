@@ -16,6 +16,7 @@ import {
   Eye20Regular,
   BranchCompare24Regular,
   DocumentLock32Regular,
+  ReadAloud24Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack } from "@officehere/ui";
 import { useBelge } from "../state/context";
@@ -71,6 +72,17 @@ export function ReviewTab({ lang, setLang, deleteComment, deleteAllComments }: {
         <RibbonStack>
           <RibbonButton icon={<TextWordCount20Regular />} label="Sözcük Sayısı" shortcut="Ctrl+Shift+G" onClick={() => ctx.openDialog("wordCount")} />
         </RibbonStack>
+      </RibbonGroup>
+      <RibbonGroup label="Konuşma" icon={<ReadAloud24Regular />}>
+        <RibbonButton
+          size="large"
+          icon={<ReadAloud24Regular />}
+          label="Sesli Oku"
+          shortcut="Ctrl+Alt+Boşluk"
+          checked={ctx.readAloud}
+          description="Metni imleçten başlayarak sesli okuyun; okunan sözcük vurgulanır."
+          onClick={ctx.toggleReadAloud}
+        />
       </RibbonGroup>
       <RibbonGroup label="Dil" icon={<LocalLanguage24Regular />}>
         <RibbonMenuButton

@@ -25,26 +25,32 @@ import {
   MathFormula20Regular,
   MathFormula32Regular,
   DataBarVertical32Regular,
+  TextCaseTitle20Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuHeader, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack, TableGridPicker, useMenuClose } from "@officehere/ui";
 import { BUILTIN_EQUATIONS } from "../editor/equation";
 import { useBelge } from "../state/context";
-import { COMMON_SYMBOLS, COVER_PAGES, FOOTER_PRESETS, HEADER_PRESETS, pageNumberDoc, stripPageFields } from "../templates/parts";
+import { COVER_PAGES, FOOTER_PRESETS, HEADER_PRESETS, pageNumberDoc, stripPageFields } from "../templates/parts";
 import { SHAPES, selectInsertedImage, shapeSvg, svgToPng, type ShapeKind } from "../editor/image";
 import { insertTable } from "./tableUtil";
+import { rememberSymbol, symbolGallery } from "../state/recentSymbols";
+import { codeOf } from "../editor/unicodeToggle";
+import { DROP_CAP_DEFAULT, canDropCap, dropCapTarget, setDropCap, type DropCap } from "../editor/dropCap";
 import { applyPageSetup, columnWidthAt } from "../state/pageSetup";
 
 function SymbolGrid({ onPick }: { onPick: (s: string) => void }) {
   const close = useMenuClose();
   return (
     <div className="bl-symgrid">
-      {COMMON_SYMBOLS.map((s) => (
+      {symbolGallery().map((s) => (
         <button
           key={s}
           type="button"
+          title={`U+${codeOf(s)}`}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             onPick(s);
+            rememberSymbol(s);
             close();
           }}
         >
@@ -73,6 +79,22 @@ function ShapeGrid({ onPick }: { onPick: (k: ShapeKind) => void }) {
         />
       ))}
     </div>
+  );
+}
+
+/** Büyük İlk Harf menüsü: menü açılırken imleçteki paragrafın durumu okunur. */
+function DropCapMenu({ editor, openOptions }: { editor: ReturnType<typeof useBelge>["editor"]; openOptions: () => void }) {
+  const t = dropCapTarget(editor.state);
+  const cur = (t?.node.attrs.dropCap as DropCap | null) ?? null;
+  const allowed = !!t && canDropCap(t.node);
+  return (
+    <Menu width={240}>
+      <MenuItem label="Yok" checked={!cur} disabled={!t} onClick={() => setDropCap(editor, null)} />
+      <MenuItem label="Metin İçinde" checked={cur?.mode === "drop"} disabled={!allowed} onClick={() => setDropCap(editor, { ...DROP_CAP_DEFAULT, ...cur, mode: "drop" })} />
+      <MenuItem label="Kenar Boşluğunda" checked={cur?.mode === "margin"} disabled={!allowed} onClick={() => setDropCap(editor, { ...DROP_CAP_DEFAULT, ...cur, mode: "margin" })} />
+      <MenuSeparator />
+      <MenuItem label="Büyük İlk Harf Seçenekleri..." disabled={!allowed} onClick={openOptions} />
+    </Menu>
   );
 }
 
@@ -253,6 +275,12 @@ export function InsertTab() {
           }
         />
         <RibbonStack>
+          <RibbonMenuButton
+            icon={<TextCaseTitle20Regular />}
+            label="Büyük İlk Harf"
+            description="Paragrafın başında birkaç satır boyunca büyük bir harf oluşturun."
+            menu={<DropCapMenu editor={editor} openOptions={() => ctx.openDialog("dropCap")} />}
+          />
           <RibbonButton icon={<Calendar20Regular />} label="Tarih ve Saat" onClick={() => ctx.openDialog("dateTime")} />
           <RibbonButton icon={<LineHorizontal120Regular />} label="Yatay Çizgi" onClick={() => chain().setHorizontalRule().run()} />
         </RibbonStack>

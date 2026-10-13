@@ -717,3 +717,20 @@
   border-top: 1px solid var(--oh-separator);
   font-size: 11.5px;
 }
+
+/* Dar pencerede durum çubuğu öğeleri üst üste binmez: sol taraf kırpılır, sağ taraf sabit kalır. */
+@media (max-width: 760px) {
+  .oh-statusbar {
+    gap: 4px;
+    overflow: hidden;
+  }
+
+  .oh-statusbar-left {
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .oh-statusbar-right {
+    flex: none;
+  }
+}

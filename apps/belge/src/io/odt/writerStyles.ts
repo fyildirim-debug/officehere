@@ -5,13 +5,15 @@ import type { DocSettings, PageSetup } from "../../model/document";
 import type { StyleDef } from "../../model/styles";
 import { styleChar, type CharProps } from "../common";
 import { esc } from "../docx/xml";
+import { pictureToOdf } from "./dataStyles";
 
 export const ODF_NS =
   'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" ' +
   'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" ' +
   'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" ' +
   'xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" ' +
-  'xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"';
+  'xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" ' +
+  'xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0"';
 
 export const XML_DECL = '<?xml version="1.0" encoding="UTF-8"?>\n';
 
@@ -150,12 +152,13 @@ export class StyleBook {
     return name;
   }
 
-  /** Paragraf otomatik stili (özellik yoksa üst stil adı döner). */
-  para(parent: string, pp: Record<string, string | undefined>, extra: Record<string, string | undefined> = {}): string {
+  /** Paragraf otomatik stili (özellik yoksa üst stil adı döner). inner: paragraph-properties alt öğeleri (ör. style:drop-cap). */
+  para(parent: string, pp: Record<string, string | undefined>, extra: Record<string, string | undefined> = {}, inner = ""): string {
     const p = attrs(pp);
     const e = attrs(extra);
-    if (!p && !e) return parent;
-    return this.add(`P|${parent}|${p}|${e}`, "P", (n) => `<style:style style:name="${n}" style:family="paragraph" style:parent-style-name="${parent}"${e}>${p ? `<style:paragraph-properties${p}/>` : ""}</style:style>`);
+    if (!p && !e && !inner) return parent;
+    const props = inner ? `<style:paragraph-properties${p}>${inner}</style:paragraph-properties>` : p ? `<style:paragraph-properties${p}/>` : "";
+    return this.add(`P|${parent}|${p}|${e}|${inner}`, "P", (n) => `<style:style style:name="${n}" style:family="paragraph" style:parent-style-name="${parent}"${e}>${props}</style:style>`);
   }
 
   /** Metin otomatik stili; özellik yoksa adlandırılmış stil ya da null. */
@@ -163,6 +166,11 @@ export class StyleBook {
     const t = attrs(textPropsAttrs(p, this.fonts));
     if (!t) return parent;
     return this.add(`T|${parent}|${t}`, "T", (n) => `<style:style style:name="${n}" style:family="text"${parent ? ` style:parent-style-name="${parent}"` : ""}><style:text-properties${t}/></style:style>`);
+  }
+
+  /** Tarih/saat alanının veri stili (biçim resminden). */
+  dataStyle(pic: string, time: boolean): string {
+    return this.add(`N|${time ? "t" : "d"}|${pic}`, "N", (n) => pictureToOdf(n, pic, time));
   }
 
   raw(family: string, base: string, inner: string, extra = ""): string {
@@ -241,7 +249,7 @@ export function namedStyles(styles: Record<string, StyleDef>, fonts: Set<string>
 }
 
 /** Sayfa düzeni: ODF'de üst kenar boşluğu üst bilgiye kadardır; gövde üst bilgi yüksekliği + aralıkla başlar. */
-export function pageLayout(name: string, p: PageSetup, hasHeader: boolean, hasFooter: boolean): string {
+export function pageLayout(name: string, p: PageSetup, hasHeader: boolean, hasFooter: boolean, pageColor: string | null = null): string {
   const m = p.margin;
   const hf = (has: boolean, edge: number, body: number, key: "bottom" | "top") => {
     if (!has) return "";
@@ -252,9 +260,11 @@ export function pageLayout(name: string, p: PageSetup, hasHeader: boolean, hasFo
   const top = hasHeader ? m.header : m.top;
   const bottom = hasFooter ? m.footer : m.bottom;
   const cols = p.columns > 1 ? `<style:columns fo:column-count="${p.columns}" fo:column-gap="${twCm(p.columnSpace)}"/>` : "";
+  // Sayfa rengi (Tasarım › Sayfa Rengi): ODF 1.2 özniteliği ve LibreOffice'in dolgu biçimi birlikte.
+  const bg = pageColor ? ` fo:background-color="${esc(pageColor)}" draw:fill="solid" draw:fill-color="${esc(pageColor)}"` : "";
   return (
     `<style:page-layout style:name="${name}"><style:page-layout-properties fo:page-width="${twCm(p.width)}" fo:page-height="${twCm(p.height)}" style:print-orientation="${p.orientation}" ` +
-    `fo:margin-top="${twCm(top)}" fo:margin-bottom="${twCm(bottom)}" fo:margin-left="${twCm(m.left + m.gutter)}" fo:margin-right="${twCm(m.right)}" style:writing-mode="lr-tb">${cols}</style:page-layout-properties>` +
+    `fo:margin-top="${twCm(top)}" fo:margin-bottom="${twCm(bottom)}" fo:margin-left="${twCm(m.left + m.gutter)}" fo:margin-right="${twCm(m.right)}"${bg} style:writing-mode="lr-tb">${cols}</style:page-layout-properties>` +
     `<style:header-style>${hf(hasHeader, m.header, m.top, "bottom")}</style:header-style><style:footer-style>${hf(hasFooter, m.footer, m.bottom, "top")}</style:footer-style></style:page-layout>`
   );
 }

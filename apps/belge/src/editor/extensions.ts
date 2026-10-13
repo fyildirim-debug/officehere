@@ -31,6 +31,8 @@ import { TableHandles } from "./tableHandles";
 import { TabStopsAttr } from "./tabStops";
 import { Bibliography, Citation, CrossRef, FieldUpdater, MergeField, SeqField } from "./fields";
 import { Outline } from "./outline";
+import { DropCapAttr, DropCapMeasure } from "./dropCap";
+import { ReadAloudHighlight } from "./readAloud";
 
 /** Yazı tipi adı yedek zinciriyle (yüklü olmayan yazı tiplerinde ölçü uyumlu açık yazı tipine düşer). */
 const BelgeFontFamily = FontFamily.extend({
@@ -94,6 +96,7 @@ function contentExtensions(): AnyExtension[] {
     Deletion,
     FormatChange,
     ParagraphFormat,
+    DropCapAttr,
     TabStopsAttr,
     ListStyles,
     PageBreak,
@@ -151,6 +154,8 @@ export function editorExtensions(controller: PaginationController, hooks: Editor
     TableHandles,
     FieldUpdater,
     Outline,
+    DropCapMeasure,
+    ReadAloudHighlight,
     Repeat,
     SelectionSync,
     Protection,

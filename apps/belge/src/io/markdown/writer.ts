@@ -1,6 +1,7 @@
 // Markdown yazıcı: belge → CommonMark + GFM (tablolar, üstü çizili, görev listeleri, dipnotlar).
 import type { JSONContent } from "@tiptap/core";
 import type { BelgeDocument } from "../../model/document";
+import { fieldNowText } from "../../editor/nodes";
 import { atomText, isMonoFont, marksToProps, plainBlocks, sectionsOf, textOf, type Mark } from "../common";
 import { CODE_SHADE } from "./reader";
 
@@ -144,8 +145,9 @@ class MdWriter {
         this.notes.push(`[^${num}]: ${body}`);
         continue;
       }
-      if (n.type === "pageField") continue;
-      const t = atomText(n);
+      // Markdown'da alan yoktur: tarih/saat o anki değeriyle yazılır, sayfa numarası atlanır.
+      if (n.type === "pageField" && n.attrs?.field !== "DATE" && n.attrs?.field !== "TIME") continue;
+      const t = n.type === "pageField" ? fieldNowText(n.attrs?.field, new Date(), n.attrs?.format) : atomText(n);
       if (t) {
         setMarks(mdMarks(n.marks), "");
         out += escapeText(t, lineStart());

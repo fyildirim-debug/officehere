@@ -50,7 +50,9 @@ export type DialogKind =
   | "markEntry"
   | "insertIndex"
   | "compare"
-  | "protect";
+  | "protect"
+  | "numberingValue"
+  | "dropCap";
 
 export interface DialogState {
   kind: DialogKind;
@@ -120,6 +122,9 @@ export interface BelgeCtx {
   openBackstage: (page?: "about" | "info" | "new" | "open" | "export" | "print") => void;
   /** Şerit sekmesine geçer (ör. resim eklenince Resim Biçimi). */
   showTab: (id: string) => void;
+  /** Sesli Oku açık mı; aç/kapat (Ctrl+Alt+Boşluk). */
+  readAloud: boolean;
+  toggleReadAloud: () => void;
 }
 
 export const BelgeContext = createContext<BelgeCtx | null>(null);

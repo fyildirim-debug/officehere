@@ -4,6 +4,7 @@ import type { JSONContent } from "@tiptap/core";
 import type { BelgeDocument, PageSetup } from "../../model/document";
 import type { StyleDef } from "../../model/styles";
 import { atomText, marksToProps, nodeStyleId, parseDataUrl, plainBlocks, sectionsOf, sniffImage, styleChar, stylesOf, type CharProps } from "../common";
+import { fieldNowText, fieldPicture } from "../../editor/nodes";
 import { ansiByte } from "./codepage";
 import { LINK_COLOR } from "./state";
 
@@ -183,8 +184,12 @@ class RtfWriter {
       case "hardBreak":
         return "\\line ";
       case "pageField": {
-        const f = n.attrs?.field === "NUMPAGES" ? "NUMPAGES" : n.attrs?.field === "DATE" ? "DATE \\\\@ \"dd.MM.yyyy\"" : n.attrs?.field === "TIME" ? "TIME \\\\@ \"HH:mm\"" : "PAGE";
-        return `{\\field{\\*\\fldinst{${this.runProps(p, base)} ${f}}}{\\fldrslt{${this.runProps(p, base)} 1}}}`;
+        const kind = n.attrs?.field;
+        const pic = fieldPicture(kind, n.attrs?.format);
+        // Alan yönergesinde ters eğik çizgi kaçışlanır: DATE \\@ "dd.MM.yyyy".
+        const f = kind === "NUMPAGES" ? "NUMPAGES" : (kind === "DATE" || kind === "TIME") && pic ? `${kind} \\\\@ "${rtfEscape(pic)}"` : "PAGE";
+        // Sonuç: tarih/saat alanında kayıt anındaki değer (alanı güncellemeyen okuyucular da doğru gösterir).
+        return `{\\field{\\*\\fldinst{${this.runProps(p, base)} ${f}}}{\\fldrslt{${this.runProps(p, base)} ${rtfEscape(fieldNowText(kind, new Date(), n.attrs?.format) ?? "1")}}}}`;
       }
       case "image":
         return this.image(n);

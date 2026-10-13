@@ -3,9 +3,11 @@
 // (birleştirilmiş hücreler), resimler, köprüler, dipnotlar, metin kutuları, İçindekiler, üst/alt bilgi.
 import JSZip from "jszip";
 import type { JSONContent } from "@tiptap/core";
-import type { BelgeDocument, PageSetup } from "../../model/document";
+import type { BelgeDocument, CommentData, PageSetup } from "../../model/document";
 import { samePage } from "../../model/document";
 import type { StyleDef } from "../../model/styles";
+import { fieldNowText, fieldPicture } from "../../editor/nodes";
+import { normalizeDropCap } from "../../editor/dropCap";
 import { atomText, marksToProps, nodeStyleId, parseDataUrl, plainBlocks, sectionsOf, sniffImage, stylesOf, textOf, type CharProps } from "../common";
 import { cleanText, esc } from "../docx/xml";
 import { ODF_CHAR, ODF_NS, ODF_PARA, StyleBook, XML_DECL, fontDecls, hasContent, metaXml, namedStyles, pageLayout, paraPropsAttrs, type ListLevelDef } from "./writerStyles";
@@ -47,6 +49,10 @@ class OdtWriter {
   frames = 0;
   /** Sonraki paragrafa bağlanacak metin kutuları. */
   pendingFrames = "";
+  /** Açık açıklama aralıkları (office:annotation … office:annotation-end) ve not içi yazım durumu. */
+  openComments = new Set<string>();
+  private commentNames = new Map<string, string>();
+  private inNote = false;
 
   constructor(readonly doc: BelgeDocument) {
     this.body = new StyleBook("", this.fonts);
@@ -59,17 +65,64 @@ class OdtWriter {
   inline(nodes: JSONContent[], book: StyleBook): string {
     let out = "";
     let i = 0;
+    // Açıklamalar yalnız belge gövdesinde (üst/alt bilgi ve not metni dışında) yazılır.
+    const edges = (n: JSONContent) => (book === this.body && !this.inNote ? this.commentEdges(n) : "");
     while (i < nodes.length) {
       const link = marksToProps(nodes[i].marks).link;
       if (link) {
         let inner = "";
-        while (i < nodes.length && marksToProps(nodes[i].marks).link === link) inner += this.inlineNode(nodes[i++], book);
+        while (i < nodes.length && marksToProps(nodes[i].marks).link === link) {
+          inner += edges(nodes[i]);
+          inner += this.inlineNode(nodes[i++], book);
+        }
         out += `<text:a xlink:type="simple" xlink:href="${esc(link)}" text:style-name="Internet_20_link" text:visited-style-name="Visited_20_Internet_20_Link">${inner}</text:a>`;
         continue;
       }
+      out += edges(nodes[i]);
       out += this.inlineNode(nodes[i++], book);
     }
     return out;
+  }
+
+  /** Düğümün açıklama işaretlerine göre kapanan ve açılan açıklama aralıkları. */
+  private commentEdges(n: JSONContent): string {
+    if (isDeleted(n)) return "";
+    const ids = new Set((n.marks ?? []).filter((m) => m.type === "comment").map((m) => String(m.attrs?.id ?? "")));
+    let out = "";
+    for (const id of [...this.openComments]) {
+      if (ids.has(id)) continue;
+      out += `<office:annotation-end office:name="${this.commentName(id)}"/>`;
+      this.openComments.delete(id);
+    }
+    for (const id of ids) {
+      if (this.openComments.has(id)) continue;
+      const c = this.doc.settings.comments?.[id];
+      if (!c) continue;
+      this.openComments.add(id);
+      out += this.annotation(id, c);
+    }
+    return out;
+  }
+
+  private commentName(id: string): string {
+    let name = this.commentNames.get(id);
+    if (!name) {
+      name = `__Annotation__${this.commentNames.size + 1}`;
+      this.commentNames.set(id, name);
+    }
+    return name;
+  }
+
+  /** office:annotation: yazar, tarih, baş harfler ve metin paragrafları. */
+  private annotation(id: string, c: CommentData): string {
+    const paras = String(c.text ?? "")
+      .split("\n")
+      .map((t) => `<text:p>${odtText(t)}</text:p>`)
+      .join("");
+    const resolved = c.resolved ? ' loext:resolved="true"' : "";
+    const date = c.date ? `<dc:date>${esc(c.date.replace(/Z$/, ""))}</dc:date>` : "";
+    const initials = c.initials ? `<meta:creator-initials>${esc(c.initials)}</meta:creator-initials>` : "";
+    return `<office:annotation office:name="${this.commentName(id)}"${resolved}><dc:creator>${esc(c.author ?? "")}</dc:creator>${date}${initials}${paras}</office:annotation>`;
   }
 
   private span(text: string, p: CharProps, book: StyleBook): string {
@@ -89,7 +142,21 @@ class OdtWriter {
         return "<text:line-break/>";
       case "pageField": {
         const f = n.attrs?.field;
-        const el = f === "NUMPAGES" ? "<text:page-count>1</text:page-count>" : f === "DATE" ? `<text:date>${new Date().toLocaleDateString("tr-TR")}</text:date>` : f === "TIME" ? `<text:time>${new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</text:time>` : '<text:page-number text:select-page="current">1</text:page-number>';
+        let el = '<text:page-number text:select-page="current">1</text:page-number>';
+        if (f === "NUMPAGES") el = "<text:page-count>1</text:page-count>";
+        else if (f === "DATE" || f === "TIME") {
+          // Güncellenen (sabit olmayan) alan; biçim veri stiliyle korunur.
+          const now = new Date();
+          const pic = fieldPicture(f, n.attrs?.format)!;
+          const time = f === "TIME";
+          const ds = book.dataStyle(pic, time);
+          const text = odtText(fieldNowText(f, now, n.attrs?.format) ?? "");
+          const pad = (x: number) => String(x).padStart(2, "0");
+          const value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+          el = time
+            ? `<text:time style:data-style-name="${ds}" text:time-value="${value}">${text}</text:time>`
+            : `<text:date style:data-style-name="${ds}" text:date-value="${value}">${text}</text:date>`;
+        }
         return this.span(el, p, book);
       }
       case "image":
@@ -131,7 +198,10 @@ class OdtWriter {
       : String(a.text ?? "")
           .split("\n")
           .map((t) => ({ type: "paragraph", ...(t ? { content: [{ type: "text", text: t }] } : {}) }));
+    const wasInNote = this.inNote;
+    this.inNote = true;
     const body = blocks.map((b) => (b.type === "paragraph" || b.type === "heading" ? `<text:p text:style-name="${end ? "Endnote" : "Footnote"}">${this.inline(b.content ?? [], this.body)}</text:p>` : this.block(b, this.body))).join("");
+    this.inNote = wasInNote;
     const roman = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"][num - 1] ?? String(num);
     return `<text:note text:id="${end ? "edn" : "ftn"}${num}" text:note-class="${end ? "endnote" : "footnote"}"><text:note-citation>${end ? roman : num}</text:note-citation><text:note-body>${body}</text:note-body></text:note>`;
   }
@@ -160,7 +230,11 @@ class OdtWriter {
       delete direct.indentLeft;
       delete direct.indentFirst;
     }
-    const style = book.para(parent, paraPropsAttrs(direct, master ? null : brk), master ? { "style:master-page-name": master } : {});
+    // Büyük ilk harf (ODF'de kenar boşluğu kipi yoktur: metin içinde yazılır).
+    const dc = opts.inList ? null : normalizeDropCap(a.dropCap);
+    const dcFont = dc?.font ? book.text({ font: dc.font } as CharProps, null) : null;
+    const dropXml = dc ? `<style:drop-cap style:lines="${dc.lines}" style:length="1" style:distance="${(dc.distance / (72 / 2.54)).toFixed(3)}cm"${dcFont ? ` style:style-name="${dcFont}"` : ""}/>` : "";
+    const style = book.para(parent, paraPropsAttrs(direct, master ? null : brk), master ? { "style:master-page-name": master } : {}, dropXml);
     const frames = this.pendingFrames;
     this.pendingFrames = "";
     const inner = frames + this.inline(n.content ?? [], book);
@@ -337,6 +411,13 @@ class OdtWriter {
       text += this.blocks(sec.content, this.body);
     });
     if (this.pendingBreak || this.pendingMaster || this.pendingFrames) text += this.paragraph({ type: "paragraph" }, this.body);
+    // Belge sonunda açık kalan açıklama aralıkları son paragrafın içinde kapanır.
+    if (this.openComments.size) {
+      const ends = [...this.openComments].map((id) => `<office:annotation-end office:name="${this.commentName(id)}"/>`).join("");
+      this.openComments.clear();
+      const at = Math.max(text.lastIndexOf("</text:p>"), text.lastIndexOf("</text:h>"));
+      text = at >= 0 ? text.slice(0, at) + ends + text.slice(at) : text + `<text:p>${ends}</text:p>`;
+    }
     // Üst/alt bilgiler (styles.xml kapsamı)
     const hf = (key: "header" | "footer" | "headerFirst" | "footerFirst" | "headerEven" | "footerEven", tag: string) => {
       const d = s[key];
@@ -347,7 +428,7 @@ class OdtWriter {
     };
     const hfXml = hf("header", "header") + (s.oddEven ? hf("headerEven", "header-left") : "") + (s.page.titlePage ? hf("headerFirst", "header-first") : "") + hf("footer", "footer") + (s.oddEven ? hf("footerEven", "footer-left") : "") + (s.page.titlePage ? hf("footerFirst", "footer-first") : "");
     const named = namedStyles(this.styles, this.fonts);
-    const layouts = pageLayout("pm1", s.page, hasHeader, hasFooter) + this.masters.map((m) => pageLayout(m.layout, m.page, hasHeader, hasFooter)).join("");
+    const layouts = pageLayout("pm1", s.page, hasHeader, hasFooter, s.pageColor) + this.masters.map((m) => pageLayout(m.layout, m.page, hasHeader, hasFooter, s.pageColor)).join("");
     const masters = `<style:master-page style:name="Standard" style:page-layout-name="pm1">${hfXml}</style:master-page>` + this.masters.map((m) => `<style:master-page style:name="${m.name}" style:page-layout-name="${m.layout}">${hfXml}</style:master-page>`).join("");
     const fonts = fontDecls(this.fonts);
     const content = `${XML_DECL}<office:document-content ${ODF_NS} office:version="1.3">${fonts}<office:automatic-styles>${this.body.toXml()}</office:automatic-styles><office:body><office:text>${text || '<text:p text:style-name="Standard"/>'}</office:text></office:body></office:document-content>`;

@@ -1,10 +1,12 @@
 // Kelime işlemci kısayolları (editör odaklıyken).
 import { Extension, type Editor } from "@tiptap/core";
 import { Selection, TextSelection } from "@tiptap/pm/state";
+import { closeHistory } from "@tiptap/pm/history";
 import { CellSelection, TableMap, nextCell } from "@tiptap/pm/tables";
 import type { StyleDef } from "../model/styles";
 import { toggleList } from "./listApply";
 import { getAutoCorrect } from "./autocorrectRules";
+import { toggleUnicode } from "./unicodeToggle";
 import { syncDomSelection } from "./pagination";
 import { applyStyle, changeIndent, clearCharFormatting, copyFormat, cycleCase, pasteFormat, setLineSpacing, setParaAttrs, stepFontSize, currentPara, type CopiedFormat } from "./commands";
 
@@ -159,6 +161,13 @@ export function createWordKeymap(hooks: EditorHooks) {
         "Alt-Shift-t": () => ed().chain().focus().insertPageField("TIME").run(),
         "Alt-Shift-p": () => ed().chain().focus().insertPageField("PAGE").run(),
         "Mod-k": () => (hooks.openDialog("link"), true),
+        // Ctrl+Geri Sil / Ctrl+Sil (sözcük silme) ayrı bir geri alma adımıdır: önceki yazma ile birleşmez ve
+        // sonrasında yazılan metin de ayrı adım olur (Word davranışı). Silmenin kendisi tarayıcıya bırakılır.
+        "Mod-Backspace": () => separateUndoStep(ed()),
+        "Mod-Delete": () => separateUndoStep(ed()),
+        // Alt+X: onaltılık kod ↔ karakter; Ctrl+Shift+Boşluk: bölünmez boşluk.
+        "Alt-x": () => toggleUnicode(ed()),
+        "Mod-Shift-Space": () => ed().chain().focus().insertContent("\u00A0").run(),
         "Mod-Shift-8": () => (hooks.toggleShowMarks(), true),
         "Mod-*": () => (hooks.toggleShowMarks(), true),
         "Mod-Shift-l": () => toggleList(ed(), "bulletList"),
@@ -220,6 +229,16 @@ export function createWordKeymap(hooks: EditorHooks) {
       };
     },
   });
+}
+
+/** Geri alma geçmişinde yeni grup başlatır; işlem bittikten sonra bir kez daha (false: tuş işlenmeye devam eder). */
+function separateUndoStep(editor: Editor): boolean {
+  const close = () => {
+    if (!editor.isDestroyed) editor.view.dispatch(closeHistory(editor.state.tr).setMeta("addToHistory", false));
+  };
+  close();
+  window.setTimeout(close, 0);
+  return false;
 }
 
 /** Ctrl+Yukarı: paragraf başı (zaten baştaysa önceki paragraf); Ctrl+Aşağı: sonraki paragrafın başı. */

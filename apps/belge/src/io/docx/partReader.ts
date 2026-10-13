@@ -5,7 +5,9 @@ import { fromOmml } from "../../editor/math/render";
 import { indexNode, xeNode } from "./indexXml";
 import type { JSONContent } from "@tiptap/core";
 import type { DocSettings } from "../../model/document";
-import type { TocEntry } from "../../editor/nodes";
+import { fieldPicture, type TocEntry } from "../../editor/nodes";
+import { pictureOfInstr } from "../../editor/dateFormat";
+import { normalizeDropCap } from "../../editor/dropCap";
 import { attr, attrNum, descendants, kid, kids, path, NS } from "./xml";
 import { parsePPr, parseRPr, stripUndef, type ParaProps, type RunProps } from "./readerStyles";
 import { tableStyleFromId } from "./styleXml";
@@ -33,6 +35,27 @@ interface FieldState {
 /** Sayfa/tarih alanı olarak okunan alan anahtar sözcükleri. */
 const PAGE_FIELDS = new Set(["PAGE", "NUMPAGES", "DATE", "TIME"]);
 
+/** Büyük ilk harf paragrafının harfi: çerçeve boyutu (yazı tipi boyutu) atılır, yazı tipi ayrıca döner. */
+function dropLetter(n: JSONContent): { node: JSONContent; font: string | null } {
+  let font: string | null = null;
+  const marks = (n.marks ?? [])
+    .map((m) => {
+      if (m.type !== "textStyle") return m;
+      font = (m.attrs?.fontFamily as string | null) ?? null;
+      const { fontSize: _s, fontFamily: _f, ...rest } = m.attrs ?? {};
+      return { ...m, attrs: rest };
+    })
+    .filter((m) => m.type !== "textStyle" || Object.values(m.attrs ?? {}).some((v) => v !== null && v !== undefined && v !== false));
+  return { node: { ...n, ...(marks.length ? { marks } : { marks: undefined }) }, font };
+}
+
+/** Sayfa/tarih alanı düğümü; tarih ve saatte \@ biçim resmi korunur (varsayılansa yazılmaz). */
+function pageFieldNode(kw: string, instr: string): JSONContent {
+  if (kw !== "DATE" && kw !== "TIME") return { type: "pageField", attrs: { field: kw } };
+  const pic = pictureOfInstr(instr);
+  return { type: "pageField", attrs: { field: kw, format: pic && pic !== fieldPicture(kw) ? pic : null } };
+}
+
 export class PartReader {
   private fields: FieldState[] = [];
   /** Paragraf içindeki kesmelerin türü (sayfa / sütun), parça sırasıyla. */
@@ -57,11 +80,35 @@ export class PartReader {
 
   private collect(container: Element) {
     const items: { node: JSONContent; list?: { numId: string; ilvl: number; sig: ListSig; start: number } }[] = [];
+    // Büyük ilk harf: Word harfi çerçeveli ayrı bir paragrafa (w:framePr w:dropCap) yazar; sonraki paragrafa katılır.
+    let drop: { items: typeof items; dc: Record<string, unknown> } | null = null;
+    const flushDrop = () => {
+      if (drop) items.push(...drop.items);
+      drop = null;
+    };
     const visit = (el: Element) => {
       for (const c of kids(el)) {
+        if (c.localName !== "p" && c.localName !== "bookmarkStart" && c.localName !== "bookmarkEnd") flushDrop();
         switch (c.localName) {
           case "p": {
-            for (const it of this.paragraph(c)) items.push(it);
+            const frame = kid(kid(c, "pPr"), "framePr");
+            const dcMode = attr(frame, "dropCap");
+            const its = this.paragraph(c);
+            if ((dcMode === "drop" || dcMode === "margin") && its.length === 1 && its[0].node.content?.length) {
+              flushDrop();
+              drop = { items: its, dc: { mode: dcMode, lines: attrNum(frame, "lines") ?? 3, distance: Math.round(((attrNum(frame, "hSpace") ?? 0) / 20) * 100) / 100 } };
+              break;
+            }
+            const pending = drop as { items: typeof items; dc: Record<string, unknown> } | null;
+            const host = pending && its.length && !its[0].list && (its[0].node.type === "paragraph" || its[0].node.type === "heading") ? its[0].node : null;
+            if (pending && host) {
+              const letters = (pending.items[0].node.content ?? []).map(dropLetter);
+              const font = letters.map((l) => l.font).find(Boolean) ?? null;
+              host.content = mergeText([...letters.map((l) => l.node), ...(host.content ?? [])]);
+              host.attrs = { ...host.attrs, dropCap: normalizeDropCap({ ...pending.dc, font }) };
+              drop = null;
+            } else flushDrop();
+            for (const it of its) items.push(it);
             const sp = kid(kid(c, "pPr"), "sectPr");
             if (sp && container.localName === "body") this.sectionEnds.push({ index: items.length, sectPr: sp });
             break;
@@ -96,6 +143,7 @@ export class PartReader {
       }
     };
     visit(container);
+    flushDrop();
     return items;
   }
 
@@ -253,7 +301,7 @@ export class PartReader {
           const kw = instr.split(/\s+/)[0]?.toUpperCase();
           const fnode = fieldNode(instr, kids(c).map((r) => descendants(r, "t").map((t) => t.textContent ?? "").join("")).join(""));
           if (fnode) push(fnode);
-          else if (PAGE_FIELDS.has(kw)) push({ type: "pageField", attrs: { field: kw } });
+          else if (PAGE_FIELDS.has(kw)) push(pageFieldNode(kw, instr));
           else if (kw === "HYPERLINK") {
             const href = parseHyperlinkInstr(instr);
             this.inline(c, base, href ? [...marks, { type: "link", attrs: { href } }] : marks, segs, extra);
@@ -322,7 +370,7 @@ export class PartReader {
               if (f.href) marks = [...marks.filter((m) => m.type !== "link"), { type: "link", attrs: { href: f.href } }];
             } else if (PAGE_FIELDS.has(kw)) {
               f.kind = kw === "NUMPAGES" ? "numpages" : "page";
-              push({ type: "pageField", attrs: { field: kw } });
+              push(pageFieldNode(kw, f.instr));
               f.emitted = true;
             } else {
               // SEQ / REF / PAGEREF / CITATION / MERGEFIELD: düğüm olarak alınır, sonuç metni atlanır.
@@ -335,7 +383,7 @@ export class PartReader {
             }
           } else if (t === "end" && f) {
             const kw = f.instr.trim().split(/\s+/)[0]?.toUpperCase();
-            if (!f.emitted && f.phase === "instr" && PAGE_FIELDS.has(kw)) push({ type: "pageField", attrs: { field: kw } });
+            if (!f.emitted && f.phase === "instr" && PAGE_FIELDS.has(kw)) push(pageFieldNode(kw, f.instr));
             if (!f.emitted && f.phase === "instr" && kw === "XE") {
               const xe = xeNode(f.instr);
               if (xe) push(xe);

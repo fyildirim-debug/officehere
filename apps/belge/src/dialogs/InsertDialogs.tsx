@@ -1,9 +1,13 @@
 // Ekleme iletişim kutuları: Bağlantı, Tablo Ekle, Simge, Tarih ve Saat, Yer İşareti.
 import { useMemo, useState } from "react";
 import { TextSelection } from "@tiptap/pm/state";
-import { Dialog, DialogButton, Field, FieldSet } from "@officehere/ui";
+import { Dialog, DialogButton, DialogTabs, Field, FieldSet } from "@officehere/ui";
 import { useBelge } from "../state/context";
-import { DATE_FORMATS, collectHeadings, insertText, wordAt } from "../editor/commands";
+import { collectHeadings, insertText, wordAt } from "../editor/commands";
+import { DATE_PICTURES, formatPicture, isTimePicture } from "../editor/dateFormat";
+import { Check } from "./FontDialog";
+import { codeOf } from "../editor/unicodeToggle";
+import { recentSymbols, rememberSymbol } from "../state/recentSymbols";
 import { insertTable } from "../ribbon/tableUtil";
 import { columnWidthAt } from "../state/pageSetup";
 
@@ -204,68 +208,177 @@ const SYMBOL_SETS: { id: string; label: string; chars: string }[] = [
   { id: "shapes", label: "Geometrik Şekiller ve Simgeler", chars: "■□▢▣▤▥▦▧▨▩▪▫▬▭▮▯▰▱▲△▴▵▶▷▸▹►▻▼▽◀◁◆◇◈◉◊○◌◍◎●◐◑◒◓★☆☎☑☒☐☺☻♠♣♥♦♪♫✓✔✕✖✗✘❖" },
 ];
 
+/** Özel Karakterler sekmesi: tipografik karakterler ve kısayolları. */
+const SPECIAL_CHARS: { ch: string; label: string; shortcut?: string }[] = [
+  { ch: "—", label: "Uzun Çizgi" },
+  { ch: "–", label: "Kısa Çizgi" },
+  { ch: "\u2011", label: "Bölünmez Kısa Çizgi" },
+  { ch: "\u00AD", label: "İsteğe Bağlı Kısa Çizgi" },
+  { ch: "\u2003", label: "Uzun Boşluk (em)" },
+  { ch: "\u2002", label: "Kısa Boşluk (en)" },
+  { ch: "\u2005", label: "1/4 Uzun Boşluk" },
+  { ch: "\u00A0", label: "Bölünmez Boşluk", shortcut: "Ctrl+Shift+Boşluk" },
+  { ch: "\u200B", label: "Genişliksiz Boşluk" },
+  { ch: "©", label: "Telif Hakkı" },
+  { ch: "®", label: "Tescilli" },
+  { ch: "™", label: "Ticari Marka" },
+  { ch: "§", label: "Bölüm" },
+  { ch: "¶", label: "Paragraf" },
+  { ch: "…", label: "Üç Nokta" },
+  { ch: "‘", label: "Tek Açılış Tırnağı" },
+  { ch: "’", label: "Tek Kapanış Tırnağı" },
+  { ch: "“", label: "Çift Açılış Tırnağı" },
+  { ch: "”", label: "Çift Kapanış Tırnağı" },
+  { ch: "«", label: "Açılış Köşeli Tırnağı" },
+  { ch: "»", label: "Kapanış Köşeli Tırnağı" },
+];
+
+/** Görünmeyen karakterlerin ızgarada gösterimi. */
+const shown = (c: string) => (/^[\u00A0\u00AD\u2002-\u200B]$/.test(c) ? "·" : c);
+
 export function SymbolDialog({ onClose }: { onClose: () => void }) {
   const { editor } = useBelge();
+  const [tab, setTab] = useState("symbols");
   const [set, setSet] = useState("tr");
   const [sel, setSel] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [recent, setRecent] = useState(recentSymbols);
+  const [special, setSpecial] = useState(0);
   const chars = Array.from(SYMBOL_SETS.find((s) => s.id === set)?.chars ?? "");
-  const insert = () => {
-    if (sel) insertText(editor, sel);
+  const pick = (c: string) => {
+    setSel(c);
+    setCode(codeOf(c));
+  };
+  const insert = (c = tab === "special" ? SPECIAL_CHARS[special].ch : sel) => {
+    if (!c) return;
+    insertText(editor, c);
+    rememberSymbol(c);
+    setRecent(recentSymbols());
+  };
+  // Karakter kodu yazılınca simge seçilir (onaltılık, ör. 20BA → ₺); kod geçerli bir alt kümedeyse o küme açılır.
+  const onCode = (v: string) => {
+    setCode(v);
+    const hex = v.trim().replace(/^U\+/i, "");
+    if (!/^[0-9A-Fa-f]{1,6}$/.test(hex)) return;
+    const cp = parseInt(hex, 16);
+    if (cp < 0x20 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) return;
+    const ch = String.fromCodePoint(cp);
+    setSel(ch);
+    const home = SYMBOL_SETS.find((s) => s.chars.includes(ch));
+    if (home) setSet(home.id);
   };
   return (
     <Dialog
       open
       title="Simge"
-      width={520}
+      width={560}
       onClose={onClose}
-      onSubmit={insert}
+      onSubmit={() => insert()}
       footer={
         <>
-          <DialogButton primary onClick={insert} disabled={!sel}>
+          <DialogButton primary onClick={() => insert()} disabled={tab === "symbols" && !sel}>
             Ekle
           </DialogButton>
           <DialogButton onClick={onClose}>Kapat</DialogButton>
         </>
       }
     >
-      <Field label="Alt küme:" inline>
-        <select value={set} onChange={(e) => setSet(e.target.value)}>
-          {SYMBOL_SETS.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
+      <DialogTabs
+        tabs={[
+          { id: "symbols", label: "Simgeler" },
+          { id: "special", label: "Özel Karakterler" },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+      {tab === "symbols" ? (
+        <>
+          <Field label="Alt küme:" inline>
+            <select value={set} onChange={(e) => setSet(e.target.value)}>
+              {SYMBOL_SETS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <div className="bl-symbols" role="listbox" aria-label="Simgeler">
+            {chars.map((c) => (
+              <button key={c} type="button" role="option" aria-selected={sel === c} className={sel === c ? "is-selected" : ""} title={`U+${codeOf(c)}`} onClick={() => pick(c)} onDoubleClick={() => insert(c)}>
+                {c}
+              </button>
+            ))}
+          </div>
+          {recent.length > 0 && (
+            <div className="bl-symrecent">
+              <span>Son kullanılan simgeler:</span>
+              <div className="bl-symbols is-recent">
+                {recent.map((c) => (
+                  <button key={c} type="button" className={sel === c ? "is-selected" : ""} title={`U+${codeOf(c)}`} onClick={() => pick(c)} onDoubleClick={() => insert(c)}>
+                    {shown(c)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <Field label="Karakter kodu (Unicode, onaltılık):" inline>
+            <input type="text" value={code} maxLength={8} style={{ width: 90 }} aria-label="Karakter kodu" onChange={(e) => onCode(e.target.value)} />
+          </Field>
+          <div className="bl-dlg-msg">{sel ? `Seçili: ${shown(sel)} (U+${codeOf(sel)}). Belgede de kodu yazıp Alt+X ile karaktere çevirebilirsiniz.` : "Bir simge seçin ya da karakter kodunu yazın."}</div>
+        </>
+      ) : (
+        <div className="bl-special" role="listbox" aria-label="Özel karakterler">
+          {SPECIAL_CHARS.map((c, i) => (
+            <button key={c.label} type="button" role="option" aria-selected={special === i} className={special === i ? "is-selected" : ""} onClick={() => setSpecial(i)} onDoubleClick={() => insert(c.ch)}>
+              <span className="bl-special-ch">{shown(c.ch)}</span>
+              <span>{c.label}</span>
+              <span className="bl-special-key">{c.shortcut ?? ""}</span>
+            </button>
           ))}
-        </select>
-      </Field>
-      <div className="bl-symbols">
-        {chars.map((c) => (
-          <button key={c} type="button" className={sel === c ? "is-selected" : ""} onClick={() => setSel(c)} onDoubleClick={() => insertText(editor, c)}>
-            {c}
-          </button>
-        ))}
-      </div>
-      <div className="bl-dlg-msg">{sel ? `Karakter kodu: ${sel.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")} (Unicode onaltılık)` : "Bir simge seçin."}</div>
+        </div>
+      )}
     </Dialog>
   );
+}
+
+/** Son seçilen tarih biçimi ve otomatik güncelleme tercihi (Word'deki gibi bir sonraki açılışta hatırlanır). */
+const DT_PREF = "officehere.belge.tarihSaat";
+
+function loadDtPref(): { pic: string; auto: boolean } {
+  try {
+    const v = JSON.parse(localStorage.getItem(DT_PREF) ?? "null") as { pic?: string; auto?: boolean } | null;
+    if (v?.pic && DATE_PICTURES.includes(v.pic)) return { pic: v.pic, auto: !!v.auto };
+  } catch {
+    // Depolama kapalı ya da bozuk: varsayılan
+  }
+  return { pic: DATE_PICTURES[0], auto: false };
 }
 
 export function DateTimeDialog({ onClose }: { onClose: () => void }) {
   const { editor } = useBelge();
   const now = useMemo(() => new Date(), []);
-  const [fmt, setFmt] = useState(DATE_FORMATS[0].id);
+  const pref = useMemo(loadDtPref, []);
+  const [pic, setPic] = useState(pref.pic);
+  const [auto, setAuto] = useState(pref.auto);
   const apply = () => {
-    const f = DATE_FORMATS.find((d) => d.id === fmt) ?? DATE_FORMATS[0];
-    insertText(editor, f.fmt(now));
+    try {
+      localStorage.setItem(DT_PREF, JSON.stringify({ pic, auto }));
+    } catch {
+      // Tercih saklanamazsa yalnız bu ekleme etkilenmez.
+    }
+    // Otomatik güncellenen tarih bir alandır (DATE/TIME \@ "biçim"); değilse o anki değer metin olarak eklenir.
+    if (auto) editor.chain().focus().insertPageField(isTimePicture(pic) ? "TIME" : "DATE", pic).run();
+    else insertText(editor, formatPicture(pic, now));
     onClose();
   };
   return (
-    <Dialog open title="Tarih ve Saat" width={360} onClose={onClose} onSubmit={apply} footer={okCancel(apply, onClose)}>
+    <Dialog open title="Tarih ve Saat" width={380} onClose={onClose} onSubmit={apply} footer={okCancel(apply, onClose)}>
       <div className="bl-listfield">
         <span>Kullanılabilir biçimler:</span>
-        <select size={9} value={fmt} onChange={(e) => setFmt(e.target.value)} onDoubleClick={apply}>
-          {DATE_FORMATS.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.fmt(now)}
+        <select size={10} value={pic} aria-label="Kullanılabilir biçimler" onChange={(e) => setPic(e.target.value)} onDoubleClick={apply}>
+          {DATE_PICTURES.map((d) => (
+            <option key={d} value={d}>
+              {formatPicture(d, now)}
             </option>
           ))}
         </select>
@@ -275,6 +388,7 @@ export function DateTimeDialog({ onClose }: { onClose: () => void }) {
           <option value="tr">Türkçe (Türkiye)</option>
         </select>
       </Field>
+      <Check label="Otomatik olarak güncelleştir" v={auto} set={setAuto} />
     </Dialog>
   );
 }

@@ -49,7 +49,7 @@ const ROMAN = ["", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"];
 function inlineText(n: JSONContent, notes?: NoteAcc): string {
   if (n.type === "text") return n.text ?? "";
   if (n.type === "hardBreak") return "\n";
-  if (n.type === "pageField") return fieldNowText(n.attrs?.field) ?? "1";
+  if (n.type === "pageField") return fieldNowText(n.attrs?.field, new Date(), n.attrs?.format) ?? "1";
   if (n.type === "equation") return String(n.attrs?.latex ?? "");
   if (n.type === "note" && notes) {
     const end = n.attrs?.kind === "endnote";

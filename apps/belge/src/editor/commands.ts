@@ -77,14 +77,22 @@ export function changeCase(editor: Editor, mode: CaseMode) {
   view.dispatch(tr);
 }
 
-/** Shift+F3: BÜYÜK → küçük → Her Sözcük döngüsü. */
+/** Shift+F3 döngüsündeki sonraki kip: BÜYÜK → küçük → Her Sözcük (seçim tam cümle içeriyorsa Cümle düzeni). */
+export function nextCaseMode(text: string): CaseMode {
+  if (text && text === text.toLocaleUpperCase(TR) && text !== text.toLocaleLowerCase(TR)) return "lower";
+  if (text && text === text.toLocaleLowerCase(TR)) return /[.!?…](\s|$)/.test(text.trim()) ? "sentence" : "title";
+  return "upper";
+}
+
+/** Shift+F3: BÜYÜK → küçük → Her Sözcük / Cümle düzeni döngüsü (seçim yoksa imleçteki sözcük). */
 export function cycleCase(editor: Editor) {
-  const { from, to } = editor.state.selection;
-  const text = editor.state.doc.textBetween(from, to, " ") || "";
-  let next: CaseMode = "upper";
-  if (text && text === text.toLocaleUpperCase(TR)) next = "lower";
-  else if (text && text === text.toLocaleLowerCase(TR)) next = "title";
-  changeCase(editor, next);
+  const { from, to, empty } = editor.state.selection;
+  let text = editor.state.doc.textBetween(from, to, " ") || "";
+  if (empty) {
+    const w = wordAt(editor.state.doc, from);
+    if (w) text = editor.state.doc.textBetween(w.from, w.to);
+  }
+  changeCase(editor, nextCaseMode(text));
 }
 
 export function wordAt(doc: PMNode, pos: number): { from: number; to: number } | null {
@@ -318,16 +326,6 @@ export function pasteFormat(editor: Editor, f: CopiedFormat, range?: { from: num
 /* Ekle                                                                  */
 /* ------------------------------------------------------------------ */
 
-export const DATE_FORMATS: { id: string; fmt: (d: Date) => string }[] = [
-  { id: "short", fmt: (d) => d.toLocaleDateString("tr-TR") },
-  { id: "long", fmt: (d) => d.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" }) },
-  { id: "weekday", fmt: (d) => d.toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }) },
-  { id: "iso", fmt: (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` },
-  { id: "monthYear", fmt: (d) => d.toLocaleDateString("tr-TR", { month: "long", year: "numeric" }) },
-  { id: "shortTime", fmt: (d) => d.toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) },
-  { id: "time", fmt: (d) => d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) },
-  { id: "timeSec", fmt: (d) => d.toLocaleTimeString("tr-TR") },
-];
 
 export function insertText(editor: Editor, text: string) {
   editor.chain().focus().insertContent(text).run();
@@ -360,16 +358,35 @@ export function countWords(text: string): number {
   return m ? m.length : 0;
 }
 
-export function docStats(doc: PMNode) {
-  const text = doc.textBetween(0, doc.content.size, "\n", " ");
+/**
+ * Belge (ya da from–to aralığı) istatistikleri. withNotes: dipnot ve son not metinleri de sayılır
+ * (Sözcük Sayısı'ndaki "Metin kutularını, dipnotları ve son notları dahil et"; metin kutuları zaten gövdededir).
+ */
+export function docStats(doc: PMNode, range?: { from: number; to: number } | null, withNotes = false) {
+  const from = range ? Math.max(0, range.from) : 0;
+  const to = range ? Math.min(doc.content.size, range.to) : doc.content.size;
+  let text = doc.textBetween(from, to, "\n", " ");
   let paragraphs = 0;
-  doc.descendants((n) => {
+  const notes: string[] = [];
+  doc.nodesBetween(from, to, (n, pos) => {
     if (n.isTextblock) {
-      if (n.textContent.trim()) paragraphs++;
+      // Aralıktaki kısmı boş olmayan paragraflar sayılır.
+      const a = Math.max(from, pos + 1);
+      const b = Math.min(to, pos + 1 + n.content.size);
+      if (doc.textBetween(a, Math.max(a, b), " ", " ").trim()) paragraphs++;
+      if (withNotes)
+        n.forEach((c, off) => {
+          const at = pos + 1 + off;
+          if (c.type.name === "note" && at >= from && at < to && c.attrs.text) notes.push(String(c.attrs.text));
+        });
       return false;
     }
     return true;
   });
+  if (notes.length) {
+    text += `\n${notes.join("\n")}`;
+    paragraphs += notes.filter((t) => t.trim()).length;
+  }
   return {
     words: countWords(text),
     chars: text.replace(/\n/g, "").length,

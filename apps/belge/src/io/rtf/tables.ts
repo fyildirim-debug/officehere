@@ -13,6 +13,8 @@ export interface RowDef {
   /** Satırın sol kenarı (\trleft, twip) ve hizası (\trqc, \trqr). */
   left?: number;
   align?: "center" | "right" | null;
+  /** Başlık satırı olarak her sayfada yinelenir (\trhdr). */
+  header?: boolean;
 }
 
 interface Row {
@@ -40,6 +42,9 @@ export class RtfTables {
         return true;
       case "trleft":
         this.def.left = param ?? 0;
+        return true;
+      case "trhdr":
+        this.def.header = true;
         return true;
       case "trql":
       case "trqc":
@@ -180,6 +185,7 @@ export class RtfTables {
     });
     const align = this.rows[0]?.def.align ?? null;
     const indent = align ? 0 : Math.round(indentTw / 15);
-    return { type: "table", attrs: { tableStyle: "grid", headerRow: true, ...(align ? { align } : {}), ...(indent ? { indent } : {}) }, content: rows.filter((r) => r.content?.length) };
+    const repeatHeader = !!this.rows[0]?.def.header;
+    return { type: "table", attrs: { tableStyle: "grid", headerRow: true, ...(align ? { align } : {}), ...(indent ? { indent } : {}), ...(repeatHeader ? { repeatHeader } : {}) }, content: rows.filter((r) => r.content?.length) };
   }
 }

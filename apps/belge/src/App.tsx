@@ -5,7 +5,7 @@ import type { Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import { AppShell, MessageBar, Ribbon, getUserName, useContextMenu, useDocumentLifecycle, useHotkeys, type OfficeBackstagePage } from "@officehere/ui";
 import { defaultSettings, emptyDoc, type DocSettings } from "./model/document";
-import { setActiveNoteEditor, useActiveNoteEditor } from "./state/activeNote";
+import { getActiveNoteEditor, setActiveNoteEditor, useActiveNoteEditor } from "./state/activeNote";
 import { setTrackAuthorSource } from "./editor/trackChanges";
 import { renderNoteHtml } from "./views/noteHtml";
 import { resolveStyles, styleSheetCss } from "./model/styles";
@@ -42,6 +42,7 @@ import { useEditorClicks } from "./state/useEditorClicks";
 import { useFormatPainter } from "./state/useFormatPainter";
 import { ReadMode } from "./views/ReadMode";
 import { BelgeStatusBar } from "./views/BelgeStatusBar";
+import { ReadAloudBar } from "./views/ReadAloudBar";
 import { ContextMenuContent, menuPointForSelection, selectContextTarget, showsMiniBar, targetOfSelection } from "./views/contextMenu";
 import { DialogHost } from "./dialogs/DialogHost";
 import { HomeTab } from "./ribbon/HomeTab";
@@ -58,6 +59,8 @@ import { MailingsTab } from "./ribbon/MailingsTab";
 import { OutlineTab } from "./ribbon/OutlineTab";
 import { MergeContext, useMailMerge } from "./mailmerge/useMailMerge";
 import { EQUATION_EVENT } from "./editor/equation";
+import { updateFields } from "./editor/fields";
+import { FIELD_REFRESH_EVENT } from "./editor/nodes";
 import { CHART_EVENT } from "./editor/chart";
 import "./styles/workspace.css";
 import "./styles/panes.css";
@@ -69,6 +72,7 @@ import "./styles/ui-extras.css";
 import "./styles/doc-extras.css";
 import "./styles/views.css";
 import "./styles/features.css";
+import "./styles/features5.css";
 
 type Note = { text: string; kind: "info" | "warning" | "error" | "success"; id: number };
 
@@ -97,6 +101,8 @@ export function App() {
   const [spellcheck, setSpellcheck] = useState(true);
   const [lang, setLang] = useState("tr");
   const [autosave, setAutosave] = useState(true);
+  const [readAloud, setReadAloud] = useState(false);
+  const toggleReadAloud = useCallback(() => setReadAloud((r) => !r), []);
   const scrollRef = useRef<HTMLDivElement>(null);
   const insertImageFileRef = useRef<(f: File, pos: number | null, view: import("@tiptap/pm/view").EditorView) => Promise<void>>(async () => {});
   const imageInput = useRef<HTMLInputElement>(null);
@@ -302,6 +308,24 @@ export function App() {
 
   const updateToc = useFieldSync(editor, controller, settings);
 
+  // F9: alanları güncelleştir (resim yazısı/çapraz başvuru/sayfa/tarih); seçimde içindekiler varsa o da yenilenir.
+  const updateAllFields = useCallback(() => {
+    const ed = active;
+    const tr = updateFields(ed.state, (p) => controller.pageOf(p));
+    if (tr) ed.view.dispatch(tr);
+    controller.request();
+    window.dispatchEvent(new CustomEvent(FIELD_REFRESH_EVENT));
+    if (ed === editor) {
+      const { from, to } = editor.state.selection;
+      let toc = false;
+      editor.state.doc.nodesBetween(Math.max(0, from - 1), Math.min(editor.state.doc.content.size, Math.max(to, from + 1)), (n) => {
+        if (n.type.name === "toc") toc = true;
+        return !toc;
+      });
+      if (toc) updateToc();
+    }
+  }, [active, editor, controller, updateToc]);
+
   const insertNote = useCallback(
     (kind: "footnote" | "endnote") => {
       if (hfEditing) return;
@@ -309,12 +333,29 @@ export function App() {
       const before = editor.state.doc.resolve(editor.state.selection.from).nodeBefore;
       const id = before?.type.name === "note" ? (before.attrs.id as string) : null;
       if (!id) return;
-      // Not metni alanı sayfalama sonrası çizilir; hazır olunca odaklan.
+      // Not metni alanı sayfalama sonrası çizilir; hazır olunca odaklan. Bu arada basılan karakterler gövdeye
+      // yazılmaz: gövde odağı hemen bırakır, tuşlar biriktirilir ve not alanına aktarılır (Word'deki gibi).
+      editor.view.dom.blur();
+      let pending = "";
+      const buffer = (e: KeyboardEvent) => {
+        if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+        if (e.key.length === 1) pending += e.key;
+        else if (e.key === "Backspace") pending = pending.slice(0, -1);
+        else return;
+        e.preventDefault();
+      };
+      window.addEventListener("keydown", buffer, true);
       let tries = 0;
       const focus = () => {
         const el = document.querySelector<HTMLElement>(`.ProseMirror[data-note-id="${id}"]`);
-        if (el) el.focus();
-        else if (tries++ < 90) requestAnimationFrame(focus);
+        if (el || tries++ >= 90) window.removeEventListener("keydown", buffer, true);
+        if (el) {
+          el.focus();
+          const ne = getActiveNoteEditor();
+          if (pending && ne) ne.commands.insertContent(pending);
+          else if (pending) document.execCommand("insertText", false, pending);
+        } else if (tries < 90) requestAnimationFrame(focus);
+        else if (pending) editor.chain().focus().insertContent(pending).run();
       };
       requestAnimationFrame(focus);
     },
@@ -347,12 +388,14 @@ export function App() {
     "Mod+P": () => setBackstage("print"),
     "Mod+F": openFind,
     F7: () => setView({ proofPane: true }),
+    F9: updateAllFields,
     "Mod+Alt+Shift+S": () => setView({ stylesPane: !view.stylesPane }),
     "Mod+H": () => openDialog("findReplace", "replace"),
     "Mod+G": () => openDialog("findReplace", "goto"),
     "Mod+Shift+G": () => openDialog("wordCount"),
     "Alt+=": () => openDialog("equation"),
     "Alt+Shift+X": () => openDialog("markEntry"),
+    "Mod+Alt+Space": toggleReadAloud,
     Escape: () => {
       if (view.focusMode) setView({ focusMode: false });
       else if (hfEditing) setHfEditing(null);
@@ -427,6 +470,8 @@ export function App() {
     notify,
     openBackstage: (p) => setBackstage(p ?? "home"),
     showTab: setTab,
+    readAloud,
+    toggleReadAloud,
   };
 
   const tabs = [
@@ -498,6 +543,11 @@ export function App() {
   const belowRibbon = (
     <>
       <DraftBar drafts={recoveryUi.drafts} onRestore={recoveryUi.restore} onDiscard={recoveryUi.discard} onClose={recoveryUi.close} />
+      {readAloud && (
+        <ErrorBoundary name="readAloud" label="Sesli Oku" onReset={() => setReadAloud(false)}>
+          <ReadAloudBar editor={editor} notify={notify} onClose={() => setReadAloud(false)} />
+        </ErrorBoundary>
+      )}
       {settings.protection?.enforced && <ProtectionBar mode={settings.protection.mode} onStop={() => openDialog("protect")} />}
       {note && (
         <MessageBar kind={note.kind} onClose={() => setNote(null)}>
