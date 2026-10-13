@@ -1,10 +1,13 @@
 // Tablo tutamaçları (Word'deki gibi): sol üstte taşıma tutamacı (✥; tıklayınca tabloyu seçer, sürükleyince
 // tabloyu taşır) ve sağ altta boyutlandırma tutamacı (sütun genişliklerini orantılı ölçekler).
+// Ortalı ya da sağa yaslı tablo sağ kenarından boyutlandırılınca sol kenarı yerinde kalır; bırakınca
+// tablo sola yaslı olur ve ölçülen sol konum girinti olarak yazılır (tek geri alma adımı).
 import { Extension } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
-import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
+import { Plugin, PluginKey, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { CellSelection, TableMap, columnResizingPluginKey } from "@tiptap/pm/tables";
 import type { EditorView } from "@tiptap/pm/view";
+import { anchorTableLeft } from "./table";
 
 /** Tabloyu (tüm hücreleriyle) seçer. */
 export function selectTable(view: EditorView, tablePos: number) {
@@ -106,6 +109,27 @@ export function freezeColumns(view: EditorView, tablePos: number): number[] {
   const tr = columnWidthsTr(view, tablePos, widths);
   if (tr.docChanged) view.dispatch(tr.setMeta("addToHistory", false));
   return widths;
+}
+
+/**
+ * Ortalı/sağa yaslı tablonun sarmalayıcıya göre sol konumu (CSS px; yakınlaştırma düzeltilmiş).
+ * Sola yaslı tabloda null: sol kenar zaten yerinde kalır.
+ */
+export function floatingTableLeft(view: EditorView, tablePos: number, table: HTMLElement): number | null {
+  const align = view.state.doc.nodeAt(tablePos)?.attrs.align;
+  const wrap = table.parentElement;
+  if ((align !== "center" && align !== "right") || !wrap) return null;
+  return (table.getBoundingClientRect().left - wrap.getBoundingClientRect().left) / (zoomOf(table) || 1);
+}
+
+/**
+ * Boyutlandırma işlemine tablonun yeni yerleşimini ekler: sabitlenen sol kenar girinti olur, tablo
+ * sola yaslanır. Sütun genişlikleriyle aynı adımda yazıldığından Geri Al ikisini birlikte geri alır.
+ */
+export function settleTableLeft(tr: Transaction, tablePos: number, left: number | null): Transaction {
+  const node = tr.doc.nodeAt(tablePos);
+  if (left === null || !node || node.type.name !== "table") return tr;
+  return tr.setNodeMarkup(tablePos, undefined, { ...node.attrs, align: null, indent: Math.round(left) });
 }
 
 /** Sütun genişliklerini orantılı ölçekler. */
@@ -234,6 +258,8 @@ class HandlesView {
     const cols = Array.from(t.querySelectorAll<HTMLElement>(":scope > colgroup > col"));
     const total = start.reduce((x, y) => x + y, 0);
     const zoom = zoomOf(t) || 1;
+    // Ortalı tablo: sol kenar şimdiki yerinde kalsın (sürüklerken yeniden ortalanmasın).
+    const left = floatingTableLeft(this.view, pos, t);
     const sx = e.clientX;
     const factorAt = (x: number) => Math.max(60, total + (x - sx) / zoom) / total;
     const show = (f: number) => {
@@ -248,6 +274,7 @@ class HandlesView {
       if (!frozen) {
         if (Math.abs(ev.clientX - sx) < 2) return;
         frozen = true;
+        if (left !== null) anchorTableLeft(t, left);
         freezeColumns(this.view, pos);
       }
       show(factorAt(ev.clientX));
@@ -257,7 +284,8 @@ class HandlesView {
       window.removeEventListener("mouseup", onUp);
       if (!frozen) return;
       const f = factorAt(ev.clientX);
-      if (Math.abs(f - 1) > 0.005) this.view.dispatch(closeHistory(columnWidthsTr(this.view, pos, start.map((w) => w * f))));
+      if (left !== null) anchorTableLeft(t, null);
+      if (Math.abs(f - 1) > 0.005) this.view.dispatch(closeHistory(settleTableLeft(columnWidthsTr(this.view, pos, start.map((w) => w * f)), pos, left)));
       else show(1);
       this.reposition();
     };
@@ -287,6 +315,8 @@ class HandlesView {
     if (!t || col < 0 || col >= start.length) return;
     const cols = Array.from(t.querySelectorAll<HTMLElement>(":scope > colgroup > col"));
     const zoom = zoomOf(t) || 1;
+    // Son sütunun sağ kenarı tablo genişliğini değiştirir: ortalı tablonun sol kenarı yerinde kalsın.
+    const left = col === start.length - 1 ? floatingTableLeft(this.view, tablePos, t) : null;
     const sx = e.clientX;
     let widths = start;
     const widthsAt = (x: number) => {
@@ -313,6 +343,7 @@ class HandlesView {
       if (!frozen) {
         if (Math.abs(ev.clientX - sx) < 2) return;
         frozen = true;
+        if (left !== null) anchorTableLeft(t, left);
         freezeColumns(this.view, tablePos);
       }
       widths = widthsAt(ev.clientX);
@@ -324,7 +355,8 @@ class HandlesView {
       document.body.classList.remove("bl-col-resizing");
       if (!frozen) return;
       widths = widthsAt(ev.clientX);
-      if (widths.some((w, i) => w !== start[i])) this.view.dispatch(closeHistory(columnWidthsTr(this.view, tablePos, widths)));
+      if (left !== null) anchorTableLeft(t, null);
+      if (widths.some((w, i) => w !== start[i])) this.view.dispatch(closeHistory(settleTableLeft(columnWidthsTr(this.view, tablePos, widths), tablePos, left)));
       else show(start);
     };
     window.addEventListener("mousemove", onMove);

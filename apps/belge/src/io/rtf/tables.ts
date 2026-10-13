@@ -10,6 +10,9 @@ export interface RowDef {
   /** Dikey birleştirme: 1 ilk, 2 devam. */
   vmerge: number[];
   bg: (string | null)[];
+  /** Satırın sol kenarı (\trleft, twip) ve hizası (\trqc, \trqr). */
+  left?: number;
+  align?: "center" | "right" | null;
 }
 
 interface Row {
@@ -34,6 +37,14 @@ export class RtfTables {
       case "trowd":
         this.def = { cellx: [], merge: [], vmerge: [], bg: [] };
         this.cellDef = { merge: 0, vmerge: 0, bg: 0 };
+        return true;
+      case "trleft":
+        this.def.left = param ?? 0;
+        return true;
+      case "trql":
+      case "trqc":
+      case "trqr":
+        this.def.align = w === "trqc" ? "center" : w === "trqr" ? "right" : null;
         return true;
       case "clmgf":
       case "clmrg":
@@ -81,7 +92,7 @@ export class RtfTables {
 
   endRow(def: RowDef) {
     if (this.cur.length) this.endCell();
-    if (this.cells.length) this.rows.push({ cells: this.cells, def: { cellx: [...def.cellx], merge: [...def.merge], vmerge: [...def.vmerge], bg: [...def.bg] } });
+    if (this.cells.length) this.rows.push({ cells: this.cells, def: { ...def, cellx: [...def.cellx], merge: [...def.merge], vmerge: [...def.vmerge], bg: [...def.bg] } });
     this.lastDef = def;
     this.cells = [];
   }
@@ -97,9 +108,11 @@ export class RtfTables {
   private build(): JSONContent {
     // Her hücrenin sol/sağ kenarı; tanımsız hücrelere eşit genişlik.
     type Cell = { left: number; right: number; blocks: JSONContent[]; merge: number; vmerge: number; bg: string | null; rowspan: number; dropped: boolean };
+    // Soldan girinti: ilk satırın \trleft değeri (eksi değer, Word'ün hücre boşluğu payıdır; yok sayılır).
+    const indentTw = Math.max(0, this.rows[0]?.def.left ?? 0);
     const grid: Cell[][] = this.rows.map((r) => {
       const out: Cell[] = [];
-      let left = 0;
+      let left = indentTw;
       r.cells.slice(0, MAX_COLS).forEach((blocks, i) => {
         const right = r.def.cellx[i] !== undefined && r.def.cellx[i] > left ? r.def.cellx[i] : left + 1440;
         out.push({ left, right, blocks, merge: r.def.merge[i] ?? 0, vmerge: r.def.vmerge[i] ?? 0, bg: r.def.bg[i] ?? null, rowspan: 1, dropped: false });
@@ -165,6 +178,8 @@ export class RtfTables {
       for (let k = used; k < total; k++) cells.push({ type: "tableCell", attrs: { colspan: 1, rowspan: 1, colwidth: [colW[k]] }, content: [{ type: "paragraph" }] });
       return { type: "tableRow", content: cells };
     });
-    return { type: "table", attrs: { tableStyle: "grid", headerRow: true }, content: rows.filter((r) => r.content?.length) };
+    const align = this.rows[0]?.def.align ?? null;
+    const indent = align ? 0 : Math.round(indentTw / 15);
+    return { type: "table", attrs: { tableStyle: "grid", headerRow: true, ...(align ? { align } : {}), ...(indent ? { indent } : {}) }, content: rows.filter((r) => r.content?.length) };
   }
 }

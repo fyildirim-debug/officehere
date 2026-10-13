@@ -262,7 +262,10 @@ class OdtWriter {
     const total = widths.reduce((s, w) => s + w, 0);
     const { brk, master } = this.takeBreak();
     const align = n.attrs?.align === "center" ? "center" : n.attrs?.align === "right" ? "right" : "left";
-    const tStyle = book.raw("table", `Tablo`, `<style:table-properties style:width="${twCm(total)}" table:align="${align}"${brk === "page" ? ' fo:break-before="page"' : ""}/>`, master ? ` style:master-page-name="${master}"` : "");
+    // Soldan girinti (px → twip): sola yaslı tabloda fo:margin-left.
+    const indent = align === "left" ? Math.round((Number(n.attrs?.indent) || 0) * 15) : 0;
+    const margin = indent ? ` fo:margin-left="${twCm(indent)}"` : "";
+    const tStyle = book.raw("table", `Tablo`, `<style:table-properties style:width="${twCm(total)}" table:align="${align}"${margin}${brk === "page" ? ' fo:break-before="page"' : ""}/>`, master ? ` style:master-page-name="${master}"` : "");
     let x = `<table:table table:name="Tablo${id}" table:style-name="${tStyle}">`;
     for (const w of widths) x += `<table:table-column table:style-name="${book.raw("table-column", "Sutun", `<style:table-column-properties style:column-width="${twCm(w)}"/>`)}"/>`;
     const border = n.attrs?.tableStyle === "none" ? "none" : "0.5pt solid #000000";

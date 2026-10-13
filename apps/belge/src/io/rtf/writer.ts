@@ -374,14 +374,16 @@ class RtfWriter {
     const free = widths.filter((w) => !w).length;
     const rest = Math.max(0, contentTw - widths.reduce((s, w) => s + w, 0));
     for (let k = 0; k < cols; k++) if (!widths[k]) widths[k] = Math.max(300, Math.round(free ? rest / free : contentTw / cols));
-    const edges = widths.map((_, k) => widths.slice(0, k + 1).reduce((s, w) => s + w, 0));
+    // Soldan girinti (\trleft): hücre sağ kenarları da o kadar kayar.
+    const left = n.attrs?.align === "center" || n.attrs?.align === "right" ? 0 : Math.round((Number(n.attrs?.indent) || 0) * 15);
+    const edges = widths.map((_, k) => left + widths.slice(0, k + 1).reduce((s, w) => s + w, 0));
     const border = noBorder ? "" : "\\clbrdrt\\brdrs\\brdrw10\\clbrdrl\\brdrs\\brdrw10\\clbrdrb\\brdrs\\brdrw10\\clbrdrr\\brdrs\\brdrw10";
     // Dikey birleştirmenin kapladığı sütunlar: başlangıç sütunu → kalan satır ve genişlik.
     const covered: { rows: number; span: number }[] = Array.from({ length: cols }, () => ({ rows: 0, span: 1 }));
     const align = n.attrs?.align === "center" ? "\\trqc" : n.attrs?.align === "right" ? "\\trqr" : "\\trql";
     let out = "";
     rows.forEach((row, r) => {
-      let def = `\\trowd\\trgaph108\\trleft0${align}${r === 0 && n.attrs?.repeatHeader ? "\\trhdr" : ""}`;
+      let def = `\\trowd\\trgaph108\\trleft${left}${align}${r === 0 && n.attrs?.repeatHeader ? "\\trhdr" : ""}`;
       let body = "";
       const cells = row.content ?? [];
       let col = 0;

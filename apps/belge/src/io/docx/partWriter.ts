@@ -507,10 +507,12 @@ export class PartWriter {
     const allFixed = known.length === ncols;
     const tblW = allFixed ? `<w:tblW w:w="${gridTw.reduce((s, x) => s + x, 0)}" w:type="dxa"/>` : '<w:tblW w:w="5000" w:type="pct"/>';
     const jc = a.align ? `<w:jc w:val="${a.align}"/>` : "";
+    const indent = !a.align || a.align === "left" ? Math.round((Number(a.indent) || 0) * 15) : 0;
+    const tblInd = indent ? `<w:tblInd w:w="${indent}" w:type="dxa"/>` : "";
     const m = a.cellMargins as { top: number; bottom: number; left: number; right: number } | null;
     const tw = (pt: number) => Math.round(pt * 20);
     const cellMar = m ? `<w:tblCellMar><w:top w:w="${tw(m.top)}" w:type="dxa"/><w:left w:w="${tw(m.left)}" w:type="dxa"/><w:bottom w:w="${tw(m.bottom)}" w:type="dxa"/><w:right w:w="${tw(m.right)}" w:type="dxa"/></w:tblCellMar>` : "";
-    let x = `<w:tbl><w:tblPr><w:tblStyle w:val="${style}"/>${tblW}${jc}<w:tblLayout w:type="fixed"/>${cellMar}${look}</w:tblPr>`;
+    let x = `<w:tbl><w:tblPr><w:tblStyle w:val="${style}"/>${tblW}${jc}${tblInd}<w:tblLayout w:type="fixed"/>${cellMar}${look}</w:tblPr>`;
     x += `<w:tblGrid>${gridTw.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>`;
     // rowspan → vMerge: her satırda dolu ızgara sütunlarını izle.
     const pending: { col: number; span: number; left: number; width: number }[] = [];
