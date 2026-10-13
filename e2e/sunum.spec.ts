@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { inflateRawSync } from "node:zlib";
 import { expect, test, type Page } from "@playwright/test";
-import { URL, collectErrors } from "./ortak";
+import { URL, collectErrors, interceptFileChooser } from "./ortak";
 
 // OfficeHere Sunum: gerçek bir kullanıcı gibi uçtan uca senaryolar.
 
@@ -46,6 +46,7 @@ test.describe("OfficeHere Sunum senaryoları", () => {
 
   test.beforeEach(async ({ page }) => {
     errors = collectErrors(page);
+    interceptFileChooser(page);
     await openApp(page);
   });
 
@@ -295,6 +296,7 @@ test.describe("OfficeHere Sunum — sağlamlık ve yeni özellikler", () => {
 
   test.beforeEach(async ({ page }) => {
     errors = collectErrors(page);
+    interceptFileChooser(page);
     await openApp(page);
   });
 

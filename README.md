@@ -5,7 +5,8 @@
 # OfficeHere
 
 **Açık kaynak, Türkçe, tanıdık ofis paketi.**
-Belge, Tablo ve Sunum — `.docx`, `.xlsx`, `.pptx` dosyalarını açar, düzenler ve kaydeder.
+Belge, Tablo ve Sunum — `.docx`, `.xlsx`, `.pptx` başta olmak üzere OpenDocument (`.odt` `.ods` `.odp`),
+eski 97-2003 (`.doc` `.xls` `.ppt`), RTF, Markdown ve CSV dosyalarını açar, düzenler ve kaydeder.
 
 [İndir](https://github.com/fyildirim-debug/officehere/releases) ·
 [Hukuki çerçeve](HUKUKI.md) ·
@@ -31,9 +32,9 @@ Belge, Tablo ve Sunum — `.docx`, `.xlsx`, `.pptx` dosyalarını açar, düzenl
 
 | | Uygulama | Karşılığı | Dosyalar |
 | --- | --- | --- | --- |
-| <img src="apps/desktop/build/filetypes/belge.png" width="28" /> | **OfficeHere Belge** | Kelime işlemci | `.docx` `.html` `.txt` → PDF |
-| <img src="apps/desktop/build/filetypes/tablo.png" width="28" /> | **OfficeHere Tablo** | Hesap tablosu | `.xlsx` `.csv` → PDF |
-| <img src="apps/desktop/build/filetypes/sunum.png" width="28" /> | **OfficeHere Sunum** | Sunu | `.pptx` → PDF, PNG |
+| <img src="apps/desktop/build/filetypes/belge.png" width="28" /> | **OfficeHere Belge** | Kelime işlemci | `.docx` `.odt` `.rtf` `.md` `.html` `.txt` · açar: `.doc` `.dotx` `.dotm` `.ott` → PDF |
+| <img src="apps/desktop/build/filetypes/tablo.png" width="28" /> | **OfficeHere Tablo** | Hesap tablosu | `.xlsx` `.ods` `.csv` `.tsv` · açar: `.xls` `.xlsm` `.xltx` `.xltm` `.ots` `.html` → PDF, HTML |
+| <img src="apps/desktop/build/filetypes/sunum.png" width="28" /> | **OfficeHere Sunum** | Sunu | `.pptx` `.odp` `.ppsx` `.potx` · açar: `.ppt` `.pptm` `.potm` `.ppsm` `.otp` → PDF, PNG |
 
 Üçü de aynı tanıdık düzeni paylaşır: renkli başlık çubuğu, Hızlı Erişim Araç
 Çubuğu, sekmeli komut şeridi, Dosya görünümü, durum çubuğu ve yakınlaştırma.
@@ -87,8 +88,13 @@ işletim sisteminize uygun paketi indirin:
 | Linux | `.AppImage` ya da `.deb` |
 | macOS (Apple Silicon) | `-mac-arm64.dmg` (imzasız: ilk açılışta sağ tık → Aç) |
 
-Kurulum `.docx`, `.xlsx`, `.csv` ve `.pptx` dosyalarını OfficeHere ile
-ilişkilendirir.
+Kurulum `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`, `.ods`, `.csv`, `.tsv`,
+`.pptx`, `.ppt`, `.ppsx` ve `.odp` dosyalarını OfficeHere ile ilişkilendirir.
+
+**Diğer biçimler:** Eski `.doc`/`.xls`/`.ppt` dosyaları yalnız açılır; kaydedince
+`.docx`/`.xlsx`/`.pptx` olur (özgün dosya değişmez). `.odt`, `.ods`, `.odp`, `.rtf`,
+`.md` ve `.csv` dosyaları aynı biçimde kaydedilebilir; ilk kayıtta bazı özelliklerin
+kaybolabileceği sorulur.
 
 **Güncelleştirmeler:** Uygulama GitHub Sürümleri'ni açılışta ve altı saatte bir
 denetler (Seçenekler'den kapatılabilir). Windows kurulumu ve AppImage yeni sürümü
@@ -125,7 +131,7 @@ Ayrıntılar: [MIMARI.md](MIMARI.md), [KATKI.md](KATKI.md).
 
 ## Uyumluluk ve testler
 
-- Dosya biçimleri açık **Office Open XML (ECMA-376 / ISO/IEC 29500)** standardına göre kendi okuyucu/yazıcılarımızla uygulanır.
+- Dosya biçimleri açık **Office Open XML (ECMA-376 / ISO/IEC 29500)** ve **OpenDocument (ISO/IEC 26300)** standartlarına, eski ikili biçimler Microsoft'un yayımladığı açık belirtimlere ([MS-CFB], [MS-DOC], [MS-XLS], [MS-PPT]) göre kendi okuyucu/yazıcılarımızla uygulanır; ek kütüphane kullanılmaz.
 - Her uygulamanın gidiş-dönüş testleri (yaz → oku → karşılaştır) vardır; üretilen dosyalar LibreOffice ve python-docx / openpyxl / python-pptx ile dış doğrulamadan geçirilir.
 - Formül motorunun sonuçları LibreOffice ile yüzlerce formülde çapraz doğrulanır.
 - Uçtan uca testler her uygulamayı gerçek bir tarayıcıda kullanıcı gibi kullanır; CI her gönderimde hepsini çalıştırır.

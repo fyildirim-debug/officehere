@@ -118,6 +118,26 @@ for (const [rel, appName] of [
   });
 }
 
+// Yeni biçimler: çift tık / komut satırı → doğru uygulama → içerik okunur.
+type TabloHook = { __ohTablo?: { cell(ref: string): { value: unknown } | null } };
+for (const [rel, appName, check] of [
+  ["apps/belge/src/io/__fixtures__/bicimler/lo-ornek.doc", "OfficeHere Belge", (w: Page) => expect(w.locator(".bl-body")).toContainText("Giriş ve Amaç")],
+  ["apps/belge/src/io/__fixtures__/bicimler/lo-ornek.odt", "OfficeHere Belge", (w: Page) => expect(w.locator(".bl-body")).toContainText("Giriş ve Amaç")],
+  ["apps/belge/src/io/__fixtures__/bicimler/lo-ornek.rtf", "OfficeHere Belge", (w: Page) => expect(w.locator(".bl-body")).toContainText("Giriş ve Amaç")],
+  ["apps/tablo/src/io/__fixtures__/ornek.xls", "OfficeHere Tablo", (w: Page) => expect.poll(() => w.evaluate(() => (window as unknown as TabloHook).__ohTablo?.cell("A1")?.value ?? null)).toBe("Ürün")],
+  ["apps/tablo/src/io/__fixtures__/ornek.ods", "OfficeHere Tablo", (w: Page) => expect.poll(() => w.evaluate(() => (window as unknown as TabloHook).__ohTablo?.cell("A1")?.value ?? null)).toBe("Ürün")],
+  ["apps/sunum/src/io/__fixtures__/lo-bicim.ppt", "OfficeHere Sunum", (w: Page) => expect(w.locator(".stage .sv")).toContainText("Çeyrek Sonuçları")],
+  ["apps/sunum/src/io/__fixtures__/lo-proje.odp", "OfficeHere Sunum", (w: Page) => expect(w.locator(".thumb-pane .thumb-item")).toHaveCount(7)],
+] as const) {
+  test(`masaüstünde ${path.extname(rel)} dosyası ${appName} ile açılır ve içeriği okunur`, async () => {
+    const { app, win } = await launch([fixture(rel)]);
+    await win.waitForSelector(".oh-ribbon");
+    await expect(win.locator(".oh-titlebar")).toContainText(appName);
+    await check(win);
+    await app.close();
+  });
+}
+
 test("belge düzenlenir, Ctrl+S ile aynı dosyaya yazılır ve son kullanılanlara eklenir", async () => {
   const file = fixture("apps/belge/src/io/__fixtures__/libreoffice-resaved-report.docx");
   const before = statSync(file).mtimeMs;

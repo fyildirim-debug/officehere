@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { URL, collectErrors } from "./ortak";
+import { URL, collectErrors, interceptFileChooser } from "./ortak";
 import { tabloTur4Tests } from "./tablo-tur4";
 
 // OfficeHere Tablo uçtan uca senaryoları. Izgara canvas olduğu için hücre konumları
@@ -76,6 +76,7 @@ test.describe("OfficeHere Tablo uçtan uca", () => {
   let errors: string[] = [];
   test.beforeEach(({ page }) => {
     errors = collectErrors(page);
+    interceptFileChooser(page);
   });
   test.afterEach(() => {
     expect(errors).toEqual([]);
@@ -426,6 +427,7 @@ test.describe("OfficeHere Tablo 3. tur", () => {
   let errors: string[] = [];
   test.beforeEach(({ page }) => {
     errors = collectErrors(page);
+    interceptFileChooser(page);
   });
   test.afterEach(() => {
     expect(errors).toEqual([]);

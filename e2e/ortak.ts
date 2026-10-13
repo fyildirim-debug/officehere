@@ -17,3 +17,12 @@ export function collectErrors(page: Page): string[] {
   });
   return errors;
 }
+
+/**
+ * Dosya seçici yakalamasını sayfanın başında açar. Yakalama tetikleyiciyle
+ * (Ctrl+O, Aç düğmesi) aynı anda istenirse yük altında seçici yakalanmadan
+ * açılabilir ve test takılır.
+ */
+export function interceptFileChooser(page: Page): void {
+  page.on("filechooser", () => {});
+}

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { URL, collectErrors } from "./ortak";
+import { URL, collectErrors, interceptFileChooser } from "./ortak";
 
 // OfficeHere Sunum: .odp, .ppt, .ppsx, .otp dosyalarını açma ve ODP olarak kaydetme / dışarı aktarma.
 
@@ -33,6 +33,7 @@ test.describe("OfficeHere Sunum dosya biçimleri", () => {
 
   test.beforeEach(async ({ page }) => {
     errors = collectErrors(page);
+    interceptFileChooser(page);
     await openApp(page);
   });
 

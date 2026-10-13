@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { URL, collectErrors } from "./ortak";
+import { URL, collectErrors, interceptFileChooser } from "./ortak";
 
 // OfficeHere Tablo dosya biçimleri: .ods/.xls/.xltx açma, biçim sorusu, .ods dışarı aktarma
 // ve indirilen dosyayı yeniden açma. Değerler window.__ohTablo test arayüzünden okunur.
@@ -32,6 +32,7 @@ test.describe("OfficeHere Tablo dosya biçimleri", () => {
   let errors: string[] = [];
   test.beforeEach(async ({ page }) => {
     errors = collectErrors(page);
+    interceptFileChooser(page);
     await page.addInitScript(() => {
       const w = window as unknown as Record<string, unknown>;
       delete w.showSaveFilePicker;

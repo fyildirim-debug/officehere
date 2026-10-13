@@ -42,6 +42,21 @@ const MIME: Record<string, string> = {
   odt: "application/vnd.oasis.opendocument.text",
   ods: "application/vnd.oasis.opendocument.spreadsheet",
   odp: "application/vnd.oasis.opendocument.presentation",
+  ott: "application/vnd.oasis.opendocument.text-template",
+  ots: "application/vnd.oasis.opendocument.spreadsheet-template",
+  otp: "application/vnd.oasis.opendocument.presentation-template",
+  rtf: "application/rtf",
+  md: "text/markdown",
+  markdown: "text/markdown",
+  tsv: "text/tab-separated-values",
+  htm: "text/html",
+  doc: "application/msword",
+  xls: "application/vnd.ms-excel",
+  ppt: "application/vnd.ms-powerpoint",
+  ppsx: "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+  potx: "application/vnd.openxmlformats-officedocument.presentationml.template",
+  dotx: "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+  xltx: "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
 };
 
 export function mimeFor(name: string): string {

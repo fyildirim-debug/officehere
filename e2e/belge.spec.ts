@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { URL, collectErrors } from "./ortak";
+import { URL, collectErrors, interceptFileChooser } from "./ortak";
 import { belgeTur4Tests } from "./belge-tur4";
 
 // OfficeHere Belge: gerçek bir kullanıcı gibi uçtan uca senaryolar (derlenmiş uygulama, yalnız arayüz).
@@ -11,6 +11,7 @@ test.describe("OfficeHere Belge senaryoları", () => {
 
   test.beforeEach(async ({ page }) => {
     errors = collectErrors(page);
+    interceptFileChooser(page);
     // Tarayıcı dosya seçicileri yerine indirme / <input type=file> yolu kullanılsın.
     await page.addInitScript(() => {
       const w = window as unknown as Record<string, unknown>;
