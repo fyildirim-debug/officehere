@@ -1,5 +1,5 @@
 /** Dosya menüsü: şablonlar, dışa aktarma ve Bilgi özellikleri. */
-import { ArrowDownload24Regular, DocumentPdf24Regular, Image24Regular, ImageMultiple24Regular, TextBulletListLtr24Regular } from "@fluentui/react-icons";
+import { ArrowDownload24Regular, DocumentPdf24Regular, DocumentSave24Regular, Image24Regular, ImageMultiple24Regular, SlidePlay24Regular, SlideTextMultiple24Regular, TextBulletListLtr24Regular } from "@fluentui/react-icons";
 import { useLayoutEffect, useRef, useState } from "react";
 import { OfficeBackstage, type BackstageExport, type OfficeBackstagePage } from "@officehere/ui";
 import type { RecentFile } from "@officehere/core";
@@ -32,6 +32,9 @@ const EXPORTS: BackstageExport[] = [
   { id: "pngAll", title: "Tüm Slaytları Resim Olarak Kaydet", description: "Her slaydı PNG olarak bir ZIP arşivinde indirir.", icon: <ImageMultiple24Regular /> },
   { id: "outline", title: "Ana Hat Olarak Kaydet", description: "Slayt başlıkları ve metinleri düz metin dosyası olarak.", icon: <TextBulletListLtr24Regular /> },
   { id: "pptx", title: "Sunu (.pptx) Olarak Kaydet", description: "Açık XML sunu biçiminde farklı kaydet.", icon: <ArrowDownload24Regular /> },
+  { id: "odp", title: "OpenDocument Sunu (.odp) Olarak Kaydet", description: "Açık belge biçiminde kaydedin; bazı efektler ve grafikler aktarılmayabilir.", icon: <DocumentSave24Regular /> },
+  { id: "ppsx", title: "Slayt Gösterisi (.ppsx) Olarak Kaydet", description: "Açılınca doğrudan gösteri olarak oynatılacak bir dosya.", icon: <SlidePlay24Regular /> },
+  { id: "potx", title: "Şablon (.potx) Olarak Kaydet", description: "Yeni sunular için başlangıç noktası olacak bir şablon.", icon: <SlideTextMultiple24Regular /> },
 ];
 
 export function FileBackstage(props: {

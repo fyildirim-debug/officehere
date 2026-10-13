@@ -434,6 +434,8 @@ export interface Comment {
 
 export interface Slide {
   id: string;
+  /** Slayt adı (isteğe bağlı; ODF draw:name, PresentationML cSld/@name). */
+  name?: string;
   layoutId: string;
   shapes: Shape[];
   background?: Fill;

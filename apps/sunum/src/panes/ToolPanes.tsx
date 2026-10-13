@@ -1,7 +1,7 @@
 /** Yazım Denetimi ve Slaytları Yeniden Kullan görev bölmeleri. */
 import { useState } from "react";
 import { openFile } from "@officehere/core";
-import { readPptx } from "../io/pptxReader";
+import { OPEN_FILTERS, readPresentationFile } from "../io/formats";
 import { flatShapes } from "../model/ops";
 import { reuseSlide } from "../model/reuse";
 import { isTextEmpty } from "../model/textStyle";
@@ -88,17 +88,17 @@ export function SpellingPane({ state, actions: a, onClose }: { state: AppState; 
   );
 }
 
-/** Slaytları Yeniden Kullan: başka bir .pptx'teki slaytları ekler. */
+/** Slaytları Yeniden Kullan: başka bir sunudaki (.pptx, .odp, .ppt…) slaytları ekler. */
 export function ReusePane({ actions: a, onClose }: { state: AppState; actions: Actions; onClose: () => void }) {
   const [src, setSrc] = useState<{ name: string; pres: Presentation } | null>(null);
   const [keep, setKeep] = useState(false);
   const [err, setErr] = useState("");
   const browse = async () => {
     setErr("");
-    const f = await openFile([{ name: "Sunu", extensions: ["pptx"] }]);
+    const f = await openFile(OPEN_FILTERS);
     if (!f) return;
     try {
-      setSrc({ name: f.name, pres: await readPptx(f.data) });
+      setSrc({ name: f.name, pres: (await readPresentationFile(f.data, f.name)).pres });
     } catch (e) {
       setErr(`Dosya açılamadı: ${(e as Error).message}`);
     }

@@ -80,7 +80,11 @@ export interface AppState {
   collapsedSections: string[];
   /** Asıl Slayt Görünümü açıkken: girişteki sunu ve slayt dizini. */
   masterBase: { pres: Presentation; slideIdx: number; dirty: boolean; tab: string } | null;
-  message: { text: string; kind: "info" | "warning" | "error" | "success" } | null;
+  message: { text: string; kind: "info" | "warning" | "error" | "success"; action?: "startShow" } | null;
+  /** Açılan dosyanın biçimi (uzantı; yolu olmayan dosyalarda kaydetme biçimi buradan). */
+  fileFormat?: string;
+  /** Biçim kaybı sorusu bu belge için soruldu mu (ODP ilk kayıt). */
+  formatAsked?: boolean;
   /** Görünüm > Renk/Gri Tonlama (yalnız düzenleme görünümünü etkiler). */
   colorMode: "color" | "gray" | "bw";
   /** Yazım denetimi dili (BCP 47, ör. "tr-TR"). */
