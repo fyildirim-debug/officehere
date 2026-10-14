@@ -1,11 +1,40 @@
 {
- "aciklama": "Derlem turu / bulanık test / LibreOffice denetimi temel çizgisi. Elle düzenlemeyin: pnpm derlem:temel ile güncellenir. Kurallar: scripts/derlem/temel.mjs başı.",
+ "aciklama": "Derlem turu / POI derlemi / paket denetimi / bulanık test / LibreOffice denetimi temel çizgisi. Elle düzenlemeyin: pnpm derlem:temel ile güncellenir. Kurallar: scripts/derlem/temel.mjs başı.",
  "kip": "baslangic",
  "guncelleme": "2026-10-14",
  "derlemBilgi": {
-  "tarih": "2026-10-14T09:52:35.212Z",
-  "commit": "e578961",
-  "dosya": 84
+  "tarih": "2026-10-14T20:51:08.540Z",
+  "commit": "0030964",
+  "dosya": 125
+ },
+ "poi": {
+  "belge": {
+   "dosya": 13,
+   "acildi": 13,
+   "parça": 75,
+   "ilişki": 76,
+   "ns": 19,
+   "öğe": 22,
+   "model": 743
+  },
+  "tablo": {
+   "dosya": 15,
+   "acildi": 15,
+   "parça": 44,
+   "ilişki": 44,
+   "ns": 466,
+   "öğe": 4,
+   "model": 10
+  },
+  "sunum": {
+   "dosya": 13,
+   "acildi": 13,
+   "parça": 70,
+   "ilişki": 54,
+   "ns": 3677,
+   "öğe": 1,
+   "model": 0
+  }
  },
  "bulanik": {
   "hizMs": 137.9,
@@ -1043,6 +1072,131 @@
   "test-derlem/lo/lo-uzun.docx→docx": {
    "pdf": true
   },
+  "test-derlem/poi/backgrounds.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/bar-chart.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/checkboxes.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/comment.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/comments.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/CustomXMLMappings.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/DataValidationEvaluations.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/delins.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/EmbeddedDocument.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/ExcelPivotTableSample.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/ExcelTables.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/ExcelWithAttachments.xlsm→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/FieldCodes.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/footnotes.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/Headers.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/hello-world-signed.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/hello-world-signed.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/hello-world-signed.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/layouts.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/NewStyleConditionalFormattings.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/Numbering.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/pie-chart.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/PPTWithAttachments.pptm→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/right-to-left.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/SampleShow.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/shapes.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/SimpleMacro.docm→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/SimpleMacro.pptm→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/SimpleMacro.xlsm→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/SimpleScatterChart.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/smartart-rotated-text.pptx→pptx": {
+   "pdf": true,
+   "bosFazla": 1
+  },
+  "test-derlem/poi/smartart-simple.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/SmartArt.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/StructuredReferences.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/table_test.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/poi/TestTableColumns.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/WithEmbeded.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/WithGIF.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/poi/WithTextBox.xlsx→xlsx": {
+   "pdf": true,
+   "bosFazla": 1
+  },
+  "test-derlem/poi/WithThreeCharts.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/poi/WordWithAttachments.docx→docx": {
+   "pdf": true
+  },
   "test-derlem/py/py-belge.docx→docx": {
    "pdf": true
   },
@@ -1086,6 +1240,7 @@
    "pdf": true
   }
  },
+ "opc": {},
  "derlem": {
   "apps/belge/src/io/__fixtures__/bicimler/izleme.doc": {
    "durum": "tamam",
@@ -1101,7 +1256,9 @@
     "docx": {
      "kayip": {
       "parça:wordprocessingml.fontTable": 1,
-      "parça:theme": 1
+      "parça:theme": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:theme": 1
      }
     }
    }
@@ -1126,7 +1283,10 @@
      "kayip": {
       "parça:manifest.rdf": 1,
       "parça:settings.xml": 1,
-      "parça:medya": 1
+      "parça:medya": 1,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12
      }
     }
    }
@@ -1160,7 +1320,13 @@
     "docx": {
      "kayip": {
       "parça:wordprocessingml.fontTable": 1,
-      "parça:theme": 1
+      "parça:theme": 1,
+      "ilişki:image": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:theme": 1,
+      "ns:mc:AlternateContent": 1,
+      "ns:mc:Choice": 1,
+      "ns:mc:Fallback": 1
      }
     }
    }
@@ -1175,6 +1341,10 @@
       "parça:manifest.rdf": 1,
       "parça:settings.xml": 1,
       "parça:medya": 1,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12,
+      "ns:loext:graphic-properties": 1,
       "öğe:paragraf": 1
      }
     }
@@ -1208,7 +1378,16 @@
       "parça:theme": 1,
       "parça:application/xml": 1,
       "parça:customXmlProperties": 1,
-      "parça:medya": 1
+      "parça:medya": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:stylesWithEffects": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:theme": 1,
+      "ilişki:customXml": 1,
+      "ilişki:customXmlProps": 1,
+      "ns:w14:docId": 1,
+      "ns:w14:defaultImageDpi": 1
      }
     }
    }
@@ -1225,7 +1404,16 @@
       "parça:theme": 1,
       "parça:application/xml": 1,
       "parça:customXmlProperties": 1,
-      "parça:medya": 1
+      "parça:medya": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:stylesWithEffects": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:theme": 1,
+      "ilişki:customXml": 1,
+      "ilişki:customXmlProps": 1,
+      "ns:w14:docId": 1,
+      "ns:w14:defaultImageDpi": 1
      }
     }
    }
@@ -1237,7 +1425,9 @@
     "docx": {
      "kayip": {
       "parça:wordprocessingml.fontTable": 1,
-      "parça:theme": 1
+      "parça:theme": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:theme": 1
      }
     }
    }
@@ -1251,6 +1441,9 @@
       "parça:wordprocessingml.footer": 1,
       "parça:wordprocessingml.fontTable": 1,
       "parça:theme": 1,
+      "ilişki:footer": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:theme": 1,
       "öğe:altBilgi": 1
      }
     }
@@ -1263,7 +1456,12 @@
     "pptx": {},
     "odp": {
      "kayip": {
-      "parça:settings.xml": 1
+      "parça:settings.xml": 1,
+      "ns:loext:gradient-stop": 12,
+      "ns:loext:graphic-properties": 6,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12
      }
     }
    }
@@ -1281,6 +1479,9 @@
    "turlar": {
     "pptx": {
      "kayip": {
+      "ns:mc:AlternateContent": 4,
+      "ns:mc:Choice": 4,
+      "ns:mc:Fallback": 4,
       "öğe:geçişliSlayt": 4
      }
     }
@@ -1306,6 +1507,14 @@
      "kayip": {
       "parça:medya": 1,
       "parça:settings.xml": 1,
+      "ns:loext:fill-complex-color": 21,
+      "ns:loext:graphic-properties": 22,
+      "ns:loext:transformation": 9,
+      "ns:loext:char-complex-color": 10,
+      "ns:loext:gradient-stop": 14,
+      "ns:loext:theme": 9,
+      "ns:loext:theme-colors": 9,
+      "ns:loext:color": 108,
       "öğe:resim": 1
      }
     }
@@ -1327,6 +1536,12 @@
       "parça:custom-properties": 1,
       "parça:presentationml.slideMaster": 8,
       "parça:theme": 8,
+      "ilişki:custom-properties": 1,
+      "ilişki:theme": 8,
+      "ilişki:slideMaster": 8,
+      "ns:mc:AlternateContent": 1,
+      "ns:mc:Choice": 1,
+      "ns:mc:Fallback": 1,
       "öğe:geçişliSlayt": 1
      }
     }
@@ -1341,6 +1556,12 @@
       "parça:custom-properties": 1,
       "parça:presentationml.slideMaster": 8,
       "parça:theme": 7,
+      "ilişki:custom-properties": 1,
+      "ilişki:theme": 8,
+      "ilişki:slideMaster": 8,
+      "ns:mc:AlternateContent": 3,
+      "ns:mc:Choice": 3,
+      "ns:mc:Fallback": 3,
       "öğe:geçişliSlayt": 3
      }
     }
@@ -1355,6 +1576,12 @@
       "parça:custom-properties": 1,
       "parça:presentationml.slideMaster": 8,
       "parça:theme": 7,
+      "ilişki:custom-properties": 1,
+      "ilişki:theme": 8,
+      "ilişki:slideMaster": 8,
+      "ns:mc:AlternateContent": 1,
+      "ns:mc:Choice": 1,
+      "ns:mc:Fallback": 1,
       "öğe:geçişliSlayt": 1
      }
     }
@@ -1369,7 +1596,11 @@
     "ods": {
      "kayip": {
       "parça:manifest.rdf": 1,
-      "parça:medya": 1
+      "parça:medya": 1,
+      "ns:loext:char-complex-color": 1,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12
      }
     }
    }
@@ -1398,7 +1629,9 @@
     "xlsx": {
      "kayip": {
       "parça:custom-properties": 1,
-      "parça:ms-office.vbaProject": 1
+      "parça:ms-office.vbaProject": 1,
+      "ilişki:vbaProject": 1,
+      "ilişki:custom-properties": 1
      }
     }
    }
@@ -1411,7 +1644,9 @@
     "xlsx": {
      "kayip": {
       "parça:custom-properties": 1,
-      "parça:ms-office.vbaProject": 1
+      "parça:ms-office.vbaProject": 1,
+      "ilişki:vbaProject": 1,
+      "ilişki:custom-properties": 1
      }
     }
    }
@@ -1423,7 +1658,8 @@
    "turlar": {
     "xlsx": {
      "kayip": {
-      "parça:custom-properties": 1
+      "parça:custom-properties": 1,
+      "ilişki:custom-properties": 1
      }
     }
    }
@@ -1441,7 +1677,11 @@
     "ods": {
      "kayip": {
       "parça:manifest.rdf": 1,
-      "parça:medya": 1
+      "parça:medya": 1,
+      "ns:loext:char-complex-color": 1,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12
      }
     }
    }
@@ -1469,7 +1709,8 @@
    "turlar": {
     "xlsx": {
      "kayip": {
-      "parça:custom-properties": 1
+      "parça:custom-properties": 1,
+      "ilişki:custom-properties": 1
      }
     }
    }
@@ -1477,6 +1718,7 @@
   "apps/tablo/test/fixtures/lo-stil.ods": {
    "durum": "tamam",
    "acildi": true,
+   "loFormulFarkli": 2,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -1501,6 +1743,14 @@
       "parça:Grafik#/content.xml": 1,
       "parça:manifest.rdf": 1,
       "parça:medya": 1,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12,
+      "ns:loext:graphic-properties": 1,
+      "ns:loext:p": 3,
+      "ns:calcext:conditional-formats": 1,
+      "ns:calcext:conditional-format": 1,
+      "ns:calcext:condition": 1,
       "öğe:doğrulama": 1,
       "öğe:koşullu": 1,
       "öğe:grafik": 3
@@ -1511,8 +1761,13 @@
   "apps/tablo/test/fixtures/lo-tablo.xlsx": {
    "durum": "tamam",
    "acildi": true,
+   "loFormulFarkli": 2,
    "turlar": {
-    "xlsx": {}
+    "xlsx": {
+     "kayip": {
+      "ns:c15:showLeaderLines": 2
+     }
+    }
    }
   },
   "apps/tablo/test/fixtures/openpyxl/aciklama.xlsx": {
@@ -1547,7 +1802,9 @@
     "xlsx": {
      "kayip": {
       "parça:spreadsheetml.comments": 1,
-      "parça:vmlDrawing": 1
+      "parça:vmlDrawing": 1,
+      "ilişki:comments": 1,
+      "ilişki:vmlDrawing": 1
      }
     }
    }
@@ -1584,6 +1841,11 @@
     "xlsx": {
      "kayip": {
       "parça:custom-properties": 1,
+      "ilişki:custom-properties": 1,
+      "ns:mc:AlternateContent": 1,
+      "ns:mc:Choice": 1,
+      "ns:mc:Fallback": 1,
+      "ns:c15:showLeaderLines": 2,
       "öğe:adlıAralık": 1
      }
     }
@@ -1693,6 +1955,14 @@
       "parça:Grafik#/content.xml": 1,
       "parça:manifest.rdf": 1,
       "parça:medya": 1,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12,
+      "ns:loext:graphic-properties": 1,
+      "ns:loext:p": 3,
+      "ns:calcext:conditional-formats": 1,
+      "ns:calcext:conditional-format": 1,
+      "ns:calcext:condition": 1,
       "öğe:doğrulama": 1,
       "öğe:koşullu": 1,
       "öğe:grafik": 3
@@ -1713,7 +1983,11 @@
    "acildi": true,
    "loFormulFarkli": 2,
    "turlar": {
-    "xlsx": {}
+    "xlsx": {
+     "kayip": {
+      "ns:c15:showLeaderLines": 2
+     }
+    }
    }
   },
   "test-derlem/lo/lo-buyuk.ods": {
@@ -1744,6 +2018,14 @@
       "parça:Grafik#/content.xml": 1,
       "parça:manifest.rdf": 1,
       "parça:medya": 1,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12,
+      "ns:loext:graphic-properties": 1,
+      "ns:loext:p": 3,
+      "ns:calcext:conditional-formats": 1,
+      "ns:calcext:conditional-format": 1,
+      "ns:calcext:condition": 1,
       "öğe:doğrulama": 1,
       "öğe:koşullu": 1,
       "öğe:grafik": 3
@@ -1756,7 +2038,11 @@
    "acildi": true,
    "loFormulFarkli": 2,
    "turlar": {
-    "xlsx": {}
+    "xlsx": {
+     "kayip": {
+      "ns:c15:showLeaderLines": 2
+     }
+    }
    }
   },
   "test-derlem/lo/lo-karma.doc": {
@@ -1775,6 +2061,12 @@
       "kelime": 2,
       "parça:wordprocessingml.fontTable": 1,
       "parça:theme": 1,
+      "ilişki:hyperlink": 2,
+      "ilişki:fontTable": 1,
+      "ilişki:theme": 1,
+      "ns:wps:cNvSpPr": 1,
+      "ns:wps:nvSpPr": 1,
+      "ns:wps:cNvPr": 1,
       "öğe:değişiklik": 1
      }
     }
@@ -1795,6 +2087,10 @@
      "kayip": {
       "parça:manifest.rdf": 1,
       "parça:settings.xml": 1,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12,
+      "ns:loext:graphic-properties": 1,
       "öğe:paragraf": 1,
       "öğe:değişiklik": 1
      }
@@ -1825,6 +2121,9 @@
       "kelime": 7,
       "parça:wordprocessingml.fontTable": 1,
       "parça:theme": 1,
+      "ilişki:hyperlink": 7,
+      "ilişki:fontTable": 1,
+      "ilişki:theme": 1,
       "öğe:köprü": 16,
       "öğe:değişiklik": 1
      }
@@ -1857,6 +2156,9 @@
      "kayip": {
       "parça:manifest.rdf": 1,
       "parça:settings.xml": 1,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12,
       "öğe:köprü": 16,
       "öğe:değişiklik": 1
      }
@@ -1889,6 +2191,12 @@
       "parça:nesne/content.xml": 1,
       "parça:medya": 2,
       "parça:settings.xml": 1,
+      "ns:loext:gradient-stop": 12,
+      "ns:loext:graphic-properties": 9,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12,
+      "ns:loext:p": 1,
       "öğe:resim": 1,
       "öğe:grafik": 1
      }
@@ -1909,6 +2217,10 @@
     "pptx": {
      "kayip": {
       "parça:drawingml.chart": 1,
+      "ilişki:chart": 1,
+      "ns:mc:AlternateContent": 8,
+      "ns:mc:Choice": 8,
+      "ns:mc:Fallback": 8,
       "öğe:geçişliSlayt": 2,
       "öğe:grafik": 1
      }
@@ -1933,6 +2245,12 @@
       "parça:nesne/content.xml": 3,
       "parça:medya": 4,
       "parça:settings.xml": 1,
+      "ns:loext:gradient-stop": 12,
+      "ns:loext:graphic-properties": 9,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12,
+      "ns:loext:p": 3,
       "öğe:resim": 3,
       "öğe:grafik": 3
      }
@@ -1946,6 +2264,10 @@
     "pptx": {
      "kayip": {
       "parça:drawingml.chart": 3,
+      "ilişki:chart": 3,
+      "ns:mc:AlternateContent": 24,
+      "ns:mc:Choice": 24,
+      "ns:mc:Fallback": 24,
       "öğe:geçişliSlayt": 4,
       "öğe:grafik": 3
      }
@@ -1961,7 +2283,1133 @@
       "kelime": 29,
       "parça:wordprocessingml.fontTable": 1,
       "parça:theme": 1,
+      "ilişki:hyperlink": 29,
+      "ilişki:fontTable": 1,
+      "ilişki:theme": 1,
       "öğe:köprü": 60
+     }
+    }
+   }
+  },
+  "test-derlem/poi/backgrounds.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:medya": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ns:p14:creationId": 4,
+      "ns:p14:discardImageEditData": 1,
+      "ns:p14:defaultImageDpi": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/bar-chart.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:medya": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ns:p15:sldGuideLst": 1,
+      "ns:p15:guide": 2,
+      "ns:p15:clr": 2,
+      "ns:p14:modId": 1,
+      "ns:p14:creationId": 1,
+      "ns:mc:AlternateContent": 1,
+      "ns:mc:Choice": 1,
+      "ns:c14:style": 1,
+      "ns:mc:Fallback": 1,
+      "ns:p14:discardImageEditData": 1,
+      "ns:p14:defaultImageDpi": 1,
+      "ns:p15:chartTrackingRefBased": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/checkboxes.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:wordprocessingml.footer": 3,
+      "parça:wordprocessingml.header": 3,
+      "parça:wordprocessingml.endnotes": 1,
+      "parça:wordprocessingml.footnotes": 1,
+      "parça:theme": 1,
+      "parça:customXmlProperties": 1,
+      "parça:application/xml": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "ilişki:header": 3,
+      "ilişki:footer": 3,
+      "ilişki:endnotes": 1,
+      "ilişki:customXml": 1,
+      "ilişki:footnotes": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:theme": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:attachedTemplate": 1,
+      "ilişki:customXmlProps": 1,
+      "öğe:üstBilgi": 3,
+      "öğe:altBilgi": 3
+     }
+    }
+   }
+  },
+  "test-derlem/poi/comment.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "ayar.yorum": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:wordprocessingml.comments": 1,
+      "ilişki:comments": 1,
+      "ilişki:fontTable": 1,
+      "öğe:yorum": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/comments.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "test-derlem/poi/CustomXMLMappings.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:spreadsheetml.tableSingleCells": 1,
+      "parça:application/xml": 1,
+      "ilişki:xmlMaps": 1,
+      "ilişki:tableSingleCells": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/DataValidationEvaluations.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 39,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "yapı.validations": 1,
+      "parça:spreadsheetml.calcChain": 1,
+      "parça:spreadsheetml.printerSettings": 1,
+      "ilişki:calcChain": 1,
+      "ilişki:printerSettings": 1,
+      "ns:mc:AlternateContent": 1,
+      "ns:mc:Choice": 1,
+      "ns:x15ac:absPath": 1,
+      "ns:x15:workbookPr": 1,
+      "ns:thm15:themeFamily": 1,
+      "öğe:doğrulama": 2
+     },
+     "kararsiz": true
+    }
+   }
+  },
+  "test-derlem/poi/delins.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "işaret.textStyle.color": 349,
+      "işaret.underline": 349,
+      "parça:theme": 1,
+      "parça:customXmlProperties": 1,
+      "parça:application/xml": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:customXml": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:theme": 1,
+      "ilişki:customXmlProps": 1,
+      "öğe:değişiklik": 11
+     }
+    }
+   }
+  },
+  "test-derlem/poi/EmbeddedDocument.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:application/vnd.ms-excel": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:theme": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:oleObject": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:theme": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/ExcelPivotTableSample.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:spreadsheetml.connections": 1,
+      "ilişki:connections": 1,
+      "ns:mc:AlternateContent": 1,
+      "ns:mc:Choice": 1,
+      "ns:x15ac:absPath": 1,
+      "ns:xr:revisionPtr": 1,
+      "ns:x15:workbookPr": 1,
+      "ns:thm15:themeFamily": 1,
+      "ns:x14:pivotTableDefinition": 2,
+      "ns:xpdl:pivotTableDefinition16": 2,
+      "ns:x14:pivotCacheDefinition": 2
+     }
+    }
+   }
+  },
+  "test-derlem/poi/ExcelTables.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:spreadsheetml.printerSettings": 1,
+      "parça:spreadsheetml.calcChain": 1,
+      "ilişki:calcChain": 1,
+      "ilişki:printerSettings": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/ExcelWithAttachments.xlsm": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:medya": 4,
+      "parça:ms-office.vbaProject": 1,
+      "parça:presentationml.presentation": 1,
+      "parça:drawing": 1,
+      "parça:oleObject": 1,
+      "parça:application/msword": 2,
+      "parça:spreadsheetml.printerSettings": 1,
+      "parça:custom-properties": 1,
+      "ilişki:custom-properties": 1,
+      "ilişki:vbaProject": 1,
+      "ilişki:oleObject": 3,
+      "ilişki:drawing": 1,
+      "ilişki:package": 1,
+      "ilişki:printerSettings": 1,
+      "ilişki:image": 4
+     }
+    }
+   }
+  },
+  "test-derlem/poi/FieldCodes.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:theme": 1,
+      "parça:customXmlProperties": 1,
+      "parça:application/xml": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "parça:ms-word.stylesWithEffects": 1,
+      "ilişki:theme": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:customXml": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:stylesWithEffects": 1,
+      "ilişki:customXmlProps": 1,
+      "ns:w14:docId": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/footnotes.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:wordprocessingml.endnotes": 1,
+      "parça:theme": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:customXmlProperties": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "parça:application/xml": 1,
+      "ilişki:theme": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:customXml": 1,
+      "ilişki:endnotes": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:customXmlProps": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/Headers.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:wordprocessingml.footnotes": 1,
+      "parça:wordprocessingml.endnotes": 1,
+      "parça:theme": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:endnotes": 1,
+      "ilişki:theme": 1,
+      "ilişki:footnotes": 1,
+      "ilişki:fontTable": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/hello-world-signed.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:theme": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "parça:digital-signature-origin": 1,
+      "parça:digital-signature-xmlsignature": 1,
+      "ilişki:digital-signature/origin": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:theme": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:digital-signature/signature": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/hello-world-signed.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:medya": 1,
+      "parça:digital-signature-origin": 1,
+      "parça:digital-signature-xmlsignature": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:digital-signature/origin": 1,
+      "ilişki:digital-signature/signature": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/hello-world-signed.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:medya": 1,
+      "parça:digital-signature-origin": 1,
+      "parça:digital-signature-xmlsignature": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:digital-signature/origin": 1,
+      "ilişki:digital-signature/signature": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/layouts.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:presentationml.notesSlide": 1,
+      "parça:presentationml.notesMaster": 1,
+      "parça:medya": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:notesSlide": 1,
+      "ilişki:slide": 1,
+      "ilişki:notesMaster": 2,
+      "ilişki:theme": 1,
+      "ns:p14:creationId": 12,
+      "ns:a14:useLocalDpi": 1,
+      "ns:p14:discardImageEditData": 1,
+      "ns:p14:defaultImageDpi": 1,
+      "öğe:not": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/NewStyleConditionalFormattings.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:spreadsheetml.calcChain": 1,
+      "parça:spreadsheetml.printerSettings": 1,
+      "ilişki:calcChain": 1,
+      "ilişki:printerSettings": 1,
+      "ns:x14:conditionalFormatting": 1,
+      "ns:x14:cfRule": 1,
+      "ns:x14:cfvo": 3,
+      "ns:xm:sqref": 1,
+      "ns:x14:iconSet": 1,
+      "ns:xm:f": 3,
+      "ns:x14:cfIcon": 3
+     }
+    }
+   }
+  },
+  "test-derlem/poi/Numbering.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:theme": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "ilişki:theme": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:webSettings": 1,
+      "ns:w15:docId": 1,
+      "ns:mc:AlternateContent": 1,
+      "ns:mc:Choice": 1,
+      "ns:mc:Fallback": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/pie-chart.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:medya": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ns:p14:modId": 1,
+      "ns:p14:creationId": 1,
+      "ns:mc:AlternateContent": 1,
+      "ns:mc:Choice": 1,
+      "ns:c14:style": 1,
+      "ns:mc:Fallback": 1,
+      "ns:p14:discardImageEditData": 1,
+      "ns:p14:defaultImageDpi": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/PPTWithAttachments.pptm": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:presentationml.handoutMaster": 1,
+      "parça:oleObject": 1,
+      "parça:theme": 1,
+      "parça:medya": 6,
+      "parça:vmlDrawing": 2,
+      "parça:ms-office.legacyDiagramText": 1,
+      "parça:ms-office.vbaProject": 1,
+      "parça:ms-office.legacyDocTextInfo": 1,
+      "parça:application/vnd.ms-excel": 1,
+      "parça:application/msword": 1,
+      "parça:spreadsheetml.sheet": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:oleObject": 3,
+      "ilişki:vmlDrawing": 2,
+      "ilişki:package": 1,
+      "ilişki:image": 5,
+      "ilişki:theme": 1,
+      "ilişki:vbaProject": 1,
+      "ilişki:handoutMaster": 1,
+      "ilişki:legacyDocTextInfo": 1,
+      "ilişki:legacyDiagramText": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/right-to-left.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:ms-excel.threadedcomments": 2,
+      "parça:ms-excel.person": 1,
+      "ilişki:person": 1,
+      "ilişki:threadedComment": 2,
+      "ns:xr:revisionPtr": 1,
+      "ns:xcalcf:calcFeatures": 1,
+      "ns:xcalcf:feature": 5,
+      "ns:thm15:themeFamily": 1,
+      "ns:tc:ThreadedComments": 2,
+      "ns:tc:threadedComment": 2,
+      "ns:tc:text": 2,
+      "ns:tc:personList": 1,
+      "ns:tc:person": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/SampleShow.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:medya": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ns:p15:sldGuideLst": 1,
+      "ns:p15:guide": 2,
+      "ns:p15:clr": 2,
+      "ns:p14:discardImageEditData": 1,
+      "ns:p14:defaultImageDpi": 1,
+      "ns:p15:chartTrackingRefBased": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/shapes.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:medya": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ns:p14:modId": 3,
+      "ns:p14:creationId": 6,
+      "ns:a14:useLocalDpi": 1,
+      "ns:p14:discardImageEditData": 1,
+      "ns:p14:defaultImageDpi": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/SimpleMacro.docm": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:ms-office.vbaProject": 1,
+      "parça:theme": 1,
+      "parça:ms-word.vbaData": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "ilişki:vbaProject": 1,
+      "ilişki:theme": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:wordVbaData": 1,
+      "ns:wne:vbaSuppData": 1,
+      "ns:wne:mcds": 1,
+      "ns:wne:mcd": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/SimpleMacro.pptm": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:ms-office.vbaProject": 1,
+      "parça:medya": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:vbaProject": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/SimpleMacro.xlsm": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:ms-office.vbaProject": 1,
+      "ilişki:vbaProject": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/SimpleScatterChart.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:spreadsheetml.chartsheet": 1,
+      "parça:drawing": 1,
+      "parça:drawingml.chart": 1,
+      "parça:ms-office.chartstyle": 2,
+      "parça:ms-office.chartcolorstyle": 2,
+      "ilişki:chartsheet": 1,
+      "ilişki:drawing": 1,
+      "ilişki:chart": 1,
+      "ilişki:chartColorStyle": 2,
+      "ilişki:chartStyle": 2,
+      "ns:mc:AlternateContent": 3,
+      "ns:mc:Choice": 3,
+      "ns:x15ac:absPath": 1,
+      "ns:x15:workbookPr": 1,
+      "ns:thm15:themeFamily": 1,
+      "ns:c14:style": 2,
+      "ns:mc:Fallback": 2,
+      "ns:cs:chartStyle": 2,
+      "ns:cs:axisTitle": 2,
+      "ns:cs:lnRef": 60,
+      "ns:cs:fillRef": 60,
+      "ns:cs:effectRef": 60,
+      "ns:cs:fontRef": 60,
+      "ns:cs:defRPr": 22,
+      "ns:cs:categoryAxis": 2,
+      "ns:cs:spPr": 40,
+      "ns:cs:chartArea": 2,
+      "ns:cs:dataLabel": 2,
+      "ns:cs:dataLabelCallout": 2,
+      "ns:cs:bodyPr": 2,
+      "ns:cs:dataPoint": 2,
+      "ns:cs:styleClr": 14,
+      "ns:cs:dataPoint3D": 2,
+      "ns:cs:dataPointLine": 2,
+      "ns:cs:dataPointMarker": 2,
+      "ns:cs:dataPointMarkerLayout": 2,
+      "ns:cs:dataPointWireframe": 2,
+      "ns:cs:dataTable": 2,
+      "ns:cs:downBar": 2,
+      "ns:cs:dropLine": 2,
+      "ns:cs:errorBar": 2,
+      "ns:cs:floor": 2,
+      "ns:cs:gridlineMajor": 2,
+      "ns:cs:gridlineMinor": 2,
+      "ns:cs:hiLoLine": 2,
+      "ns:cs:leaderLine": 2,
+      "ns:cs:legend": 2,
+      "ns:cs:plotArea": 2,
+      "ns:cs:plotArea3D": 2,
+      "ns:cs:seriesAxis": 2,
+      "ns:cs:seriesLine": 2,
+      "ns:cs:title": 2,
+      "ns:cs:trendline": 2,
+      "ns:cs:trendlineLabel": 2,
+      "ns:cs:upBar": 2,
+      "ns:cs:valueAxis": 2,
+      "ns:cs:wall": 2,
+      "ns:cs:colorStyle": 2,
+      "ns:cs:variation": 18,
+      "öğe:sayfa": 1,
+      "öğe:grafik": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/smartart-rotated-text.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:drawingml.diagramData": 1,
+      "parça:medya": 1,
+      "parça:ms-office.drawingml.diagramDrawing": 1,
+      "parça:drawingml.diagramLayout": 1,
+      "parça:drawingml.diagramColors": 1,
+      "parça:drawingml.diagramStyle": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:diagramLayout": 1,
+      "ilişki:diagramData": 1,
+      "ilişki:diagramDrawing": 1,
+      "ilişki:diagramColors": 1,
+      "ilişki:diagramQuickStyle": 1,
+      "ns:a16:creationId": 1,
+      "ns:p14:modId": 1,
+      "ns:dgm:relIds": 1,
+      "ns:p14:creationId": 13,
+      "ns:p15:sldGuideLst": 1,
+      "ns:dgm:dataModel": 4,
+      "ns:dgm:ptLst": 4,
+      "ns:dgm:pt": 55,
+      "ns:dgm:prSet": 52,
+      "ns:dgm:spPr": 40,
+      "ns:dgm:t": 19,
+      "ns:dgm:presLayoutVars": 7,
+      "ns:dgm:chMax": 10,
+      "ns:dgm:chPref": 10,
+      "ns:dgm:dir": 2,
+      "ns:dgm:animLvl": 2,
+      "ns:dgm:bulletEnabled": 8,
+      "ns:dgm:cxnLst": 4,
+      "ns:dgm:cxn": 48,
+      "ns:dgm:bg": 4,
+      "ns:dgm:whole": 4,
+      "ns:dgm:extLst": 1,
+      "ns:dsp:dataModelExt": 1,
+      "ns:dsp:drawing": 1,
+      "ns:dsp:spTree": 1,
+      "ns:dsp:nvGrpSpPr": 1,
+      "ns:dsp:cNvPr": 10,
+      "ns:dsp:cNvGrpSpPr": 1,
+      "ns:dsp:grpSpPr": 1,
+      "ns:dsp:sp": 9,
+      "ns:dsp:nvSpPr": 9,
+      "ns:dsp:cNvSpPr": 9,
+      "ns:dsp:spPr": 9,
+      "ns:dsp:style": 9,
+      "ns:dsp:txBody": 9,
+      "ns:dsp:txXfrm": 9,
+      "ns:thm15:themeFamily": 1,
+      "ns:dgm:layoutDef": 1,
+      "ns:dgm:title": 3,
+      "ns:dgm:desc": 3,
+      "ns:dgm:catLst": 3,
+      "ns:dgm:cat": 3,
+      "ns:dgm:sampData": 1,
+      "ns:dgm:styleData": 1,
+      "ns:dgm:clrData": 1,
+      "ns:dgm:layoutNode": 8,
+      "ns:dgm:varLst": 3,
+      "ns:dgm:alg": 11,
+      "ns:dgm:param": 6,
+      "ns:dgm:shape": 8,
+      "ns:dgm:adjLst": 8,
+      "ns:dgm:constrLst": 9,
+      "ns:dgm:constr": 106,
+      "ns:dgm:forEach": 3,
+      "ns:dgm:choose": 6,
+      "ns:dgm:if": 6,
+      "ns:dgm:else": 6,
+      "ns:dgm:adj": 4,
+      "ns:dgm:presOf": 4,
+      "ns:dgm:ruleLst": 4,
+      "ns:dgm:rule": 3,
+      "ns:dgm:colorsDef": 1,
+      "ns:dgm:styleLbl": 98,
+      "ns:dgm:fillClrLst": 49,
+      "ns:dgm:linClrLst": 49,
+      "ns:dgm:effectClrLst": 49,
+      "ns:dgm:txLinClrLst": 49,
+      "ns:dgm:txFillClrLst": 49,
+      "ns:dgm:txEffectClrLst": 49,
+      "ns:dgm:styleDef": 1,
+      "ns:dgm:scene3d": 50,
+      "ns:dgm:sp3d": 49,
+      "ns:dgm:txPr": 49,
+      "ns:dgm:style": 49,
+      "ns:p14:discardImageEditData": 1,
+      "ns:p14:defaultImageDpi": 1,
+      "ns:p15:chartTrackingRefBased": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/smartart-simple.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:drawingml.diagramData": 1,
+      "parça:medya": 2,
+      "parça:drawingml.diagramColors": 1,
+      "parça:drawingml.diagramStyle": 1,
+      "parça:drawingml.diagramLayout": 1,
+      "parça:ms-office.drawingml.diagramDrawing": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:diagramLayout": 1,
+      "ilişki:diagramData": 1,
+      "ilişki:diagramDrawing": 1,
+      "ilişki:diagramColors": 1,
+      "ilişki:diagramQuickStyle": 1,
+      "ilişki:image": 2,
+      "ns:a16:creationId": 2,
+      "ns:p14:modId": 1,
+      "ns:dgm:relIds": 1,
+      "ns:p14:creationId": 13,
+      "ns:dgm:dataModel": 4,
+      "ns:dgm:ptLst": 4,
+      "ns:dgm:pt": 27,
+      "ns:dgm:prSet": 22,
+      "ns:dgm:spPr": 22,
+      "ns:dgm:t": 13,
+      "ns:dgm:presLayoutVars": 5,
+      "ns:dgm:chMax": 13,
+      "ns:dgm:dir": 2,
+      "ns:dgm:resizeHandles": 2,
+      "ns:dgm:chPref": 11,
+      "ns:dgm:bulletEnabled": 11,
+      "ns:dgm:cxnLst": 2,
+      "ns:dgm:cxn": 25,
+      "ns:dgm:bg": 4,
+      "ns:dgm:whole": 4,
+      "ns:dgm:extLst": 1,
+      "ns:dsp:dataModelExt": 1,
+      "ns:thm15:themeFamily": 1,
+      "ns:dgm:colorsDef": 1,
+      "ns:dgm:title": 3,
+      "ns:dgm:desc": 3,
+      "ns:dgm:catLst": 3,
+      "ns:dgm:cat": 4,
+      "ns:dgm:styleLbl": 98,
+      "ns:dgm:fillClrLst": 49,
+      "ns:dgm:linClrLst": 49,
+      "ns:dgm:effectClrLst": 49,
+      "ns:dgm:txLinClrLst": 49,
+      "ns:dgm:txFillClrLst": 49,
+      "ns:dgm:txEffectClrLst": 49,
+      "ns:dgm:styleDef": 1,
+      "ns:dgm:scene3d": 50,
+      "ns:dgm:sp3d": 49,
+      "ns:dgm:txPr": 49,
+      "ns:dgm:style": 49,
+      "ns:dgm:layoutDef": 1,
+      "ns:dgm:sampData": 1,
+      "ns:dgm:styleData": 1,
+      "ns:dgm:clrData": 1,
+      "ns:dgm:layoutNode": 16,
+      "ns:dgm:varLst": 8,
+      "ns:dgm:choose": 32,
+      "ns:dgm:if": 56,
+      "ns:dgm:alg": 23,
+      "ns:dgm:param": 24,
+      "ns:dgm:else": 32,
+      "ns:dgm:shape": 16,
+      "ns:dgm:adjLst": 16,
+      "ns:dgm:presOf": 58,
+      "ns:dgm:constrLst": 22,
+      "ns:dgm:constr": 267,
+      "ns:dgm:ruleLst": 16,
+      "ns:dgm:forEach": 7,
+      "ns:dgm:rule": 8,
+      "ns:dsp:drawing": 1,
+      "ns:dsp:spTree": 1,
+      "ns:dsp:nvGrpSpPr": 1,
+      "ns:dsp:cNvPr": 5,
+      "ns:dsp:cNvGrpSpPr": 1,
+      "ns:dsp:grpSpPr": 1,
+      "ns:dsp:sp": 4,
+      "ns:dsp:nvSpPr": 4,
+      "ns:dsp:cNvSpPr": 4,
+      "ns:dsp:spPr": 4,
+      "ns:dsp:style": 4,
+      "ns:dsp:txBody": 4,
+      "ns:dsp:txXfrm": 4,
+      "ns:p14:discardImageEditData": 1,
+      "ns:p14:defaultImageDpi": 1,
+      "ns:p15:chartTrackingRefBased": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/SmartArt.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:drawingml.diagramData": 1,
+      "parça:medya": 1,
+      "parça:drawingml.diagramLayout": 1,
+      "parça:drawingml.diagramStyle": 1,
+      "parça:drawingml.diagramColors": 1,
+      "parça:ms-office.drawingml.diagramDrawing": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:diagramLayout": 1,
+      "ilişki:diagramData": 1,
+      "ilişki:diagramDrawing": 1,
+      "ilişki:diagramColors": 1,
+      "ilişki:diagramQuickStyle": 1,
+      "ns:a16:creationId": 64,
+      "ns:p14:modId": 1,
+      "ns:dgm:relIds": 1,
+      "ns:p14:creationId": 13,
+      "ns:dgm:dataModel": 4,
+      "ns:dgm:ptLst": 4,
+      "ns:dgm:pt": 42,
+      "ns:dgm:prSet": 31,
+      "ns:dgm:spPr": 26,
+      "ns:dgm:t": 16,
+      "ns:dgm:presLayoutVars": 6,
+      "ns:dgm:dir": 2,
+      "ns:dgm:resizeHandles": 2,
+      "ns:dgm:bulletEnabled": 6,
+      "ns:dgm:cxnLst": 4,
+      "ns:dgm:cxn": 33,
+      "ns:dgm:bg": 4,
+      "ns:dgm:whole": 4,
+      "ns:dgm:extLst": 1,
+      "ns:dsp:dataModelExt": 1,
+      "ns:dgm:layoutDef": 1,
+      "ns:dgm:title": 3,
+      "ns:dgm:desc": 3,
+      "ns:dgm:catLst": 3,
+      "ns:dgm:cat": 3,
+      "ns:dgm:sampData": 1,
+      "ns:dgm:styleData": 1,
+      "ns:dgm:clrData": 1,
+      "ns:dgm:layoutNode": 3,
+      "ns:dgm:varLst": 2,
+      "ns:dgm:choose": 1,
+      "ns:dgm:if": 1,
+      "ns:dgm:alg": 4,
+      "ns:dgm:param": 8,
+      "ns:dgm:else": 1,
+      "ns:dgm:shape": 3,
+      "ns:dgm:adjLst": 3,
+      "ns:dgm:presOf": 3,
+      "ns:dgm:constrLst": 3,
+      "ns:dgm:constr": 9,
+      "ns:dgm:ruleLst": 3,
+      "ns:dgm:forEach": 2,
+      "ns:dgm:rule": 1,
+      "ns:dgm:styleDef": 1,
+      "ns:dgm:scene3d": 50,
+      "ns:dgm:styleLbl": 98,
+      "ns:dgm:sp3d": 49,
+      "ns:dgm:txPr": 49,
+      "ns:dgm:style": 49,
+      "ns:thm15:themeFamily": 1,
+      "ns:dgm:colorsDef": 1,
+      "ns:dgm:fillClrLst": 49,
+      "ns:dgm:linClrLst": 49,
+      "ns:dgm:effectClrLst": 49,
+      "ns:dgm:txLinClrLst": 49,
+      "ns:dgm:txFillClrLst": 49,
+      "ns:dgm:txEffectClrLst": 49,
+      "ns:dsp:drawing": 1,
+      "ns:dsp:spTree": 1,
+      "ns:dsp:nvGrpSpPr": 1,
+      "ns:dsp:cNvPr": 6,
+      "ns:dsp:cNvGrpSpPr": 1,
+      "ns:dsp:grpSpPr": 1,
+      "ns:dsp:sp": 5,
+      "ns:dsp:nvSpPr": 5,
+      "ns:dsp:cNvSpPr": 5,
+      "ns:dsp:spPr": 5,
+      "ns:dsp:style": 5,
+      "ns:dsp:txBody": 5,
+      "ns:dsp:txXfrm": 5,
+      "ns:p14:discardImageEditData": 1,
+      "ns:p14:defaultImageDpi": 1,
+      "ns:p15:chartTrackingRefBased": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/StructuredReferences.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 9,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "değer": 9,
+      "parça:spreadsheetml.calcChain": 1,
+      "ilişki:calcChain": 1,
+      "ns:mc:AlternateContent": 1,
+      "ns:mc:Choice": 1,
+      "ns:x15ac:absPath": 1,
+      "ns:x15:workbookPr": 1,
+      "ns:thm15:themeFamily": 1
+     },
+     "kararsiz": true
+    }
+   }
+  },
+  "test-derlem/poi/table_test.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:docProps/app.xml": 1,
+      "parça:docProps/core.xml": 1,
+      "parça:medya": 1,
+      "parça:ppt/presentation.xml": 1,
+      "parça:ppt/presProps.xml": 1,
+      "parça:ppt/slideLayouts/slideLayout#.xml": 11,
+      "parça:ppt/slideMasters/slideMaster#.xml": 1,
+      "parça:ppt/slides/slide#.xml": 1,
+      "parça:ppt/tableStyles.xml": 1,
+      "parça:ppt/theme/theme#.xml": 1,
+      "parça:ppt/viewProps.xml": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ns:p15:sldGuideLst": 1,
+      "ns:p14:discardImageEditData": 1,
+      "ns:p14:defaultImageDpi": 1,
+      "ns:p15:chartTrackingRefBased": 1,
+      "ns:p14:creationId": 13,
+      "ns:p14:modId": 1,
+      "ns:a16:colId": 3,
+      "ns:a16:rowId": 6,
+      "ns:thm15:themeFamily": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/TestTableColumns.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:theme": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:theme": 1,
+      "ilişki:fontTable": 1,
+      "ns:w14:docId": 1,
+      "ns:w15:docId": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/WithEmbeded.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:medya": 2,
+      "parça:oleObject": 1,
+      "parça:application/vnd.ms-excel": 1,
+      "parça:vmlDrawing": 1,
+      "parça:spreadsheetml.printerSettings": 1,
+      "ilişki:oleObject": 2,
+      "ilişki:vmlDrawing": 1,
+      "ilişki:printerSettings": 1,
+      "ilişki:image": 2
+     }
+    }
+   }
+  },
+  "test-derlem/poi/WithGIF.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:theme": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "parça:ms-word.stylesWithEffects": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "ilişki:theme": 1,
+      "ilişki:stylesWithEffects": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:webSettings": 1,
+      "ns:a14:useLocalDpi": 1,
+      "ns:wp14:sizeRelH": 1,
+      "ns:wp14:pctWidth": 1,
+      "ns:wp14:sizeRelV": 1,
+      "ns:wp14:pctHeight": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/WithTextBox.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:drawing": 1,
+      "ilişki:drawing": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/WithThreeCharts.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:spreadsheetml.calcChain": 1,
+      "ilişki:calcChain": 1
+     }
+    }
+   }
+  },
+  "test-derlem/poi/WordWithAttachments.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "işaret.textStyle.color": 22,
+      "işaret.underline": 22,
+      "parça:wordprocessingml.header": 1,
+      "parça:wordprocessingml.footnotes": 1,
+      "parça:wordprocessingml.endnotes": 1,
+      "parça:theme": 1,
+      "parça:application/msword": 2,
+      "parça:application/vnd.ms-excel": 1,
+      "parça:spreadsheetml.sheet": 1,
+      "parça:oleObject": 1,
+      "parça:ms-word.keyMapCustomizations": 1,
+      "parça:application/xml": 1,
+      "parça:customXmlProperties": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "ilişki:package": 1,
+      "ilişki:endnotes": 1,
+      "ilişki:oleObject": 4,
+      "ilişki:theme": 1,
+      "ilişki:customXml": 1,
+      "ilişki:keyMapCustomizations": 1,
+      "ilişki:footnotes": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:header": 1,
+      "ilişki:customXmlProps": 1,
+      "ns:wne:tcg": 1,
+      "ns:wne:keymaps": 1,
+      "ns:wne:keymap": 1,
+      "ns:wne:macro": 1,
+      "öğe:paragraf": 3,
+      "öğe:üstBilgi": 1
      }
     }
    }
@@ -1977,7 +3425,16 @@
       "parça:wordprocessingml.fontTable": 1,
       "parça:theme": 1,
       "parça:application/xml": 1,
-      "parça:customXmlProperties": 1
+      "parça:customXmlProperties": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:stylesWithEffects": 1,
+      "ilişki:webSettings": 1,
+      "ilişki:fontTable": 1,
+      "ilişki:theme": 1,
+      "ilişki:customXml": 1,
+      "ilişki:customXmlProps": 1,
+      "ns:w14:docId": 1,
+      "ns:w14:defaultImageDpi": 1
      }
     }
    }
@@ -1989,7 +3446,12 @@
     "pptx": {
      "kayip": {
       "parça:presentationml.printerSettings": 1,
-      "parça:medya": 1
+      "parça:medya": 1,
+      "ilişki:metadata/thumbnail": 1,
+      "ilişki:printerSettings": 1,
+      "ns:p14:discardImageEditData": 1,
+      "ns:p14:defaultImageDpi": 1,
+      "ns:p14:creationId": 13
      }
     }
    }
@@ -2078,6 +3540,9 @@
      "kayip": {
       "parça:manifest.rdf": 1,
       "parça:settings.xml": 1,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12,
       "öğe:köprü": 60
      }
     }

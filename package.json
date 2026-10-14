@@ -29,6 +29,7 @@
     "derlem": "node scripts/derlem/tur.mjs",
     "derlem:uret": "node scripts/derlem/uret.mjs",
     "derlem:lo": "node scripts/derlem/lo.mjs",
+    "derlem:opc": "node scripts/derlem/opc.mjs",
     "derlem:temel": "node scripts/derlem/temel.mjs --calistir",
     "bulanik": "node scripts/bulanik/calistir.mjs"
   },

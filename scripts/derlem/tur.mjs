@@ -7,6 +7,8 @@
 //   - paket: OOXML/ODF parça envanteri ve anlamlı öğe sayıları (envanter.mjs)
 //   - ikinci tur: kaydedilen dosya bir kez daha yazılıp açılınca değişiyor mu (yakınsama)
 //   - tablo: motorun formül sonuçları LibreOffice'in hesabıyla (test-derlem/gercek_lo.json)
+//   - POI derlemi (test-derlem/poi/, gerçek Office dosyaları): uygulama başına parça/ilişki/ad alanı kaybı
+//     toplamı; temel.json "poi" ile karşılaştırılır, parça kaybı artışı her kipte HATA (temel.mjs)
 // Çıktılar: .derlem/rapor/derlem.json (ham), derlem.md (özet + "kaybolan" sayıları) ve temel çizgi
 // karşılaştırması (temel.mjs); kaydedilen dosyalar .derlem/cikti/<uygulama>/ (pnpm derlem:lo bunları açar).
 //
@@ -20,7 +22,7 @@ import { FARK, gercekKarsilastir, kararsizlik, kayipHaritasi } from "./fark.mjs"
 import { Havuz } from "./havuz.mjs";
 import { argumanlar, CIKTI, DERLEM, derlemDosyalari, KOK, PAKET, RAPOR, sure, URETILEN, UYGULAMALAR } from "./ortak.mjs";
 import { paketle } from "./paketle.mjs";
-import { bulguRaporu, derlemKarsilastir, derlemOzeti, kipBelirle, temelOku } from "./temel.mjs";
+import { bulguRaporu, derlemKarsilastir, derlemOzeti, kipBelirle, poiKarsilastir, poiOzeti, temelOku } from "./temel.mjs";
 
 const A = argumanlar();
 const SINIR_MS = Number(process.env.DERLEM_SINIR_MS ?? 120_000);
@@ -132,10 +134,23 @@ for (const app of UYGULAMALAR) {
   toplam[app] = satir;
   p(`| ${app} | ${satir.dosya} | ${satir.acildi} | ${satir.acilamadi} | ${satir.agir} | ${satir.tur} | ${satir.turHatasi} | ${satir.kayipli} | ${satir.kararsiz} | ${satir.kelime} | ${app === "tablo" ? satir.lo : "-"} |`);
 }
+const poi = poiOzeti(sonuclar);
+const temelPoi = A.temelsiz ? {} : (temelOku().poi ?? {});
+if (Object.keys(poi).length) {
+  p();
+  p("## POI derlemi (gerçek Office dosyaları, yerel biçim turu)");
+  p();
+  p("Kaybolan toplamlar; parantez içinde temel çizgi. Parça kaybı artışı her kipte HATA (temel.json `poi`).");
+  p();
+  p("| uygulama | dosya | açıldı | parça | ilişki | ns | öğe | model |");
+  p("|---|---|---|---|---|---|---|---|");
+  const tv = (app, k) => (temelPoi[app] ? ` (${temelPoi[app][k] ?? 0})` : "");
+  for (const [app, x] of Object.entries(poi)) p(`| ${app} | ${x.dosya} | ${x.acildi}${tv(app, "acildi")} | ${x.parça}${tv(app, "parça")} | ${x.ilişki}${tv(app, "ilişki")} | ${x.ns}${tv(app, "ns")} | ${x.öğe}${tv(app, "öğe")} | ${x.model}${tv(app, "model")} |`);
+}
 p();
 p("## Kaybolanlar (anahtar başına toplam; tur sayısı)");
 p();
-p("Model: `kelime`, `düğüm.*`, `işaret.*`, `öznitelik.*`, `ayar.*`, `değer`, `formül`, `stil.*` (etkin stil farkı olan hücre), `yapı.*`, `şekil.*`, `biçim.*`, `slaytAlanı.*`. Paket: `parça:*` (aynı ailede kaybolan ZIP parçası), `öğe:*` (paragraf, tablo, resim, yorum, dipnot, slayt… sayısındaki azalma).");
+p("Model: `kelime`, `düğüm.*`, `işaret.*`, `öznitelik.*`, `ayar.*`, `değer`, `formül`, `stil.*` (etkin stil farkı olan hücre), `yapı.*`, `şekil.*`, `biçim.*`, `slaytAlanı.*`. Paket (aynı biçim ailesinde): `parça:*` (kaybolan ZIP parçası, içerik türüne göre), `ilişki:*` (ilişki türü), `ns:*` (uzantı ad alanı öğesi: w14, x14, p14, mc, dgm, cs…); her ailede `öğe:*` (paragraf, tablo, resim, yorum, dipnot, slayt… sayısındaki azalma).");
 p();
 const kayipToplam = {};
 for (const r of sonuclar)
@@ -188,6 +203,13 @@ if (!A.temelsiz) {
   const { md: kmd, hataVar } = bulguRaporu("Derlem turu", b);
   md += "\n" + kmd + "\n";
   if (hataVar) cikisKodu = 1;
+  // POI kapısı yalnız uygulamanın bütün POI dosyaları koşulduysa anlamlıdır (--dosya süzgecinde atlanır).
+  if (!A.dosya && Object.keys(poi).length) {
+    const pb = poiKarsilastir(poi, temel.poi ?? {}, kip);
+    const r = bulguRaporu("POI derlemi kayıp kapısı", pb);
+    md += "\n" + r.md + "\n";
+    if (r.hataVar) cikisKodu = 1;
+  }
 }
 writeFileSync(join(RAPOR, "derlem.md"), md);
 const T = Object.values(toplam).reduce((a, s) => {

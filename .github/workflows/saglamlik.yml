@@ -1,9 +1,12 @@
 name: Sağlamlık
 
-# Gerçek dünya derlemi kaydet-aç turu (pnpm derlem), bozuk dosya bulanık testi (pnpm bulanik) ve
+# Gerçek dünya derlemi kaydet-aç turu (pnpm derlem; test-derlem/poi: Apache POI'den gerçek Office dosyaları),
+# kaydedilen paketlerin tutarlılık denetimi (pnpm derlem:opc), bozuk dosya bulanık testi (pnpm bulanik) ve
 # kaydedilen dosyaların LibreOffice ile açılması (pnpm derlem:lo). Sonuçlar scripts/derlem/temel.json
 # ile karşılaştırılır:
 #   - yeni takılma / yığın taşması / bellek taşması: her zaman HATA
+#   - POI derleminde uygulama başına parça kaybı artışı ya da açılamayan dosya, yeni paket (OPC/ODF) hatası:
+#     her zaman HATA
 #   - yeni kayıp, yeniden açılamayan dosya, kararsızlaşma, LibreOffice'in açamadığı çıktı: temel.json'daki
 #     "kip" alanına göre HATA ("siki") ya da yalnız rapor ("baslangic"; elle tetiklemede değiştirilebilir)
 #   - iyileşme: başarısız olmaz; `pnpm derlem:temel` ile temel güncellenir (artefaktta temel-aday.json var)
@@ -65,6 +68,9 @@ jobs:
           key: bulanik-${{ hashFiles('scripts/bulanik/uret.mjs', 'test-derlem/**', 'apps/belge/src/io/__fixtures__/bicimler/ornek.md', 'apps/tablo/test/fixtures/openpyxl/karmasik.xlsx', 'pnpm-lock.yaml') }}
       - name: Kaydet-aç turu (pnpm derlem)
         run: pnpm derlem
+      - name: Paket tutarlılık denetimi (pnpm derlem:opc)
+        if: ${{ !cancelled() }}
+        run: pnpm derlem:opc
       - name: Bulanık test (pnpm bulanik)
         if: ${{ !cancelled() }}
         run: pnpm bulanik
@@ -74,7 +80,7 @@ jobs:
       - name: Özet ve aday temel çizgi
         if: ${{ !cancelled() }}
         run: |
-          for f in derlem bulanik lo_pdf; do
+          for f in derlem opc bulanik lo_pdf; do
             if [ -f ".derlem/rapor/$f.md" ]; then head -c 300000 ".derlem/rapor/$f.md" >> "$GITHUB_STEP_SUMMARY"; echo >> "$GITHUB_STEP_SUMMARY"; fi
           done
           node scripts/derlem/temel.mjs --aday .derlem/rapor/temel-aday.json || true

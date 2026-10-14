@@ -6,13 +6,20 @@
 //    (OOXML→OOXML, ODF→ODF) bir kayıtta kaybolan kategori "kaybolan parça" sayılır.
 //  - ogeler: biçimden bağımsız anlamlı öğe sayıları (paragraf, tablo, resim, yorum, dipnot,
 //    slayt, birleşik hücre…). Biçimler arası (ör. .odt → .docx) karşılaştırmada da kullanılır.
+//  - iliskiler: OOXML ilişki türü sayıları (.rels içindeki Type'ın son bölümü: styles, vbaProject,
+//    customXml, digital-signature/origin…). Taşınmayan parçanın ilişkisi de kaybolur.
+//  - ns: uzantı ad alanlarındaki öğe sayıları ("w14:checkbox", "x14:dataValidation",
+//    "mc:AlternateContent", "dgm:dataModel"…). Ana ad alanları (w, x, p, a…) model düzeyinde ölçülür.
 // Bağımlılık yoktur: ZIP merkez dizini elle okunur, sıkıştırma zlib ile açılır.
 import { inflateRawSync } from "node:zlib";
 
 const AZAMI_PARCA = 64 * 1024 * 1024; // daha büyük parça (ör. zip bombası) okunmaz
 
-/** ZIP merkez dizinini okur: Map<ad, () => Uint8Array|null>. ZIP değilse null. */
-export function zipAc(u8) {
+/**
+ * ZIP merkez dizinindeki girdiler, sırasıyla ve yinelenenler dahil:
+ * [{ad, yontem, sikisik, acik, yerel}]. ZIP değilse null.
+ */
+export function zipGirdileri(u8) {
   if (u8.length < 22 || u8[0] !== 0x50 || u8[1] !== 0x4b) return null;
   const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
   let eocd = -1;
@@ -26,18 +33,29 @@ export function zipAc(u8) {
   const adet = dv.getUint16(eocd + 10, true);
   let p = dv.getUint32(eocd + 16, true);
   const dec = new TextDecoder();
-  const parcalar = new Map();
+  const girdiler = [];
   for (let k = 0; k < adet && p + 46 <= u8.length; k++) {
     if (dv.getUint32(p, true) !== 0x02014b50) break;
-    const yontem = dv.getUint16(p + 10, true);
-    const sikisik = dv.getUint32(p + 20, true);
-    const acik = dv.getUint32(p + 24, true);
     const adUz = dv.getUint16(p + 28, true);
-    const ekUz = dv.getUint16(p + 30, true);
-    const yorumUz = dv.getUint16(p + 32, true);
-    const yerel = dv.getUint32(p + 42, true);
-    const ad = dec.decode(u8.subarray(p + 46, p + 46 + adUz));
-    p += 46 + adUz + ekUz + yorumUz;
+    girdiler.push({
+      ad: dec.decode(u8.subarray(p + 46, p + 46 + adUz)),
+      yontem: dv.getUint16(p + 10, true),
+      sikisik: dv.getUint32(p + 20, true),
+      acik: dv.getUint32(p + 24, true),
+      yerel: dv.getUint32(p + 42, true),
+    });
+    p += 46 + adUz + dv.getUint16(p + 30, true) + dv.getUint16(p + 32, true);
+  }
+  return girdiler;
+}
+
+/** ZIP merkez dizinini okur: Map<ad, () => Uint8Array|null>. ZIP değilse null. */
+export function zipAc(u8) {
+  const girdiler = zipGirdileri(u8);
+  if (!girdiler) return null;
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const parcalar = new Map();
+  for (const { ad, yontem, sikisik, acik, yerel } of girdiler) {
     if (ad.endsWith("/")) continue;
     parcalar.set(ad, () => {
       if (acik > AZAMI_PARCA || yerel + 30 > u8.length) return null;
@@ -206,7 +224,144 @@ function ogeSay(parcalar, metin) {
   return o;
 }
 
-/** Bir dosyanın paket envanteri: {aile, parcalar: {kategori: adet}, ogeler: {anahtar: adet}} ya da null (ZIP değilse). */
+/**
+ * Uzantı ad alanları: URI → kısa önek. Envanter yalnız bunlardaki öğeleri sayar; ana ad alanlarının
+ * (w, x, p, a, c, r, v…) öğeleri model ölçümüyle karşılaştırılır. Listede olmayan bir Microsoft uzantı
+ * ad alanı (schemas.microsoft.com/office/…) yoldan türetilen önekle ("ms:powerpoint/2018/8/main") sayılır.
+ */
+export const UZANTI_NS = {
+  "http://schemas.openxmlformats.org/markup-compatibility/2006": "mc",
+  // Belge
+  "http://schemas.microsoft.com/office/word/2006/wordml": "wne",
+  "http://schemas.microsoft.com/office/word/2010/wordml": "w14",
+  "http://schemas.microsoft.com/office/word/2012/wordml": "w15",
+  "http://schemas.microsoft.com/office/word/2015/wordml/symex": "w16se",
+  "http://schemas.microsoft.com/office/word/2016/wordml/cid": "w16cid",
+  "http://schemas.microsoft.com/office/word/2018/wordml": "w16",
+  "http://schemas.microsoft.com/office/word/2018/wordml/cex": "w16cex",
+  "http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash": "w16sdtdh",
+  "http://schemas.microsoft.com/office/word/2023/wordml/word16du": "w16du",
+  "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing": "wp14",
+  "http://schemas.microsoft.com/office/word/2010/wordprocessingShape": "wps",
+  "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup": "wpg",
+  "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas": "wpc",
+  "http://schemas.microsoft.com/office/word/2010/wordprocessingInk": "wpi",
+  // Tablo
+  "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main": "x14",
+  "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac": "x14ac",
+  "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main": "x15",
+  "http://schemas.microsoft.com/office/spreadsheetml/2010/11/ac": "x15ac",
+  "http://schemas.microsoft.com/office/spreadsheetml/2014/11/main": "x16r2",
+  "http://schemas.microsoft.com/office/spreadsheetml/2014/revision": "xr",
+  "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2": "xr2",
+  "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3": "xr3",
+  "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata": "xlrd",
+  "http://schemas.microsoft.com/office/spreadsheetml/2017/richdata2": "xlrd2",
+  "http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments": "tc",
+  "http://schemas.microsoft.com/office/spreadsheetml/2018/calcfeatures": "xcalcf",
+  "http://schemas.microsoft.com/office/spreadsheetml/2016/pivotdefaultlayout": "xpdl",
+  "http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray": "xda",
+  "http://schemas.microsoft.com/office/excel/2006/main": "xm",
+  // Sunum
+  "http://schemas.microsoft.com/office/powerpoint/2010/main": "p14",
+  "http://schemas.microsoft.com/office/powerpoint/2012/main": "p15",
+  "http://schemas.microsoft.com/office/powerpoint/2015/main": "p159",
+  "http://schemas.microsoft.com/office/powerpoint/2017/10/main": "p1710",
+  "http://schemas.microsoft.com/office/powerpoint/2018/8/main": "p188",
+  "http://schemas.microsoft.com/office/powerpoint/2013/main/command": "pc",
+  // Çizim, grafik, SmartArt
+  "http://schemas.microsoft.com/office/drawing/2010/main": "a14",
+  "http://schemas.microsoft.com/office/drawing/2012/main": "a15",
+  "http://schemas.microsoft.com/office/drawing/2014/main": "a16",
+  "http://schemas.microsoft.com/office/drawing/2016/SVG/main": "asvg",
+  "http://schemas.microsoft.com/office/drawing/2017/decorative": "adec",
+  "http://schemas.microsoft.com/office/drawing/2010/compatibility": "com14",
+  "http://schemas.microsoft.com/office/drawing/2010/slicer": "sle15",
+  "http://schemas.microsoft.com/office/drawing/2007/8/2/chart": "c14",
+  "http://schemas.microsoft.com/office/drawing/2012/chart": "c15",
+  "http://schemas.microsoft.com/office/drawing/2014/chart": "c16",
+  "http://schemas.microsoft.com/office/drawing/2017/03/chart": "c16r3",
+  "http://schemas.microsoft.com/office/drawing/2014/chartex": "cx",
+  "http://schemas.microsoft.com/office/drawing/2012/chartStyle": "cs",
+  "http://schemas.openxmlformats.org/drawingml/2006/diagram": "dgm",
+  "http://purl.oclc.org/ooxml/drawingml/diagram": "dgm",
+  "http://schemas.microsoft.com/office/drawing/2008/diagram": "dsp",
+  "http://schemas.microsoft.com/office/drawing/2010/diagram": "dgm14",
+  "http://schemas.microsoft.com/office/thememl/2012/main": "thm15",
+  "http://schemas.microsoft.com/office/2006/activeX": "ax",
+  "http://www.w3.org/2003/InkML": "inkml",
+  // ODF (LibreOffice/OpenOffice uzantıları)
+  "urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0": "loext",
+  "urn:org:documentfoundation:names:experimental:calc:xmlns:calcext:1.0": "calcext",
+  "http://openoffice.org/2009/office": "officeooo",
+  "http://openoffice.org/2009/table": "tableooo",
+  "http://openoffice.org/2010/draw": "drawooo",
+  "urn:openoffice:names:experimental:ooo-ms-interop:xmlns:field:1.0": "field",
+  "urn:openoffice:names:experimental:ooxml-odf-interop:xmlns:form:1.0": "formx",
+  "http://www.w3.org/TR/css3-text/": "css3t",
+};
+
+/** Ad alanı URI'sinin uzantı öneki; uzantı değilse null. */
+export function uzantiOneki(uri) {
+  if (UZANTI_NS[uri]) return UZANTI_NS[uri];
+  const m = /^http:\/\/schemas\.microsoft\.com\/office\/(.+)$/.exec(uri);
+  // İlişki ve (SharePoint) meta veri ad alanları uzantı öğesi taşımaz.
+  if (m && !/relationships|metadata/.test(m[1])) return `ms:${m[1]}`;
+  return null;
+}
+
+/** İlişki türünün kısa adı (http://…/relationships/styles → styles; …/metadata/core-properties → metadata/core-properties). */
+export function iliskiTuru(tur) {
+  const i = tur.lastIndexOf("/relationships/");
+  return i >= 0 ? tur.slice(i + "/relationships/".length) : tur.slice(tur.lastIndexOf("/") + 1);
+}
+
+const XMLNS = /\bxmlns(?::([\w.-]+))?\s*=\s*["']([^"']*)["']/g;
+
+/** Bir XML parçasındaki uzantı ad alanı öğelerini sayar (öneki bildirimden çözülür; kök varsayılan ad alanı da). */
+function nsSay(x, ns) {
+  const onekler = new Map();
+  let varsayilan = null;
+  for (const m of x.matchAll(XMLNS)) {
+    const e = uzantiOneki(m[2]);
+    if (m[1] === undefined) {
+      if (varsayilan === null) varsayilan = e ?? "";
+    } else if (e && !onekler.has(m[1])) onekler.set(m[1], e);
+  }
+  if (onekler.size) {
+    const re = new RegExp(`<(${[...onekler.keys()].map((k) => k.replace(/\./g, "\\.")).join("|")}):([A-Za-z_][\\w.-]*)(?=[\\s/>])`, "g");
+    for (const m of x.matchAll(re)) {
+      const k = `${onekler.get(m[1])}:${m[2]}`;
+      ns[k] = (ns[k] ?? 0) + 1;
+    }
+  }
+  if (varsayilan) {
+    for (const m of x.matchAll(/<([A-Za-z_][\w.-]*)(?=[\s/>])/g)) {
+      const k = `${varsayilan}:${m[1]}`;
+      ns[k] = (ns[k] ?? 0) + 1;
+    }
+  }
+}
+
+/** Paketteki ilişki türleri (OOXML) ve uzantı ad alanı öğeleri (OOXML ve ODF). */
+function iliskiVeNs(p, metin) {
+  const iliskiler = {};
+  const ns = {};
+  for (const ad of p.keys()) {
+    if (ad.endsWith(".rels")) {
+      for (const m of (metin(ad) ?? "").matchAll(/<Relationship\b[^>]*?\bType\s*=\s*["']([^"']+)["']/g)) {
+        const k = iliskiTuru(m[1]);
+        iliskiler[k] = (iliskiler[k] ?? 0) + 1;
+      }
+    } else if (/\.(xml|vml)$/i.test(ad) && ad !== "[Content_Types].xml") {
+      const x = metin(ad);
+      if (x) nsSay(x, ns);
+    }
+  }
+  return { iliskiler, ns };
+}
+
+/** Bir dosyanın paket envanteri: {aile, parcalar, ogeler, iliskiler, ns} ({anahtar: adet}) ya da null (ZIP değilse). */
 export function envanter(u8) {
   const p = zipAc(u8);
   if (!p) return null;
@@ -231,25 +386,37 @@ export function envanter(u8) {
   } catch {
     ogeler = {};
   }
-  return { aile: aile(p), parcalar, ogeler };
+  let ek = { iliskiler: {}, ns: {} };
+  try {
+    ek = iliskiVeNs(p, metin);
+  } catch {
+    /* bozuk parça: ilişki/ad alanı envanteri boş */
+  }
+  return { aile: aile(p), parcalar, ogeler, ...ek };
 }
+
+/** Envanter grupları ve kayıp/fark anahtarındaki önekleri. Parça, ilişki ve ad alanı yalnız aynı ailede karşılaştırılır. */
+export const GRUPLAR = [
+  ["parcalar", "parça", true],
+  ["iliskiler", "ilişki", true],
+  ["ns", "ns", true],
+  ["ogeler", "öğe", false],
+];
 
 /**
  * İki envanter arasındaki kayıp: kaynakta olup hedefte azalan/kaybolan şeyler.
- * Parça kategorileri yalnız aynı ailede karşılaştırılır; öğe sayıları her zaman.
+ * Parça kategorileri, ilişki türleri ve uzantı ad alanı öğeleri yalnız aynı ailede karşılaştırılır;
+ * öğe sayıları her zaman.
  */
 export function envanterKaybi(A, B) {
   const k = {};
   if (!A || !B) return k;
-  if (A.aile === B.aile) {
-    for (const [kat, n] of Object.entries(A.parcalar)) {
-      const m = B.parcalar[kat] ?? 0;
-      if (m < n) k[`parça:${kat}`] = n - m;
+  for (const [grup, onEk, ayniAile] of GRUPLAR) {
+    if (ayniAile && A.aile !== B.aile) continue;
+    for (const [key, n] of Object.entries(A[grup] ?? {})) {
+      const m = B[grup]?.[key] ?? 0;
+      if (m < n) k[`${onEk}:${key}`] = n - m;
     }
-  }
-  for (const [o, n] of Object.entries(A.ogeler)) {
-    const m = B.ogeler[o] ?? 0;
-    if (m < n) k[`öğe:${o}`] = n - m;
   }
   return k;
 }
@@ -258,9 +425,11 @@ export function envanterKaybi(A, B) {
 export function envanterFarki(B, C) {
   const f = {};
   if (!B || !C) return f;
-  for (const grup of ["parcalar", "ogeler"]) {
-    for (const key of new Set([...Object.keys(B[grup]), ...Object.keys(C[grup])])) {
-      if ((B[grup][key] ?? 0) !== (C[grup][key] ?? 0)) f[`${grup === "parcalar" ? "parça" : "öğe"}:${key}`] = `${B[grup][key] ?? 0}→${C[grup][key] ?? 0}`;
+  for (const [grup, onEk] of GRUPLAR) {
+    const b = B[grup] ?? {};
+    const c = C[grup] ?? {};
+    for (const key of new Set([...Object.keys(b), ...Object.keys(c)])) {
+      if ((b[key] ?? 0) !== (c[key] ?? 0)) f[`${onEk}:${key}`] = `${b[key] ?? 0}→${c[key] ?? 0}`;
     }
   }
   return f;

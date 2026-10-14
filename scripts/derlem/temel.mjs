@@ -8,19 +8,26 @@
 //             (ör. anlaşılır hata → ham hata), LibreOffice'in açamadığı yeni çıktı.
 //             kip "baslangic": yalnız rapor edilir; kip "siki": HATA.
 //   İYİLEŞME: azalan kayıp / düzelen dosya. CI başarısız olmaz; `pnpm derlem:temel` ile temel güncellenir.
+//   KAPI (her kipte HATA, kipten bağımsız):
+//     - POI derlemi (test-derlem/poi/, gerçek Office dosyaları): uygulama başına toplam parça kaybı ya da
+//       açılan dosya sayısı temel çizgidekinden kötü (temel.json "poi"; yerel biçim turu: docx/xlsx/pptx).
+//       İlişki / ad alanı / öğe kaybı toplamlarının artışı gerileme sayılır (kipe göre).
+//     - Paket tutarlılığı (opc.mjs): bir çıktının OPC/ODF hata sayısı temel çizgidekinden fazla ("opc").
 //
 // CLI:
 //   node scripts/derlem/temel.mjs --guncelle [--zorla] [--kip siki|baslangic]
 //       .derlem/rapor/*.json sonuçlarından temel.json'u yeniden yazar. Gerileme varsa --zorla ister.
 //   node scripts/derlem/temel.mjs --calistir   (pnpm derlem:temel)
-//       önce derlem turu + bulanık testi (LibreOffice varsa PDF denetimini de) çalıştırır, sonra günceller.
+//       önce derlem turu + paket denetimi + bulanık testi (LibreOffice varsa PDF denetimini de) çalıştırır,
+//       sonra günceller.
 //   node scripts/derlem/temel.mjs --aday <dosya>
 //       temel.json'a dokunmadan mevcut raporlardan aday temel yazar (CI bunu artefakt olarak yükler).
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { argumanlar, KOK, RAPOR, TEMEL } from "./ortak.mjs";
+import { kayipGruplari } from "./fark.mjs";
+import { argumanlar, KOK, RAPOR, TEMEL, UYGULAMALAR } from "./ortak.mjs";
 
 export const AGIR_DURUM = new Set(["zaman-asimi", "bellek", "isci-hatasi", "cikis", "cokme"]);
 export const BULANIK_SIRA = {
@@ -37,8 +44,12 @@ export const BULANIK_SIRA = {
 };
 export const BULANIK_AGIR = new Set(Object.entries(BULANIK_SIRA).filter(([, v]) => v === 3).map(([k]) => k));
 
+/** POI derleminin dosya anahtarı öneki ve kapının baktığı yerel biçim turu. */
+export const POI_ONEK = "test-derlem/poi/";
+const YEREL_BICIM = { belge: "docx", tablo: "xlsx", sunum: "pptx" };
+
 export function temelOku() {
-  if (!existsSync(TEMEL)) return { kip: "baslangic", derlem: {}, bulanik: { ornekler: {} }, lo: {} };
+  if (!existsSync(TEMEL)) return { kip: "baslangic", derlem: {}, bulanik: { ornekler: {} }, lo: {}, poi: {}, opc: {} };
   return JSON.parse(readFileSync(TEMEL, "utf8"));
 }
 export const kipBelirle = (A, temel) => (typeof A.kip === "string" && A.kip) || process.env.DERLEM_KIP || temel.kip || "baslangic";
@@ -68,6 +79,46 @@ export function derlemOzeti(dosyalar) {
   return Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
 }
 
+/**
+ * POI derlemi kayıp toplamları (uygulama başına, yerel biçim turu):
+ * {belge: {dosya, acildi, parça, ilişki, ns, öğe, model}, …}. Toplamlar kayıp haritalarından (kayipHaritasi) gelir.
+ */
+export function poiOzeti(dosyalar) {
+  const o = {};
+  for (const f of dosyalar) {
+    if (!f.anahtar.startsWith(POI_ONEK)) continue;
+    const s = (o[f.app] ??= { dosya: 0, acildi: 0, ...kayipGruplari({}) });
+    s.dosya++;
+    if (!f.acildi) continue;
+    s.acildi++;
+    const tur = (f.turlar ?? []).find((t) => t.bicim === YEREL_BICIM[f.app]);
+    for (const [k, n] of Object.entries(kayipGruplari(tur?.kayip))) s[k] += n;
+  }
+  return Object.fromEntries(UYGULAMALAR.filter((a) => o[a]).map((a) => [a, o[a]]));
+}
+
+/** POI kapısı: parça kaybı artışı ya da açılan dosya azalması her kipte HATA; diğer toplamların artışı gerileme. */
+export function poiKarsilastir(simdi, temel, kip) {
+  const b = bulgular(kip);
+  for (const [app, s] of Object.entries(simdi)) {
+    const t = temel?.[app];
+    if (!t) {
+      b.bilgiler.push(`${app}: POI temel çizgisi yok (parça kaybı ${s.parça}, ${s.acildi}/${s.dosya} açıldı)`);
+      continue;
+    }
+    if (s.acildi < t.acildi) b.hatalar.push(`${app}: POI derleminde açılan dosya ${t.acildi}→${s.acildi}`);
+    if (s.acildi > t.acildi) b.iyilesmeler.push(`${app}: POI derleminde açılan dosya ${t.acildi}→${s.acildi}`);
+    for (const k of ["parça", "ilişki", "ns", "öğe", "model"]) {
+      const [a, n] = [t[k] ?? 0, s[k] ?? 0];
+      const ileti = `${app}: POI ${k} kaybı ${a}→${n}`;
+      if (n > a && k === "parça") b.hatalar.push(ileti);
+      else if (n > a) b.gerileme(ileti);
+      else if (n < a) b.iyilesmeler.push(ileti);
+    }
+  }
+  return b;
+}
+
 export function bulanikOzeti(sonuc) {
   const ornekler = {};
   for (const r of sonuc.ornekler) ornekler[`${r.app}/${r.ad}`] = r.sinif;
@@ -77,6 +128,20 @@ export function bulanikOzeti(sonuc) {
 export function loOzeti(satirlar) {
   const o = {};
   for (const r of satirlar) o[r.anahtar] = { pdf: !r.ohHata, ...(r.bosFazla ? { bosFazla: r.bosFazla } : {}) };
+  return Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+/** Paket denetimi (opc.mjs) hata listesinden tür sayıları: {tür: adet}. */
+export function hataSayilari(hatalar) {
+  const o = {};
+  for (const { tur } of hatalar) o[tur] = (o[tur] ?? 0) + 1;
+  return Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+/** Temel çizgide saklanan biçim: {"<anahtar> →<biçim>": {tür: adet}} (yalnız hatalı çıktılar). */
+export function opcOzeti(satirlar) {
+  const o = {};
+  for (const s of satirlar) if (s.hatalar.length) o[s.anahtar] = hataSayilari(s.hatalar);
   return Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
 }
 
@@ -158,6 +223,27 @@ export function loKarsilastir(simdi, temel, kip) {
   return b;
 }
 
+/** Paket hatası sayısı artışı her kipte HATA; azalma iyileşme. `denetlenen`: bu koşuda bakılan çıktı anahtarları. */
+export function opcKarsilastir(simdi, temel, denetlenen, kip) {
+  const b = bulgular(kip);
+  const T = temel ?? {};
+  for (const k of denetlenen) {
+    const s = simdi[k] ?? {};
+    const t = T[k] ?? {};
+    const artan = [];
+    const azalan = [];
+    for (const tur of new Set([...Object.keys(s), ...Object.keys(t)])) {
+      if ((s[tur] ?? 0) > (t[tur] ?? 0)) artan.push(`${tur} ${t[tur] ?? 0}→${s[tur]}`);
+      if ((s[tur] ?? 0) < (t[tur] ?? 0)) azalan.push(`${tur} ${t[tur]}→${s[tur] ?? 0}`);
+    }
+    if (artan.length) b.hatalar.push(`${k}: yeni paket hatası: ${artan.join(", ")}`);
+    if (azalan.length) b.iyilesmeler.push(`${k}: paket hatası azaldı: ${azalan.join(", ")}`);
+  }
+  const kume = new Set(denetlenen);
+  for (const k of Object.keys(T)) if (!kume.has(k)) b.bilgiler.push(`${k}: bu koşuda yok`);
+  return b;
+}
+
 /** Bulguları Markdown'a çevirir ve konsola özetler; dönüş: hata var mı. */
 export function bulguRaporu(baslik, b, { azami = 60 } = {}) {
   const L = [`## ${baslik} — temel çizgiyle karşılaştırma (kip: ${b.kip})`, ""];
@@ -186,6 +272,7 @@ async function ana() {
   if (A.calistir) {
     const kos = (betik, ek = []) => spawnSync(process.execPath, [join(KOK, betik), "--temelsiz", ...ek], { stdio: "inherit", cwd: KOK }).status;
     kos("scripts/derlem/tur.mjs");
+    kos("scripts/derlem/opc.mjs");
     kos("scripts/bulanik/calistir.mjs", ["--paketleme-yok"]);
     if (spawnSync("soffice", ["--version"], { stdio: "ignore" }).status === 0) kos("scripts/derlem/lo.mjs");
   }
@@ -200,7 +287,13 @@ async function ana() {
   const bul = oku("bulanik.json");
   // LibreOffice denetimi bu koşuda yapılmadıysa eski raporu kullanma (eski temel korunur).
   const lo = A.calistir && spawnSync("soffice", ["--version"], { stdio: "ignore" }).status !== 0 ? null : oku("lo_pdf.json");
-  for (const [ad, r] of [["derlem", tur], ["bulanık", bul]]) {
+  // Paket denetimi başka bir derlem koşusunun çıktılarına aitse kullanılmaz (eski temel korunur).
+  let opc = oku("opc.json");
+  if (opc && tur && opc.derlemTarih !== tur.tarih) {
+    console.error("Uyarı: opc.json bu derlem koşusuna ait değil (pnpm derlem:opc yeniden çalıştırılmalı); paket denetimi temeli korunuyor.");
+    opc = null;
+  }
+  for (const [ad, r] of [["derlem", tur], ["bulanık", bul], ["paket denetimi", opc]]) {
     if (r && r.kapsamli === false) {
       console.error(`Temel güncellenmedi: ${ad} raporu kısmi (--uygulama/--dosya ile koşulmuş). Tam koşu gerekir.`);
       return 1;
@@ -220,6 +313,14 @@ async function ana() {
     const korunan = Object.entries(eski.derlem ?? {}).filter(([k]) => k.startsWith("uretilen/") && !oz[k]);
     yeni.derlem = Object.fromEntries([...Object.entries(oz), ...korunan].sort(([a], [b]) => a.localeCompare(b)));
     yeni.derlemBilgi = { tarih: tur.tarih, commit: tur.commit, dosya: tur.dosyalar.length };
+    const poi = poiOzeti(tur.dosyalar);
+    gerilemeler.push(...poiKarsilastir(poi, eski.poi ?? {}, "siki").hatalar);
+    yeni.poi = poi;
+  }
+  if (opc) {
+    const oz = opcOzeti(opc.satirlar);
+    gerilemeler.push(...opcKarsilastir(oz, eski.opc ?? {}, opc.satirlar.map((x) => x.anahtar), "siki").hatalar);
+    yeni.opc = oz;
   }
   if (bul) {
     const oz = bulanikOzeti(bul);
@@ -240,19 +341,24 @@ async function ana() {
     return 1;
   }
   const sirali = {
-    aciklama: "Derlem turu / bulanık test / LibreOffice denetimi temel çizgisi. Elle düzenlemeyin: pnpm derlem:temel ile güncellenir. Kurallar: scripts/derlem/temel.mjs başı.",
+    aciklama: "Derlem turu / POI derlemi / paket denetimi / bulanık test / LibreOffice denetimi temel çizgisi. Elle düzenlemeyin: pnpm derlem:temel ile güncellenir. Kurallar: scripts/derlem/temel.mjs başı.",
     kip,
     guncelleme: new Date().toISOString().slice(0, 10),
     derlemBilgi: yeni.derlemBilgi,
+    poi: yeni.poi ?? {},
     bulanik: yeni.bulanik,
     lo: yeni.lo ?? {},
+    opc: yeni.opc ?? {},
     derlem: yeni.derlem ?? {},
   };
   // --aday: temel.json'a dokunmadan aday temel yazılır (CI artefaktı; koordinatör inceleyip kopyalar).
   const hedef = typeof A.aday === "string" ? A.aday : TEMEL;
   writeFileSync(hedef, JSON.stringify(sirali, null, 1) + "\n");
   if (A.aday) console.log(`aday temel yazıldı: ${hedef} (${gerilemeler.length} gerileme içerir)`);
-  else console.log(`temel çizgi yazıldı: ${TEMEL} (kip: ${kip}; derlem ${Object.keys(sirali.derlem).length} dosya, bulanık ${Object.keys(sirali.bulanik?.ornekler ?? {}).length} örnek, LO ${Object.keys(sirali.lo).length} çıktı)`);
+  else {
+    const poi = Object.entries(sirali.poi).map(([a, x]) => `${a} ${x.parça}`).join(" / ");
+    console.log(`temel çizgi yazıldı: ${TEMEL} (kip: ${kip}; derlem ${Object.keys(sirali.derlem).length} dosya, POI parça kaybı ${poi || "-"}, paket hatalı çıktı ${Object.keys(sirali.opc).length}, bulanık ${Object.keys(sirali.bulanik?.ornekler ?? {}).length} örnek, LO ${Object.keys(sirali.lo).length} çıktı)`);
+  }
   return 0;
 }
 

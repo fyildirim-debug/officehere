@@ -4,7 +4,10 @@
 // kayipHaritasi: bu farkı ve paket envanteri kaybını düz bir {anahtar: sayı} haritasına çevirir;
 // temel çizgi bu haritayı saklar, CI sayının artmasını "yeni kayıp" sayar. Yalnız AZALMALAR kayıptır
 // (ör. renk 56→250 eklenen açık biçimdir, kayıp değildir).
-import { envanterFarki, envanterKaybi } from "./envanter.mjs";
+// Paket anahtarları (envanter.mjs, yalnız aynı biçim ailesinde): `parça:<içerik türü>`, `ilişki:<ilişki türü>`
+// (styles, vbaProject, customXml…), `ns:<önek>:<öğe>` (w14:checkbox, x14:dataValidation, mc:AlternateContent,
+// dgm:pt…); her ailede `öğe:<anlamlı öğe>`. Geri kalan anahtarlar model ölçümüdür.
+import { envanterFarki, envanterKaybi, GRUPLAR } from "./envanter.mjs";
 
 const kelimeler = (s) => (s ?? "").toLocaleLowerCase("tr").split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 /** Kelime torbası karşılaştırması: kaç kelime kayboldu / eklendi. */
@@ -152,6 +155,16 @@ export function kayipHaritasi(app, d, tr, kaynakEnvanteri) {
   }
   for (const [key, n] of Object.entries(envanterKaybi(kaynakEnvanteri, tr.envanter))) ekle(key, n);
   return k;
+}
+
+/** Kayıp haritasının grup toplamları: {parça, ilişki, ns, öğe, model}. */
+export function kayipGruplari(kayip) {
+  const g = Object.fromEntries([...GRUPLAR.map(([, onEk]) => [onEk, 0]), ["model", 0]]);
+  for (const [k, n] of Object.entries(kayip ?? {})) {
+    const onEk = k.slice(0, k.indexOf(":"));
+    g[k.includes(":") && onEk in g ? onEk : "model"] += n;
+  }
+  return g;
 }
 
 /** İkinci turda (B→C) değişen alanlar: boş dizi = kararlı. */
