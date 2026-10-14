@@ -1,6 +1,7 @@
 // Derlem / bulanık test araçlarının kendi testleri (node:test; bağımlılıksız).
 // Kullanım: pnpm test:betikler   (node --test scripts/derlem/temel.test.mjs)
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -8,8 +9,8 @@ import { crc32 } from "node:zlib";
 import { aile, envanter, envanterFarki, envanterKaybi, iliskiTuru, kategori, uzantiOneki } from "./envanter.mjs";
 import { kayipGruplari, kayipHaritasi, torba } from "./fark.mjs";
 import { opcDenetle } from "./opc.mjs";
-import { DERLEM, derlemDosyalari } from "./ortak.mjs";
-import { bulanikKarsilastir, derlemKarsilastir, kipBelirle, opcKarsilastir, opcOzeti, poiKarsilastir, poiOzeti } from "./temel.mjs";
+import { DERLEM, derlemDosyalari, KOK } from "./ortak.mjs";
+import { bulanikKarsilastir, derlemKarsilastir, kipBelirle, opcKarsilastir, opcOzeti, poiKarsilastir, poiOzeti, semaKarsilastir, semaOzeti } from "./temel.mjs";
 
 /** Sıkıştırmasız küçük ZIP (test paketleri için): girdiler [[ad, metin|Uint8Array]] sırasıyla yazılır. */
 function zipYap(girdiler) {
@@ -232,4 +233,77 @@ test("derlem dosya listesi: depodaki alt küme ve fikstürler, anahtarlar benzer
   assert.deepEqual(new Set(poi.map((x) => x.app)), new Set(["belge", "tablo", "sunum"]));
   assert.ok(d.some((x) => x.anahtar === "apps/tablo/src/io/__fixtures__/ornek.ods"));
   assert.equal(new Set(d.map((x) => x.anahtar)).size, d.length);
+});
+
+test("şema temeli: yeni imza ya da artış her kipte HATA, azalma iyileşme", () => {
+  const im = "word/comments.xml | w:comment@w:date: '…' is not a valid value of the atomic type 'w:ST_DateTime'.";
+  const satirlar = [
+    { anahtar: "a.docx →docx", imzalar: { [im]: 2 } },
+    { anahtar: "b.odt →odt", imzalar: {} },
+  ];
+  const oz = semaOzeti(satirlar);
+  assert.deepEqual(oz, { "a.docx →docx": { [im]: 2 } }, "yalnız izin dışı hatalı çıktılar saklanır");
+  const temel = { "a.docx →docx": { [im]: 1 }, "b.odt →odt": { "content.xml | dc:date: x": 1 }, "c.pptx →pptx": { y: 1 } };
+  const b = semaKarsilastir(oz, temel, satirlar.map((s) => s.anahtar), "baslangic");
+  assert.deepEqual(b.hatalar, [`a.docx →docx: yeni şema hatası: ${im} 1→2`]);
+  assert.deepEqual(b.iyilesmeler, ["b.odt →odt: şema hatası azaldı: content.xml | dc:date: x 1→0"]);
+  assert.deepEqual(b.bilgiler, ["c.pptx →pptx: bu koşuda yok"], "ODF atlandıysa ya da çıktı üretilmediyse bilgi");
+  assert.equal(semaKarsilastir({ "d.xlsx →xlsx": { z: 1 } }, {}, ["d.xlsx →xlsx"], "baslangic").hatalar.length, 1, "temelde olmayan imza = yeni hata");
+});
+
+// MCE ön işlemesi, ODF yabancı öğe kuralı, hata imzası ve izin listesi (python3 + lxml; şema indirmeden).
+const PY_SINAMA = String.raw`
+import json, sys
+sys.dont_write_bytecode = True
+sys.path.insert(0, "scripts/derlem")
+from lxml import etree
+import xsd, odf_rng
+W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+X = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+anla = {W, X, xsd.MC, xsd.XML_NS, "urn:schemas-microsoft-com:vml"}
+def mce(metin):
+    kok = etree.fromstring(metin.encode())
+    xsd.mce(kok, anla, [], metin.encode())
+    return etree.tostring(kok).decode()
+o = {}
+o["mce"] = mce('<w:body xmlns:w="' + W + '" xmlns:mc="' + xsd.MC + '" xmlns:w14="urn:w14" xmlns:v="urn:schemas-microsoft-com:vml" mc:Ignorable="w14">'
+    '<w:p w14:paraId="1"><w14:x/><mc:AlternateContent><mc:Choice Requires="w14"><w:r>A</w:r></mc:Choice>'
+    '<mc:Fallback><w:r>B</w:r></mc:Fallback></mc:AlternateContent><mc:AlternateContent><mc:Choice Requires="v"><w:r>C</w:r></mc:Choice>'
+    '<mc:Fallback><w:r>D</w:r></mc:Fallback></mc:AlternateContent></w:p></w:body>')
+o["ext"] = mce('<x:workbook xmlns:x="' + X + '" xmlns:mc="' + xsd.MC + '" xmlns:x15="urn:x15" mc:Ignorable="x15">'
+    '<x:extLst><x:ext uri="1"><x15:a/></x:ext><x:ext uri="2"><y:b xmlns:y="urn:y"/></x:ext></x:extLst></x:workbook>')
+T = "urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+odf = etree.fromstring(('<r xmlns:text="' + T + '" xmlns:loext="urn:lo"><text:p loext:a="1">a<loext:x>b<text:span>c</text:span></loext:x>d</text:p>'
+    '<loext:y>z</loext:y>t</r>').encode())
+odf_rng.yabancilari_at(odf, {T})
+o["odf"] = etree.tostring(odf).decode()
+sema = etree.XMLSchema(etree.fromstring(b'<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="' + X.encode() + b'">'
+    b'<xs:element name="t"><xs:complexType><xs:attribute name="val"><xs:simpleType><xs:restriction base="xs:string">'
+    b'<xs:pattern value="[0-9]+%"/></xs:restriction></xs:simpleType></xs:attribute></xs:complexType></xs:element></xs:schema>'))
+sema.validate(etree.fromstring(('<t xmlns="' + X + '" val="75000" foo="1"/>').encode()))
+h = [xsd.xsd_hata("xl/sharedStrings.xml", e) for e in sema.error_log]
+o["imza"] = sorted(xsd.imza(x) for x in h)
+o["deger"] = sorted(str(x["deger"]) for x in h)
+izin = xsd.izin_oku()
+bu = {"parca": "ppt/slides/slide3.xml", "oge": "a:buSzPct", "oznitelik": "val", "govde": "[facet 'pattern'] The value '…' is not accepted by the pattern '…'."}
+o["izin"] = [xsd.izinli_mi({**bu, "deger": "75000"}, "pptx", "xsd", izin), xsd.izinli_mi({**bu, "deger": "75"}, "pptx", "xsd", izin), xsd.izinli_mi({**bu, "deger": "75000"}, "odp", "rng", izin)]
+print(json.dumps(o))
+`;
+
+const lxmlVar = spawnSync("python3", ["-c", "import lxml"], { stdio: "ignore" }).status === 0;
+test("şema doğrulaması (xsd.py): MCE, ODF yabancı öğe, imza, izin listesi", { skip: !lxmlVar && "python3-lxml yok (CI'da kurulu)" }, () => {
+  const r = spawnSync("python3", ["-c", PY_SINAMA], { cwd: KOK, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const o = JSON.parse(r.stdout);
+  // w14 (yok sayılır) atılır; Requires="w14" anlaşılmaz → Fallback (B); Requires="v" anlaşılır → Choice (C)
+  assert.match(o.mce, /<w:p><w:r>B<\/w:r><w:r>C<\/w:r><\/w:p>/);
+  assert.doesNotMatch(o.mce, /w14:|mc:/);
+  // İçeriği tümüyle yok sayılan ext atılır; anlaşılmayan ama yok sayılmayan ad alanı (y) kalır (şema bunu yargılar)
+  assert.match(o.ext, /<x:extLst><x:ext uri="2"><y:b xmlns:y="urn:y"\/><\/x:ext><\/x:extLst>/);
+  // Paragraf içindeki yabancı öğenin içeriği korunur, dışındaki tümüyle silinir; yabancı öznitelik atılır
+  assert.match(o.odf, /<text:p>ab<text:span>c<\/text:span>d<\/text:p>t<\/r>$/);
+  assert.deepEqual(o.deger, ["75000", "None"]);
+  assert.ok(o.imza.every((s) => s.startsWith("xl/sharedStrings.xml | x:t@")), o.imza.join("\n"));
+  assert.ok(o.imza.some((s) => s.includes("The value '…' is not accepted by the pattern '…'")), "değer ve kalıp imzadan atılır");
+  assert.deepEqual(o.izin, ["dml-buSzPct-tamsayi", null, null], "izin yalnız tamsayı değere ve kendi doğrulayıcısına");
 });

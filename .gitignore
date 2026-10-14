@@ -22,3 +22,6 @@ out_*.txt
 
 # Derlem / bulanık test çıktıları (pnpm derlem, pnpm bulanik)
 .derlem/
+
+# Şema doğrulamasının indirdiği ECMA-376 / ODF şemaları ve jing (depoya konmaz; scripts/derlem/xsd.py)
+.sema-onbellek/

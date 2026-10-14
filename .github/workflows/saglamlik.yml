@@ -1,12 +1,12 @@
 name: Sağlamlık
 
 # Gerçek dünya derlemi kaydet-aç turu (pnpm derlem; test-derlem/poi: Apache POI'den gerçek Office dosyaları),
-# kaydedilen paketlerin tutarlılık denetimi (pnpm derlem:opc), bozuk dosya bulanık testi (pnpm bulanik) ve
-# kaydedilen dosyaların LibreOffice ile açılması (pnpm derlem:lo). Sonuçlar scripts/derlem/temel.json
-# ile karşılaştırılır:
+# kaydedilen paketlerin tutarlılık denetimi (pnpm derlem:opc), şema doğrulaması (pnpm derlem:xsd: ECMA-376
+# Transitional XSD + ODF 1.3 RelaxNG), bozuk dosya bulanık testi (pnpm bulanik) ve kaydedilen dosyaların
+# LibreOffice ile açılması (pnpm derlem:lo). Sonuçlar scripts/derlem/temel.json ile karşılaştırılır:
 #   - yeni takılma / yığın taşması / bellek taşması: her zaman HATA
-#   - POI derleminde uygulama başına parça kaybı artışı ya da açılamayan dosya, yeni paket (OPC/ODF) hatası:
-#     her zaman HATA
+#   - POI derleminde uygulama başına parça kaybı artışı ya da açılamayan dosya, yeni paket (OPC/ODF) hatası,
+#     izin listesi (scripts/derlem/xsd-izin.json) dışında yeni ya da artan şema hatası: her zaman HATA
 #   - yeni kayıp, yeniden açılamayan dosya, kararsızlaşma, LibreOffice'in açamadığı çıktı: temel.json'daki
 #     "kip" alanına göre HATA ("siki") ya da yalnız rapor ("baslangic"; elle tetiklemede değiştirilebilir)
 #   - iyileşme: başarısız olmaz; `pnpm derlem:temel` ile temel güncellenir (artefaktta temel-aday.json var)
@@ -49,15 +49,28 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
-      - name: Araçların kendi testleri (karşılaştırma kuralları, envanter)
-        run: pnpm test:betikler
-      - name: LibreOffice ve PDF araçları
+      # python3-lxml: şema doğrulaması (xsd.py) ve onun betik testleri; jing'in istediği java runner'da hazır.
+      - name: LibreOffice, PDF ve XML araçları
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libreoffice-writer libreoffice-calc libreoffice-impress python3-uno \
+            libreoffice-writer libreoffice-calc libreoffice-impress python3-uno python3-lxml \
             poppler-utils fonts-liberation fonts-crosextra-carlito fonts-crosextra-caladea
           soffice --version
+          java -version
+      - name: Araçların kendi testleri (karşılaştırma kuralları, envanter, MCE)
+        run: pnpm test:betikler
+      # ECMA-376 şemaları depoya konmaz (yeniden dağıtım koşulu belirsiz): Ecma'dan indirilir, SHA-256 betikte
+      # sabit. ODF 1.3 RelaxNG (OASIS) ve jing (BSD) de aynı yolla. Anahtar sabit SHA'lardan; değişince yenilenir.
+      - name: Şema önbelleği anahtarı
+        id: sema
+        run: echo "anahtar=$(python3 scripts/derlem/xsd.py --anahtar)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: .sema-onbellek
+          key: ${{ steps.sema.outputs.anahtar }}
+      - name: Şemalar ve jing (önbellekte yoksa indir)
+        run: python3 scripts/derlem/xsd.py --indir
       # Depodaki alt küme (test-derlem/) dışındaki büyük dosyalar ve LibreOffice formül sonuçları
       - name: Derlemi üret (pnpm derlem:uret)
         run: pnpm derlem:uret
@@ -71,6 +84,10 @@ jobs:
       - name: Paket tutarlılık denetimi (pnpm derlem:opc)
         if: ${{ !cancelled() }}
         run: pnpm derlem:opc
+      # pnpm derlem:xsd ile aynı; --odf-zorunlu: java/jing yoksa ODF sessizce atlanmaz, adım düşer.
+      - name: Şema doğrulaması (XSD + ODF RelaxNG)
+        if: ${{ !cancelled() }}
+        run: python3 scripts/derlem/xsd.py --odf-zorunlu
       - name: Bulanık test (pnpm bulanik)
         if: ${{ !cancelled() }}
         run: pnpm bulanik
@@ -80,7 +97,7 @@ jobs:
       - name: Özet ve aday temel çizgi
         if: ${{ !cancelled() }}
         run: |
-          for f in derlem opc bulanik lo_pdf; do
+          for f in derlem opc xsd bulanik lo_pdf; do
             if [ -f ".derlem/rapor/$f.md" ]; then head -c 300000 ".derlem/rapor/$f.md" >> "$GITHUB_STEP_SUMMARY"; echo >> "$GITHUB_STEP_SUMMARY"; fi
           done
           node scripts/derlem/temel.mjs --aday .derlem/rapor/temel-aday.json || true

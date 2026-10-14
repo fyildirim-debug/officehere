@@ -13,6 +13,8 @@
 //       açılan dosya sayısı temel çizgidekinden kötü (temel.json "poi"; yerel biçim turu: docx/xlsx/pptx).
 //       İlişki / ad alanı / öğe kaybı toplamlarının artışı gerileme sayılır (kipe göre).
 //     - Paket tutarlılığı (opc.mjs): bir çıktının OPC/ODF hata sayısı temel çizgidekinden fazla ("opc").
+//     - Şema doğrulaması (xsd.py: ECMA-376 Transitional XSD, ODF 1.3 RelaxNG): bir çıktıda izin listesi
+//       (xsd-izin.json) dışındaki hata imzasının sayısı temel çizgidekinden fazla ya da yeni imza ("sema").
 //
 // CLI:
 //   node scripts/derlem/temel.mjs --guncelle [--zorla] [--kip siki|baslangic]
@@ -22,8 +24,10 @@
 //       sonra günceller.
 //   node scripts/derlem/temel.mjs --aday <dosya>
 //       temel.json'a dokunmadan mevcut raporlardan aday temel yazar (CI bunu artefakt olarak yükler).
+//   node scripts/derlem/temel.mjs --sema [--kip …]
+//       .derlem/rapor/xsd.json'u temel çizgiyle karşılaştırır, sonucu xsd.md'ye ekler (xsd.py çağırır).
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { kayipGruplari } from "./fark.mjs";
@@ -49,7 +53,7 @@ export const POI_ONEK = "test-derlem/poi/";
 const YEREL_BICIM = { belge: "docx", tablo: "xlsx", sunum: "pptx" };
 
 export function temelOku() {
-  if (!existsSync(TEMEL)) return { kip: "baslangic", derlem: {}, bulanik: { ornekler: {} }, lo: {}, poi: {}, opc: {} };
+  if (!existsSync(TEMEL)) return { kip: "baslangic", derlem: {}, bulanik: { ornekler: {} }, lo: {}, poi: {}, opc: {}, sema: {} };
   return JSON.parse(readFileSync(TEMEL, "utf8"));
 }
 export const kipBelirle = (A, temel) => (typeof A.kip === "string" && A.kip) || process.env.DERLEM_KIP || temel.kip || "baslangic";
@@ -145,6 +149,19 @@ export function opcOzeti(satirlar) {
   return Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
 }
 
+/**
+ * Şema doğrulaması (xsd.py) satırlarından temel çizgi kaydı: {"<anahtar> →<biçim>": {imza: adet}}; yalnız izin
+ * listesi dışında hatası olan çıktılar. İmza: "<parça kalıbı> | <öğe>[@öznitelik]: <değersiz ileti>".
+ */
+export function semaOzeti(satirlar) {
+  const o = {};
+  for (const s of satirlar) {
+    const im = Object.entries(s.imzalar ?? {}).sort(([a], [b]) => a.localeCompare(b));
+    if (im.length) o[s.anahtar] = Object.fromEntries(im);
+  }
+  return Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
+}
+
 /* ------------------------------------------------------------ karşılaştırma */
 
 function bulgular(kip) {
@@ -224,7 +241,13 @@ export function loKarsilastir(simdi, temel, kip) {
 }
 
 /** Paket hatası sayısı artışı her kipte HATA; azalma iyileşme. `denetlenen`: bu koşuda bakılan çıktı anahtarları. */
-export function opcKarsilastir(simdi, temel, denetlenen, kip) {
+export const opcKarsilastir = (simdi, temel, denetlenen, kip) => sayacKarsilastir(simdi, temel, denetlenen, kip, "paket hatası");
+
+/** Şema hatası: yeni imza ya da imza sayısı artışı her kipte HATA (yeni hata = gerileme); azalma iyileşme. */
+export const semaKarsilastir = (simdi, temel, denetlenen, kip) => sayacKarsilastir(simdi, temel, denetlenen, kip, "şema hatası");
+
+/** Çıktı başına {tür: adet} sayaçları: artış her kipte HATA, azalma iyileşme, bu koşuda bakılmayan bilgi. */
+function sayacKarsilastir(simdi, temel, denetlenen, kip, ad) {
   const b = bulgular(kip);
   const T = temel ?? {};
   for (const k of denetlenen) {
@@ -236,8 +259,8 @@ export function opcKarsilastir(simdi, temel, denetlenen, kip) {
       if ((s[tur] ?? 0) > (t[tur] ?? 0)) artan.push(`${tur} ${t[tur] ?? 0}→${s[tur]}`);
       if ((s[tur] ?? 0) < (t[tur] ?? 0)) azalan.push(`${tur} ${t[tur]}→${s[tur] ?? 0}`);
     }
-    if (artan.length) b.hatalar.push(`${k}: yeni paket hatası: ${artan.join(", ")}`);
-    if (azalan.length) b.iyilesmeler.push(`${k}: paket hatası azaldı: ${azalan.join(", ")}`);
+    if (artan.length) b.hatalar.push(`${k}: yeni ${ad}: ${artan.join(", ")}`);
+    if (azalan.length) b.iyilesmeler.push(`${k}: ${ad} azaldı: ${azalan.join(", ")}`);
   }
   const kume = new Set(denetlenen);
   for (const k of Object.keys(T)) if (!kume.has(k)) b.bilgiler.push(`${k}: bu koşuda yok`);
@@ -269,15 +292,18 @@ export function bulguRaporu(baslik, b, { azami = 60 } = {}) {
 /* ------------------------------------------------------------ CLI */
 async function ana() {
   const A = argumanlar();
+  if (A.sema) return semaCli(A);
   if (A.calistir) {
     const kos = (betik, ek = []) => spawnSync(process.execPath, [join(KOK, betik), "--temelsiz", ...ek], { stdio: "inherit", cwd: KOK }).status;
     kos("scripts/derlem/tur.mjs");
     kos("scripts/derlem/opc.mjs");
+    // Şemalar yoksa (ağ yok) xsd.py çıkar; xsd.json bu koşuya ait olmaz ve şema temeli korunur.
+    spawnSync("python3", [join(KOK, "scripts/derlem/xsd.py"), "--temelsiz"], { stdio: "inherit", cwd: KOK });
     kos("scripts/bulanik/calistir.mjs", ["--paketleme-yok"]);
     if (spawnSync("soffice", ["--version"], { stdio: "ignore" }).status === 0) kos("scripts/derlem/lo.mjs");
   }
   if (!A.guncelle && !A.calistir && !A.aday) {
-    console.log("Kullanım: node scripts/derlem/temel.mjs --guncelle [--zorla] [--kip siki|baslangic]  |  --calistir  |  --aday <dosya>");
+    console.log("Kullanım: node scripts/derlem/temel.mjs --guncelle [--zorla] [--kip siki|baslangic]  |  --calistir  |  --aday <dosya>  |  --sema");
     return 0;
   }
   const eski = temelOku();
@@ -292,6 +318,15 @@ async function ana() {
   if (opc && tur && opc.derlemTarih !== tur.tarih) {
     console.error("Uyarı: opc.json bu derlem koşusuna ait değil (pnpm derlem:opc yeniden çalıştırılmalı); paket denetimi temeli korunuyor.");
     opc = null;
+  }
+  // Şema doğrulaması da öyle; ODF atlandıysa (java yok) ya da --yalniz ile koşulduysa şema temeli korunur.
+  let sema = oku("xsd.json");
+  if (sema && tur && sema.derlemTarih !== tur.tarih) {
+    console.error("Uyarı: xsd.json bu derlem koşusuna ait değil (pnpm derlem:xsd yeniden çalıştırılmalı); şema temeli korunuyor.");
+    sema = null;
+  } else if (sema && sema.kapsamli === false) {
+    console.error("Uyarı: şema raporu kısmi (ODF atlandı ya da derlem kısmi); şema temeli korunuyor.");
+    sema = null;
   }
   for (const [ad, r] of [["derlem", tur], ["bulanık", bul], ["paket denetimi", opc]]) {
     if (r && r.kapsamli === false) {
@@ -322,6 +357,15 @@ async function ana() {
     gerilemeler.push(...opcKarsilastir(oz, eski.opc ?? {}, opc.satirlar.map((x) => x.anahtar), "siki").hatalar);
     yeni.opc = oz;
   }
+  if (sema) {
+    const oz = semaOzeti(sema.satirlar);
+    const denetlenen = sema.satirlar.map((x) => x.anahtar);
+    gerilemeler.push(...semaKarsilastir(oz, eski.sema ?? {}, denetlenen, "siki").hatalar);
+    // Bu makinede üretilemeyen çıktıların (LibreOffice yok: uretilen/) eski kayıtları korunur.
+    const bakilan = new Set(denetlenen);
+    const korunan = Object.entries(eski.sema ?? {}).filter(([k]) => !bakilan.has(k));
+    yeni.sema = Object.fromEntries([...Object.entries(oz), ...korunan].sort(([a], [b]) => a.localeCompare(b)));
+  }
   if (bul) {
     const oz = bulanikOzeti(bul);
     const b = bulanikKarsilastir(oz, eski.bulanik, "siki");
@@ -341,7 +385,7 @@ async function ana() {
     return 1;
   }
   const sirali = {
-    aciklama: "Derlem turu / POI derlemi / paket denetimi / bulanık test / LibreOffice denetimi temel çizgisi. Elle düzenlemeyin: pnpm derlem:temel ile güncellenir. Kurallar: scripts/derlem/temel.mjs başı.",
+    aciklama: "Derlem turu / POI derlemi / paket denetimi / şema doğrulaması / bulanık test / LibreOffice denetimi temel çizgisi. Elle düzenlemeyin: pnpm derlem:temel ile güncellenir. Kurallar: scripts/derlem/temel.mjs başı.",
     kip,
     guncelleme: new Date().toISOString().slice(0, 10),
     derlemBilgi: yeni.derlemBilgi,
@@ -349,6 +393,7 @@ async function ana() {
     bulanik: yeni.bulanik,
     lo: yeni.lo ?? {},
     opc: yeni.opc ?? {},
+    sema: yeni.sema ?? {},
     derlem: yeni.derlem ?? {},
   };
   // --aday: temel.json'a dokunmadan aday temel yazılır (CI artefaktı; koordinatör inceleyip kopyalar).
@@ -357,9 +402,24 @@ async function ana() {
   if (A.aday) console.log(`aday temel yazıldı: ${hedef} (${gerilemeler.length} gerileme içerir)`);
   else {
     const poi = Object.entries(sirali.poi).map(([a, x]) => `${a} ${x.parça}`).join(" / ");
-    console.log(`temel çizgi yazıldı: ${TEMEL} (kip: ${kip}; derlem ${Object.keys(sirali.derlem).length} dosya, POI parça kaybı ${poi || "-"}, paket hatalı çıktı ${Object.keys(sirali.opc).length}, bulanık ${Object.keys(sirali.bulanik?.ornekler ?? {}).length} örnek, LO ${Object.keys(sirali.lo).length} çıktı)`);
+    console.log(`temel çizgi yazıldı: ${TEMEL} (kip: ${kip}; derlem ${Object.keys(sirali.derlem).length} dosya, POI parça kaybı ${poi || "-"}, paket hatalı çıktı ${Object.keys(sirali.opc).length}, şema hatalı çıktı ${Object.keys(sirali.sema).length}, bulanık ${Object.keys(sirali.bulanik?.ornekler ?? {}).length} örnek, LO ${Object.keys(sirali.lo).length} çıktı)`);
   }
   return 0;
+}
+
+/** xsd.py'nin çağırdığı karşılaştırma: .derlem/rapor/xsd.json ↔ temel.json "sema"; sonuç xsd.md'ye eklenir. */
+function semaCli(A) {
+  const yol = join(RAPOR, "xsd.json");
+  if (!existsSync(yol)) {
+    console.error("Önce şema doğrulaması: python3 scripts/derlem/xsd.py");
+    return 2;
+  }
+  const r = JSON.parse(readFileSync(yol, "utf8"));
+  const temel = temelOku();
+  const b = semaKarsilastir(semaOzeti(r.satirlar), temel.sema ?? {}, r.satirlar.map((s) => s.anahtar), kipBelirle(A, temel));
+  const { md, hataVar } = bulguRaporu("Şema doğrulaması", b);
+  appendFileSync(join(RAPOR, "xsd.md"), "\n" + md + "\n");
+  return hataVar ? 1 : 0;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = await ana();

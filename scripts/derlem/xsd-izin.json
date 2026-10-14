@@ -1,0 +1,64 @@
+{
+ "aciklama": "Şema doğrulamasının (scripts/derlem/xsd.py) izin listesi: Office'in kendi yazdığı ve kendisinin sorunsuz okuduğu, ama ECMA-376 Transitional XSD'lerine uymayan bilinen sapmalar. Her girdi gerekçe taşır; eşleşme alanları: dogrulayici (xsd|rng, varsayılan xsd), uzanti (liste), parca (düzenli ifade, parça adı), oge ve oznitelik (önekli ad, tam eşleşme), ileti (düzenli ifade, imza gövdesi), deger (düzenli ifade, değerin tamamı). Kapsamı dar tutun: bir girdi yalnız tarif ettiği sapmayı örtmeli; yeni girdi eklemeden önce sapmanın Office'in kendi çıktısında bulunduğunu (ör. POI derleminde özgün dosya) gösterin.",
+ "izinler": [
+  {
+   "kimlik": "sml-t-xml-space",
+   "dogrulayici": "xsd",
+   "uzanti": ["xlsx", "xlsm", "xltx", "xltm"],
+   "parca": "^xl/",
+   "oge": "x:t",
+   "oznitelik": "xml:space",
+   "ileti": "is not allowed",
+   "gerekce": "SpreadsheetML'de <t> (paylaşılan dize, açıklama, zengin metin parçası) ST_Xstring basit türünde tanımlı, bu yüzden şema hiçbir özniteliğe izin vermiyor. Excel baştaki/sondaki boşluğu korumak için <t xml:space=\"preserve\"> yazar ve okur; özniteliği atmak boşluk kaybına yol açar.",
+   "kaynak": "Excel'in kaydettiği özgünlerde de var: test-derlem/poi/comments.xlsx, right-to-left.xlsx, ExcelWithAttachments.xlsm (xl/comments1.xml, xl/sharedStrings.xml)."
+  },
+  {
+   "kimlik": "dml-buSzPct-tamsayi",
+   "dogrulayici": "xsd",
+   "oge": "a:buSzPct",
+   "oznitelik": "val",
+   "deger": "2[5-9][0-9]{3}|[3-9][0-9]{4}|[1-3][0-9]{5}|400000",
+   "ileti": "pattern|atomic type",
+   "gerekce": "ECMA-376 5. baskı Transitional şemasında madde imi boyutu (ST_TextBulletSizePercent) yalnız '%' sonekli dize ('75%'). PowerPoint yüzdenin binde birini tamsayı olarak (val=\"75000\") yazar ve okur; LibreOffice de .pptx'e böyle yazar. Yalnız şemanın kendi tamsayı karşılığının (ST_TextBulletSizeDecimal) aralığındaki değere, 25000–400000, izin verilir; başka bir değer yine hatadır.",
+   "kaynak": "PowerPoint ve LibreOffice çıktılarında: test-derlem/lo/lo-sunu.pptx, lo-sunu24.pptx (ppt/slides/slide#.xml, ppt/slideMasters/slideMaster#.xml)."
+  },
+  {
+   "kimlik": "dml-grafik-eksen-kimligi-negatif",
+   "dogrulayici": "xsd",
+   "parca": "/charts/chart\\d+\\.xml$",
+   "oge": ["c:axId", "c:crossAx"],
+   "oznitelik": "val",
+   "deger": "-[0-9]{1,10}",
+   "ileti": "atomic type|minInclusive",
+   "gerekce": "Grafik eksen kimliği (c:axId, c:crossAx) şemada xs:unsignedInt. PowerPoint ve Excel (özellikle Mac sürümleri) kimliği işaretli 32 bit tamsayı olarak üretir ve negatif değeri (val=\"-2068027336\") yazıp okur. Yalnız negatif tamsayıya izin verilir.",
+   "kaynak": "test-derlem/poi/bar-chart.pptx (Microsoft Macintosh PowerPoint 15), test-derlem/py/py-sunu.pptx (PowerPoint 14 şablonu): ppt/charts/chart#.xml. Bugünkü çıktılarda grafik yeniden yazıldığı için görülmez; geçiş katmanı grafik parçasını olduğu gibi taşırsa gerekir."
+  },
+  {
+   "kimlik": "wml-rFonts-hint-cs",
+   "dogrulayici": "xsd",
+   "oge": "w:rFonts",
+   "oznitelik": "w:hint",
+   "deger": "cs",
+   "ileti": "enumeration|atomic type",
+   "gerekce": "Transitional şemada yazı tipi ipucu (ST_Hint) yalnız 'default' ve 'eastAsia'. Word 2007'den beri karmaşık yazı (sağdan sola, Arapça/İbranice) için w:hint=\"cs\" yazar ve okur.",
+   "kaynak": "test-derlem/poi/WordWithAttachments.docx (Microsoft Office Word 12): word/document.xml."
+  },
+  {
+   "kimlik": "dml-graphicData-com-legacyDrawing",
+   "dogrulayici": "xsd",
+   "oge": "com:legacyDrawing",
+   "ileti": "strict wildcard",
+   "gerekce": "PowerPoint gömülü OLE nesnesini a:graphicData içinde com:legacyDrawing (drawingml/2006/compatibility) ile VML şekline bağlar. Bu ad alanının şeması Bölüm 4 Transitional XSD kümesinde yok ve a:graphicData katı (strict) joker kullanıyor; doğrulayıcı öğeyi tanıyamıyor.",
+   "kaynak": "test-derlem/poi/PPTWithAttachments.pptm (Microsoft Office PowerPoint 12): ppt/slides/slide#.xml."
+  },
+  {
+   "kimlik": "sml-xmlMaps-gomulu-sema",
+   "dogrulayici": "xsd",
+   "parca": "^xl/xmlMaps\\.xml$",
+   "oge": "xsd:schema",
+   "ileti": "strict wildcard",
+   "gerekce": "XML eşlemeleri (x:Schema) kullanıcının XML Şeması'nı gömülü taşır; x:Schema içeriği katı joker ve doğrulayıcı XML Şeması'nın kendi şemasını yüklemiyor. Excel'in yazdığı biçim; gömülü şemanın içeriği bu kapının kapsamı dışında.",
+   "kaynak": "test-derlem/poi/CustomXMLMappings.xlsx (Microsoft Excel 12): xl/xmlMaps.xml."
+  }
+ ]
+}

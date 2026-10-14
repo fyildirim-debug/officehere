@@ -1,0 +1,120 @@
+name: Haftalık
+
+# Open XML SDK (MIT, DocumentFormat.OpenXml) OpenXmlValidator ile derlem çıktılarının doğrulanması: Office'in
+# kendi sürüm ad alanlarını ve uygulamasının beklediği öğe sıralarını bilen ikinci görüş. Her PR'daki
+# ECMA-376 XSD kapısını (saglamlik.yml, scripts/derlem/xsd.py) tamamlar; YALNIZ RAPOR: başarısız olmaz,
+# bulgular yazıcı düzeltmelerine ya da scripts/derlem/xsd-izin.json'a girdi olur.
+# Bilinen: exceljs yazı tipi alt öğelerini Office'in sırasıyla yazmıyor (ECMA'da serbest sıra; SDK uyarır).
+on:
+  schedule:
+    - cron: "17 3 * * 1" # Pazartesi 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  openxml-sdk:
+    name: Open XML SDK doğrulaması (rapor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      # Yalnız depodaki derlem ve fikstürler (LibreOffice'le üretilen büyük dosyalar olmadan); temel çizgi
+      # karşılaştırması sağlamlık işinin görevi.
+      - name: Kaydet-aç turu
+        run: pnpm derlem --temelsiz
+      - name: Doğrulayıcıyı derle
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir -p oxsdk && cd oxsdk
+          cat > oxsdk.csproj <<'EOF'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>Exe</OutputType>
+              <TargetFramework>net8.0</TargetFramework>
+              <Nullable>enable</Nullable>
+              <ImplicitUsings>enable</ImplicitUsings>
+              <InvariantGlobalization>true</InvariantGlobalization>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
+            </ItemGroup>
+          </Project>
+          EOF
+          cat > Program.cs <<'EOF'
+          // Open XML SDK OpenXmlValidator: dosya başına hata sayısı ve ilk 50 hata (JSON).
+          using System.Text.Json;
+          using DocumentFormat.OpenXml;
+          using DocumentFormat.OpenXml.Packaging;
+          using DocumentFormat.OpenXml.Validation;
+
+          var dogrulayici = new OpenXmlValidator(FileFormatVersions.Microsoft365);
+          var ozet = new List<object>();
+          var toplam = 0;
+          foreach (var yol in args)
+          {
+              var hatalar = new List<object>();
+              try
+              {
+                  using OpenXmlPackage paket = Path.GetExtension(yol).ToLowerInvariant() switch
+                  {
+                      ".docx" or ".docm" or ".dotx" or ".dotm" => WordprocessingDocument.Open(yol, false),
+                      ".xlsx" or ".xlsm" or ".xltx" or ".xltm" => SpreadsheetDocument.Open(yol, false),
+                      _ => PresentationDocument.Open(yol, false),
+                  };
+                  foreach (var h in dogrulayici.Validate(paket))
+                      hatalar.Add(new { parca = h.Part?.Uri.ToString(), yol = h.Path?.XPath, kimlik = h.Id, tur = h.ErrorType.ToString(), ileti = h.Description });
+              }
+              catch (Exception e)
+              {
+                  hatalar.Add(new { parca = (string?)null, yol = (string?)null, kimlik = "acilamadi", tur = "Paket", ileti = e.Message });
+              }
+              toplam += hatalar.Count;
+              ozet.Add(new { dosya = yol, hata = hatalar.Count, hatalar = hatalar.Take(50) });
+              Console.WriteLine($"{hatalar.Count,6}  {yol}");
+          }
+          File.WriteAllText(Environment.GetEnvironmentVariable("OXSDK_RAPOR") ?? "openxml-sdk.json", JsonSerializer.Serialize(ozet, new JsonSerializerOptions { WriteIndented = true }));
+          Console.WriteLine($"Toplam: {args.Length} dosya, {toplam} hata");
+          EOF
+          dotnet build -c Release -o out --nologo -v q
+      - name: Derlem çıktılarını doğrula
+        run: |
+          mkdir -p .derlem/rapor
+          find .derlem/cikti -type f \( -name '*.docx' -o -name '*.xlsx' -o -name '*.pptx' \) | sort > .derlem/rapor/openxml-sdk-liste.txt
+          OXSDK_RAPOR=.derlem/rapor/openxml-sdk.json xargs -d '\n' dotnet "$RUNNER_TEMP/oxsdk/out/oxsdk.dll" < .derlem/rapor/openxml-sdk-liste.txt | tee .derlem/rapor/openxml-sdk.txt
+          {
+            echo "## Open XML SDK doğrulaması (yalnız rapor)"
+            echo
+            echo "Hatalı dosyalar (hata sayısı, dosya):"
+            echo '```'
+            awk '$1 != "0"' .derlem/rapor/openxml-sdk.txt
+            echo '```'
+            echo
+            echo "En sık hatalar (kimlik, ileti):"
+            echo '```'
+            node -e 'const r=require("./.derlem/rapor/openxml-sdk.json");const c={};for(const d of r)for(const h of d.hatalar){const k=h.kimlik+" | "+String(h.ileti).slice(0,160);c[k]=(c[k]||0)+1}for(const [k,n] of Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,30))console.log(n+"  "+k)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: openxml-sdk-rapor
+          path: .derlem/rapor/openxml-sdk*
+          retention-days: 30

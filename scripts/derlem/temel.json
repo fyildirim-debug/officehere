@@ -1,5 +1,5 @@
 {
- "aciklama": "Derlem turu / POI derlemi / paket denetimi / bulanık test / LibreOffice denetimi temel çizgisi. Elle düzenlemeyin: pnpm derlem:temel ile güncellenir. Kurallar: scripts/derlem/temel.mjs başı.",
+ "aciklama": "Derlem turu / POI derlemi / paket denetimi / şema doğrulaması / bulanık test / LibreOffice denetimi temel çizgisi. Elle düzenlemeyin: pnpm derlem:temel ile güncellenir. Kurallar: scripts/derlem/temel.mjs başı.",
  "kip": "baslangic",
  "guncelleme": "2026-10-14",
  "derlemBilgi": {
@@ -1244,6 +1244,30 @@
   }
  },
  "opc": {},
+ "sema": {
+  "apps/sunum/src/io/__fixtures__/lo-proje.odp →odp": {
+   "content.xml | style:graphic-properties: element \"style:graphic-properties\" not allowed here": 3
+  },
+  "test-derlem/lo/lo-karma.odt →odt": {
+   "content.xml | dc:date: character content of element \"dc:date\" invalid": 2
+  },
+  "test-derlem/lo/lo-rapor.odt →odt": {
+   "content.xml | dc:date: character content of element \"dc:date\" invalid": 1
+  },
+  "test-derlem/lo/lo-sunu.odp →odp": {
+   "content.xml | @style:column-width: value of attribute \"style:column-width\" is invalid": 1,
+   "content.xml | @style:row-height: value of attribute \"style:row-height\" is invalid": 1,
+   "content.xml | style:graphic-properties: element \"style:graphic-properties\" not allowed here": 1
+  },
+  "test-derlem/lo/lo-sunu24.odp →odp": {
+   "content.xml | @style:column-width: value of attribute \"style:column-width\" is invalid": 1,
+   "content.xml | @style:row-height: value of attribute \"style:row-height\" is invalid": 1,
+   "content.xml | style:graphic-properties: element \"style:graphic-properties\" not allowed here": 1
+  },
+  "uretilen/lo/lo-uzun.odt →odt": {
+   "content.xml | dc:date: character content of element \"dc:date\" invalid": 1
+  }
+ },
  "derlem": {
   "apps/belge/src/io/__fixtures__/bicimler/izleme.doc": {
    "durum": "tamam",
