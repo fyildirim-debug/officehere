@@ -1,7 +1,8 @@
-// Güncelleştirme bildirimi: başlık çubuğunda rozet ve Hakkında sayfasında denetim bölümü.
+// Güncelleştirme bildirimi: başlık çubuğunda rozet ve Hakkında sayfasında denetim bölümü (kanal
+// seçimiyle).
 // Yalnız masaüstünde görünür; tarayıcı sürümünde köprü olmadığı için hiçbir şey çizilmez.
 import { useEffect, useState } from "react";
-import { getNative, type UpdateState } from "@officehere/core";
+import { getNative, type UpdateChannel, type UpdateState } from "@officehere/core";
 import { ArrowClockwise16Regular, ArrowDownload16Regular } from "@fluentui/react-icons";
 import { tipProps } from "./Tooltip";
 
@@ -78,11 +79,16 @@ export function UpdateSection() {
   const [busy, setBusy] = useState(false);
   // Seçenek tıklanınca hemen değişir; ana süreçten gelen durum onu sonra doğrular.
   const [autoCheck, setAutoCheck] = useState<boolean | null>(null);
+  const [channel, setChannel] = useState<UpdateChannel | null>(null);
   useEffect(() => {
     if (s) setAutoCheck(s.autoCheck);
   }, [s?.autoCheck]);
+  useEffect(() => {
+    if (s) setChannel(s.channel ?? "kararli");
+  }, [s?.channel]);
   if (!s) return null;
   const api = updatesApi();
+  const shownChannel = channel ?? s.channel ?? "kararli";
   return (
     <section className="oh-update-section" aria-label="Güncelleştirmeler">
       <div className="oh-update-row">
@@ -128,6 +134,30 @@ export function UpdateSection() {
           <span>Güncelleştirmeleri otomatik denetle</span>
         </label>
       )}
+      {s.mode !== "off" && api?.setChannel && (
+        <>
+          <label className="oh-field is-inline oh-update-channel">
+            <span className="oh-field-label">Güncelleme kanalı</span>
+            <select
+              value={shownChannel}
+              onChange={(e) => {
+                const next = e.target.value === "beta" ? "beta" : "kararli";
+                setChannel(next);
+                void api.setChannel?.(next);
+              }}
+            >
+              <option value="kararli">Kararlı</option>
+              <option value="beta">Beta</option>
+            </select>
+          </label>
+          <p className="oh-update-note">
+            {shownChannel === "beta"
+              ? "Beta sürümleri yenilikleri önce getirir ama hata içerebilir. Kararlı kanala dönünce kurulu sürüm geri alınmaz; bir sonraki kararlı sürüm beklenir."
+              : "Yalnız kararlı sürümler alınır."}
+          </p>
+        </>
+      )}
     </section>
   );
 }
+

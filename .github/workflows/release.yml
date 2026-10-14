@@ -3,6 +3,14 @@ name: Sürüm
 # "v0.1.0" gibi bir etiket gönderildiğinde ya da elle "surum" girişiyle tetiklendiğinde
 # Windows, Linux ve macOS paketlerini üretip GitHub Sürümüne yükler. Elle tetiklemede
 # etiket, çalışılan commit üzerinde GitHub tarafından oluşturulur.
+#
+# Ön sürüm (beta kanalı): etiket "-" içeriyorsa (v0.2.0-beta.1, v0.2.0-rc.1) GitHub sürümü "ön sürüm"
+# olarak işaretlenir; "releases/latest" onu hiç döndürmez. electron-builder GitHub sağlayıcısında
+# generateUpdatesFilesForAllChannels'ı yok sayar ve beta sürümünde de latest*.yml üretir; bu yüzden
+# ön sürümde dosyalar beta*.yml adını alır ve latest*.yml hiç yüklenmez: kararlı kullanıcının okuduğu
+# latest*.yml hiçbir zaman bir ön sürümden gelmez. Kararlı sürümde latest*.yml'nin kopyası beta*.yml
+# olarak da yüklenir; beta kanalındakiler sonraki kararlıyı da alır. Uygulama içi beta kanalı yalnız
+# "-beta.N" etiketlerini alır; rc/alpha ön sürümleri yalnız Sürümler sayfasından indirilebilir.
 on:
   push:
     tags: ["v*"]
@@ -37,13 +45,35 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Etiket ile uygulama sürümü aynı olmalı: kanal kararı etikete, güncelleyicinin kararı sürüme bakar.
+      - name: Sürüm numarası denetimi
+        shell: bash
+        env:
+          SURUM: ${{ inputs.surum || github.ref_name }}
+        run: |
+          paket=$(node -p "require('./apps/desktop/package.json').version")
+          if [[ "$SURUM" == v* && "${SURUM#v}" != "$paket" ]]; then
+            echo "::error::Etiket ($SURUM) ile apps/desktop/package.json sürümü ($paket) aynı değil"
+            exit 1
+          fi
       - run: pnpm --filter @officehere/desktop dist -- ${{ matrix.hedef }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Güncelleme kanalı dosyaları (ön sürümde beta*.yml, kararlıda latest*.yml + beta*.yml)
+        shell: bash
+        working-directory: apps/desktop/release
+        env:
+          SURUM: ${{ inputs.surum || github.ref_name }}
+        run: |
+          shopt -s nullglob
+          for f in latest*.yml; do
+            if [[ "$SURUM" == *-* ]]; then mv -- "$f" "beta${f#latest}"; else cp -- "$f" "beta${f#latest}"; fi
+          done
+          ls -l -- *.yml
       - uses: actions/upload-artifact@v4
         with:
           name: officehere-${{ matrix.os }}
-          # latest*.yml ve .blockmap dosyaları uygulama içi güncelleyici (electron-updater) içindir.
+          # latest*.yml, beta*.yml ve .blockmap dosyaları uygulama içi güncelleyici (electron-updater) içindir.
           path: |
             apps/desktop/release/*.exe
             apps/desktop/release/*.AppImage
@@ -51,6 +81,7 @@ jobs:
             apps/desktop/release/*.dmg
             apps/desktop/release/*.blockmap
             apps/desktop/release/latest*.yml
+            apps/desktop/release/beta*.yml
           if-no-files-found: ignore
 
   yayin:
@@ -73,6 +104,19 @@ jobs:
         with:
           path: paketler
           merge-multiple: true
+      # Son kapı: ön sürümde latest*.yml bulunursa (kararlı kullanıcı onu okur) yayın durur.
+      - name: Kanal denetimi
+        shell: bash
+        env:
+          SURUM: ${{ inputs.surum || github.ref_name }}
+        run: |
+          shopt -s nullglob
+          latest=(paketler/latest*.yml)
+          if [[ "$SURUM" == *-* && ${#latest[@]} -gt 0 ]]; then
+            echo "::error::Ön sürümde latest*.yml var: ${latest[*]}"
+            exit 1
+          fi
+          ls -1 paketler/*.yml
       # Sürümdeki her dosyanın SHA-256 özeti; kullanıcı indirdiği paketi bununla doğrular (README: "Doğrulama").
       - name: Sağlama toplamları (SHA256SUMS.txt)
         working-directory: paketler
@@ -98,6 +142,8 @@ jobs:
           tag_name: ${{ inputs.surum || github.ref_name }}
           target_commitish: ${{ github.sha }}
           name: OfficeHere ${{ inputs.surum || github.ref_name }}
+          # "-" içeren etiket ön sürümdür: "releases/latest" ve kararlı kanal onu görmez.
+          prerelease: ${{ contains(inputs.surum || github.ref_name, '-') }}
           files: paketler/*
           body_path: ${{ steps.notlar.outputs.yol }}
           generate_release_notes: ${{ steps.notlar.outputs.yol == '' }}

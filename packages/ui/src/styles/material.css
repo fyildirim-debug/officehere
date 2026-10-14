@@ -268,6 +268,17 @@
   cursor: pointer;
 }
 
+.oh-update-channel {
+  margin: 10px 0 0;
+}
+
+.oh-update-note {
+  margin: 6px 0 0;
+  color: var(--oh-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .oh-update-pill {
     animation-name: oh-fade-in;

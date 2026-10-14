@@ -106,7 +106,11 @@ export interface UpdateState {
   checkedAt?: number;
   /** Açılışta ve düzenli aralıklarla kendiliğinden denetlensin mi. */
   autoCheck: boolean;
+  /** Güncelleme kanalı: "beta" ön sürümleri de alır (eski kabuklarda yok: kararlı). */
+  channel?: UpdateChannel;
 }
+
+export type UpdateChannel = "kararli" | "beta";
 
 export interface UpdatesApi {
   getState(): Promise<UpdateState>;
@@ -114,6 +118,8 @@ export interface UpdatesApi {
   /** İndirilmiş güncelleştirmeyi kurmak için yeniden başlatır; elle kipte indirme sayfasını açar. */
   install(): Promise<void>;
   setAutoCheck(on: boolean): Promise<UpdateState>;
+  /** Kanalı değiştirir; betadan kararlıya dönüşte sürüm geri alınmaz, sonraki kararlı beklenir. */
+  setChannel?(channel: UpdateChannel): Promise<UpdateState>;
   onChange(callback: (state: UpdateState) => void): () => void;
 }
 

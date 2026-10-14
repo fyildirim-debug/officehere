@@ -80,6 +80,7 @@ contextBridge.exposeInMainWorld("officehereNative", {
     check: () => ipcRenderer.invoke("oh:update-check"),
     install: () => ipcRenderer.invoke("oh:update-install"),
     setAutoCheck: (on: boolean) => ipcRenderer.invoke("oh:update-auto", on),
+    setChannel: (channel: "kararli" | "beta") => ipcRenderer.invoke("oh:update-channel", channel === "beta" ? "beta" : "kararli"),
     onChange: (cb: (s: unknown) => void) => {
       updateListeners.add(cb);
       return () => updateListeners.delete(cb);

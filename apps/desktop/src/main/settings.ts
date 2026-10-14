@@ -1,5 +1,5 @@
-// Kullanıcı ayarları: userData/ayarlar.json. Dosyayı güncelleştirme denetimi de kullanır
-// (otomatikGuncellemeDenetimi); yazarken mevcut anahtarlar korunur.
+// Kullanıcı ayarları: userData/ayarlar.json. Dosyayı güncelleştirme denetimi (otomatikGuncellemeDenetimi,
+// guncellemeKanali: "kararli" | "beta") da kullanır; yazarken mevcut anahtarlar korunur.
 import { app } from "electron";
 import fs from "node:fs";
 import path from "node:path";
