@@ -14,6 +14,7 @@ import { addXlfnPrefixes } from "./xlsxFormula";
 import type { PackageParts } from "./xlsxPost";
 import { writeScenariosInto, writeWorkbookProtection } from "./xlsxWhatIf";
 import { autoFilterXml } from "./xlsxFilters";
+import { tableFileName } from "./xlsxPackage";
 
 /* ------------------------------ Veri doğrulama ------------------------------ */
 
@@ -133,7 +134,7 @@ async function writeTableColumns(wb: WorkbookModel, sheet: SheetModel, sheetPath
     if (!f) continue;
     const xml = await f.async("string");
     const display = /\bdisplayName="([^"]*)"/.exec(xml)?.[1] ?? "";
-    const t = sheet.tables.find((x) => x.name.replace(/[^\p{L}\p{N}_]/gu, "_") === display);
+    const t = sheet.tables.find((x) => tableFileName(x.name) === display);
     if (!t) continue;
     parts.zip.file(path, tableAutoFilter(xml.replace(/<tableColumns\b[\s\S]*?<\/tableColumns>/, tableColumnsXml(wb, sheet, t)), t));
   }

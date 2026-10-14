@@ -1,6 +1,7 @@
 /**
  * Dosya biçimleri: içerik imzası + uzantıyla biçim tanıma, açma ve yazıcı seçimi.
- * Yerel biçim .xlsx'tir; .xls ve şablonlar yalnız açılır, .ods/.csv/.tsv yazılabilir.
+ * Yerel biçim .xlsx'tir; makrolu kitap (.xlsm) yine .xlsm olarak yazılır (makrolar korunur,
+ * çalıştırılmaz); .xls ve şablonlar yalnız açılır, .ods/.csv/.tsv yazılabilir.
  */
 import JSZip from "jszip";
 import { baseName, extensionOf, isCfb, type FileFilter } from "@officehere/core";
@@ -12,14 +13,15 @@ import { readHtml } from "./html";
 import { ODS_MIME, readOds } from "./ods/reader";
 import { writeOds } from "./ods/writer";
 import { readXls } from "./xls/reader";
-import { readXlsx, writeXlsx } from "./xlsx";
+import { readXlsx, writeXlsx, type XlsxReadReport, type XlsxWriteReport } from "./xlsx";
 
 export type BookFormat = "xlsx" | "xlsm" | "xltx" | "xltm" | "xls" | "ods" | "ots" | "csv" | "tsv" | "txt" | "html";
 /** Kaydedilebilen biçimler. */
-export type SaveFormat = "xlsx" | "ods" | "csv" | "tsv";
+export type SaveFormat = "xlsx" | "xlsm" | "ods" | "csv" | "tsv";
 
 export const FILTERS: Record<SaveFormat, FileFilter> = {
   xlsx: { name: "Çalışma Kitabı (.xlsx)", extensions: ["xlsx"] },
+  xlsm: { name: "Makro İçerebilen Çalışma Kitabı (.xlsm)", extensions: ["xlsm"] },
   ods: { name: "OpenDocument Hesap Tablosu (.ods)", extensions: ["ods"] },
   csv: { name: "CSV UTF-8 (Noktalı virgülle ayrılmış, yalnız etkin sayfa) (.csv)", extensions: ["csv"] },
   tsv: { name: "Metin (Sekmeyle ayrılmış, yalnız etkin sayfa) (.tsv)", extensions: ["tsv"] },
@@ -129,10 +131,16 @@ async function openBookRaw(name: string, data: ArrayBuffer): Promise<OpenedBook>
     case "html":
       return { wb: readHtml(data, sheetName), format, template: false, notice: "Web sayfasındaki tablolar içe aktarıldı. Kaydedince .xlsx olarak kaydedilir." };
     default: {
-      const report: { notice?: string } = {};
+      const report: XlsxReadReport = {};
       const wb = await readXlsx(data, report);
-      const macro = format === "xlsm" || format === "xltm";
-      const notice = [report.notice, macro ? "Bu çalışma kitabındaki makrolar çalıştırılmaz ve kaydedilirken korunmaz. Kaydedince .xlsx olarak kaydedilir." : undefined].filter(Boolean).join(" ");
+      const macro =
+        format === "xlsm"
+          ? "Bu çalışma kitabındaki makrolar kaydederken korunur, ancak OfficeHere'da çalıştırılmaz."
+          : format === "xltm"
+            ? "Bu şablondaki makrolar çalıştırılmaz; .xlsx olarak kaydedilince korunmaz."
+            : undefined;
+      const signed = report.signed ? "Bu çalışma kitabı dijital olarak imzalanmış; kaydederseniz imza kaldırılır." : undefined;
+      const notice = [report.notice, signed, macro].filter(Boolean).join(" ");
       return { wb, format, template: format === "xltx" || format === "xltm", notice: notice || undefined };
     }
   }
@@ -140,7 +148,7 @@ async function openBookRaw(name: string, data: ArrayBuffer): Promise<OpenedBook>
 
 /** Biçim aynı biçimde yazılabiliyor mu (yoksa Kaydet → Farklı Kaydet .xlsx). */
 export function writableAs(format: BookFormat): SaveFormat | null {
-  if (format === "xlsx" || format === "ods" || format === "csv" || format === "tsv") return format;
+  if (format === "xlsx" || format === "xlsm" || format === "ods" || format === "csv" || format === "tsv") return format;
   if (format === "txt") return "tsv";
   return null;
 }
@@ -148,13 +156,17 @@ export function writableAs(format: BookFormat): SaveFormat | null {
 /** Uzantıdan kaydetme biçimi. */
 export function saveFormatOf(name: string): SaveFormat | null {
   const e = extensionOf(name);
-  return e === "xlsx" || e === "ods" || e === "csv" || e === "tsv" ? e : e === "txt" ? "tsv" : null;
+  return e === "xlsx" || e === "xlsm" || e === "ods" || e === "csv" || e === "tsv" ? e : e === "txt" ? "tsv" : null;
 }
 
-/** Çalışma kitabını istenen biçimde baytlara/metne çevirir. */
-export async function writeBook(wb: WorkbookModel, sheet: SheetModel, format: SaveFormat, delimiter?: string): Promise<Uint8Array<ArrayBuffer> | string> {
+/**
+ * Çalışma kitabını istenen biçimde baytlara/metne çevirir. `report.warnings`: .xlsx/.xlsm'de
+ * kaydedilemeyen öğeler (yapısal değişiklikte kaydırılamayan, kaynağı bulunamayan, makrolar…).
+ * Biçim değişince (.ods/.csv) özgün paketten taşıma yapılmaz.
+ */
+export async function writeBook(wb: WorkbookModel, sheet: SheetModel, format: SaveFormat, delimiter?: string, report?: XlsxWriteReport): Promise<Uint8Array<ArrayBuffer> | string> {
   if (format === "csv") return writeCsv(wb, sheet, { delimiter: delimiter ?? ";" });
   if (format === "tsv") return writeCsv(wb, sheet, { delimiter: delimiter ?? "\t" });
   if (format === "ods") return writeOds(wb);
-  return writeXlsx(wb);
+  return writeXlsx(wb, { macro: format === "xlsm", report });
 }

@@ -10,6 +10,7 @@ import { URL, collectErrors, interceptFileChooser } from "./ortak";
 // dev birleştirmeli dosyanın takılmadan açılıp kaydedilmesi.
 
 const FIX = resolve(__dirname, "..", "apps/tablo/test/fixtures");
+const POI = resolve(__dirname, "..", "test-derlem/poi");
 type Zip = { file(name: string): { async(t: "string"): Promise<string> } | null; file(name: string, data: string): void; remove(name: string): void; generateAsync(o: { type: "nodebuffer"; compression: "DEFLATE" }): Promise<Buffer> };
 const JSZip = createRequire(resolve(__dirname, "..", "apps/tablo/package.json"))("jszip") as { loadAsync(data: Buffer): Promise<Zip> };
 
@@ -119,6 +120,24 @@ test.describe("OfficeHere Tablo dosya G/Ç sağlamlığı", () => {
     expect(await sheetNames(page)).toEqual(["Sayfa1", "Sayfa2", "Sayfa3"]);
     await expect(page.getByText(/kurtarıldı/).first()).toBeVisible();
     expect((await page.evaluate(() => (window as unknown as { __ohTablo: Api }).__ohTablo.loadWarnings())).length).toBeGreaterThan(0);
+  });
+
+  test("makrolu kitap .xlsm olarak kaydedilir: makro projesi korunur, bilgi çubuğu çalıştırılmadığını söyler", async ({ page }) => {
+    await openFile(page, join(POI, "SimpleMacro.xlsm"));
+    await expect(page.locator(".oh-messagebar")).toContainText("makrolar kaydederken korunur, ancak OfficeHere'da çalıştırılmaz");
+    await focusGrid(page);
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.keyboard.press("Control+s")]);
+    expect(dl.suggestedFilename()).toBe("SimpleMacro.xlsm");
+    const file = join(mkdtempSync(join(tmpdir(), "oh-tablo-io-")), "SimpleMacro.xlsm");
+    await dl.saveAs(file);
+    const z = await JSZip.loadAsync(readFileSync(file));
+    expect(z.file("xl/vbaProject.bin")).not.toBeNull();
+    expect(await z.file("[Content_Types].xml")!.async("string")).toContain("application/vnd.ms-excel.sheet.macroEnabled.main+xml");
+  });
+
+  test("dijital imzalı kitap: açılışta imzanın kaydedince kaldırılacağı bildirilir", async ({ page }) => {
+    await openFile(page, join(POI, "hello-world-signed.xlsx"));
+    await expect(page.locator(".oh-messagebar")).toContainText("dijital olarak imzalanmış; kaydederseniz imza kaldırılır");
   });
 
   test("tüm sayfayı kaplayan birleştirme (A1:XFD1048576) takılmadan açılır ve kaydedilir", async ({ page }) => {

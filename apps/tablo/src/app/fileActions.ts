@@ -1,7 +1,8 @@
 /**
  * Dosya eylemleri: Aç, Kaydet, Farklı Kaydet, Yeni, Dışarı Aktar. Biçim içerik
- * imzasıyla tanınır; yazılamayan biçimler (.xls, makrolu, şablon) Kaydet'te
- * .xlsx Farklı Kaydet'e yönlenir; .ods/.csv/.tsv ilk kayıtta bir kez sorulur.
+ * imzasıyla tanınır; yazılamayan biçimler (.xls, şablon) Kaydet'te .xlsx Farklı
+ * Kaydet'e yönlenir; makrolu kitap .xlsm olarak kaydedilir; .ods/.csv/.tsv ilk
+ * kayıtta bir kez sorulur.
  */
 import { useMemo } from "react";
 import { isDirectSave, trackSave } from "@officehere/ui";
@@ -13,7 +14,7 @@ import { writeHtml } from "../io/html";
 import { writeOds } from "../io/ods/writer";
 import { exportPdf } from "../io/print";
 import { printWithOptions } from "../io/printPages";
-import { writeXlsx } from "../io/xlsx";
+import { writeXlsx, type XlsxWriteReport } from "../io/xlsx";
 import { buildTemplate, TEMPLATES } from "../templates";
 import type { FormatChoice } from "../dialogs/SaveFormatDialog";
 import { fileFormatOf, setFileFormat } from "./fileFormat";
@@ -46,14 +47,21 @@ function textSavedNotice(ctl: Controller, format: SaveFormat): void {
   ctl.infoBar = { kind: "info", text: `${format === "csv" ? "CSV" : "Sekmeyle ayrılmış metin"} olarak kaydedildi: yalnız etkin sayfanın («${ctl.sheet.name}») değerleri kaydedildi. Diğer sayfalar ve biçimler için .xlsx olarak kaydedin.` };
 }
 
+/** .xlsx/.xlsm kaydında korunamayan öğeler (dosyadan gelen, yapı değişince kaydırılamayan…). */
+function savedWarnings(ctl: Controller, report: XlsxWriteReport): void {
+  if (!report.warnings.length) return;
+  ctl.infoBar = { kind: "warning", text: `Kaydedildi. Şu öğeler bu dosyada korunamadı: ${report.warnings.join(", ")}.` };
+  ctl.emit();
+}
+
 let bookCounter = 1;
 
 export function useFileActions(ctl: Controller): FileActions {
   return useMemo(() => {
     // Dosyanın kendi ayırıcısı yalnız aynı biçimde kaydederken korunur
-    const data = (format: SaveFormat) => {
+    const data = (format: SaveFormat, report?: XlsxWriteReport) => {
       const st = fileFormatOf(ctl.wb);
-      return writeBook(ctl.wb, ctl.sheet, format, writableAs(st.format) === format ? st.delimiter : undefined);
+      return writeBook(ctl.wb, ctl.sheet, format, writableAs(st.format) === format ? st.delimiter : undefined, report);
     };
     const done = (ref: FileRef, format: SaveFormat, notice?: string) => {
       ctl.fileRef = ref;
@@ -130,7 +138,7 @@ export function useFileActions(ctl: Controller): FileActions {
         const format = writableAs(state.format);
         // Yazılamayan biçim (.xls, makrolu, HTML): özgün dosyanın üzerine yazılmaz
         if (!format) return actions.saveAs("xlsx");
-        if (format !== "xlsx" && !state.confirmed) {
+        if (format !== "xlsx" && format !== "xlsm" && !state.confirmed) {
           const choice = await askFormat(ctl, format);
           if (!choice) return false;
           if (choice === "xlsx") return actions.saveAs("xlsx");
@@ -138,10 +146,12 @@ export function useFileActions(ctl: Controller): FileActions {
         }
         const name = ctl.fileName.includes(".") ? ctl.fileName : `${ctl.fileName}.${format}`;
         const target = ctl.fileRef;
-        const bytes = await data(format);
+        const report: XlsxWriteReport = { warnings: [] };
+        const bytes = await data(format, report);
         const ref = await trackSave(isDirectSave(target), async () => saveFile(target, name, [FILTERS[format]], bytes));
         if (!ref) return false;
         done(ref, saveFormatOf(ref.name) ?? format, openNotice);
+        savedWarnings(ctl, report);
         return true;
       },
       async saveAs(preferred) {
@@ -149,7 +159,8 @@ export function useFileActions(ctl: Controller): FileActions {
         const format: SaveFormat = preferred ?? writableAs(fileFormatOf(ctl.wb).format) ?? "xlsx";
         const filters = [FILTERS[format], ...SAVE_ORDER.filter((f) => f !== format).map((f) => FILTERS[f])];
         const name = `${baseName(ctl.fileName)}.${format}`;
-        const bytes = await data(format);
+        const report: XlsxWriteReport = { warnings: [] };
+        const bytes = await data(format, report);
         let finalFormat = format;
         const ref = await trackSave(false, async () => {
           const r = await saveFileAs(name, filters, bytes);
@@ -158,12 +169,14 @@ export function useFileActions(ctl: Controller): FileActions {
           const chosen = saveFormatOf(r.name);
           if (chosen && chosen !== format && (r.path || r.handle)) {
             finalFormat = chosen;
-            return saveFile(r, r.name, [FILTERS[chosen]], await writeBook(ctl.wb, ctl.sheet, chosen));
+            report.warnings = [];
+            return saveFile(r, r.name, [FILTERS[chosen]], await writeBook(ctl.wb, ctl.sheet, chosen, undefined, report));
           }
           return r;
         });
         if (!ref) return false;
         done(ref, finalFormat, openNotice);
+        savedWarnings(ctl, report);
         return true;
       },
       async newBook(id) {

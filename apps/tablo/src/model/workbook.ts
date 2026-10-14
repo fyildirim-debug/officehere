@@ -9,6 +9,7 @@ import { MAX_COLS, MAX_ROWS, contains, intersects, shiftIndex, shiftRect } from 
 import { StyleTable, type CellStyle } from "./styles";
 import { renameRangeText, shiftRangeText } from "./rangeRefs";
 import { defaultTheme, type WorkbookTheme } from "./theme";
+import { removeSheetPassthrough, removeSheetWorkbookPassthrough, renamePassthrough, renameWorkbookPassthrough, shiftForeignPassthrough, shiftOwnPassthrough, shiftWorkbookPassthrough, type SheetPassthrough, type WorkbookPassthrough } from "./passthrough";
 import type { AutoFilter, ChartDef, CondRule, DataTableDef, ImageDef, Note, PageSetup, PivotDef, Rect, Scenario, Selection, ShapeDef, SlicerDef, SparklineGroup, TableDef, Validation, ViewMode, WorkbookProtection } from "./types";
 
 export type CellInput = Scalar | { formula: string };
@@ -65,6 +66,10 @@ export class SheetModel {
   protected = false;
   /** Koruma parolası (yalnız oturumda tutulur, dosyaya yazılmaz). */
   protectPassword?: string;
+  /** Satır/sütun ekleme-silme sayacı (geçiş parçacıklarının güncelliği için). */
+  structVersion = 0;
+  /** Dosyadan gelen, modelin tanımadığı XML (kaydederken geri konur; model/passthrough.ts). */
+  passthrough: SheetPassthrough | null = null;
 
   constructor(
     public id: number,
@@ -123,6 +128,8 @@ export class SheetModel {
       ignoredErrors: new Set(this.ignoredErrors),
       frozen: { ...this.frozen },
       page: structuredClone(this.page),
+      structVersion: this.structVersion,
+      passthrough: this.passthrough && structuredClone(this.passthrough),
     };
   }
 
@@ -154,10 +161,14 @@ export class SheetModel {
     this.ignoredErrors = new Set(d.ignoredErrors);
     this.frozen = { ...d.frozen };
     this.page = structuredClone(d.page);
+    this.structVersion = d.structVersion ?? this.structVersion;
+    this.passthrough = d.passthrough ? structuredClone(d.passthrough) : null;
   }
 
   /** Satır/sütun ekleme-silmede sayfa nesnelerini kaydırır. */
   shiftStructure(axis: "row" | "col", at: number, count: number): void {
+    this.structVersion++;
+    if (this.passthrough) shiftOwnPassthrough(this.passthrough, this.name, axis, at, count, this.structVersion);
     const moveKeys = <T>(m: Map<number, T>): Map<number, T> => {
       const out = new Map<number, T>();
       for (const [k, v] of m) {
@@ -275,6 +286,8 @@ export interface SheetData {
   ignoredErrors: Set<number>;
   frozen: { rows: number; cols: number };
   page: PageSetup;
+  structVersion?: number;
+  passthrough?: SheetPassthrough | null;
 }
 
 export interface CellState {
@@ -315,6 +328,10 @@ export class WorkbookModel {
   loadWarnings: string[] = [];
   /** Çalışma kitabı yapı koruması. */
   protection: WorkbookProtection | null = null;
+  /** Açılan .xlsx paketinin kaynak kaydı kimliği (@officehere/core registerSource; kaydederken taşıma). */
+  kaynak?: string;
+  /** workbook.xml'in modelin tanımadığı bölümleri (kaydederken geri konur). */
+  passthrough: WorkbookPassthrough | null = null;
   private nextObjectId = 1;
   /** usedRange önbelleği (sayfa başına sonuç ve onu üreten damga). */
   private usedCache = new WeakMap<SheetModel, UsedRangeCache>();
@@ -366,6 +383,8 @@ export class WorkbookModel {
     if (!s) return;
     this.engine.removeSheet(s.id);
     this.sheets.splice(index, 1);
+    for (const o of this.sheets) if (o.passthrough) removeSheetPassthrough(o.passthrough, s.name);
+    removeSheetWorkbookPassthrough(this.passthrough, s.name);
     if (this.activeIndex >= this.sheets.length) this.activeIndex = this.sheets.length - 1;
   }
 
@@ -379,7 +398,9 @@ export class WorkbookModel {
         mapSeriesRanges(c, (t) => renameRangeText(t, s.name, name));
       }
       for (const g of o.sparklines) for (const it of g.items) it.range = renameRangeText(it.range, s.name, name);
+      if (o.passthrough) renamePassthrough(o.passthrough, s.name, name);
     }
+    renameWorkbookPassthrough(this.passthrough, s.name, name);
     s.name = name;
   }
 
@@ -591,7 +612,9 @@ export class WorkbookModel {
         mapSeriesRanges(c, (t) => shiftRangeText(t, s.name, sheet.name, axis, at, count));
       }
       for (const g of s.sparklines) for (const it of g.items) it.range = shiftRangeText(it.range, s.name, sheet.name, axis, at, count);
+      if (s !== sheet && s.passthrough) shiftForeignPassthrough(s.passthrough, s.name, sheet.name, axis, at, count);
     }
+    shiftWorkbookPassthrough(this.passthrough, sheet.name, axis, at, count);
   }
 
   /** Tablo tanımlarını hesap motoruna bildirir (yapısal başvurular); değişmediyse işlem yapılmaz. */
@@ -610,6 +633,7 @@ export class WorkbookModel {
       activeIndex: this.activeIndex,
       theme: structuredClone(this.theme),
       protection: structuredClone(this.protection),
+      passthrough: this.passthrough && structuredClone(this.passthrough),
     };
   }
 
@@ -625,6 +649,7 @@ export class WorkbookModel {
     this.activeIndex = Math.min(snap.activeIndex, this.sheets.length - 1);
     this.theme = structuredClone(snap.theme);
     if (snap.protection !== undefined) this.protection = structuredClone(snap.protection);
+    if (snap.passthrough !== undefined) this.passthrough = structuredClone(snap.passthrough);
     this.syncTables();
     this.engine.recalc();
   }
@@ -648,6 +673,7 @@ export interface WorkbookSnapshot {
   activeIndex: number;
   theme: WorkbookTheme;
   protection?: WorkbookProtection | null;
+  passthrough?: WorkbookPassthrough | null;
 }
 
 /** Değeri düzenleme metnine çevirir (tarihler gg.aa.yyyy, yüzde %, ondalık virgül). */

@@ -72,10 +72,10 @@ describe("Biçim tanıma (içerik imzası)", () => {
     const bad = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3, 4, 5, 6]);
     await expect(sniffFormat("x.xlsx", bad.buffer)).rejects.toThrow(/bozuk/);
   });
-  it("şablon ve makrolu kitaplar: makro yok sayılır, şablon adsız açılır", async () => {
+  it("şablon ve makrolu kitaplar: makro korunur ama çalıştırılmaz, şablon adsız açılır", async () => {
     const m = await openBook("sablon.xlsm", fixture("sablon.xlsm"));
     expect(m.template).toBe(false);
-    expect(m.notice).toMatch(/makro/);
+    expect(m.notice).toMatch(/makrolar kaydederken korunur, ancak OfficeHere.da çalıştırılmaz/);
     expect(m.wb.getValue(m.wb.sheets[0], 1, 1)).toBe(30);
     const t = await openBook("sablon.xltx", fixture("sablon.xltx"));
     expect(t.template).toBe(true);
@@ -86,7 +86,9 @@ describe("Biçim tanıma (içerik imzası)", () => {
   });
   it("kaydetme biçimi kararları", () => {
     expect(writableAs("xls")).toBeNull();
-    expect(writableAs("xlsm")).toBeNull();
+    // Makrolu kitap kendi biçiminde kaydedilir (makrolar korunur, çalıştırılmaz)
+    expect(writableAs("xlsm")).toBe("xlsm");
+    expect(saveFormatOf("a.XLSM")).toBe("xlsm");
     expect(writableAs("ods")).toBe("ods");
     expect(writableAs("txt")).toBe("tsv");
     expect(saveFormatOf("a.ODS")).toBe("ods");

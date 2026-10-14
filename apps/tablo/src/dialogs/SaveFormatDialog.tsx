@@ -6,7 +6,7 @@ import type { SaveFormat } from "../io/formats";
 
 export type FormatChoice = "same" | "xlsx" | null;
 
-const NAMES: Record<SaveFormat, string> = { xlsx: ".xlsx", ods: "ODS", csv: "CSV", tsv: "TSV" };
+const NAMES: Record<SaveFormat, string> = { xlsx: ".xlsx", xlsm: ".xlsm", ods: "ODS", csv: "CSV", tsv: "TSV" };
 
 function message(format: SaveFormat, sheet: string): string {
   if (format === "ods") return "Bu çalışma kitabı OpenDocument Hesap Tablosu (.ods) biçiminde. Bu biçimde bazı özellikler (grafikler, özet tablolar, koşullu biçimlendirme, veri doğrulama gibi) kaybolabilir.\n\nTüm özellikleri korumak için .xlsx olarak kaydedin.";

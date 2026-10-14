@@ -4,6 +4,7 @@
  * bölmeleri dondurma, otomatik filtre, notlar, köprüler, koşullu biçimlendirme,
  * veri doğrulama, adlandırılmış aralıklar, tablolar, resimler ve grafikler.
  */
+import JSZip from "jszip";
 import { readPageBreaksFromData } from "./xlsxBreaks";
 import { addr, cellKey, colToName, errorFromCode, formatRange, isError, nameToCol, parseRangeAddress, resolveFunctionName, stripFunctionPrefix, type Scalar } from "@officehere/formula";
 import { MAX_COLS, MAX_ROWS } from "../model/rect";
@@ -12,7 +13,7 @@ import type { PageSetup, Rect, ValidationRule } from "../model/types";
 import { WorkbookModel, type SheetModel } from "../model/workbook";
 import { ColorResolver, fromXStyle, rawNumberFormats, toXStyle } from "./xlsxStyles";
 import { readCharts } from "./xlsxCharts";
-import { postProcess } from "./xlsxPost";
+import { passthroughCfRules, postProcess, type PassthroughContext } from "./xlsxPost";
 import { compressCells, readCondRule, readValidation, writeCondRule } from "./xlsxRules";
 
 import { usesDynamicFunctions } from "./xlsxDynamic";
@@ -21,7 +22,8 @@ import { addXlfnPrefixes, normalizeFileFormula, utcSerial } from "./xlsxFormula"
 
 export { compressCells, addXlfnPrefixes, normalizeFileFormula };
 import { readPivotsFromData } from "./xlsxPivot";
-import { OPTIONAL_PARTS, readCommentsFromData, readDefinedNamesFromData, stripOptionalParts } from "./xlsxPackage";
+import { OPTIONAL_PARTS, readCommentsFromData, readDefinedNamesFromData, readSheetPassthrough, readWorkbookPassthrough, sheetSkeleton, stripOptionalParts, tableFileName, type PtSource } from "./xlsxPackage";
+import { Carry, OpcPackage, carryParts, getSource, registerSource, releaseSource, relsPathOf, rootNamespace } from "@officehere/core/opc";
 import { prepareXlsx } from "./xlsxGuard";
 import { BIG_MERGE_CELLS, CELL_BUDGET, clampMerge, disjointMerges, MergeLookup, usedExtent } from "./bookUtil";
 import { readTablesFromData } from "./xlsxTables";
@@ -31,6 +33,8 @@ import { readWhatIfFromData } from "./xlsxWhatIf";
 import { readFiltersFromData } from "./xlsxFilters";
 import { readSlicersFromData } from "./xlsxSlicers";
 import { parseThemeXml } from "../model/theme";
+import { emptyPassthrough } from "../model/passthrough";
+import { sheetPaths, unescapeXml } from "./ooxmlZip";
 import { activateTheme } from "../model/themeRuntime";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -82,7 +86,12 @@ async function loadTolerant(ExcelJS: any, data: ArrayBuffer, warnings: string[])
 /** Okuma raporu: yapısal onarım yapıldıysa kullanıcıya gösterilecek ileti. */
 export interface XlsxReadReport {
   notice?: string;
+  /** Dosya dijital olarak imzalı (kaydedince imza kaldırılır). */
+  signed?: boolean;
 }
+
+/** Kitap çöpe gidince kaynak paket kaydı da bırakılır (bellek dosya boyutu kadar tutulmasın). */
+const sourceFinalizer = typeof FinalizationRegistry === "function" ? new FinalizationRegistry<string>((id) => releaseSource(id)) : null;
 
 export async function readXlsx(input: ArrayBuffer, report?: XlsxReadReport): Promise<WorkbookModel> {
   const ExcelJS = await loadExcelJS();
@@ -103,6 +112,24 @@ async function readPrepared(ExcelJS: any, pkg: Awaited<ReturnType<typeof prepare
   const notices: string[] = pkg.notice ? [pkg.notice] : [];
   const x = await loadTolerant(ExcelJS, pkg.excel, warnings);
   const wb = new WorkbookModel(true);
+  // Kaynak paket (onarılmış): kaydederken modelin tanımadığı parçalar ve öğeler buradan taşınır
+  let src: OpcPackage | undefined;
+  try {
+    src = await ownDataStripped(await OpcPackage.open(data), data);
+  } catch {
+    src = undefined;
+  }
+  const zip = await loadZip(data);
+  const skeletons = new Map<string, string>();
+  try {
+    for (const [name, path] of await sheetPaths(zip)) {
+      const t = await zip.file(path)?.async("string");
+      if (t) skeletons.set(name, sheetSkeleton(t));
+    }
+  } catch {
+    /* sayfa iskeletleri isteğe bağlı (doğrulamalar exceljs modelinden okunur) */
+  }
+  const cfLinks = new Map<SheetModel, Map<string, string>>();
   wb.loadWarnings = warnings;
   const cr = new ColorResolver();
   cr.loadTheme(x._themes?.theme1);
@@ -133,8 +160,10 @@ async function readPrepared(ExcelJS: any, pkg: Awaited<ReturnType<typeof prepare
     const sheet = wb.addSheet(ws.name);
     // Birleştirmeler exceljs'e verilmez (xlsxGuard: kendi taramamız, geçerli ve çakışmasız)
     const merges = pkg.merges.get(ws.name) ?? [];
+    const links = new Map<string, string>();
+    cfLinks.set(sheet, links);
     try {
-      readSheet(wb, sheet, ws, cr, x, warnings, rawFormats, merges);
+      readSheet(wb, sheet, ws, cr, x, warnings, rawFormats, merges, skeletons.get(ws.name), links);
     } catch {
       warnings.push(`"${ws.name}" sayfasının bir bölümü`);
     }
@@ -237,6 +266,20 @@ async function readPrepared(ExcelJS: any, pkg: Awaited<ReturnType<typeof prepare
   } catch {
     warnings.push("onay kutuları");
   }
+  if (src) {
+    const id = registerSource(src);
+    wb.kaynak = id;
+    sourceFinalizer?.register(wb, id);
+    if (src.signed) {
+      warnings.push("dijital imza (kaydedince kaldırılır)");
+      if (report) report.signed = true;
+    }
+    try {
+      await readPassthrough(src, zip, wb, cfLinks, warnings);
+    } catch {
+      warnings.push("dosyadaki bazı tanınmayan öğeler (kaydedince korunamayabilir)");
+    }
+  }
   // Sessiz kayıp denetimi: sayfalarda veri vardı ama hiçbir hücre okunamadıysa uyarılır
   if (pkg.hadCells && wb.sheets.every((s) => countCells(wb, s) === 0)) {
     warnings.push("sayfa verileri");
@@ -255,9 +298,95 @@ function countCells(wb: WorkbookModel, s: SheetModel): number {
   return n;
 }
 
+/**
+ * OfficeHere'nin kendi özel XML bölümleri (mini grafik, dilimleyici: urn:officehere:…) kaynaktan
+ * taşınmaz: model bunları yeniden yazar; silinmişlerse eski kopya geri gelmesin. Varsa ilişkileri
+ * çıkarılmış bir kaynak kopyası kurulur.
+ */
+async function ownDataStripped(src: OpcPackage, data: ArrayBuffer): Promise<OpcPackage> {
+  const main = src.mainPart;
+  if (!main) return src;
+  const own: string[] = [];
+  for (const r of await src.rels(main)) {
+    if (r.external || !r.part || !/\/customXml$/.test(r.type)) continue;
+    if (rootNamespace((await src.text(r.part).catch(() => null)) ?? "").startsWith("urn:officehere:")) own.push(r.id);
+  }
+  if (!own.length) return src;
+  const zip = await JSZip.loadAsync(data);
+  const relsPath = src.canonicalName(relsPathOf(main)) ?? relsPathOf(main);
+  const rels = await zip.file(relsPath)?.async("string");
+  if (!rels) return src;
+  zip.file(relsPath, rels.replace(/<Relationship\b[^>]*>(?:<\/Relationship>)?/g, (tag) => (own.includes(unescapeXml(/\bId="([^"]*)"/.exec(tag)?.[1] ?? "")) ? "" : tag)));
+  return OpcPackage.open(await zip.generateAsync({ type: "uint8array" }));
+}
+
+/** Sayfa XML'indeki veri doğrulamaları (exceljs modeli biçiminde: aralık → kural). */
+function rawValidations(skeleton: string): [string, any][] {
+  const block = /<(?:\w+:)?dataValidations\b[^>]*>([\s\S]*?)<\/(?:\w+:)?dataValidations>/.exec(skeleton)?.[1];
+  if (!block) return [];
+  const out: [string, any][] = [];
+  const attr = (tag: string, n: string) => {
+    const v = new RegExp(`\\s${n}="([^"]*)"`).exec(tag)?.[1];
+    return v === undefined ? undefined : unescapeXml(v);
+  };
+  const flag = (v: string | undefined) => v === "1" || v === "true";
+  for (const m of block.matchAll(/<(?:\w+:)?dataValidation\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?dataValidation>)/g)) {
+    const a = m[1];
+    // exceljs ile aynı varsayılanlar: tür "any", sayısal türlerde işleç "between"
+    const type = attr(a, "type") ?? "any";
+    const body = m[2] ?? "";
+    // Sayı ve tırnaklı liste dışındaki formüller "=" ile (hücre/ad başvurusu)
+    const formula = (n: string) => {
+      const f = /<(?:\w+:)?(formula\d)>([\s\S]*?)<\/(?:\w+:)?\1>/g;
+      for (const x of body.matchAll(f)) {
+        if (x[1] !== n) continue;
+        const t = unescapeXml(x[2]).trim();
+        if (!t || /^-?[\d.]+(E[+-]?\d+)?$/i.test(t) || t.startsWith('"') || t.startsWith("=")) return t;
+        return "=" + t;
+      }
+      return undefined;
+    };
+    const dv = {
+      type,
+      operator: attr(a, "operator") ?? (type === "any" || type === "list" || type === "custom" ? undefined : "between"),
+      formulae: [formula("formula1"), formula("formula2")].filter((f) => f !== undefined),
+      allowBlank: flag(attr(a, "allowBlank")),
+      showDropDown: flag(attr(a, "showDropDown")),
+      errorStyle: attr(a, "errorStyle"),
+      errorTitle: attr(a, "errorTitle"),
+      error: attr(a, "error"),
+      promptTitle: attr(a, "promptTitle"),
+      prompt: attr(a, "prompt"),
+    };
+    for (const range of (attr(a, "sqref") ?? "").split(/\s+/).filter(Boolean)) out.push([range, dv]);
+  }
+  return out;
+}
+
+/** Sayfaların ve çalışma kitabının geçiş verisi (kaynak paketten). */
+async function readPassthrough(pkg: OpcPackage, zip: Awaited<ReturnType<typeof loadZip>>, wb: WorkbookModel, cfLinks: Map<SheetModel, Map<string, string>>, warnings: string[]): Promise<void> {
+  const src: PtSource = {
+    pkg,
+    // Metinler okuma önbelleğinden (büyük sayfa XML'i yeniden açılmasın); kaynak kopyası farklıysa paketten
+    text: async (part) => (await zip.file(part)?.async("string")) ?? (await pkg.text(part).catch(() => null)),
+  };
+  const paths = await sheetPaths(zip);
+  for (const sheet of wb.sheets) {
+    const path = paths.get(sheet.name);
+    if (!path) continue;
+    try {
+      sheet.passthrough = await readSheetPassthrough(src, sheet, path, cfLinks.get(sheet));
+    } catch {
+      sheet.passthrough = { ...emptyPassthrough(sheet.structVersion), part: path };
+      warnings.push("dosyadaki bazı tanınmayan öğeler (kaydedince korunamayabilir)");
+    }
+  }
+  if (pkg.mainPart) wb.passthrough = await readWorkbookPassthrough(src, pkg.mainPart);
+}
 
 
-function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResolver, x: any, warnings: string[], rawFormats?: Map<string, string>, merges: Rect[] = []): void {
+
+function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResolver, x: any, warnings: string[], rawFormats?: Map<string, string>, merges: Rect[] = [], skeleton?: string, cfLinks?: Map<string, string>): void {
   if (ws.state && ws.state !== "visible") sheet.hidden = true;
   const tab = cr.resolve(ws.properties?.tabColor);
   if (tab) sheet.tabColor = tab;
@@ -330,8 +459,10 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
   for (const a of arrayAreas)
     for (let i = a.r1; i <= a.r2; i++)
       for (let j = a.c1; j <= a.c2; j++) if ((i !== a.row || j !== a.col) && !wb.getFormula(sheet, i, j)) wb.setInputRaw(sheet, i, j, null);
-  // Veri doğrulama (hücre değeri olmasa da)
-  for (const [key, dv] of Object.entries<any>(ws.dataValidations?.model ?? {})) {
+  // Veri doğrulama (hücre değeri olmasa da). Sayfa XML'inden okunur: exceljs sayısal türlerde hücre
+  // başvurulu formülleri (E1) sayıya çevirip NaN yapıyor, eksik allowBlank'ı da ayırt etmiyordu.
+  const dvs = skeleton !== undefined ? rawValidations(skeleton) : Object.entries<any>(ws.dataValidations?.model ?? {});
+  for (const [key, dv] of dvs) {
     if (!dv?.type) continue;
     const rr = parseRangeAddress(key.replace(/^range:/, "").replace(/\$/g, ""));
     if (!rr) continue;
@@ -369,7 +500,10 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
     const ranges = rectsFromSqref(cf.ref ?? "");
     for (const rule of cf.rules ?? []) {
       const cr2 = readCondRule(rule, cr);
-      if (cr2) sheet.condFormats.push({ ...cr2, id: wb.newId("cf"), ranges });
+      if (!cr2) continue;
+      const id = wb.newId("cf");
+      sheet.condFormats.push({ ...cr2, id, ranges });
+      if (rule.x14Id) cfLinks?.set(String(rule.x14Id), id);
     }
   }
   // Sayfa yapısı
@@ -505,7 +639,18 @@ function toScalar(v: any): Scalar {
 
 /* ============================== YAZMA ============================== */
 
-export async function writeXlsx(wb: WorkbookModel): Promise<Uint8Array<ArrayBuffer>> {
+/** Yazma raporu: kaydedilemeyen öğelerin (Türkçe) etiketleri. */
+export interface XlsxWriteReport {
+  warnings: string[];
+}
+
+export interface XlsxWriteOptions {
+  /** Makrolu çalışma kitabı (.xlsm): makro projesi taşınır, ana parça türü makrolu olur. */
+  macro?: boolean;
+  report?: XlsxWriteReport;
+}
+
+export async function writeXlsx(wb: WorkbookModel, opts: XlsxWriteOptions = {}): Promise<Uint8Array<ArrayBuffer>> {
   const ExcelJS = await loadExcelJS();
   const x = new ExcelJS.Workbook();
   x.creator = wb.props.author ?? "OfficeHere Tablo";
@@ -531,7 +676,19 @@ export async function writeXlsx(wb: WorkbookModel): Promise<Uint8Array<ArrayBuff
   // exceljs sıkıştırmadan yazar; paket postProcess'te tek kez sıkıştırılır (iki kez DEFLATE yerine)
   const buf = await x.xlsx.writeBuffer({ zip: { compression: "STORE" } });
   let bytes: Uint8Array = new Uint8Array(buf as ArrayBuffer);
-  bytes = await postProcess(bytes, wb);
+  // Geçiş katmanı: özgün paketin modelin tanımadığı öğeleri (postProcess) ve parçaları (carryParts)
+  const src = getSource(wb.kaynak);
+  const ctx: PassthroughContext = { src, carry: new Carry(), partMap: [], warnings: [] };
+  bytes = await postProcess(bytes, wb, ctx);
+  if (src || opts.macro) {
+    const r = await carryParts({ app: "tablo", source: src ?? null, output: bytes, partMap: ctx.partMap, carry: ctx.carry, macro: !!opts.macro, overrides: { own: ["tableSingleCells"] } });
+    bytes = r.bytes;
+    for (const d of r.report.dropped) {
+      if (d.reason === "macro") ctx.warnings.push("makrolar (.xlsx biçiminde saklanamaz; korumak için .xlsm olarak kaydedin)");
+      else if (d.reason === "comments") ctx.warnings.push("yorum yanıt zincirleri (notlar korunur)");
+    }
+  }
+  if (opts.report) opts.report.warnings = [...new Set(ctx.warnings)];
   return new Uint8Array(bytes);
 }
 
@@ -585,8 +742,8 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any, xStyle: (id: n
       }
       if (!rows.length) rows.push(t.columns.map(() => null));
       ws.addTable({
-        name: t.name.replace(/[^\p{L}\p{N}_]/gu, "_"),
-        displayName: t.name.replace(/[^\p{L}\p{N}_]/gu, "_"),
+        name: tableFileName(t.name),
+        displayName: tableFileName(t.name),
         ref: addr(t.ref.r1, t.ref.c1),
         headerRow: t.headerRow,
         totalsRow: t.totalRow,
@@ -676,9 +833,11 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any, xStyle: (id: n
   }
   if (sheet.autoFilter) ws.autoFilter = formatRange(sheet.autoFilter.range);
   // Veri doğrulama: postProcess'te (xlsxExtras) çakışmasız ve sınırsız aralıkla yazılır
-  // Koşullu biçimlendirme
+  // Koşullu biçimlendirme (özgün x14 girdisiyle yazılanlar hariç: postProcess geri koyar)
   let priority = 1;
+  const keepCf = passthroughCfRules(sheet);
   for (const rule of sheet.condFormats) {
+    if (keepCf.has(rule.id)) continue;
     const xr = writeCondRule(rule, priority++);
     if (!xr) continue;
     ws.addConditionalFormatting({ ref: rule.ranges.map((r) => formatRange(r)).join(" "), rules: [xr] });
