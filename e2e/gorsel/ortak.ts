@@ -48,14 +48,12 @@ export async function dosyaAc(page: Page, app: Uygulama, yol: string): Promise<v
   const dosya = resolve(DERLEM, yol);
   if (app === "belge") {
     await page.setInputFiles("#bl-open-input", dosya);
-  } else if (app === "tablo") {
+  } else {
+    // Dosya › Aç › Gözat: Ctrl+O yük altındaki CI'da kısayol dinleyicisi hazır olmadan basılınca
+    // seçici açılmıyordu (Sunum'da bir kez 60 sn zaman aşımı); menü yolu her iki uygulamada kararlı.
     await page.locator(".oh-ribbon-file").click();
     await page.locator(".oh-bs-item", { hasText: "Aç" }).first().click();
     const [secici] = await Promise.all([page.waitForEvent("filechooser"), page.locator(".oh-bs-action", { hasText: "Gözat" }).first().click()]);
-    await secici.setFiles(dosya);
-  } else {
-    await page.locator(".stage").click({ position: { x: 4, y: 4 } });
-    const [secici] = await Promise.all([page.waitForEvent("filechooser"), page.keyboard.press("Control+o")]);
     await secici.setFiles(dosya);
   }
   await expect(page.locator(".oh-titlebar")).toContainText(basename(yol).replace(/\.[^.]+$/, ""), { timeout: 30_000 });

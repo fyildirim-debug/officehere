@@ -116,8 +116,10 @@ describe("bulanık dayanıklılık", () => {
       { numRuns: 300 },
     );
     // üretici anlamlı: koşuların önemli bir kısmında taşıma ve düşürme gerçekleşiyor
-    expect(sayac.tasinan).toBeGreaterThan(sayac.kosu / 5);
-    expect(sayac.dusen).toBeGreaterThan(sayac.kosu / 5);
+    // Üreteç işe yarar örnek üretiyor mu: ortalama ~%20; eşik %10 (rastgele tohumla ~4 standart sapma pay,
+    // %20 eşiği ortalamanın tam üstündeydi ve testi yarı yarıya düşürüyordu).
+    expect(sayac.tasinan).toBeGreaterThan(sayac.kosu / 10);
+    expect(sayac.dusen).toBeGreaterThan(sayac.kosu / 10);
   }, 120_000);
 
   it("rastgele bozuk kaynak: öğe düzeyi kopyalar ve çöp toplama da tutarlı", async () => {
