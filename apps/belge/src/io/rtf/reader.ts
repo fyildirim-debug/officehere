@@ -5,12 +5,14 @@ import { defaultSettings, normalizeDoc, type BelgeDocument } from "../../model/d
 import { noteText } from "../../editor/notes";
 import { fieldPicture } from "../../editor/nodes";
 import { pictureOfInstr } from "../../editor/dateFormat";
-import { charMarks, foldLists, noteNode, paragraphNode, stripStyleProps, styleChar, stylesOf, type CharProps, type FlowItem } from "../common";
+import { charMarks, extendCommentToWord, foldLists, noteNode, paragraphNode, stripStyleProps, styleChar, stylesOf, type CharProps, type FlowItem } from "../common";
 import { charsetCodepage, decodeBytes } from "./codepage";
 import { RtfTables } from "./tables";
 import { RtfPict } from "./pict";
 import { RtfLists } from "./lists";
-import { HL_COLORS, LINK_COLOR, SKIP_DESTS, charWord, newChr, newPar, paraWord, headingLevelOf, styleIdByName, applyInfo, type Chr, type Par } from "./state";
+import { HL_COLORS, LINK_COLOR, SKIP_DESTS, charWord, dttmIso, newChr, newPar, paraWord, headingLevelOf, styleIdByName, applyInfo, type Chr, type Par } from "./state";
+import { LoadWarnings } from "../warnings";
+import type { StyleDef } from "../../model/styles";
 
 /** Sayfa ve tarih/saat alanları (sonuç metni yerine alan düğümü okunur). */
 const PAGE_FIELD = /^\s*(PAGE|NUMPAGES|DATE|TIME)\b/i;
@@ -38,7 +40,12 @@ type Dest =
   | "pn"
   | "shp"
   | "sn"
-  | "shpPib";
+  | "shpPib"
+  | "revtbl"
+  | "atnauthor"
+  | "atnid"
+  | "annotation"
+  | "atnval";
 
 interface Group {
   chr: Chr;
@@ -90,7 +97,9 @@ export class RtfReader {
   private colors: (string | null)[] = [];
   private colorCur: { r: number; g: number; b: number; set: boolean } = { r: 0, g: 0, b: 0, set: false };
   private styleNames = new Map<number, string>();
-  private styleCur: { id: number; name: string } | null = null;
+  private styleCur: { id: number; name: string; chr: Chr; par: Par } | null = null;
+  /** Kaynağın Normal (\s0) stil tanımı (Normal stile taşınır). */
+  private normalDef: { chr: Chr; par: Par } | null = null;
   private pending: number[] = [];
   private skipUc = 0;
   private story = new Story();
@@ -106,6 +115,38 @@ export class RtfReader {
   readonly doc: BelgeDocument = { content: { type: "doc" }, settings: defaultSettings() };
   private page = { ...this.doc.settings.page, margin: { ...this.doc.settings.page.margin } };
   private pageTouched = false;
+  /** Okunamayan (kaydedince kaybolacak) içerik uyarıları. */
+  warnings = new LoadWarnings();
+  /** Değişiklik izleme yazarları (\revtbl) ve açıklamalar (\annotation). */
+  private revText = "";
+  private revAuthors: string[] = [];
+  private atn = { author: "", initials: "", text: "", date: "", ref: null as string | null };
+  private pendingAtn: string[] = [];
+  /** Açıklama aralıkları (\atrfstart N … \atrfend N) ve \atnref N → açıklama kimliği. */
+  private openAtr = new Set<string>();
+  private atrSeen = new Set<string>();
+  private atrMap = new Map<string, string>();
+  private atnVal = "";
+  /** Son \par'dan sonra \pard görüldü mü (son paragraf \par olmadan da vardır). */
+  private pardAfterPar = false;
+  private styleTable: Record<string, StyleDef> | null = null;
+  /** Açılan gruplar kapananlardan çoksa (bozuk dosya) hoşgörülü okuma. */
+  private lenient = false;
+  /** Derinlik sınırını aşan (açılmayan) grup sayısı. */
+  private overflow = 0;
+
+  /** Kaçışlı olmayan { ve } sayıları dengesiz mi (açılan > kapanan). */
+  private unbalanced(): boolean {
+    const b = this.b;
+    let depth = 0;
+    for (let i = 0; i < b.length; i++) {
+      const c = b[i];
+      if (c === 0x5c) i++;
+      else if (c === 0x7b) depth++;
+      else if (c === 0x7d) depth--;
+    }
+    return depth > 1;
+  }
 
   constructor(private readonly b: Uint8Array) {}
 
@@ -114,6 +155,7 @@ export class RtfReader {
     while (this.pos < Math.min(64, this.b.length) && this.b[this.pos] !== 0x7b) this.pos++;
     const head = new TextDecoder("latin1").decode(this.b.subarray(this.pos, this.pos + 6));
     if (!head.startsWith("{\\rtf")) throw new Error("Geçerli bir RTF dosyası değil.");
+    this.lenient = this.unbalanced();
     this.g = { chr: newChr(), par: newPar(), dest: "body", ignorable: false, first: false };
     let guard = 0;
     while (this.pos < this.b.length) {
@@ -121,14 +163,27 @@ export class RtfReader {
       const c = this.b[this.pos];
       if (c === 0x7b) {
         this.flushText();
-        if (this.stack.length > 2000) throw new Error("RTF grupları çok derin iç içe.");
+        // Aşırı derin gruplar düzleştirilir (ayrı grup açılmaz; eşleşen kapanışlar da yok sayılır).
+        if (this.stack.length > 2000) {
+          this.overflow++;
+          this.warnings.add("deep", "RTF grup derinliği");
+          this.pos++;
+          continue;
+        }
         this.stack.push(this.g);
         this.g = { chr: { ...this.g.chr }, par: { ...this.g.par, pn: this.g.par.pn }, dest: this.g.dest, ignorable: false, first: true };
         this.skipUc = 0;
         this.pos++;
       } else if (c === 0x7d) {
         this.flushText();
+        if (this.overflow > 0) {
+          this.overflow--;
+          this.pos++;
+          continue;
+        }
         this.g.onEnd?.();
+        // Kök grup kapanıyor: son paragraf kendi (grubun içindeki) biçimiyle biter.
+        if (this.stack.length === 1 && this.g.dest === "body" && this.story === this.main) this.endDocument();
         const prev = this.stack.pop();
         if (!prev) break;
         this.g = prev;
@@ -149,9 +204,11 @@ export class RtfReader {
       }
     }
     this.flushText();
-    this.endParagraph(true);
+    if (this.stack.length) this.warnings.add("unclosed", `kapanmamış grup: ${this.stack.length}`);
+    this.endDocument();
     this.story.tables.close(this.story.items);
     const blocks = foldLists(this.main.items);
+    if (this.atrSeen.size) this.resolveRanges(blocks);
     const s = this.doc.settings;
     if (this.pageTouched) s.page = this.page;
     this.doc.content = normalizeDoc({ type: "doc", content: blocks.length ? blocks : [{ type: "paragraph" }] });
@@ -207,7 +264,12 @@ export class RtfReader {
     if (b[p] === 0x20) p++;
     this.pos = p;
     if (w === "bin") {
-      const n = Math.max(0, Math.min(param ?? 0, b.length - p));
+      // Dosyanın kalanından uzun ikili veri bozukluktur: atlanmaz (içerik okunmaya devam eder).
+      if ((param ?? 0) > b.length - p) {
+        this.warnings.add("corrupt", "\\bin uzunluğu dosyayı aşıyor");
+        return;
+      }
+      const n = Math.max(0, param ?? 0);
       if (this.g.dest === "pict" && this.pict) this.pict.bin = b.slice(p, p + n);
       this.pos = p + n;
       return;
@@ -282,6 +344,21 @@ export class RtfReader {
       case "sn":
         if (this.shape) this.shape.prop += s;
         break;
+      case "revtbl":
+        this.revText += s;
+        break;
+      case "atnauthor":
+        this.atn.author += s;
+        break;
+      case "atnid":
+        this.atn.initials += s;
+        break;
+      case "annotation":
+        this.atn.text += s;
+        break;
+      case "atnval":
+        this.atnVal += s;
+        break;
     }
   }
 
@@ -310,7 +387,8 @@ export class RtfReader {
       spacing: c.expnd ? c.expnd / 20 : null,
       link: c.link,
     };
-    this.story.inline.push({ type: "text", text: s, attrs: { _props: props } } as JSONContent);
+    const rev = c.rev ? { type: c.rev === "ins" ? "insertion" : "deletion", attrs: { author: this.revAuthors[c.rauth] ?? "", date: dttmIso(c.rdate) } } : null;
+    this.story.inline.push({ type: "text", text: s, attrs: { _props: props, _rev: rev, _atr: this.openAtr.size ? [...this.openAtr] : null } } as JSONContent);
   }
 
   private node(n: JSONContent) {
@@ -324,6 +402,15 @@ export class RtfReader {
     const pa = g.par;
     const first = g.first;
     g.first = false;
+    // Grupları kapanmamış (dengesiz) bozuk dosya: paragraf başlangıcı gövdeye dönüldüğünü gösterir; aksi hâlde
+    // belgenin tamamı ilk kapanmamış tablo grubunda kalır ve boş açılırdı.
+    if (this.lenient && (w === "pard" || w === "sectd") && g.dest !== "body" && g.dest !== "pict") {
+      g.dest = "body";
+      g.ignorable = false;
+      // Kapanmamış alanlar da biter (yoksa sonraki metin alan yönergesi sayılırdı).
+      this.fields = [];
+      g.chr.link = null;
+    }
     if (g.dest === "skip") return;
     // Hedef (destination) sözcükleri: yalnız grubun ilk sözcüğü olarak anlamlıdır.
     if (first || g.ignorable) {
@@ -353,15 +440,16 @@ export class RtfReader {
         return;
       case "stylesheet":
         if (w === "s" || w === "cs" || w === "ds" || w === "ts") {
-          const cur = { id: w === "s" ? (param ?? 0) : -1 - (param ?? 0), name: "" };
+          const cur = { id: w === "s" ? (param ?? 0) : -1 - (param ?? 0), name: "", chr: newChr(), par: newPar() };
           this.styleCur = cur;
           const prev = g.onEnd;
           g.onEnd = () => {
             prev?.();
             this.styleNames.set(cur.id, cur.name.replace(/;[\s\S]*$/, "").trim());
+            if (cur.id === 0) this.normalDef = { chr: cur.chr, par: cur.par };
             this.styleCur = null;
           };
-        }
+        } else if (this.styleCur) charWord(this.styleCur.chr, w, param) || paraWord(this.styleCur.par, w, param);
         return;
       case "listtable":
         this.lists.word(w, param);
@@ -389,7 +477,16 @@ export class RtfReader {
       case "bkmk":
         if (w === "yr" || w === "mo" || w === "dy" || w === "hr" || w === "min") this.infoText += `${w}${param} `;
         return;
+      case "annotation":
+        if (w === "par" && this.atn.text) this.atn.text += "\n";
+        return;
+      case "revtbl":
+      case "atnauthor":
+      case "atnid":
+      case "atnval":
+        return;
     }
+    if (w === "pard" && g.dest === "body" && this.story === this.main) this.pardAfterPar = true;
     if (charWord(c, w, param) || paraWord(pa, w, param)) return;
     if (this.story.tables.word(w, param, (i) => this.colors[i] ?? null)) return;
     const pageKey = PAGE_WORDS[w];
@@ -520,10 +617,52 @@ export class RtfReader {
         });
         return true;
       }
-      case "shpinst":
+      case "shpinst": {
         g.dest = "shp";
-        this.shape = { shpleft: 0, shptop: 0, shpright: 0, shpbottom: 0, prop: "", pict: false };
+        const shape = { shpleft: 0, shptop: 0, shpright: 0, shpbottom: 0, prop: "", pict: false };
+        this.shape = shape;
+        // Resmi olmayan şekil (çizim, metin kutusu) okunamaz.
+        end(() => {
+          if (!shape.pict) this.warnings.add("shapes", "\\shp");
+        });
         return true;
+      }
+      case "revtbl":
+        g.dest = "revtbl";
+        this.revText = "";
+        end(() => {
+          this.revAuthors = this.revText.split(";").map((x) => x.trim());
+        });
+        return true;
+      case "atnauthor":
+      case "atnid":
+        g.dest = w;
+        if (w === "atnauthor") this.atn.author = "";
+        else this.atn.initials = "";
+        return true;
+      case "annotation":
+        g.dest = "annotation";
+        this.atn.text = "";
+        end(() => this.addAnnotation());
+        return true;
+      case "atnref":
+      case "atndate":
+      case "atrfstart":
+      case "atrfend": {
+        // Küçük değer grupları: açıklama başvuru numarası, tarihi ve aralık sınırları.
+        g.dest = "atnval";
+        this.atnVal = "";
+        end(() => {
+          const v = this.atnVal.trim();
+          if (w === "atnref") this.atn.ref = v;
+          else if (w === "atndate") this.atn.date = dttmIso(Number(v) >>> 0);
+          else if (w === "atrfstart") {
+            this.openAtr.add(v);
+            this.atrSeen.add(v);
+          } else this.openAtr.delete(v);
+        });
+        return true;
+      }
       case "sp":
         return g.dest === "shp";
       case "sn":
@@ -536,9 +675,12 @@ export class RtfReader {
         // Şeklin resmi okunduysa yedek görünüm atlanır.
         if (this.shape?.pict) g.dest = "skip";
         return true;
+      case "object":
+        // Gömülü nesne: yalnız önizleme resmi (\result) okunur.
+        this.warnings.add("objects", "\\object");
+        return true;
       case "shppict":
       case "result":
-      case "object":
       case "shp":
       case "fldrslt":
         if (w === "fldrslt") {
@@ -559,6 +701,8 @@ export class RtfReader {
           // Sonucu olmayan sayfa alanı
           const kw = f && !f.result ? PAGE_FIELD.exec(f.instr) : null;
           if (kw && f) this.node(pageFieldNode(kw[1].toUpperCase(), f.instr));
+          const name = f?.instr.trim().split(/\s+/)[0]?.toUpperCase();
+          if (name && !/^(HYPERLINK|SHAPE)$/.test(name) && !PAGE_FIELD.test(name)) this.warnings.add("fields", `alan: ${name}`);
         });
         return true;
       case "fldinst":
@@ -591,7 +735,8 @@ export class RtfReader {
         });
         return true;
       case "footnote":
-        this.startStory(null);
+        // Dengesiz dosyada grubun sonu bilinemez: not/üst-alt bilgi metni gövdeye akar (içerik kaybolmaz).
+        if (!this.lenient) this.startStory(null);
         return true;
       case "header":
       case "headerr":
@@ -601,7 +746,7 @@ export class RtfReader {
       case "footerf":
       case "headerl":
       case "footerl":
-        this.startStory((w.startsWith("header") ? "header" : "footer") + (w.endsWith("f") ? "First" : w.endsWith("l") ? "Even" : ""));
+        if (!this.lenient) this.startStory((w.startsWith("header") ? "header" : "footer") + (w.endsWith("f") ? "First" : w.endsWith("l") ? "Even" : ""));
         return true;
       default:
         if (SKIP_DESTS.has(w)) {
@@ -638,6 +783,76 @@ export class RtfReader {
     };
   }
 
+  /** Belgenin stil tablosu: kaynağın varsayılanları (varsayılan yazı tipi, 12 nk, aralıksız tek satır) Normal stile taşınır. */
+  private styles(): Record<string, StyleDef> {
+    if (this.styleTable) return this.styleTable;
+    const s = this.doc.settings;
+    const ours = stylesOf().Normal;
+    // Normal (\s0) stil tanımı varsa onun değerleri; yoksa RTF varsayılanları.
+    const n = this.normalDef;
+    const font = this.fonts.get(n?.chr.f ?? this.deff)?.name || ours.props.font;
+    const size = n?.chr.fs ? n.chr.fs / 2 : 12;
+    const pt = (v: number | null | undefined) => (v ? Math.round((v / 20) * 100) / 100 : 0);
+    const line = n?.par.sl && n.par.slmult ? Math.round((Math.abs(n.par.sl) / 240) * 100) / 100 : 1;
+    const props = { ...ours.props, font, size, spaceBefore: pt(n?.par.sb), spaceAfter: pt(n?.par.sa), line };
+    const same = (Object.keys(props) as (keyof typeof props)[]).every((k) => props[k] === ours.props[k] || (typeof props[k] === "number" && Math.abs((props[k] as number) - ((ours.props[k] as number | undefined) ?? NaN)) < 0.01));
+    if (!same) s.customStyles = { ...s.customStyles, Normal: { ...ours, props } };
+    this.styleTable = stylesOf(s);
+    return this.styleTable;
+  }
+
+  /** Belge sonu: açık paragraf biter; son \par'dan sonra yeni paragraf başladıysa (boş da olsa) korunur. */
+  private endDocument() {
+    this.endParagraph(true);
+    if (this.pardAfterPar && this.story === this.main && !this.story.inline.length && this.g.dest === "body") this.endParagraph(false);
+    this.pardAfterPar = false;
+    if (this.pendingAtn.length) this.warnings.add("comments", "bağlanamayan açıklama");
+  }
+
+  /** Aralıklı açıklamaların yer tutucu kimlikleri gerçek kimliklerle değiştirilir (eşlenmeyenler atılır). */
+  private resolveRanges(blocks: JSONContent[]) {
+    const walk = (n: JSONContent) => {
+      if (n.marks?.some((m) => m.type === "comment" && String(m.attrs?.id).startsWith("__atr:"))) {
+        n.marks = n.marks.flatMap((m) => {
+          const id = String(m.attrs?.id);
+          if (m.type !== "comment" || !id.startsWith("__atr:")) return [m];
+          const real = this.atrMap.get(id.slice(6));
+          return real ? [{ type: "comment", attrs: { id: real } }] : [];
+        });
+        if (!n.marks.length) delete n.marks;
+      }
+      n.content?.forEach(walk);
+    };
+    blocks.forEach(walk);
+  }
+
+  /** \annotation grubu bitti: açıklama kaydedilir ve konumuna yer tutucu bırakılır. */
+  private addAnnotation() {
+    const comments = this.doc.settings.comments;
+    let k = Object.keys(comments).length;
+    while (comments[`rc${k}`]) k++;
+    const id = `rc${k}`;
+    const author = this.atn.author.trim();
+    const initials = this.atn.initials.trim() || author.split(/\s+/).filter(Boolean).map((w) => w[0]!.toLocaleUpperCase("tr-TR")).join("").slice(0, 3) || "K";
+    comments[id] = { id, author, initials, date: this.atn.date || new Date().toISOString(), text: this.atn.text.replace(/\s+$/, "").trim() };
+    const ref = this.atn.ref;
+    this.atn = { author: "", initials: "", text: "", date: "", ref: null };
+    // Aralıklı açıklama: aralıktaki metinler yer tutucu kimlikle işaretlendi; belge sonunda eşlenir.
+    if (ref !== null && this.atrSeen.has(ref)) this.atrMap.set(ref, id);
+    else if (this.story === this.main && this.stack.some((x) => x.dest === "body")) this.story.inline.push({ type: "__atn", attrs: { id } });
+    else this.warnings.add("comments", "üst/alt bilgi ya da not içinde açıklama");
+  }
+
+  private takeAtn(): { type: string; attrs: { id: string } }[] {
+    const out = this.pendingAtn.map((id) => ({ type: "comment", attrs: { id } }));
+    for (const id of this.pendingAtn) this.pointIds.add(id);
+    this.pendingAtn = [];
+    return out;
+  }
+
+  /** Bu paragrafta noktaya bağlanan açıklamalar (sözcüğün tamamına yayılır). */
+  private pointIds = new Set<string>();
+
   /* -------------------------- paragraf ve liste -------------------------- */
 
   /** Paragraf sonu: biriken satır içi içerik paragraf düğümüne dönüşür. */
@@ -646,23 +861,50 @@ export class RtfReader {
     const st = this.story;
     const pa = this.g.par;
     if ((soft || (cell && st.tables.hasBlocks())) && !st.inline.length) return;
+    if (st === this.main) this.pardAfterPar = false;
     const level = headingLevelOf(this.styleNames.get(pa.s), pa.outline);
     const styleId = level ? null : styleIdByName(this.styleNames.get(pa.s));
     const ours = level ? `Heading${level}` : (styleId ?? "Normal");
-    const base = styleChar(stylesOf(), ours).base;
-    const content: JSONContent[] = st.inline.map((n) => {
+    const base = styleChar(this.styles(), ours).base;
+    const converted: JSONContent[] = st.inline.map((n) => {
       const props = (n.attrs as { _props?: CharProps } | undefined)?._props;
       if (n.type !== "text" || !props) return n;
+      const rev = (n.attrs as { _rev?: { type: string; attrs: Record<string, unknown> } | null })._rev;
+      const atr = (n.attrs as { _atr?: string[] | null })._atr ?? [];
       // Yazıcının bağlantılara verdiği renk biçim sayılmaz.
       const own: CharProps = { ...props };
       // Bağlantı stilinin rengi/alt çizgisi ve not metninin boyutu biçim sayılmaz.
       if (own.link && own.color && (own.color === LINK_COLOR || /^#(0000FF|000080)$/i.test(own.color))) own.color = null;
       if (own.link && own.underline === "single") own.underline = null;
       if (st.note) own.size = own.font = null;
-      const marks = charMarks(stripStyleProps(own, base));
+      const marks: JSONContent["marks"] = [...charMarks(stripStyleProps(own, base)), ...(rev ? [rev] : []), ...atr.map((k) => ({ type: "comment", attrs: { id: `__atr:${k}` } }))];
       return { type: "text", text: n.text, ...(marks.length ? { marks } : {}) };
     });
     st.inline = [];
+    // Açıklamalar (\annotation): ardından gelen ilk sözcüğe, yoksa paragrafın son metnine bağlanır.
+    const content: JSONContent[] = [];
+    for (const n of converted) {
+      if (n.type === "__atn") {
+        this.pendingAtn.push(String(n.attrs?.id));
+        continue;
+      }
+      if (n.type === "text" && n.text && this.pendingAtn.length) {
+        const m = /^\s*\S+/.exec(n.text);
+        const head = m ? m[0] : n.text;
+        content.push({ ...n, text: head, marks: [...(n.marks ?? []), ...this.takeAtn()] });
+        if (head.length < n.text.length) content.push({ ...n, text: n.text.slice(head.length) });
+        continue;
+      }
+      content.push(n);
+    }
+    if (this.pendingAtn.length) {
+      const last = [...content].reverse().find((n) => n.type === "text" && n.text);
+      if (last) last.marks = [...(last.marks ?? []), ...this.takeAtn()];
+    }
+    if (this.pointIds.size) {
+      extendCommentToWord(content, this.pointIds);
+      this.pointIds.clear();
+    }
     const attrs: Record<string, unknown> = {};
     if (level) attrs.level = level;
     else if (styleId) attrs.styleId = styleId;
@@ -707,7 +949,9 @@ export class RtfReader {
 }
 
 /** RTF baytları → belge. */
-export function readRtf(data: ArrayBuffer | Uint8Array): BelgeDocument {
+export function readRtf(data: ArrayBuffer | Uint8Array, warnings?: LoadWarnings): BelgeDocument {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  return new RtfReader(bytes).read();
+  const r = new RtfReader(bytes);
+  if (warnings) r.warnings = warnings;
+  return r.read();
 }

@@ -3,7 +3,7 @@
 import type JSZip from "jszip";
 import type { BibStyle, Source, SourceType } from "../../model/sources";
 import type { MailMergeData } from "../../model/document";
-import { NS, XML_HEAD, cleanText, descendants, esc, kid, parseXml } from "./xml";
+import { NS, XML_HEAD, cleanText, descendants, esc, kid, parseXml, zipText } from "./xml";
 import type { Rels } from "./partWriter";
 
 export const BIB_NS = "http://schemas.openxmlformats.org/officeDocument/2006/bibliography";
@@ -151,7 +151,7 @@ export async function readCustomXml(zip: JSZip): Promise<{ sources?: Source[]; b
   for (const name of names) {
     let doc: Document;
     try {
-      doc = parseXml(await zip.file(name)!.async("string"));
+      doc = parseXml(await zipText(zip.file(name)!));
     } catch {
       continue;
     }

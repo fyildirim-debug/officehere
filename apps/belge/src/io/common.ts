@@ -320,6 +320,47 @@ export function imageNode(bytes: Uint8Array, opts: { mime?: string; width?: numb
 /* Düğüm yardımcıları                                                  */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Noktaya bağlı açıklamanın işaretini sözcüğün tamamına yayar: sözcük birden çok koşuya bölünmüşse
+ * (ör. RTF \\u kaçışları, biçim değişikliği) işaretli metne boşluksuz bitişen parçalar da işaretlenir.
+ */
+export function extendCommentToWord(nodes: JSONContent[], ids: Iterable<string>): void {
+  const has = (n: JSONContent | undefined, id: string) => !!n && n.type === "text" && !!n.marks?.some((m) => m.type === "comment" && m.attrs?.id === id);
+  const add = (n: JSONContent, id: string): JSONContent => ({ ...n, marks: [...(n.marks ?? []), { type: "comment", attrs: { id } }] });
+  for (const id of ids) {
+    const first = nodes.findIndex((n) => has(n, id));
+    if (first < 0) continue;
+    let last = first;
+    while (has(nodes[last + 1], id)) last++;
+    // İleri: işaretli metin boşlukla bitmiyorsa sonraki metnin baştaki sözcük parçası.
+    for (let j = last; j + 1 < nodes.length; j++) {
+      const cur = nodes[j].text ?? "";
+      const next = nodes[j + 1];
+      if (/\s$/.test(cur) || next.type !== "text" || !next.text || /^\s/.test(next.text) || has(next, id)) break;
+      const m = /^\S+/.exec(next.text)!;
+      if (m[0].length === next.text.length) {
+        nodes[j + 1] = add(next, id);
+        continue;
+      }
+      nodes.splice(j + 1, 1, add({ ...next, text: m[0] }, id), { ...next, text: next.text.slice(m[0].length) });
+      break;
+    }
+    // Geri: işaretli metin boşlukla başlamıyorsa önceki metnin sondaki sözcük parçası.
+    for (let j = first; j > 0; j--) {
+      const cur = nodes[j].text ?? "";
+      const prev = nodes[j - 1];
+      if (/^\s/.test(cur) || prev.type !== "text" || !prev.text || /\s$/.test(prev.text) || has(prev, id)) break;
+      const m = /\S+$/.exec(prev.text)!;
+      if (m[0].length === prev.text.length) {
+        nodes[j - 1] = add(prev, id);
+        continue;
+      }
+      nodes.splice(j - 1, 1, { ...prev, text: prev.text.slice(0, prev.text.length - m[0].length) }, add({ ...prev, text: m[0] }, id));
+      break;
+    }
+  }
+}
+
 /** Aynı işaretli bitişik metin düğümlerini birleştirir, boş metinleri atar. */
 export function mergeText(nodes: JSONContent[]): JSONContent[] {
   const out: JSONContent[] = [];

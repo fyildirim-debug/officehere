@@ -1,4 +1,5 @@
 // OOXML yardımcıları: ad alanları, kaçış, DOM erişimi.
+import { BelgeOpenError } from "../warnings";
 
 export const NS = {
   w: "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
@@ -51,11 +52,138 @@ export const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 /* Okuma tarafı                                                         */
 /* ------------------------------------------------------------------ */
 
-export function parseXml(text: string): Document {
+/** İç içe öğe düzeyi sınırı: tarayıcıların XML ayrıştırıcıları ~256 düzeyde durur; okuyucular özyinelemelidir. */
+export const MAX_XML_DEPTH = 200;
+
+/** Derinlik sınırı aşılınca düzleştirilen belgeler (okuyucu uyarı verir). */
+export const flattenedDocs = new WeakSet<Document>();
+
+const TOKEN = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>|<!DOCTYPE(?:[^>[]|\[[^\]]*\])*>|<(\/?)[^\s>/!?][^>]*?(\/?)>/g;
+
+/**
+ * Sınırdan derin öğelerin etiketleri atılır (içerikleri sınırdaki öğeye kalır); böylece aşırı iç içe
+ * (bozuk ya da kötü niyetli) belge ayrıştırıcıyı ve özyinelemeli okuyucuları kilitlemez. Derinlik
+ * aşılmıyorsa metin olduğu gibi döner.
+ */
+export function limitDepth(text: string, max = MAX_XML_DEPTH): { text: string; flattened: boolean } {
+  let depth = 0;
+  let over = false;
+  TOKEN.lastIndex = 0;
+  for (let m = TOKEN.exec(text); m; m = TOKEN.exec(text)) {
+    if (m[1] === undefined) continue;
+    if (m[1] === "/") depth--;
+    else if (m[2] !== "/" && ++depth > max) {
+      over = true;
+      break;
+    }
+  }
+  if (!over) return { text, flattened: false };
+  const out: string[] = [];
+  let last = 0;
+  depth = 0;
+  // Sınırın ötesinde açılan etiketlerin kapanışları da atılır (yığın yerine düzey sayacı yeterli).
+  TOKEN.lastIndex = 0;
+  for (let m = TOKEN.exec(text); m; m = TOKEN.exec(text)) {
+    if (m[1] === undefined) continue;
+    let drop = false;
+    if (m[1] === "/") {
+      drop = depth > max;
+      depth--;
+    } else if (m[2] !== "/") {
+      depth++;
+      drop = depth > max;
+    } else drop = depth >= max;
+    if (drop) {
+      out.push(text.slice(last, m.index));
+      last = m.index + m[0].length;
+    }
+  }
+  out.push(text.slice(last));
+  return { text: out.join(""), flattened: true };
+}
+
+function tryParse(text: string): { doc: Document; error: string | null } {
   const doc = new DOMParser().parseFromString(text, "application/xml");
   const err = doc.getElementsByTagName("parsererror")[0];
-  if (err) throw new Error(`XML ayrıştırılamadı: ${err.textContent?.slice(0, 120)}`);
-  return doc;
+  return { doc, error: err ? (err.textContent ?? "").slice(0, 160) : null };
+}
+
+/**
+ * Bildirilmemiş ad alanı ön ekleri (bazı üreticilerin ve bozuk dosyaların hatası) kök öğeye yer tutucu
+ * ad alanıyla eklenir; böylece bilinmeyen öğeler yok sayılır, belgenin geri kalanı okunur.
+ */
+function declareMissingPrefixes(text: string): string | null {
+  const declared = new Set(["xml", "xmlns"]);
+  for (const m of text.matchAll(/xmlns:([A-Za-z_][\w.-]*)\s*=/g)) declared.add(m[1]);
+  const missing = new Set<string>();
+  for (const m of text.matchAll(/<\/?([A-Za-z_][\w.-]*):[A-Za-z_]/g)) if (!declared.has(m[1])) missing.add(m[1]);
+  for (const m of text.matchAll(/\s([A-Za-z_][\w.-]*):[A-Za-z_][\w.-]*\s*=\s*["']/g)) if (!declared.has(m[1])) missing.add(m[1]);
+  if (!missing.size || missing.size > 64) return null;
+  const root = /<([A-Za-z_][\w.:-]*)/.exec(text.replace(/<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!DOCTYPE[^>]*>/g, (s) => " ".repeat(s.length)));
+  if (!root) return null;
+  const at = root.index + root[0].length;
+  const decl = [...missing].map((p) => ` xmlns:${p}="urn:officehere:bilinmeyen:${p}"`).join("");
+  return text.slice(0, at) + decl + text.slice(at);
+}
+
+export function parseXml(source: string): Document {
+  const { text, flattened } = limitDepth(source);
+  const done = (doc: Document) => {
+    if (flattened) flattenedDocs.add(doc);
+    return doc;
+  };
+  const r = tryParse(text);
+  if (r.error) {
+    const fixed = declareMissingPrefixes(text);
+    if (fixed) {
+      const again = tryParse(fixed);
+      if (!again.error) return done(again.doc);
+    }
+    throw new Error(`XML ayrıştırılamadı: ${r.error.slice(0, 120)}`);
+  }
+  return done(r.doc);
+}
+
+/** XML parçasının izin verilen en büyük açılmış boyutu (zip bombasına karşı). */
+export const MAX_XML_PART = 512 * 1024 * 1024;
+/** Bu boyutun üstünde 200 kattan fazla sıkıştırılmış XML parçası zip bombası sayılır (gerçek belgeler ~5-30 kat). */
+export const SUSPICIOUS_PART = 64 * 1024 * 1024;
+
+interface ZipEntry {
+  async(type: "uint8array"): Promise<Uint8Array>;
+  name?: string;
+}
+
+/** Ortam dosyası (resim vb.) zip bombası ya da olağandışı büyük mü (açılmadan atlanır). */
+export function oversizedEntry(f: unknown): boolean {
+  const size = entrySize(f);
+  const packed = (f as { _data?: { compressedSize?: number } } | null)?._data?.compressedSize ?? null;
+  if (size === null) return false;
+  return size > MAX_XML_PART || (packed !== null && size > SUSPICIOUS_PART && size > packed * 200);
+}
+
+/** Paket girdisinin açılmış boyutu (JSZip iç verisinden; bilinmiyorsa null). */
+export function entrySize(f: unknown): number | null {
+  const n = (f as { _data?: { uncompressedSize?: number } } | null)?._data?.uncompressedSize;
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Paketteki XML parçasını metne çevirir: yerel TextDecoder (JSZip'in metin çözücüsünden çok daha hızlı),
+ * sondaki boşluklar atılır; olağandışı büyük parça anlaşılır hatayla reddedilir.
+ */
+export async function zipText(f: ZipEntry): Promise<string> {
+  const size = entrySize(f);
+  const packed = (f as { _data?: { compressedSize?: number } })._data?.compressedSize ?? null;
+  // Zip bombası: çok büyük ve olağandışı yüksek oranda sıkıştırılmış parça açılmadan reddedilir.
+  const bomb = size !== null && packed !== null && size > SUSPICIOUS_PART && size > packed * 200;
+  if (size !== null && (size > MAX_XML_PART || bomb)) throw new BelgeOpenError(`Dosya açılamadı: paketteki bir bölüm olağandışı büyük (${Math.round(size / 1048576)} MB${bomb ? `, ${Math.round(size / Math.max(1, packed!))} kat sıkıştırılmış` : ""}); dosya bozuk ya da zararlı (zip bombası) olabilir.`);
+  const b = await f.async("uint8array");
+  let end = b.length;
+  while (end > 0 && (b[end - 1] === 0x20 || b[end - 1] === 0x0a || b[end - 1] === 0x0d || b[end - 1] === 0x09 || b[end - 1] === 0)) end--;
+  if (b[0] === 0xff && b[1] === 0xfe) return new TextDecoder("utf-16le").decode(b.subarray(2, end));
+  if (b[0] === 0xfe && b[1] === 0xff) return new TextDecoder("utf-16be").decode(b.subarray(2, end));
+  return new TextDecoder("utf-8").decode(b.subarray(0, end));
 }
 
 /** Öğenin yerel adı (ön ek yok sayılır). */

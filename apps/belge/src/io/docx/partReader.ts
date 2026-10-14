@@ -14,6 +14,7 @@ import { tableStyleFromId } from "./styleXml";
 import type { ListSig } from "./numbering";
 import type { DocxReader } from "./reader";
 import { readDrawing, readPict } from "./readerDrawing";
+import { extendCommentToWord } from "../common";
 
 export type Mark = { type: string; attrs?: Record<string, unknown> };
 
@@ -63,6 +64,11 @@ export class PartReader {
   /** Gövdede bölüm sonları: sectPr taşıyan paragrafların ardından öğe sırası. */
   sectionEnds: { index: number; sectPr: Element }[] = [];
   private openComments = new Set<string>();
+  /** Aralığı açılmış ve en az bir metne uygulanmış açıklamalar. */
+  private rangedComments = new Set<string>();
+  private markedComments = new Set<string>();
+  /** Aralıksız (nokta) açıklamalar: ardından gelen ilk sözcüğe, yoksa paragrafın son metnine bağlanır. */
+  pendingPoints: string[] = [];
   private listCounts = new Map<string, number>();
   watermark: DocSettings["watermark"] = null;
 
@@ -79,7 +85,7 @@ export class PartReader {
   }
 
   private collect(container: Element) {
-    const items: { node: JSONContent; list?: { numId: string; ilvl: number; sig: ListSig; start: number } }[] = [];
+    const items: { node: JSONContent; list?: { numId: string; ilvl: number; sig: ListSig; start: number }; ctx?: string }[] = [];
     // Büyük ilk harf: Word harfi çerçeveli ayrı bir paragrafa (w:framePr w:dropCap) yazar; sonraki paragrafa katılır.
     let drop: { items: typeof items; dc: Record<string, unknown> } | null = null;
     const flushDrop = () => {
@@ -116,6 +122,11 @@ export class PartReader {
           case "tbl":
             items.push({ node: this.table(c) });
             break;
+          case "altChunk":
+          case "subDoc":
+            // Başka biçimde gömülü içerik parçası / alt belge okunamaz.
+            this.r.warnings.add("objects", `w:${c.localName}`);
+            break;
           case "sdt": {
             const pr = kid(c, "sdtPr") ?? c;
             const gallery = attr(descendants(pr, "docPartGallery")[0], "val");
@@ -144,6 +155,15 @@ export class PartReader {
     };
     visit(container);
     flushDrop();
+    // Bağlamsal aralık (w:contextualSpacing): aynı stildeki ardışık paragraflar arasındaki aralık yok sayılır.
+    // Modelde karşılığı olmadığından aradaki aralıklar doğrudan sıfırlanır (görünüm ve sayfa düzeni korunur).
+    for (let i = 0; i + 1 < items.length; i++) {
+      const a = items[i];
+      const b = items[i + 1];
+      if (!a.ctx || a.ctx !== b.ctx) continue;
+      a.node.attrs = { ...a.node.attrs, spaceAfter: 0 };
+      b.node.attrs = { ...b.node.attrs, spaceBefore: 0 };
+    }
     return items;
   }
 
@@ -194,7 +214,7 @@ export class PartReader {
     return out;
   }
 
-  private paragraph(p: Element): { node: JSONContent; list?: { numId: string; ilvl: number; sig: ListSig; start: number } }[] {
+  private paragraph(p: Element): { node: JSONContent; list?: { numId: string; ilvl: number; sig: ListSig; start: number }; ctx?: string }[] {
     const pPr = kid(p, "pPr");
     const styleId = attr(kid(pPr, "pStyle"), "val");
     const direct = parsePPr(pPr);
@@ -237,10 +257,16 @@ export class PartReader {
     this.boxes = [];
     const wmBefore = this.watermark;
     this.inline(p, styleDiff.r, [], segments, extra);
+    if (this.pendingPoints.length) this.attachPointsToLast(segments);
+    if (this.pointIds.size) {
+      for (const seg of segments) extendCommentToWord(seg, this.pointIds);
+      this.pointIds.clear();
+    }
     // Yalnız filigran taşıyan üst bilgi paragrafı atlanır.
     if (this.watermark !== wmBefore && segments.every((x) => x.length === 0) && !this.boxes.length) return [];
     const type = mapped.type === "heading" ? "heading" : "paragraph";
-    const out: { node: JSONContent; list?: { numId: string; ilvl: number; sig: ListSig; start: number } }[] = [];
+    const out: { node: JSONContent; list?: { numId: string; ilvl: number; sig: ListSig; start: number }; ctx?: string }[] = [];
+    const ctx = (direct.contextual ?? stylePP.contextual) ? (styleId ?? this.r.sheet.defaultParagraph) : undefined;
     // Yatay çizgi: metni olmayan, yalnız alt kenarlıklı paragraf.
     const onlyBottom = pp.borders && pp.borders.bottom && !pp.borders.top && !pp.borders.left && !pp.borders.right;
     if (onlyBottom && segments.length === 1 && segments[0].length === 0 && mapped.ourId === "Normal" && !list) {
@@ -253,7 +279,7 @@ export class PartReader {
       if (empty && segments.length > 1 && (i === 0 || i === segments.length - 1)) return;
       const node: JSONContent = { type, attrs: { ...attrs }, ...(empty ? {} : { content: mergeText(content) }) };
       // Başlıklar (anahat numaralandırması olsa da) listeye girmez: liste öğesi paragrafla başlamalıdır.
-      out.push({ node, list: i === 0 && list && numId && type !== "heading" ? { numId, ilvl, sig: list.sig, start: list.start } : undefined });
+      out.push({ node, list: i === 0 && list && numId && type !== "heading" ? { numId, ilvl, sig: list.sig, start: list.start } : undefined, ctx });
     });
     for (const e of extra) out.push({ node: e });
     // Paragrafa bağlı metin kutuları paragraftan önce yer alır.
@@ -305,7 +331,11 @@ export class PartReader {
           else if (kw === "HYPERLINK") {
             const href = parseHyperlinkInstr(instr);
             this.inline(c, base, href ? [...marks, { type: "link", attrs: { href } }] : marks, segs, extra);
-          } else this.inline(c, base, marks, segs, extra);
+          } else {
+            // Tanınmayan alan: görünen sonucu metin olarak okunur (alan kodu kaydedilmez).
+            if (kw && kw !== "SHAPE") this.r.warnings.add("fields", `alan: ${kw}`);
+            this.inline(c, base, marks, segs, extra);
+          }
           break;
         }
         case "bookmarkStart": {
@@ -315,10 +345,15 @@ export class PartReader {
         }
         case "commentRangeStart":
           this.openComments.add(`c${attr(c, "id")}`);
+          this.rangedComments.add(`c${attr(c, "id")}`);
           break;
-        case "commentRangeEnd":
-          this.openComments.delete(`c${attr(c, "id")}`);
+        case "commentRangeEnd": {
+          const id = `c${attr(c, "id")}`;
+          this.openComments.delete(id);
+          // Boş aralık (hiçbir metni kapsamayan açıklama) nokta açıklaması gibi bağlanır.
+          if (this.rangedComments.has(id) && !this.markedComments.has(id) && !this.pendingPoints.includes(id)) this.pendingPoints.push(id);
           break;
+        }
         case "smartTag":
         case "customXml":
           this.inline(c, base, marks, segs, extra);
@@ -353,7 +388,21 @@ export class PartReader {
     if (change) marks.push(this.formatChange(change, base));
     for (const id of this.openComments) marks.push({ type: "comment", attrs: { id } });
     if (field?.phase === "result" && field.kind === "link" && field.href) marks = [...marks.filter((m) => m.type !== "link"), { type: "link", attrs: { href: field.href } }];
-    const push = (n: JSONContent) => segs[segs.length - 1].push(marks.length && n.type !== "pageBreak" ? { ...n, marks } : n);
+    const push = (n: JSONContent) => {
+      if (n.type === "text" && n.text) {
+        for (const id of this.openComments) this.markedComments.add(id);
+        if (this.pendingPoints.length) {
+          // Bekleyen nokta açıklaması bu metnin ilk sözcüğüne bağlanır.
+          const m = /^\s*\S+/.exec(n.text);
+          const head = m ? m[0] : n.text;
+          const points = this.takePoints();
+          segs[segs.length - 1].push({ ...n, text: head, marks: [...marks, ...points] });
+          if (head.length < n.text.length) segs[segs.length - 1].push(marks.length ? { ...n, text: n.text.slice(head.length), marks } : { ...n, text: n.text.slice(head.length) });
+          return;
+        }
+      }
+      segs[segs.length - 1].push(marks.length && n.type !== "pageBreak" ? { ...n, marks } : n);
+    };
     for (const c of kids(r)) {
       const f = this.fields[this.fields.length - 1];
       const suppress = f && (f.phase === "instr" || f.kind === "page" || f.kind === "numpages");
@@ -387,7 +436,7 @@ export class PartReader {
             if (!f.emitted && f.phase === "instr" && kw === "XE") {
               const xe = xeNode(f.instr);
               if (xe) push(xe);
-            }
+            } else if (!f.emitted && f.kind !== "link" && kw && kw !== "SHAPE" && !PAGE_FIELDS.has(kw)) this.r.warnings.add("fields", `alan: ${kw}`);
             this.fields.pop();
             if (f.kind === "link") marks = marks.filter((m) => m.type !== "link");
           }
@@ -429,6 +478,12 @@ export class PartReader {
         case "endnoteRef":
           // Not metninin başındaki kendi başvuru işareti atlanır.
           break;
+        case "commentReference": {
+          // Aralığı olmayan (yalnız başvurusu bulunan) açıklama: konumundaki sözcüğe bağlanır.
+          const id = `c${attr(c, "id")}`;
+          if (!this.rangedComments.has(id) && !this.pendingPoints.includes(id)) this.pendingPoints.push(id);
+          break;
+        }
         case "footnoteReference":
         case "endnoteReference": {
           if (suppress) break;
@@ -440,6 +495,16 @@ export class PartReader {
         }
         case "drawing":
           if (!suppress) readDrawing(this, c, push, extra);
+          break;
+        case "object":
+          // Gömülü (OLE) nesne: önizleme resmi okunur, nesnenin kendisi kaydedilmez.
+          if (!suppress) {
+            this.r.warnings.add("objects", "w:object");
+            readPict(this, c, push, extra);
+          }
+          break;
+        case "control":
+          this.r.warnings.add("objects", "w:control");
           break;
         case "pict":
           if (!suppress) readPict(this, c, push, extra);
@@ -453,6 +518,32 @@ export class PartReader {
             if (pc) readPict(this, pc, push, extra);
           }
           break;
+        }
+      }
+    }
+  }
+
+  /** Bu paragrafta noktaya bağlanan açıklamalar (sözcüğün tamamına yayılır). */
+  private pointIds = new Set<string>();
+
+  private takePoints(): Mark[] {
+    const out = this.pendingPoints.map((id) => ({ type: "comment", attrs: { id } }));
+    for (const id of this.pendingPoints) {
+      this.markedComments.add(id);
+      this.pointIds.add(id);
+    }
+    this.pendingPoints = [];
+    return out;
+  }
+
+  /** Paragraf sonunda bekleyen nokta açıklamaları paragrafın son metnine bağlanır (metin yoksa sonraki paragrafa kalır). */
+  private attachPointsToLast(segs: JSONContent[][]) {
+    for (let s = segs.length - 1; s >= 0; s--) {
+      for (let i = segs[s].length - 1; i >= 0; i--) {
+        const n = segs[s][i];
+        if (n.type === "text" && n.text) {
+          segs[s][i] = { ...n, marks: [...(n.marks ?? []), ...this.takePoints()] };
+          return;
         }
       }
     }
@@ -495,7 +586,8 @@ export class PartReader {
       col += gridBefore;
       for (const tc of kids(tr, "tc")) {
         const tcPr = kid(tc, "tcPr");
-        const span = attrNum(kid(tcPr, "gridSpan"), "val") ?? 1;
+        // Geçersiz/dev birleştirme (bozuk dosya) sütun sınırına (63) indirgenir.
+        const span = Math.max(1, Math.min(63, Math.round(attrNum(kid(tcPr, "gridSpan"), "val") ?? 1) || 1));
         const vmEl = kid(tcPr, "vMerge");
         const vm = vmEl ? (attr(vmEl, "val") === "restart" ? "restart" : "continue") : null;
         cells.push({ el: tc, col, span, vm });

@@ -3,13 +3,14 @@
 // köprüler, dipnotlar, metin kutuları, İçindekiler, sayfa sonları, üst/alt bilgi ve sayfa yapısı.
 import JSZip from "jszip";
 import type { JSONContent } from "@tiptap/core";
-import { defaultSettings, normalizeDoc, samePage, type BelgeDocument, type CommentData, type PageSetup } from "../../model/document";
+import { defaultSettings, normalizeDoc, samePage, type BelgeDocument, type CommentData, type DocSettings, type PageSetup } from "../../model/document";
 import { fieldPicture, type TocEntry } from "../../editor/nodes";
 import { noteText } from "../../editor/notes";
 import { normalizeDropCap } from "../../editor/dropCap";
-import { bulletStyleAt, charMarks, foldLists, fromBase64, imageNode, noteNode, paragraphNode, stripStyleProps, styleChar, stylesOf, type CharProps, type FlowItem, type ListInfo } from "../common";
-import { attr, descendants, kid, kids, parseXml } from "../docx/xml";
-import type { StyleProps } from "../../model/styles";
+import { bulletStyleAt, charMarks, extendCommentToWord, foldLists, fromBase64, imageNode, noteNode, paragraphNode, stripStyleProps, styleChar, stylesOf, type CharProps, type FlowItem, type ListInfo } from "../common";
+import { attr, descendants, flattenedDocs, kid, kids, oversizedEntry, parseXml, zipText } from "../docx/xml";
+import type { StyleDef, StyleProps } from "../../model/styles";
+import { BelgeOpenError, LoadWarnings } from "../warnings";
 import { OdtStyles, decodeName, type ListLevel, type OdtStyle, type PageLayout, type ParaProps } from "./styles";
 
 const KNOWN_PARA: Record<string, string> = {
@@ -84,31 +85,78 @@ export class OdtReader {
   private openComments = new Set<string>();
   private commentByName = new Map<string, string>();
   private pointComment: string | null = null;
+  /** Bu paragrafta noktaya bağlanan açıklamalar (sözcüğün tamamına yayılır). */
+  private pointIds = new Set<string>();
+  /** Değişiklik izleme bölgeleri (text:tracked-changes) ve açık ekleme aralıkları. */
+  private changes = new Map<string, { kind: "insertion" | "deletion" | "format"; author: string; date: string; text: string }>();
+  private openInsertions = new Map<string, { author: string; date: string }>();
+  /** Okunamayan (kaydedince kaybolacak) içerik uyarıları. */
+  warnings = new LoadWarnings();
+  /** Belgenin stil tablosu (kaynağın varsayılanları Normal stile taşındıktan sonra). */
+  private styles: Record<string, StyleDef> = stylesOf();
 
   async read(data: ArrayBuffer | Uint8Array): Promise<BelgeDocument> {
     let zip: JSZip;
     try {
       zip = await JSZip.loadAsync(data);
-    } catch {
-      throw new Error("Geçerli bir ODT dosyası değil (ZIP paketi açılamadı).");
+    } catch (err) {
+      throw new BelgeOpenError("Geçerli bir ODT dosyası değil (ZIP paketi açılamadı).", (err as Error).message);
     }
     const contentFile = zip.file("content.xml");
     if (!contentFile) throw new Error("Geçerli bir ODT dosyası değil (content.xml yok).");
     const mime = await zip.file("mimetype")?.async("string");
-    if (mime && !/opendocument\.text/.test(mime)) throw new Error("Bu OpenDocument dosyası bir metin belgesi değil.");
+    if (mime && !/opendocument\.text/.test(mime)) throw new Error(notTextMessage(mime));
     for (const name of Object.keys(zip.files)) {
       const f = zip.files[name];
       if (f.dir || /\.xml$/i.test(name) || name === "mimetype" || this.media.size > 500) continue;
+      if (/^(\.\/)?(Object |ObjectReplacements\/)/.test(name)) this.warnings.add("objects", name);
+      if (/^(\.\/)?Basic\/|^(\.\/)?Scripts\//.test(name)) this.warnings.add("macros");
+      if (oversizedEntry(f)) {
+        this.warnings.add("images", `olağandışı büyük: ${name}`);
+        continue;
+      }
       this.media.set(name.replace(/^\.\//, ""), await f.async("uint8array"));
     }
     const stylesFile = zip.file("styles.xml");
-    const stylesXml = stylesFile ? parseXml(await stylesFile.async("string")) : null;
-    const contentXml = parseXml(await contentFile.async("string"));
+    const stylesXml = stylesFile ? parseXml(await zipText(stylesFile)) : null;
+    const contentXml = parseXml(await zipText(contentFile));
     if (stylesXml) this.st.load(stylesXml.documentElement, "styles");
     this.st.load(contentXml.documentElement, "content");
+    let meta: Element | null = null;
+    const metaFile = zip.file("meta.xml");
+    if (metaFile) {
+      try {
+        meta = parseXml(await zipText(metaFile)).documentElement;
+      } catch {
+        // Bozuk meta.xml yok sayılır.
+      }
+    }
+    if (flattenedDocs.has(contentXml)) this.warnings.add("deep");
+    return this.readParsed(contentXml.documentElement, meta);
+  }
 
+  /** Düz XML OpenDocument (.fodt): stiller, içerik, meta ve resimler tek belgede. */
+  readFlat(xml: string): BelgeDocument {
+    const doc = parseXml(xml);
+    const root = doc.documentElement;
+    if (root.localName !== "document") throw new Error("Geçerli bir düz XML OpenDocument (.fodt) dosyası değil.");
+    const mime = attr(root, "mimetype");
+    if (mime && !/opendocument\.text/.test(mime)) throw new Error(notTextMessage(mime));
+    if (flattenedDocs.has(doc)) this.warnings.add("deep");
+    if (kid(root, "scripts") && descendants(kid(root, "scripts")!, "*").length) this.warnings.add("macros");
+    // Tek belgede otomatik stiller hem içerik hem üst/alt bilgi kapsamında geçerlidir.
+    this.st.load(root, "styles");
+    const masters = this.st.masterOrder.length;
+    this.st.load(root, "content");
+    this.st.masterOrder.length = masters;
+    return this.readParsed(root, kid(root, "meta"));
+  }
+
+  private readParsed(contentRoot: Element, meta: Element | null): BelgeDocument {
     const settings = defaultSettings();
-    const text = descendants(contentXml.documentElement, "text").find((e) => e.parentElement?.localName === "body");
+    this.adoptDefaults(settings);
+    this.readTrackedChanges(contentRoot);
+    const text = descendants(contentRoot, "text").find((e) => e.parentElement?.localName === "body");
     if (!text) throw new Error("Belge gövdesi bulunamadı.");
     this.scope = "content";
     const items = this.blocks(text);
@@ -138,8 +186,59 @@ export class OdtReader {
     settings.comments = Object.fromEntries(Object.entries(this.comments).filter(([id]) => used.has(id)));
     this.openComments.clear();
     this.readHeaders(firstMaster, settings);
-    await this.readMeta(zip, settings);
+    if (meta) this.readMeta(meta, settings);
+    if (Object.keys(this.comments).length > Object.keys(settings.comments).length) this.warnings.add("comments", "bağlanamayan açıklama");
     return { content: normalizeDoc({ type: "doc", content: sections }), settings };
+  }
+
+  /**
+   * Kaynağın varsayılan paragraf stili (Standart; yoksa varsayılan stil) bizim Normal stilimize taşınır:
+   * belge kendi yazı tipi, boyutu ve aralıklarıyla görünür, kaydedilince sayfa düzeni kaymaz.
+   */
+  private adoptDefaults(settings: DocSettings) {
+    const chain = this.st.chain("Standard", "paragraph", "styles");
+    const t = this.st.mergeText(this.st.defaultText(), chain);
+    const pp = this.st.mergePara(chain);
+    const ours = stylesOf().Normal;
+    const props = { ...ours.props };
+    let changed = false;
+    const norm = (f?: string | null) => (f ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+    if (t.font && norm(t.font) !== norm(props.font)) {
+      props.font = t.font;
+      changed = true;
+    }
+    const set = (k: "size" | "spaceBefore" | "spaceAfter" | "line", v: number, d: number) => {
+      if (Math.abs(v - ((props[k] as number | undefined) ?? d)) > 0.01) {
+        props[k] = round(v);
+        changed = true;
+      }
+    };
+    set("size", t.size ?? 12, 11);
+    set("spaceBefore", pp.spaceBefore ?? 0, 0);
+    set("spaceAfter", pp.spaceAfter ?? 0, 0);
+    set("line", pp.lineRule === "auto" || pp.lineRule === undefined ? (pp.lineHeight ?? 1) : 1, 1);
+    if (changed) settings.customStyles = { ...settings.customStyles, Normal: { ...ours, props } };
+    this.styles = stylesOf(settings);
+  }
+
+  /** text:tracked-changes → değişiklik bölgeleri (silinen metin bölgenin içindedir). */
+  private readTrackedChanges(root: Element) {
+    for (const tc of descendants(root, "tracked-changes")) {
+      for (const region of kids(tc, "changed-region")) {
+        const id = attr(region, "id") ?? region.getAttribute("xml:id");
+        const ch = kids(region).find((k) => k.localName === "insertion" || k.localName === "deletion" || k.localName === "format-change");
+        if (!id || !ch) continue;
+        const info = kid(ch, "change-info");
+        const author = kid(info, "creator")?.textContent?.trim() ?? "";
+        const raw = kid(info, "date")?.textContent?.trim() ?? "";
+        const date = raw && !/Z|[+-]\d\d:\d\d$/.test(raw) ? `${raw.replace(/\.\d+$/, "")}Z` : raw;
+        const text = ch.localName === "deletion" ? kids(ch).filter((k) => k.localName === "p" || k.localName === "h" || k.localName === "list").map((k) => (k.textContent ?? "").replace(/\s+/g, " ")).join(" ").trim() : "";
+        const kind = ch.localName === "insertion" ? "insertion" : ch.localName === "deletion" ? "deletion" : "format";
+        if (kind === "format") this.warnings.add("trackFormat", "text:format-change");
+        if (kind === "deletion" && kids(ch).some((k) => k.localName === "table" || descendants(k, "frame").length)) this.warnings.add("trackChanges", "silinen tablo/çerçeve");
+        this.changes.set(id, { kind, author, date, text });
+      }
+    }
   }
 
   /* -------------------------- bloklar -------------------------- */
@@ -203,7 +302,7 @@ export class OdtReader {
     const chain = this.st.chain(attr(p, "style-name"), "paragraph", this.scope);
     const outline = Number(attr(p, "outline-level")) || null;
     const map = this.mapPara(chain, heading, outline);
-    let base: StyleProps = styleChar(stylesOf(), map.id).base;
+    let base: StyleProps = styleChar(this.styles, map.id).base;
     const pp = this.st.mergePara(chain);
     // Kapsayıcı stiller (dipnot, üst/alt bilgi, tablo içeriği): kendi biçimleri doğrudan biçim sayılmaz.
     let firstBase: number | undefined;
@@ -231,8 +330,13 @@ export class OdtReader {
       const lastText = [...content].reverse().find((n) => n.type === "text");
       if (lastText) {
         lastText.marks = [...(lastText.marks ?? []), { type: "comment", attrs: { id: this.pointComment } }];
+        this.pointIds.add(this.pointComment);
         this.pointComment = null;
       }
+    }
+    if (this.pointIds.size) {
+      extendCommentToWord(content, this.pointIds);
+      this.pointIds.clear();
     }
     const last = content[content.length - 1];
     if (last?.type === "text" && last.text?.endsWith(" ") && this.lastSpace) last.text = last.text.replace(/ +$/, "");
@@ -336,12 +440,16 @@ export class OdtReader {
     if (ctx.link && (props.color === "#0563C1" || props.color === "#000080")) props.color = null;
     const marks = charMarks(props);
     for (const id of this.openComments) marks.push({ type: "comment", attrs: { id } });
+    // Değişiklik izleme: açık ekleme aralığındaki metin.
+    const ins = [...this.openInsertions.values()].pop();
+    if (ins && this.scope === "content") marks.push({ type: "insertion", attrs: { author: ins.author, date: ins.date } });
     // Aralıksız açıklama ardından gelen ilk sözcüğe bağlanır.
     const point = this.pointComment;
     if (point) {
       const m = /^\s*\S+/.exec(s);
       const head = m ? m[0] : s;
       this.pointComment = null;
+      this.pointIds.add(point);
       out.push({ type: "text", text: head, marks: [...marks, { type: "comment", attrs: { id: point } }] });
       if (head.length < s.length) out.push({ type: "text", text: s.slice(head.length), ...(marks.length ? { marks } : {}) });
       return;
@@ -456,6 +564,23 @@ export class OdtReader {
         case "annotation":
           this.annotation(e);
           break;
+        case "change-start":
+        case "change-end":
+        case "change": {
+          const id = attr(e, "change-id") ?? "";
+          const ch = this.changes.get(id);
+          if (!ch || this.scope !== "content") break;
+          if (ch.kind === "insertion") {
+            if (e.localName === "change-start") this.openInsertions.set(id, ch);
+            else this.openInsertions.delete(id);
+          } else if (ch.kind === "deletion" && e.localName === "change" && ch.text) {
+            // Silinen metin bulunduğu konuma silme işaretiyle geri konur (kabul/ret düzenleyicide yapılır).
+            const props: CharProps = { ...stripStyleProps(ctx.props, base), link: ctx.link, charStyle: ctx.charStyle };
+            out.push({ type: "text", text: ch.text, marks: [...charMarks(props), { type: "deletion", attrs: { author: ch.author, date: ch.date } }] });
+            this.lastSpace = false;
+          }
+          break;
+        }
         case "annotation-end": {
           const id = this.commentByName.get(attr(e, "name") ?? "");
           if (id) this.openComments.delete(id);
@@ -704,11 +829,8 @@ export class OdtReader {
     this.scope = "content";
   }
 
-  private async readMeta(zip: JSZip, settings: BelgeDocument["settings"]) {
-    const f = zip.file("meta.xml");
-    if (!f) return;
+  private readMeta(x: Element, settings: BelgeDocument["settings"]) {
     try {
-      const x = parseXml(await f.async("string")).documentElement;
       const get = (n: string) => descendants(x, n)[0]?.textContent?.trim() ?? "";
       const p = settings.properties;
       p.title = get("title");
@@ -738,7 +860,23 @@ function lengthPx(v: string | null): number | null {
 
 export { decodeName };
 
+/** OpenDocument'ın metin belgesi olmayan türü için anlaşılır ileti. */
+function notTextMessage(mime: string): string {
+  if (/spreadsheet/.test(mime)) return "Bu bir OpenDocument hesap tablosu; OfficeHere Tablo ile açın.";
+  if (/presentation/.test(mime)) return "Bu bir OpenDocument sunusu; OfficeHere Sunum ile açın.";
+  return "Bu OpenDocument dosyası bir metin belgesi değil.";
+}
+
 /** ODT baytları → belge. */
-export async function readOdt(data: ArrayBuffer | Uint8Array): Promise<BelgeDocument> {
-  return new OdtReader().read(data);
+export async function readOdt(data: ArrayBuffer | Uint8Array, warnings?: LoadWarnings): Promise<BelgeDocument> {
+  const r = new OdtReader();
+  if (warnings) r.warnings = warnings;
+  return r.read(data);
+}
+
+/** Düz XML OpenDocument (.fodt) metni → belge. */
+export function readFodt(xml: string, warnings?: LoadWarnings): BelgeDocument {
+  const r = new OdtReader();
+  if (warnings) r.warnings = warnings;
+  return r.readFlat(xml);
 }

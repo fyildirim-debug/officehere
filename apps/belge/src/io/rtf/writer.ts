@@ -6,7 +6,7 @@ import type { StyleDef } from "../../model/styles";
 import { atomText, marksToProps, nodeStyleId, parseDataUrl, plainBlocks, sectionsOf, sniffImage, styleChar, stylesOf, type CharProps } from "../common";
 import { fieldNowText, fieldPicture } from "../../editor/nodes";
 import { ansiByte } from "./codepage";
-import { LINK_COLOR } from "./state";
+import { LINK_COLOR, isoDttm } from "./state";
 
 const STYLE_INDEX: Record<string, [number, string]> = {
   Normal: [0, "Normal"],
@@ -110,6 +110,11 @@ class RtfWriter {
   lists: LevelDef[][] = [];
   styles: Record<string, StyleDef>;
   listDefs = new Map<JSONContent, number>();
+  /** Değişiklik izleme yazarları (\revtbl; 0 "Unknown") ve açık açıklama aralıkları (gövdede). */
+  revAuthors: string[] = ["Unknown"];
+  private openAtn = new Map<string, number>();
+  private atnSeq = 0;
+  private inBody = false;
 
   constructor(readonly doc: BelgeDocument) {
     this.styles = stylesOf(doc.settings);
@@ -164,23 +169,68 @@ class RtfWriter {
       const link = marksToProps(n.marks).link;
       if (link) {
         let inner = "";
-        while (i < nodes.length && marksToProps(nodes[i].marks).link === link) inner += this.inlineNode(nodes[i++], base);
+        while (i < nodes.length && marksToProps(nodes[i].marks).link === link) {
+          out += this.atnEdges(nodes[i]);
+          inner += this.inlineNode(nodes[i++], base);
+        }
         out += `{\\field{\\*\\fldinst{HYPERLINK "${rtfEscape(link.replace(/"/g, "%22"))}"}}{\\fldrslt{${inner}}}}`;
         continue;
       }
+      out += this.atnEdges(n);
       out += this.inlineNode(n, base);
       i++;
     }
     return out;
   }
 
+  revAuthor(name: string): number {
+    let i = this.revAuthors.indexOf(name || "Unknown");
+    if (i < 0) i = this.revAuthors.push(name) - 1;
+    return i;
+  }
+
+  /** Değişiklik izleme koşu sözcükleri (\revised / \deleted, yazar ve tarih). */
+  revProps(n: JSONContent): string {
+    const m = n.marks?.find((x) => x.type === "insertion" || x.type === "deletion");
+    if (!m) return "";
+    const a = this.revAuthor(String(m.attrs?.author ?? ""));
+    const dt = isoDttm(String(m.attrs?.date ?? ""));
+    return m.type === "insertion" ? `\\revised\\revauth${a}${dt ? `\\revdttm${dt}` : ""}` : `\\deleted\\revauthdel${a}${dt ? `\\revdttmdel${dt}` : ""}`;
+  }
+
+  /** Açıklama aralıklarının açılış/kapanışları (\atrfstart … \atrfend + \annotation); yalnız gövdede. */
+  private atnEdges(n: JSONContent): string {
+    if (!this.inBody) return "";
+    const ids = new Set((n.marks ?? []).filter((m) => m.type === "comment").map((m) => String(m.attrs?.id ?? "")));
+    let out = "";
+    for (const id of [...this.openAtn.keys()]) if (!ids.has(id)) out += this.atnEnd(id);
+    for (const id of ids) {
+      if (this.openAtn.has(id) || !this.doc.settings.comments?.[id]) continue;
+      const num = this.atnSeq++;
+      this.openAtn.set(id, num);
+      out += `{\\*\\atrfstart ${num}}`;
+    }
+    return out;
+  }
+
+  private atnEnd(id: string): string {
+    const num = this.openAtn.get(id)!;
+    this.openAtn.delete(id);
+    const c = this.doc.settings.comments[id];
+    const dt = isoDttm(c.date ?? "");
+    const text = String(c.text ?? "")
+      .split("\n")
+      .map((t) => rtfEscape(t))
+      .join("\\par ");
+    return `{\\*\\atrfend ${num}}{\\*\\atnid ${rtfEscape(c.initials ?? "")}}{\\*\\atnauthor ${rtfEscape(c.author ?? "")}}\\chatn{\\*\\annotation{\\*\\atnref ${num}}${dt ? `{\\*\\atndate ${dt}}` : ""}\\pard\\plain ${text}}`;
+  }
+
   inlineNode(n: JSONContent, base: CharProps): string {
-    // İzlenen değişiklikte silinmiş metin yazılmaz (değişiklikler kabul edilmiş sayılır).
-    if (n.marks?.some((m) => m.type === "deletion")) return "";
     const p = marksToProps(n.marks);
+    // İzlenen değişiklik: metin \revised / \deleted ile yazılır; silinmiş diğer öğeler yazılmaz.
+    if (n.type === "text") return n.text ? `{${this.runProps(p, base)}${this.revProps(n)} ${rtfEscape(n.text)}}` : "";
+    if (n.marks?.some((m) => m.type === "deletion")) return "";
     switch (n.type) {
-      case "text":
-        return n.text ? `{${this.runProps(p, base)} ${rtfEscape(n.text)}}` : "";
       case "hardBreak":
         return "\\line ";
       case "pageField": {
@@ -228,6 +278,16 @@ class RtfWriter {
   }
 
   note(n: JSONContent): string {
+    const wasBody = this.inBody;
+    this.inBody = false;
+    try {
+      return this.noteBody(n);
+    } finally {
+      this.inBody = wasBody;
+    }
+  }
+
+  private noteBody(n: JSONContent): string {
     const a = n.attrs ?? {};
     const blocks: JSONContent[] = (a.content as JSONContent[] | null)?.length
       ? (a.content as JSONContent[])
@@ -450,7 +510,7 @@ class RtfWriter {
       const c = styleChar(this.styles, id);
       const sp = c.base;
       const props = `\\f${this.font(c.font ?? "Aptos")}\\fs${Math.round((c.size ?? 11) * 2)}${c.bold ? "\\b" : ""}${c.italic ? "\\i" : ""}${this.color(c.color) ? `\\cf${this.color(c.color)}` : ""}`;
-      const para = `\\sb${tw(sp.spaceBefore ?? 0)}\\sa${tw(sp.spaceAfter ?? 0)}${sp.keepNext ? "\\keepn" : ""}${id.startsWith("Heading") ? `\\outlinelevel${idx - 1}` : ""}`;
+      const para = `\\sb${tw(sp.spaceBefore ?? 0)}\\sa${tw(sp.spaceAfter ?? 0)}\\sl${Math.round((sp.line ?? 1) * 240)}\\slmult1${sp.keepNext ? "\\keepn" : ""}${id.startsWith("Heading") ? `\\outlinelevel${idx - 1}` : ""}`;
       x += `{\\s${idx}${idx ? "\\sbasedon0\\snext0" : "\\snext0"}${para}${props} ${name};}`;
     }
     return `${x}}\n`;
@@ -471,6 +531,7 @@ class RtfWriter {
   write(): string {
     const s = this.doc.settings;
     let body = "";
+    this.inBody = true;
     sectionsOf(this.doc.content).forEach((sec, i) => {
       if (i > 0) {
         const kind = sec.attrs?.kind;
@@ -478,7 +539,10 @@ class RtfWriter {
       }
       body += this.blocks(sec.content);
     });
+    this.inBody = false;
     body = body.replace(/\\par\n$/, "\n");
+    // Belge sonunda açık kalan açıklama aralıkları son paragrafta kapanır.
+    for (const id of [...this.openAtn.keys()]) body = body.replace(/\n$/, "") + this.atnEnd(id) + "\n";
     const hf = this.hf("header", "header") + this.hf("footer", "footer") + this.hf("headerFirst", "headerf") + this.hf("footerFirst", "footerf") + (s.oddEven ? this.hf("headerEven", "headerl") + this.hf("footerEven", "footerl") : "");
     const p = s.properties;
     const d = new Date(p.created || Date.now());
@@ -488,7 +552,8 @@ class RtfWriter {
     const fonts = `{\\fonttbl${this.fonts.map((f, i) => `{\\f${i}\\fnil\\fcharset162 ${rtfEscape(f)};}`).join("")}}\n`;
     const colors = `{\\colortbl;${this.colors.map((c) => `\\red${parseInt(c.slice(0, 2), 16)}\\green${parseInt(c.slice(2, 4), 16)}\\blue${parseInt(c.slice(4, 6), 16)};`).join("")}}\n`;
     const doc = `\\deftab708${this.pageProps(s.page)}${s.page.titlePage ? "\\titlepg" : ""}${s.oddEven ? "\\facingp" : ""}\\headery${s.page.margin.header}\\footery${s.page.margin.footer}\\sectd${this.pageProps(s.page, true)}${s.page.titlePage ? "\\titlepg" : ""}\n`;
-    return `{\\rtf1\\ansi\\ansicpg1254\\deff0\\uc1\\deflang1055\n${fonts}${colors}${styles}${lists}{\\*\\generator OfficeHere Belge;}\n${info}${doc}${hf}${body}}\n`;
+    const revtbl = this.revAuthors.length > 1 ? `{\\*\\revtbl ${this.revAuthors.map((a) => `{${rtfEscape(a)};}`).join("")}}\n` : "";
+    return `{\\rtf1\\ansi\\ansicpg1254\\deff0\\uc1\\deflang1055\n${fonts}${colors}${styles}${lists}${revtbl}{\\*\\generator OfficeHere Belge;}\n${info}${doc}${hf}${body}}\n`;
   }
 }
 

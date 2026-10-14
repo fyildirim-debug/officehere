@@ -2,7 +2,7 @@
 import JSZip from "jszip";
 import { extensionOf, isCfb, type FileFilter } from "@officehere/core";
 
-export type FormatId = "docx" | "doc" | "odt" | "rtf" | "md" | "html" | "txt";
+export type FormatId = "docx" | "doc" | "odt" | "fodt" | "rtf" | "md" | "html" | "txt";
 
 export interface FormatDef {
   id: FormatId;
@@ -19,13 +19,14 @@ export const FORMATS: Record<FormatId, FormatDef> = {
   docx: { id: "docx", label: "Belge (.docx)", short: "Belge", extensions: ["docx", "docm", "dotx", "dotm"], saveExt: "docx" },
   doc: { id: "doc", label: "Belge 97-2003 (.doc)", short: ".doc (97-2003)", extensions: ["doc"], saveExt: null },
   odt: { id: "odt", label: "OpenDocument Metin (.odt)", short: "OpenDocument Metin", extensions: ["odt", "ott"], saveExt: "odt" },
+  fodt: { id: "fodt", label: "Düz XML OpenDocument Metin (.fodt)", short: "Düz XML OpenDocument", extensions: ["fodt"], saveExt: null },
   rtf: { id: "rtf", label: "Zengin Metin (.rtf)", short: "Zengin Metin", extensions: ["rtf"], saveExt: "rtf" },
   md: { id: "md", label: "Markdown (.md)", short: "Markdown", extensions: ["md", "markdown"], saveExt: "md" },
   html: { id: "html", label: "Web Sayfası (.html)", short: "Web Sayfası", extensions: ["html", "htm"], saveExt: "html" },
   txt: { id: "txt", label: "Düz Metin (.txt)", short: "Düz Metin", extensions: ["txt"], saveExt: "txt" },
 };
 
-const OPEN_ORDER: FormatId[] = ["docx", "doc", "odt", "rtf", "md", "html", "txt"];
+const OPEN_ORDER: FormatId[] = ["docx", "doc", "odt", "fodt", "rtf", "md", "html", "txt"];
 const SAVE_ORDER: FormatId[] = ["docx", "odt", "rtf", "md", "html", "txt"];
 
 export const OPEN_FILTERS: FileFilter[] = [
@@ -73,8 +74,13 @@ export async function detectFormat(name: string, data: ArrayBuffer | Uint8Array)
   if (b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) i = 3;
   while (i < b.length && i < 64 && (b[i] === 0x20 || b[i] === 0x0a || b[i] === 0x0d || b[i] === 0x09)) i++;
   if (String.fromCharCode(...b.subarray(i, i + 5)) === "{\\rtf") return "rtf";
-  // .doc uzantılı HTML (eski "web sayfası" kayıtları)
   const head = new TextDecoder("latin1").decode(b.subarray(i, i + 1024)).toLowerCase();
+  // Düz XML OpenDocument metin (.fodt): tek XML belgesi.
+  if (/^<(\?xml|office:document)/.test(head)) {
+    const top = new TextDecoder("latin1").decode(b.subarray(i, i + 4096));
+    if (/<office:document[\s>]/.test(top) && (/office:mimetype="application\/vnd\.oasis\.opendocument\.text(-template)?"/.test(top) || byExt === "fodt")) return "fodt";
+  }
+  // .doc uzantılı HTML (eski "web sayfası" kayıtları)
   if ((byExt === "doc" || byExt === null) && /^<(!doctype html|html|\?xml)/.test(head) && head.includes("<html")) return "html";
   // İmzası tutmayan ikili/paket uzantıları ilgili okuyucuda anlaşılır hatayla reddedilir.
   return byExt ?? "txt";

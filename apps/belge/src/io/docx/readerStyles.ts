@@ -38,6 +38,8 @@ export interface ParaProps {
   keepLines?: boolean;
   suppressLineNumbers?: boolean;
   pageBreakBefore?: boolean;
+  /** Aynı stildeki paragraflar arasında aralık bırakma (w:contextualSpacing). */
+  contextual?: boolean;
   shading?: string | null;
   borders?: { top?: BorderSpec; bottom?: BorderSpec; left?: BorderSpec; right?: BorderSpec } | null;
   numId?: string;
@@ -187,6 +189,9 @@ export function parsePPr(pPr: Element | null): ParaProps {
         break;
       case "suppressLineNumbers":
         p.suppressLineNumbers = onOff(c) ?? undefined;
+        break;
+      case "contextualSpacing":
+        p.contextual = onOff(c) ?? undefined;
         break;
       case "spacing": {
         const b = attrNum(c, "before");

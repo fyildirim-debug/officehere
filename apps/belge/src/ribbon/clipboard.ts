@@ -1,6 +1,6 @@
 // Pano işlemleri (Kes/Kopyala/Yapıştır ve yapıştırma seçenekleri).
 import type { Editor } from "@tiptap/core";
-import { cleanOfficeHtml, lastInternalCopy } from "../editor/paste";
+import { cleanOfficeHtml, lastInternalCopy, sanitizePastedHtml } from "../editor/paste";
 
 export function execClipboard(editor: Editor, cmd: "cut" | "copy"): boolean {
   editor.commands.focus();
@@ -20,10 +20,10 @@ export async function pasteFromClipboard(editor: Editor, mode: "keep" | "merge" 
       for (const it of items) {
         if (it.types.includes("text/html")) {
           const html = await (await it.getType("text/html")).text();
-          // Ctrl+V ile aynı yol: yapıştırma dönüştürücüleri (Office HTML, düz metin) uygulanır.
+          // Ctrl+V ile aynı yol: yapıştırma dönüştürücüleri (Office HTML, düz metin) uygulanır. HTML etkisiz bir
+          // belgede ayrıştırılır (canlı belgede innerHTML ile <img onerror> gibi betikler çalışırdı) ve temizlenir.
           if (mode === "merge") {
-            const tmp = document.createElement("div");
-            tmp.innerHTML = cleanOfficeHtml(html);
+            const tmp = new DOMParser().parseFromString(sanitizePastedHtml(cleanOfficeHtml(html)), "text/html").body;
             tmp.querySelectorAll("[style]").forEach((el) => el.removeAttribute("style"));
             tmp.querySelectorAll("font").forEach((el) => el.replaceWith(...Array.from(el.childNodes)));
             editor.view.pasteHTML(tmp.innerHTML);

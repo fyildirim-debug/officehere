@@ -42,7 +42,7 @@ describe("biçim tanıma", () => {
 
   it("aç ve kaydet filtreleri", () => {
     expect(OPEN_FILTERS[0].name).toBe("Tüm Belgeler");
-    expect(OPEN_FILTERS[0].extensions).toEqual(["docx", "docm", "dotx", "dotm", "doc", "odt", "ott", "rtf", "md", "markdown", "html", "htm", "txt"]);
+    expect(OPEN_FILTERS[0].extensions).toEqual(["docx", "docm", "dotx", "dotm", "doc", "odt", "ott", "fodt", "rtf", "md", "markdown", "html", "htm", "txt"]);
     expect(OPEN_FILTERS.map((f) => f.name)).toContain("OpenDocument Metin (.odt)");
     expect(OPEN_ACCEPT).toContain(".odt");
     expect(OPEN_ACCEPT).toContain(".doc,");

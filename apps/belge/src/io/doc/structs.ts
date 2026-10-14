@@ -49,12 +49,19 @@ export function parsePieces(t: Bytes, fib: Fib): Piece[] {
 const cp1252 = new TextDecoder("windows-1252");
 
 /** Parçalardan tüm metin (CP dizini = karakter dizini). */
+/** Belge metninin en büyük uzunluğu (karakter); bozuk parça tablosu dev boşluklarla belleği tüketmesin. */
+const MAX_TEXT = 64 * 1024 * 1024;
+
 export function pieceText(wd: Bytes, pieces: Piece[], maxCp: number): string {
   const parts: string[] = [];
   let at = 0;
+  let total = 0;
   for (const p of pieces) {
     if (p.cpStart >= maxCp) break;
-    if (p.cpStart > at) parts.push("\u0000".repeat(Math.min(p.cpStart - at, 1_000_000)));
+    const gap = p.cpStart > at ? Math.min(p.cpStart - at, 1_000_000) : 0;
+    total += gap + Math.max(0, Math.min(p.cpEnd, maxCp) - p.cpStart);
+    if (total > MAX_TEXT) throw new Error("Bozuk .doc dosyası (metin uzunluğu geçersiz).");
+    if (gap) parts.push("\u0000".repeat(gap));
     const n = Math.min(p.cpEnd, maxCp) - p.cpStart;
     if (p.compressed) parts.push(cp1252.decode(wd.slice(p.fc, n)));
     else parts.push(wd.utf16(p.fc, n));

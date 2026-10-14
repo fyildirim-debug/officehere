@@ -1,5 +1,6 @@
 // styles.xml üretimi: belge stilleri, tablo stilleri ve özellik dönüşümleri.
 import type { BorderSpec, StyleDef, StyleProps } from "../../model/styles";
+import type { DocDefaults } from "../../model/document";
 import { styleIds } from "../../model/styles";
 import { TABLE_STYLES } from "../../editor/table";
 import { NS, XML_HEAD, esc, hex6 } from "./xml";
@@ -102,12 +103,21 @@ export function tableStyleFromId(styleId: string | null): string | null {
   return hit?.id ?? null;
 }
 
-export function buildStylesXml(styles: Record<string, StyleDef>): string {
+/** Belge varsayılanları: Normal stilin yazı tipi/boyut/aralığı; açılan belgenin dili ve diğer yazı tipleri korunur. */
+function docDefaultsXml(normal: StyleProps, dd?: DocDefaults | null): string {
+  const font = normal.font ?? "Aptos";
+  const f = esc(font);
+  const fonts = `<w:rFonts w:ascii="${f}" w:hAnsi="${f}" w:eastAsia="${esc(dd?.fontEastAsia ?? font)}" w:cs="${esc(dd?.fontCs ?? font)}"/>`;
+  const sz = Math.round((normal.size ?? 11) * 2);
+  const lang = `<w:lang w:val="${esc(dd?.lang ?? "tr-TR")}" w:eastAsia="${esc(dd?.langEastAsia ?? "en-US")}" w:bidi="${esc(dd?.langBidi ?? "ar-SA")}"/>`;
+  const before = normal.spaceBefore ? ` w:before="${Math.round(normal.spaceBefore * 20)}"` : "";
+  return `<w:docDefaults><w:rPrDefault><w:rPr>${fonts}<w:kern w:val="2"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>${lang}</w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing${before} w:after="${Math.round((normal.spaceAfter ?? 8) * 20)}" w:line="${Math.round((normal.line ?? 1.08) * 240)}" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>`;
+}
+
+export function buildStylesXml(styles: Record<string, StyleDef>, defaults?: DocDefaults | null): string {
   const normal = styles.Normal.props;
   const parts: string[] = [];
-  parts.push(
-    `<w:docDefaults><w:rPrDefault><w:rPr>${fontsXml(normal.font ?? "Aptos")}<w:kern w:val="2"/><w:sz w:val="${Math.round((normal.size ?? 11) * 2)}"/><w:szCs w:val="${Math.round((normal.size ?? 11) * 2)}"/><w:lang w:val="tr-TR" w:eastAsia="en-US" w:bidi="ar-SA"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="${Math.round((normal.spaceAfter ?? 8) * 20)}" w:line="${Math.round((normal.line ?? 1.08) * 240)}" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>`,
-  );
+  parts.push(docDefaultsXml(normal, defaults));
   for (const id of styleIds(styles)) {
     const s = styles[id];
     if (!s) continue;
@@ -116,7 +126,7 @@ export function buildStylesXml(styles: Record<string, StyleDef>): string {
     if (s.type === "character") {
       parts.push(`<w:style w:type="character" w:styleId="${id}">${head}${styleRPr(s.props)}</w:style>`);
     } else {
-      const p = id === "Normal" ? { ...s.props, font: undefined, size: undefined, spaceAfter: undefined, line: undefined } : s.props;
+      const p = id === "Normal" ? { ...s.props, font: undefined, size: undefined, spaceBefore: undefined, spaceAfter: undefined, line: undefined } : s.props;
       const ppr = stylePPr(p, s.level ? { outline: s.level - 1 } : {});
       const rpr = styleRPr(p);
       parts.push(`<w:style w:type="paragraph"${id === "Normal" ? ' w:default="1"' : ""} w:styleId="${id}">${head}${ppr}${rpr}</w:style>`);

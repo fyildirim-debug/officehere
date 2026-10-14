@@ -28,6 +28,13 @@ export interface Chp {
   spec: boolean;
   picLoc: number | null;
   ole: boolean;
+  /** Değişiklik izleme: silinmiş / eklenmiş metin, yazar dizini (SttbfRMark) ve DTTM tarihi. */
+  rmDel: boolean;
+  rmIns: boolean;
+  ibstRMark: number;
+  dttmRMark: number;
+  ibstRMarkDel: number;
+  dttmRMarkDel: number;
 }
 
 export interface Pap {
@@ -55,7 +62,7 @@ export interface Pap {
   header: boolean;
 }
 
-export const newChp = (): Chp => ({ bold: false, italic: false, strike: false, dstrike: false, outline: false, shadow: false, smallCaps: false, caps: false, hidden: false, emboss: false, imprint: false, underline: null, hps: 20, color: null, highlight: null, bg: null, iss: 0, ftc: null, spacing: 0, istd: null, spec: false, picLoc: null, ole: false });
+export const newChp = (): Chp => ({ bold: false, italic: false, strike: false, dstrike: false, outline: false, shadow: false, smallCaps: false, caps: false, hidden: false, emboss: false, imprint: false, underline: null, hps: 20, color: null, highlight: null, bg: null, iss: 0, ftc: null, spacing: 0, istd: null, spec: false, picLoc: null, ole: false, rmDel: false, rmIns: false, ibstRMark: 0, dttmRMark: 0, ibstRMarkDel: 0, dttmRMarkDel: 0 });
 export const newPap = (): Pap => ({ istd: 0, jc: null, left: null, right: null, first: null, before: null, after: null, line: null, keep: false, keepNext: false, pageBreakBefore: false, inTable: false, ttp: false, itap: 0, ilvl: 0, ilfo: 0, outline: null, shading: null, tdef: null, tshd: null, header: false });
 
 /** Ico renk dizini (sprmCIco, vurgu). */
@@ -192,6 +199,24 @@ export function applyChpx(c: Chp, grpprl: Uint8Array, base: Chp) {
         break;
       case 0x080a:
         c.ole = v !== 0;
+        break;
+      case 0x0800:
+        c.rmDel = toggle(v, base.rmDel);
+        break;
+      case 0x0801:
+        c.rmIns = toggle(v, base.rmIns);
+        break;
+      case 0x4804:
+        c.ibstRMark = u16(grpprl, at);
+        break;
+      case 0x6805:
+        c.dttmRMark = u32(grpprl, at);
+        break;
+      case 0x4863:
+        c.ibstRMarkDel = u16(grpprl, at);
+        break;
+      case 0x6864:
+        c.dttmRMarkDel = u32(grpprl, at);
         break;
       case 0xca71:
         // SHD: cvFore, cvBack, ipat

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Değişiklik izleme, açıklama ve belge varsayılanları örneği (düz ODF). uret.sh bu dosyadan LibreOffice ile izleme.{odt,docx,rtf,doc} üretir. -->
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.text">
+ <office:meta>
+  <dc:title>İzleme Örneği</dc:title>
+ </office:meta>
+ <office:font-face-decls>
+  <style:font-face style:name="Liberation Serif" svg:font-family="'Liberation Serif'"/>
+ </office:font-face-decls>
+ <office:styles>
+  <style:default-style style:family="paragraph">
+   <style:text-properties style:font-name="Liberation Serif" fo:font-size="12pt" fo:language="tr" fo:country="TR"/>
+  </style:default-style>
+  <style:style style:name="Standard" style:family="paragraph" style:class="text"/>
+ </office:styles>
+ <office:automatic-styles>
+  <style:style style:name="P1" style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:text-align="justify"/></style:style>
+  <style:page-layout style:name="pm1">
+   <style:page-layout-properties fo:page-width="21cm" fo:page-height="29.7cm" style:print-orientation="portrait" fo:margin-top="2cm" fo:margin-bottom="2cm" fo:margin-left="2cm" fo:margin-right="2cm"/>
+  </style:page-layout>
+ </office:automatic-styles>
+ <office:master-styles>
+  <style:master-page style:name="Standard" style:page-layout-name="pm1"/>
+ </office:master-styles>
+ <office:body>
+  <office:text>
+   <text:tracked-changes text:track-changes="true">
+    <text:changed-region xml:id="ct1" text:id="ct1"><text:deletion><office:change-info><dc:creator>Ali Veli</dc:creator><dc:date>2026-01-02T10:00:00</dc:date></office:change-info><text:p text:style-name="Standard">silinen sözcük</text:p></text:deletion></text:changed-region>
+    <text:changed-region xml:id="ct2" text:id="ct2"><text:insertion><office:change-info><dc:creator>Ali Veli</dc:creator><dc:date>2026-01-02T10:05:00</dc:date></office:change-info></text:insertion></text:changed-region>
+   </text:tracked-changes>
+   <text:p text:style-name="Standard">Birinci paragraf: <office:annotation office:name="a1"><dc:creator>Ayşe Yılmaz</dc:creator><dc:date>2026-01-03T09:00:00</dc:date><text:p>Aralıklı açıklama metni.</text:p></office:annotation>açıklamalı ifade<office:annotation-end office:name="a1"/> burada.</text:p>
+   <text:p text:style-name="Standard"><office:annotation><dc:creator>Mehmet Kaya</dc:creator><dc:date>2026-01-03T09:30:00</dc:date><text:p>Nokta açıklaması.</text:p></office:annotation>İkinci paragrafta noktaya bağlı açıklama var.</text:p>
+   <text:p text:style-name="Standard">Bu cümlede <text:change text:change-id="ct1"/>bir <text:change-start text:change-id="ct2"/>eklenen ifade<text:change-end text:change-id="ct2"/> var.</text:p>
+   <text:p text:style-name="P1">Son paragraf iki yana yaslanmıştır ve belgenin kendi varsayılan yazı tipi ile aralıkları korunmalıdır; bu paragraf yeterince uzun olsun diye birkaç sözcük daha eklenmiştir.</text:p>
+  </office:text>
+ </office:body>
+</office:document>

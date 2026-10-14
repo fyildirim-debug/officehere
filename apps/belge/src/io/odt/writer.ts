@@ -53,6 +53,10 @@ class OdtWriter {
   openComments = new Set<string>();
   private commentNames = new Map<string, string>();
   private inNote = false;
+  /** Değişiklik izleme bölgeleri (text:tracked-changes), açık ekleme aralığı ve son silme bölgesi. */
+  private changes: { id: string; kind: "insertion" | "deletion"; author: string; date: string; text: string }[] = [];
+  private openIns: { key: string; id: string } | null = null;
+  private lastDel: { key: string; region: { text: string } } | null = null;
 
   constructor(readonly doc: BelgeDocument) {
     this.body = new StyleBook("", this.fonts);
@@ -65,8 +69,8 @@ class OdtWriter {
   inline(nodes: JSONContent[], book: StyleBook): string {
     let out = "";
     let i = 0;
-    // Açıklamalar yalnız belge gövdesinde (üst/alt bilgi ve not metni dışında) yazılır.
-    const edges = (n: JSONContent) => (book === this.body && !this.inNote ? this.commentEdges(n) : "");
+    // Açıklamalar ve değişiklik izleme yalnız belge gövdesinde (üst/alt bilgi ve not metni dışında) yazılır.
+    const edges = (n: JSONContent) => (book === this.body && !this.inNote ? this.trackEdges(n) + this.commentEdges(n) : "");
     while (i < nodes.length) {
       const link = marksToProps(nodes[i].marks).link;
       if (link) {
@@ -81,7 +85,60 @@ class OdtWriter {
       out += edges(nodes[i]);
       out += this.inlineNode(nodes[i++], book);
     }
+    if (book === this.body && !this.inNote) out += this.closeTrack();
     return out;
+  }
+
+  /** Ekleme aralığının başı/sonu ve silinen metnin konumu (silinen metin bölgede saklanır). */
+  private trackEdges(n: JSONContent): string {
+    const ins = n.marks?.find((m) => m.type === "insertion");
+    const del = n.marks?.find((m) => m.type === "deletion");
+    const who = (m: { attrs?: Record<string, unknown> }) => ({ author: String(m.attrs?.author ?? ""), date: String(m.attrs?.date ?? "") });
+    let out = "";
+    const key = ins && !del ? JSON.stringify(who(ins)) : null;
+    if (this.openIns && this.openIns.key !== key) {
+      out += `<text:change-end text:change-id="${this.openIns.id}"/>`;
+      this.openIns = null;
+    }
+    if (key && !this.openIns) {
+      const id = `ct${this.changes.length + 1}`;
+      this.changes.push({ id, kind: "insertion", ...who(ins!), text: "" });
+      this.openIns = { key, id };
+      out += `<text:change-start text:change-id="${id}"/>`;
+    }
+    if (!del) {
+      this.lastDel = null;
+      return out;
+    }
+    const text = n.type === "text" ? (n.text ?? "") : n.type === "hardBreak" ? " " : (atomText(n) ?? "");
+    const dkey = JSON.stringify(who(del));
+    if (this.lastDel && this.lastDel.key === dkey) {
+      this.lastDel.region.text += text;
+      return out;
+    }
+    const id = `ct${this.changes.length + 1}`;
+    const region = { id, kind: "deletion" as const, ...who(del), text };
+    this.changes.push(region);
+    this.lastDel = { key: dkey, region };
+    return `${out}<text:change text:change-id="${id}"/>`;
+  }
+
+  private closeTrack(): string {
+    this.lastDel = null;
+    if (!this.openIns) return "";
+    const id = this.openIns.id;
+    this.openIns = null;
+    return `<text:change-end text:change-id="${id}"/>`;
+  }
+
+  /** text:tracked-changes: bölgeler (yazar, tarih; silmelerde silinen metin). */
+  private trackedChangesXml(): string {
+    if (!this.changes.length) return "";
+    const info = (c: { author: string; date: string }) => `<office:change-info><dc:creator>${esc(c.author)}</dc:creator>${c.date ? `<dc:date>${esc(c.date.replace(/\.\d+Z$|Z$/, ""))}</dc:date>` : ""}</office:change-info>`;
+    const regions = this.changes
+      .map((c) => `<text:changed-region xml:id="${c.id}" text:id="${c.id}">${c.kind === "insertion" ? `<text:insertion>${info(c)}</text:insertion>` : `<text:deletion>${info(c)}<text:p>${odtText(c.text)}</text:p></text:deletion>`}</text:changed-region>`)
+      .join("");
+    return `<text:tracked-changes text:track-changes="false">${regions}</text:tracked-changes>`;
   }
 
   /** Düğümün açıklama işaretlerine göre kapanan ve açılan açıklama aralıkları. */
@@ -431,7 +488,7 @@ class OdtWriter {
     const layouts = pageLayout("pm1", s.page, hasHeader, hasFooter, s.pageColor) + this.masters.map((m) => pageLayout(m.layout, m.page, hasHeader, hasFooter, s.pageColor)).join("");
     const masters = `<style:master-page style:name="Standard" style:page-layout-name="pm1">${hfXml}</style:master-page>` + this.masters.map((m) => `<style:master-page style:name="${m.name}" style:page-layout-name="${m.layout}">${hfXml}</style:master-page>`).join("");
     const fonts = fontDecls(this.fonts);
-    const content = `${XML_DECL}<office:document-content ${ODF_NS} office:version="1.3">${fonts}<office:automatic-styles>${this.body.toXml()}</office:automatic-styles><office:body><office:text>${text || '<text:p text:style-name="Standard"/>'}</office:text></office:body></office:document-content>`;
+    const content = `${XML_DECL}<office:document-content ${ODF_NS} office:version="1.3">${fonts}<office:automatic-styles>${this.body.toXml()}</office:automatic-styles><office:body><office:text>${this.trackedChangesXml()}${text || '<text:p text:style-name="Standard"/>'}</office:text></office:body></office:document-content>`;
     const styles = `${XML_DECL}<office:document-styles ${ODF_NS} office:version="1.3">${fonts}${named}<office:automatic-styles>${layouts}${this.hfBook.toXml()}</office:automatic-styles><office:master-styles>${masters}</office:master-styles></office:document-styles>`;
     const zip = new JSZip();
     zip.file("mimetype", MIME_ODT, { compression: "STORE" });

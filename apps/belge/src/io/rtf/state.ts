@@ -20,6 +20,10 @@ export interface Chr {
   expnd: number;
   uc: number;
   link: string | null;
+  /** Değişiklik izleme: eklenen (\revised) ya da silinen (\deleted) metin; yazar dizini ve DTTM tarihi. */
+  rev: "ins" | "del" | null;
+  rauth: number;
+  rdate: number;
 }
 
 export interface Par {
@@ -44,15 +48,15 @@ export interface Par {
   pn: { ordered: boolean; level: number } | null;
 }
 
-export const newChr = (): Chr => ({ b: false, i: false, ul: null, strike: false, dstrike: false, sup: false, sub: false, fs: null, cf: 0, hl: 0, cb: 0, f: null, caps: false, scaps: false, v: false, expnd: 0, uc: 1, link: null });
+export const newChr = (): Chr => ({ b: false, i: false, ul: null, strike: false, dstrike: false, sup: false, sub: false, fs: null, cf: 0, hl: 0, cb: 0, f: null, caps: false, scaps: false, v: false, expnd: 0, uc: 1, link: null, rev: null, rauth: 0, rdate: 0 });
 export const newPar = (): Par => ({ align: null, li: null, ri: null, fi: null, sb: null, sa: null, sl: null, slmult: false, keepn: false, keep: false, pagebb: false, intbl: false, ls: null, ilvl: 0, s: 0, outline: null, shade: null, brdrb: false, pn: null });
 
 /** İçeriği okunmadan atlanan hedefler (yıldızsız olanlar dahil). */
 export const SKIP_DESTS = new Set([
   "author", "buptim", "comment", "company", "creatim", "doccomm", "docvar", "hlinkbase", "keywords", "operator", "printim", "revtim", "subject", "title",
-  "xe", "tc", "txe", "rxe", "private", "template", "ftnsep", "ftnsepc", "ftncn", "aftnsep", "aftnsepc", "aftncn", "nonshppict", "filetbl", "revtbl",
+  "xe", "tc", "txe", "rxe", "private", "template", "ftnsep", "ftnsepc", "ftncn", "aftnsep", "aftnsepc", "aftncn", "nonshppict", "filetbl",
   "rsidtbl", "listpicture", "mmathPr", "themedata", "colorschememapping", "datastore", "latentstyles", "generator", "xmlnstbl", "fchars", "lchars",
-  "pgptbl", "protusertbl", "bkmkend", "atnid", "atnauthor", "annotation", "atndate", "atnref", "atntime", "atnparent", "listtext", "pntext", "pntxta",
+  "pgptbl", "protusertbl", "bkmkend", "atndate", "atnref", "atntime", "atnparent", "listtext", "pntext", "pntxta",
   "pntxtb", "objdata", "objclass", "objname", "shpinst", "sp", "sn", "sv", "background", "userprops", "category", "manager", "falt", "panose",
   "fname", "fontemb", "fontfile", "stylerestrictions", "ud", "upr", "wgrffmtfilter", "pgdsctbl", "oldcprops", "oldpprops", "oldtprops", "oldsprops",
   "defchp", "defpap", "pnseclvl", "picprop", "blipuid", "macpict", "pmmetafile",
@@ -115,6 +119,20 @@ export function charWord(c: Chr, w: string, param: number | null): boolean {
       return true;
     case "striked":
       c.dstrike = on;
+      return true;
+    case "revised":
+      c.rev = on ? "ins" : c.rev === "ins" ? null : c.rev;
+      return true;
+    case "deleted":
+      c.rev = on ? "del" : c.rev === "del" ? null : c.rev;
+      return true;
+    case "revauth":
+    case "revauthdel":
+      c.rauth = param ?? 0;
+      return true;
+    case "revdttm":
+    case "revdttmdel":
+      c.rdate = param ?? 0;
       return true;
     case "super":
     case "sub":
@@ -220,6 +238,26 @@ export function paraWord(pa: Par, w: string, param: number | null): boolean {
       return true;
   }
   return false;
+}
+
+/** DTTM (dakika, saat, gün, ay, yıl-1900 bit alanları) → ISO tarih; geçersizse boş. */
+export function dttmIso(dttm: number): string {
+  const v = dttm >>> 0;
+  if (!v) return "";
+  const min = v & 0x3f;
+  const hr = (v >> 6) & 0x1f;
+  const dy = (v >> 11) & 0x1f;
+  const mo = (v >> 16) & 0xf;
+  const yr = ((v >> 20) & 0x1ff) + 1900;
+  if (!dy || !mo || mo > 12 || min > 59 || hr > 23) return "";
+  return new Date(Date.UTC(yr, mo - 1, dy, hr, min)).toISOString().replace(/\.\d+Z$/, "Z");
+}
+
+/** ISO tarih → DTTM. */
+export function isoDttm(iso: string): number {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return 0;
+  return (d.getUTCMinutes() | (d.getUTCHours() << 6) | (d.getUTCDate() << 11) | ((d.getUTCMonth() + 1) << 16) | ((d.getUTCFullYear() - 1900) << 20) | (d.getUTCDay() << 29)) >>> 0;
 }
 
 /** \info alanı → belge özellikleri. */

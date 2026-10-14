@@ -259,7 +259,7 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
   zip.file("word/document.xml", `${XML_HEAD}<w:document ${DOC_NS} mc:Ignorable="w14 wp14"><w:body>${bodyXml}${finalSect}</w:body></w:document>`.replace("<w:body>", `${bg}<w:body>`));
 
   const styles = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing, settings.customStyles);
-  zip.file("word/styles.xml", buildStylesXml(styles));
+  zip.file("word/styles.xml", buildStylesXml(styles, settings.docDefaults));
   zip.file("word/numbering.xml", numberingXml(ctx));
   zip.file(
     "word/settings.xml",

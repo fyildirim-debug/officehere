@@ -1,10 +1,11 @@
 // DOCX okuyucu: OOXML (JSZip + DOMParser) → ProseMirror JSON + belge ayarları.
 import JSZip from "jszip";
 import type { JSONContent } from "@tiptap/core";
-import { defaultSettings, normalizeDoc, pageMetrics, samePage, type BelgeDocument, type CommentData, type DocSettings, type PageSetup } from "../../model/document";
+import { defaultSettings, normalizeDoc, pageMetrics, samePage, type BelgeDocument, type CommentData, type DocDefaults, type DocSettings, type PageSetup } from "../../model/document";
 import { noteText } from "../../editor/notes";
 import { effectiveProps, resolveStyles, type StyleDef } from "../../model/styles";
-import { attr, attrNum, descendants, kid, kids, parseXml, relsTarget, NS } from "./xml";
+import { attr, attrNum, descendants, flattenedDocs, kid, kids, oversizedEntry, parseXml, path, relsTarget, zipText, NS } from "./xml";
+import { BelgeOpenError, LoadWarnings } from "../warnings";
 import { Numbering, StyleSheet, parseTheme, type ParaProps, type RunProps, type ThemeFonts } from "./readerStyles";
 import { PartReader, stripNoteStyle, type Rel } from "./partReader";
 import { readCustomXml } from "./customXml";
@@ -43,7 +44,7 @@ async function readRels(zip: JSZip, part: string): Promise<Map<string, Rel>> {
   const relPath = `${dir ? dir + "/" : ""}_rels/${part.slice(part.lastIndexOf("/") + 1)}.rels`;
   const f = zip.file(relPath);
   if (!f) return map;
-  const doc = parseXml(await f.async("string"));
+  const doc = parseXml(await zipText(f));
   for (const r of Array.from(doc.getElementsByTagName("*")).filter((e) => e.localName === "Relationship")) {
     const external = r.getAttribute("TargetMode") === "External";
     const target = r.getAttribute("Target") ?? "";
@@ -63,6 +64,8 @@ export class DocxReader {
   footnotes = new Map<string, { text: string; content: JSONContent[] | null }>();
   endnotes = new Map<string, { text: string; content: JSONContent[] | null }>();
   ours: Record<string, StyleDef> = resolveStyles("default", "OfficeHere");
+  /** Okunamayan (kaydedince kaybolacak) içerik uyarıları. */
+  warnings = new LoadWarnings();
   /** Belge (son bölüm) metin alanı genişliği ve sol kenar boşluğu (px; kaydırmalı resim konumu için). */
   contentWPx = 605;
   marginLPx = 94;
@@ -172,12 +175,18 @@ export class DocxReader {
     let main = "word/document.xml";
     for (const r of rootRels.values()) if (r.type.endsWith("/officeDocument")) main = r.target;
     const mainFile = zip.file(main);
-    if (!mainFile) throw new Error("Geçerli bir DOCX dosyası değil (document.xml yok).");
+    if (!mainFile || /^(xl|ppt)\//.test(main)) {
+      // Başka bir ofis biçimi (yanlış uzantı) ise hangi uygulamayla açılacağı söylenir.
+      const mime = (await zip.file("mimetype")?.async("string"))?.trim() ?? "";
+      if (main.startsWith("xl/") || zip.file("xl/workbook.xml") || /spreadsheet/.test(mime)) throw new BelgeOpenError("Bu bir çalışma kitabı (hesap tablosu) dosyası; OfficeHere Tablo ile açın.");
+      if (main.startsWith("ppt/") || zip.file("ppt/presentation.xml") || /presentation/.test(mime)) throw new BelgeOpenError("Bu bir sunu dosyası; OfficeHere Sunum ile açın.");
+      throw new Error("Geçerli bir DOCX dosyası değil (document.xml yok).");
+    }
     const docRels = await readRels(zip, main);
     const loadXml = async (p: string | undefined) => {
       if (!p) return null;
       const f = zip.file(p);
-      return f ? parseXml(await f.async("string")) : null;
+      return f ? parseXml(await zipText(f)) : null;
     };
     const relOf = (suffix: string) => [...docRels.values()].find((r) => r.type.endsWith(suffix))?.target;
 
@@ -209,13 +218,20 @@ export class DocxReader {
       if (cx.bibStyle && !settings.bibStyle) settings.bibStyle = cx.bibStyle;
     }
     if (cx.mailMerge) settings.mailMerge = cx.mailMerge;
-    this.ours = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing, settings.customStyles);
     this.theme = parseTheme(await loadXml(relOf("/theme")));
-    this.sheet = new StyleSheet(await loadXml(relOf("/styles")), this.theme);
+    const stylesXml = await loadXml(relOf("/styles"));
+    this.sheet = new StyleSheet(stylesXml, this.theme);
+    this.ours = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing, settings.customStyles);
+    if (stylesXml) this.adoptDefaults(settings, stylesXml);
     this.numbering = new Numbering(await loadXml(relOf("/numbering")));
+    if (Object.keys(zip.files).some((n) => /vbaProject\.bin$/i.test(n))) this.warnings.add("macros");
     // Medya
     const mediaFiles = Object.keys(zip.files).filter((n) => !zip.files[n].dir).filter((n) => /\/media\//.test(n) || /^word\/[^/]+\.(png|jpe?g|gif|bmp)$/i.test(n));
     for (const name of mediaFiles) {
+      if (oversizedEntry(zip.file(name))) {
+        this.warnings.add("images", `olağandışı büyük: ${name}`);
+        continue;
+      }
       const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
       const bytes = await zip.file(name)!.async("uint8array");
       this.media.set(name, `data:${MIME[ext] ?? "application/octet-stream"};base64,${toBase64(bytes)}`);
@@ -223,7 +239,7 @@ export class DocxReader {
 
     for (const name of Object.keys(zip.files).filter((n) => /\/charts\/chart\d+\.xml$/i.test(n))) {
       try {
-        this.charts.set(name, parseXml(await zip.file(name)!.async("string")));
+        this.charts.set(name, parseXml(await zipText(zip.file(name)!)));
       } catch {
         // bozuk grafik parçası atlanır
       }
@@ -254,8 +270,10 @@ export class DocxReader {
       }
     }
 
-    const docXml = parseXml(await mainFile.async("string"));
+    const docXml = parseXml(await zipText(mainFile));
     const docEl = docXml.documentElement;
+    if (flattenedDocs.has(docXml)) this.warnings.add("deep");
+    this.scanLosses(docEl);
     const body = kid(docEl, "body");
     if (!body) throw new Error("Belge gövdesi bulunamadı.");
     const reader = new PartReader(this, docRels);
@@ -380,9 +398,97 @@ export class DocxReader {
       settings.properties = { title: get("title"), subject: get("subject"), author: get("creator"), keywords: get("keywords"), created: get("created") || settings.properties.created, modified: get("modified") || settings.properties.modified };
     }
 
-    return { content: normalizeDoc({ type: "doc", content: sections }), settings };
+    const content = normalizeDoc({ type: "doc", content: sections });
+    // Belgede hiçbir yere bağlanamayan açıklamalar kaydedilince kaybolur.
+    if (Object.keys(settings.comments).length) {
+      const used = new Set<string>();
+      const walk = (n: JSONContent | null | undefined) => {
+        if (!n) return;
+        for (const m of n.marks ?? []) if (m.type === "comment") used.add(String(m.attrs?.id));
+        if (n.type === "note" && Array.isArray(n.attrs?.content)) (n.attrs.content as JSONContent[]).forEach(walk);
+        n.content?.forEach(walk);
+      };
+      walk(content);
+      for (const k of ["header", "footer", "headerFirst", "footerFirst", "headerEven", "footerEven"] as const) walk(settings[k]);
+      const lost = Object.keys(settings.comments).filter((id) => !used.has(id));
+      if (lost.length) this.warnings.add("comments", `bağlanamayan açıklama: ${lost.length}`);
+    }
+    return { content, settings };
+  }
+
+  /**
+   * Kaynağın belge varsayılanları ve Normal stili (yazı tipi, boyut, paragraf aralığı) bizim Normal stilimize
+   * taşınır: belge kendi varsayılanlarıyla görünür ve kaydedilince sayfa düzeni kaymaz. Dil ve Doğu Asya /
+   * karmaşık yazı tipleri ayrıca saklanır. OfficeHere'in kendi Normal stili (customStyles) varsa o geçerlidir.
+   */
+  private adoptDefaults(settings: DocSettings, styles: Document) {
+    const rPr = path(kid(styles.documentElement, "docDefaults"), "rPrDefault", "rPr");
+    const lang = kid(rPr, "lang");
+    const fonts = kid(rPr, "rFonts");
+    const dd: DocDefaults = {};
+    const put = (k: keyof DocDefaults, v: string | null) => {
+      if (v) dd[k] = v;
+    };
+    put("lang", attr(lang, "val"));
+    put("langEastAsia", attr(lang, "eastAsia"));
+    put("langBidi", attr(lang, "bidi"));
+    put("fontEastAsia", attr(fonts, "eastAsia"));
+    put("fontCs", attr(fonts, "cs"));
+    if (Object.keys(dd).length) settings.docDefaults = dd;
+    if (settings.customStyles?.Normal) return;
+    const src = this.sheet.effective(this.sheet.defaultParagraph);
+    const ours = this.ours.Normal;
+    const props = { ...ours.props };
+    let changed = false;
+    const norm = (f?: string) => (f ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+    if (src.r.font && norm(src.r.font) !== norm(props.font)) {
+      props.font = src.r.font;
+      changed = true;
+    }
+    // Belirtilmeyen değerler biçim belirtiminin varsayılanlarıdır: 10 nk, 0 aralık, tek satır.
+    const size = src.r.size ?? 10;
+    if (Math.abs(size - (props.size ?? 11)) > 0.01) {
+      props.size = size;
+      changed = true;
+    }
+    const before = src.p.spaceBefore ?? 0;
+    const after = src.p.spaceAfter ?? 0;
+    if (Math.abs(before - (props.spaceBefore ?? 0)) > 0.01) {
+      props.spaceBefore = before;
+      changed = true;
+    }
+    if (Math.abs(after - (props.spaceAfter ?? 0)) > 0.01) {
+      props.spaceAfter = after;
+      changed = true;
+    }
+    if ((src.p.lineRule ?? "auto") === "auto") {
+      const line = src.p.lineHeight ?? 1;
+      if (Math.abs(line - (props.line ?? 1)) > 0.005) {
+        props.line = line;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    settings.customStyles = { ...settings.customStyles, Normal: { ...ours, props } };
+    this.ours = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing, settings.customStyles);
+    this.diffCache.clear();
+  }
+
+  /** Okunamayan değişiklik izleme kayıtları ve gömülü içerik (uyarı için tek geçişte). */
+  scanLosses(root: Element) {
+    const all = root.getElementsByTagName("*");
+    for (let i = 0; i < all.length; i++) {
+      const e = all[i];
+      const n = e.localName;
+      if (TRACK_FORMAT.has(n)) this.warnings.add("trackFormat", `w:${n}`);
+      else if ((n === "ins" || n === "del") && e.parentElement?.localName === "rPr" && e.parentElement.parentElement?.localName === "pPr") this.warnings.add("trackFormat", "paragraf işareti");
+      else if (n === "OLEObject") this.warnings.add("objects", n);
+    }
   }
 }
+
+/** Okunmayan değişiklik izleme öğeleri (paragraf/tablo/bölüm biçimi, hücre ekleme-silme). */
+const TRACK_FORMAT = new Set(["pPrChange", "sectPrChange", "tblPrChange", "tblPrExChange", "trPrChange", "tcPrChange", "tblGridChange", "numberingChange", "cellIns", "cellDel", "cellMerge", "customXmlInsRangeStart", "customXmlDelRangeStart"]);
 
 export function initialsOf(name: string): string {
   return (
@@ -395,6 +501,8 @@ export function initialsOf(name: string): string {
   );
 }
 
-export async function readDocx(data: ArrayBuffer | Uint8Array): Promise<BelgeDocument> {
-  return new DocxReader().read(data);
+export async function readDocx(data: ArrayBuffer | Uint8Array, warnings?: LoadWarnings): Promise<BelgeDocument> {
+  const r = new DocxReader();
+  if (warnings) r.warnings = warnings;
+  return r.read(data);
 }

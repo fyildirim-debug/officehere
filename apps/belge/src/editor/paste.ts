@@ -37,6 +37,47 @@ function markerKind(marker: string): { ordered: boolean; style: string | null } 
   return { ordered: false, style: null };
 }
 
+/** Etkin içerik taşıyan öğeler: yapıştırılan HTML'den içerikleriyle birlikte atılır. */
+const ACTIVE_TAGS = "script, iframe, frame, frameset, object, embed, applet, base, link, meta, noscript, template, portal";
+/** URL taşıyan öznitelikler. */
+const URL_ATTRS = new Set(["href", "src", "xlink:href", "action", "formaction", "data", "poster", "background", "srcset", "lowsrc", "dynsrc", "ping", "cite", "longdesc", "manifest", "codebase"]);
+
+/** Betik çalıştırabilen adres: javascript:, vbscript:, (resim dışı) data:. Görünmez karakterler ve boşluklar yok sayılır. */
+function unsafeUrl(name: string, value: string, tag: string): boolean {
+  // eslint-disable-next-line no-control-regex
+  const v = value.replace(/[\u0000-\u0020\u007f-\u00a0\u200b-\u200f\u2028\u2029\ufeff]+/g, "").toLowerCase();
+  if (/^(javascript|vbscript|livescript|mocha):/.test(v) || /&#|\\u00/.test(v.slice(0, 12))) return true;
+  if (v.startsWith("data:")) return !(tag === "img" && name === "src" && /^data:image\/(png|jpe?g|gif|bmp|webp)[;,]/.test(v));
+  return false;
+}
+
+/**
+ * Yapıştırılan (ya da açılan) HTML'i etkisiz bir belgede (DOMParser; betik çalışmaz, resim yüklenmez) ayrıştırıp
+ * temizler: betik/çerçeve/nesne öğeleri, on* olay öznitelikleri, javascript:/vbscript: adresleri ve CSS ifadeleri
+ * atılır; metin ve biçim korunur.
+ */
+export function sanitizePastedHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const root = doc.documentElement;
+  root.querySelectorAll(ACTIVE_TAGS).forEach((e) => e.remove());
+  for (const el of Array.from(root.querySelectorAll("*"))) {
+    const tag = el.localName.toLowerCase();
+    // SVG içindeki betik ve animasyonla öznitelik değiştirme (set/animate href) de etkisizleştirilir.
+    if ((tag === "set" || tag === "animate" || tag === "animatetransform" || tag === "handler" || tag === "foreignobject") && el.namespaceURI !== "http://www.w3.org/1999/xhtml") {
+      el.remove();
+      continue;
+    }
+    for (const a of Array.from(el.attributes)) {
+      const n = a.name.toLowerCase();
+      if (n.startsWith("on") || n === "formaction" || n === "srcdoc") el.removeAttribute(a.name);
+      else if (URL_ATTRS.has(n) && unsafeUrl(n, a.value, tag)) el.removeAttribute(a.name);
+      else if (n === "style" && /expression\s*\(|javascript:|vbscript:|-moz-binding|behavior\s*:/i.test(a.value)) el.removeAttribute(a.name);
+    }
+  }
+  // Gövde dışında kalan (head içindeki) stil dışı içerik zaten atıldı; yalnız gövde döner.
+  return doc.body.innerHTML;
+}
+
 /** Office HTML'ini (mso sınıfları, koşullu yorumlar, o:p, mso-list paragrafları) sadeleştirir. */
 export function cleanOfficeHtml(html: string): string {
   if (!/mso-|urn:schemas-microsoft-com|class="?Mso/i.test(html)) return html;
@@ -212,7 +253,8 @@ export const PasteRules = Extension.create({
       new Plugin({
         key: new PluginKey("belgePaste"),
         props: {
-          transformPastedHTML: (html) => liftBlockStyles(cleanOfficeHtml(html)),
+          // Office HTML sadeleştirmesi ham koşullu yorumları gerektirir; ikisi de etkisiz belgede (DOMParser) çalışır.
+          transformPastedHTML: (html) => liftBlockStyles(sanitizePastedHtml(cleanOfficeHtml(html))),
           clipboardTextParser: (text, _ctx, _plain, view) => textToSlice(view.state.schema, text),
           transformPasted: (slice, view) => listifySlice(unwrapSectionSlice(slice), view.state.selection.$from),
           handleDOMEvents: {

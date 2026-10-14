@@ -50,6 +50,8 @@ export const FC = {
   Stshf: 1,
   PlcffndRef: 2,
   PlcffndTxt: 3,
+  PlcfandRef: 4,
+  PlcfandTxt: 5,
   PlcfSed: 6,
   PlcfHdd: 11,
   PlcfBteChpx: 12,
@@ -58,7 +60,9 @@ export const FC = {
   Clx: 33,
   PlcfendRef: 46,
   PlcfendTxt: 47,
+  GrpXstAtnOwners: 36,
   DggInfo: 50,
+  SttbfRMark: 51,
   PlfLst: 73,
   PlfLfo: 74,
 } as const;

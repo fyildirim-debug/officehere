@@ -25,11 +25,18 @@ export function readDrawing(pr: PartReader, d: Element, push: (n: JSONContent) =
     void extra;
     return;
   }
-  if (!blip) return;
+  if (!blip) {
+    // Şekil, SmartArt ya da resimsiz çizim grubu: okunamaz.
+    pr.r.warnings.add("shapes", gd?.getAttribute("uri") ?? "drawing");
+    return;
+  }
   const rid = blip.getAttributeNS(NS.r, "embed") ?? attr(blip, "embed");
   const rel = rid ? pr.rels.get(rid) : undefined;
   const src = rel ? pr.r.media.get(rel.target) : undefined;
-  if (!src) return;
+  if (!src) {
+    pr.r.warnings.add("images", rel?.target ?? (rid ? `ilişki ${rid}` : "resim"));
+    return;
+  }
   const ext = descendants(d, "extent")[0];
   const cx = attrNum(ext, "cx") ?? 1905000;
   const cy = attrNum(ext, "cy") ?? 1428750;
@@ -114,7 +121,10 @@ export function readPict(pr: PartReader, pc: Element, push: (n: JSONContent) => 
     const rid = img.getAttributeNS(NS.r, "id") ?? attr(img, "id");
     const rel = rid ? pr.rels.get(rid) : undefined;
     const src = rel ? pr.r.media.get(rel.target) : undefined;
-    if (!src) return;
+    if (!src) {
+      pr.r.warnings.add("images", rel?.target ?? "v:imagedata");
+      return;
+    }
     const style = img.parentElement?.getAttribute("style") ?? "";
     const w = /width:\s*([\d.]+)pt/.exec(style);
     const h = /height:\s*([\d.]+)pt/.exec(style);
@@ -147,7 +157,14 @@ export function readPict(pr: PartReader, pc: Element, push: (n: JSONContent) => 
       },
       content: textBoxBlocks(pr, txbx),
     });
+    return;
   }
+  // Tanınmayan VML çizimi (çizgi, dikdörtgen, grup…).
+  const inShapetype = (e: Element) => {
+    for (let x: Element | null = e; x && x !== pc; x = x.parentElement) if (x.localName === "shapetype") return true;
+    return false;
+  };
+  if (descendants(pc, "*").some((e) => e.namespaceURI === NS.v && !inShapetype(e))) pr.r.warnings.add("shapes", "v:shape");
 }
 
 /** a:srcRect → kırpma oranları. */

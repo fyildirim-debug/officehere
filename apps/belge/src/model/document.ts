@@ -168,6 +168,20 @@ export interface DocSettings {
   protection?: DocProtection | null;
   /** Adres mektup birleştirme veri kaynağı (alıcı listesi ve hariç tutulanlar); belgeyle saklanır. */
   mailMerge?: MailMergeData | null;
+  /** Açılan belgenin varsayılan dil ve yazı tipi ayrıntıları (yeni belgede yok); kaydederken korunur. */
+  docDefaults?: DocDefaults | null;
+}
+
+/**
+ * Kaynak belgenin varsayılanlarından Normal stile sığmayanlar (dil, Doğu Asya ve karmaşık yazı tipleri).
+ * Yazı tipi, boyut ve paragraf aralığı Normal stile (customStyles.Normal) taşınır.
+ */
+export interface DocDefaults {
+  lang?: string;
+  langEastAsia?: string;
+  langBidi?: string;
+  fontEastAsia?: string;
+  fontCs?: string;
 }
 
 /** Düzenlemeyi Kısıtla (w:documentProtection). */
