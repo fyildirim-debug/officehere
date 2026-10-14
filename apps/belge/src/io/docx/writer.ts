@@ -1,5 +1,30 @@
 // DOCX yazıcı: ProseMirror JSON + belge ayarları → OOXML paketi (ECMA-376).
+//
+// Açılan belgenin özgün paketi (settings.kaynak) varsa geçiş katmanı çalışır (@officehere/core/opc):
+//   - settings.xml baştan yazılmaz: özgün parça korunur (compat, rsid, docVars, attachedTemplate, mathPr…),
+//     yalnız modelin sahip olduğu öğeler yazılır; özgündeki ilişkileri (şablon, adres mektup kaynağı) yeniden kurulur
+//   - özgünün ilk bölümünün başvurduğu (boş da olsa) üst/alt bilgi türleri ve dipnot/son not ayraçları yazılır
+//   - yazıcının üretmediği parçalar (tema, fontTable + gömülü yazı tipleri, webSettings, glossary, customXml,
+//     .docm'de vbaProject…) carryParts ile taşınır; custom.xml birleştirilir; imza ve yorum yanıt zinciri düşer
+// Biçim değişince (odt/rtf/md) bu yazıcı çağrılmaz, dolayısıyla taşıma da yapılmaz.
 import JSZip from "jszip";
+import {
+  Carry,
+  carryParts,
+  childElements,
+  collectRefs,
+  explicitRelIds,
+  getSource,
+  localName,
+  reattach,
+  rebuildElement,
+  relativeTarget,
+  relTypeName,
+  SETTINGS_ORDER,
+  XmlPart,
+  type CarryReport,
+  type OpcPackage,
+} from "@officehere/core/opc";
 import { BIB_NS, MERGE_NS, mergeToXml, sourcesToXml, writeCustomXml } from "./customXml";
 import { hfKeyOf, hfOwner } from "../../editor/sectionHf";
 import { CT_CHART } from "./chartXml";
@@ -151,10 +176,193 @@ function hasHfContent(json: JSONContent | null): boolean {
   return json.content.some(walk);
 }
 
-export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
+/* ------------------------------------------------------------------ */
+/* Geçiş katmanı: özgün paketten okunanlar ve settings.xml yaması        */
+/* ------------------------------------------------------------------ */
+
+/** Özgün paketten yazıcının ihtiyaç duyduğu bilgiler (paket başına bir kez okunur). */
+interface SourceInfo {
+  /** İlk bölümün başvurduğu üst/alt bilgi türleri ("header:first", "footer:even"…). */
+  hf: Set<string>;
+  /** Ana parçanın dipnot / son not parçası var mı (ayraçlar). */
+  footnotes: boolean;
+  endnotes: boolean;
+  /** Ana parçanın ayarlar parçası. */
+  settings: { part: string; xml: string } | null;
+}
+
+const NO_SOURCE: SourceInfo = { hf: new Set(), footnotes: false, endnotes: false, settings: null };
+const infoCache = new WeakMap<OpcPackage, Promise<SourceInfo>>();
+
+/** Belge gövdesindeki ilk sectPr (ilk bölümün özellikleri). */
+function firstSectPr(xml: string): string {
+  const m = /<((?:[\w.-]+:)?)sectPr\b/.exec(xml);
+  if (!m) return "";
+  const open = xml.indexOf(">", m.index);
+  if (open < 0) return "";
+  if (xml[open - 1] === "/") return xml.slice(m.index, open + 1);
+  const end = xml.indexOf(`</${m[1]}sectPr>`, open);
+  return xml.slice(m.index, end < 0 ? undefined : end);
+}
+
+function sourceInfo(pkg: OpcPackage): Promise<SourceInfo> {
+  let p = infoCache.get(pkg);
+  if (!p) {
+    p = (async () => {
+      const info: SourceInfo = { hf: new Set(), footnotes: false, endnotes: false, settings: null };
+      const main = pkg.mainPart;
+      if (!main) return info;
+      const rels = await pkg.rels(main);
+      const target = (short: string) => rels.find((r) => !r.external && r.part && relTypeName(r.type) === short && pkg.has(r.part))?.part ?? null;
+      info.footnotes = !!target("footnotes");
+      info.endnotes = !!target("endnotes");
+      const sp = target("settings");
+      const sx = sp ? await pkg.text(sp).catch(() => null) : null;
+      if (sp && sx) info.settings = { part: pkg.canonicalName(sp) ?? sp, xml: sx };
+      const body = await pkg.text(main).catch(() => null);
+      for (const m of firstSectPr(body ?? "").matchAll(/<(?:[\w.-]+:)?(header|footer)Reference\b[^>]*?\s(?:[\w.-]+:)?type\s*=\s*["'](default|first|even)["']/g)) info.hf.add(`${m[1]}:${m[2]}`);
+      return info;
+    })().catch(() => NO_SOURCE);
+    infoCache.set(pkg, p);
+  }
+  return p;
+}
+
+/** Kök öğede ilişki ad alanına bağlı önekler (parçacıklardaki r:id'leri bulmak için). */
+function relPrefixes(open: string): string[] {
+  return [...open.matchAll(/\sxmlns:([\w.-]+)\s*=\s*["'](http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/relationships|http:\/\/purl\.oclc\.org\/ooxml\/officeDocument\/relationships)["']/g)].map((m) => m[1]);
+}
+
+/** CT_Compat alt öğe sırası (ECMA-376 Bölüm 1, §17.15.3; Transitional). */
+const COMPAT_ORDER = [
+  "useSingleBorderforContiguousCells", "wpJustification", "noTabHangInd", "noLeading", "spaceForUL", "noColumnBalance", "balanceSingleByteDoubleByteWidth",
+  "noExtraLineSpacing", "doNotLeaveBackslashAlone", "ulTrailSpace", "doNotExpandShiftReturn", "spacingInWholePoints", "lineWrapLikeWord6",
+  "printBodyTextBeforeHeader", "printColBlack", "wpSpaceWidth", "showBreaksInFrames", "subFontBySize", "suppressBottomSpacing", "suppressTopSpacing",
+  "suppressSpacingAtTopOfPage", "suppressTopSpacingWP", "suppressSpBfAfterPgBrk", "swapBordersFacingPages", "convMailMergeEsc", "truncateFontHeightsLikeWP6",
+  "mwSmallCaps", "usePrinterMetrics", "doNotSuppressParagraphBorders", "wrapTrailSpaces", "footnoteLayoutLikeWW8", "shapeLayoutLikeWW8", "alignTablesRowByRow",
+  "forgetLastTabAlignment", "adjustLineHeightInTable", "autoSpaceLikeWord95", "noSpaceRaiseLower", "doNotUseHTMLParagraphAutoSpacing", "layoutRawTableWidth",
+  "layoutTableRowsApart", "useWord97LineBreakRules", "doNotBreakWrappedTables", "doNotSnapToGridInCell", "selectFldWithFirstOrLastChar", "applyBreakingRules",
+  "doNotWrapTextWithPunct", "doNotUseEastAsianBreakRules", "useWord2002TableStyleRules", "growAutofit", "useFELayout", "useNormalStyleForList",
+  "doNotUseIndentAsNumberingTabStop", "useAltKinsokuLineBreakRules", "allowSpaceOfSameStyleInTable", "doNotSuppressIndentation", "doNotAutofitConstrainedTables",
+  "autofitToFirstFixedWidthCell", "underlineTabInNumList", "displayHangulFixedWidth", "splitPgBreakAndParaMark", "doNotVertAlignCellWithSp",
+  "doNotBreakConstrainedForcedTable", "doNotVertAlignInTxbx", "useAnsiKerningPairs", "cachedColBalance", "compatSetting",
+];
+const COMPAT_RANK = new Map(COMPAT_ORDER.map((n, i) => [n, i]));
+
+/**
+ * Uyumluluk ayarları şema sırasına dizilir (eski sürümler bazı öğeleri sona yazar); ana ad alanında şemada
+ * olmayan öğe atılır. Sıra zaten uygunsa dokunulmaz.
+ */
+function normalizeCompat(xml: string): string {
+  let kids: { name: string; xml: string }[];
+  try {
+    kids = childElements(xml);
+  } catch {
+    return xml;
+  }
+  const prefix = /^<([\w.-]+:)?/.exec(xml)?.[1] ?? "";
+  const main = (k: { xml: string }) => k.xml.startsWith(`<${prefix}`) && !k.xml.slice(prefix.length + 1).match(/^[\w.-]+:/);
+  const known = kids.filter((k) => main(k) && COMPAT_RANK.has(k.name));
+  const other = kids.filter((k) => !main(k));
+  const ranks = known.map((k) => COMPAT_RANK.get(k.name)!);
+  if (known.length + other.length === kids.length && ranks.every((r, i) => i === 0 || ranks[i - 1]! <= r)) return xml;
+  const sorted = known.map((k, i) => ({ k, i })).sort((a, b) => COMPAT_RANK.get(a.k.name)! - COMPAT_RANK.get(b.k.name)! || a.i - b.i);
+  return rebuildElement(xml, [...sorted.map((x) => x.k.xml), ...other.map((k) => k.xml)]);
+}
+
+/** Dipnot / son not belge özellikleri: özgün numaralama ayarları korunur, ayraç başvuruları yazıcınınkiler. */
+function notePr(part: XmlPart, kind: "footnote" | "endnote", has: boolean) {
+  const el = `${kind}Pr`;
+  const cur = part.get(el);
+  const keep = cur ? childElements(cur).filter((c) => c.name !== kind).map((c) => c.xml) : [];
+  const refs = has ? `<w:${kind} w:id="-1"/><w:${kind} w:id="0"/>` : "";
+  part.set(el, keep.length || refs ? `<w:${el}>${keep.join("")}${refs}</w:${el}>` : null);
+}
+
+/**
+ * settings.xml yaması: özgün parça korunur, yalnız modelin sahip olduğu öğeler (sayfa rengi gösterimi, düzenleme
+ * kısıtlaması, tek/çift üst bilgi, dipnot/son not ayraçları) yazılır. Strict ya da beklenmeyen kökte null (yazıcı
+ * kendi parçasını üretir).
+ */
+function patchSettings(xml: string, s: DocSettings, notes: { footnote: boolean; endnote: boolean }): XmlPart | null {
+  let part: XmlPart;
+  try {
+    part = new XmlPart(xml, SETTINGS_ORDER);
+  } catch {
+    return null;
+  }
+  if (localName(part.rootName) !== "settings") return null;
+  const decl = (prefix: string) => new RegExp(`\\sxmlns${prefix ? `:${prefix}` : ""}\\s*=\\s*["']([^"']*)["']`).exec(part.open)?.[1];
+  const rootPrefix = part.rootName.includes(":") ? part.rootName.slice(0, part.rootName.indexOf(":")) : "";
+  if (decl(rootPrefix) !== NS.w) return null;
+  const w = decl("w");
+  if (w !== undefined && w !== NS.w) return null;
+  part.ensureNamespace("w", NS.w);
+  part.set("displayBackgroundShape", s.pageColor ? "<w:displayBackgroundShape/>" : null);
+  // Modelin okumadığı kısıtlama türü (ör. form doldurma) özgünden korunur.
+  const prot = part.get("documentProtection");
+  const mode = prot ? /\s(?:[\w.-]+:)?edit\s*=\s*["']([^"']*)["']/.exec(prot)?.[1] : undefined;
+  if (s.protection) part.set("documentProtection", protectionXml(s.protection));
+  else if (!prot || mode === "readOnly" || mode === "comments" || mode === "trackedChanges") part.set("documentProtection", null);
+  part.set("evenAndOddHeaders", s.oddEven ? "<w:evenAndOddHeaders/>" : null);
+  part.map("compat", normalizeCompat);
+  // Şemada zorunlu yakınlaştırma yüzdesi (bazı üreticiler yalnız w:val="bestFit" yazar).
+  part.map("zoom", (z) => (/\s(?:[\w.-]+:)?percent\s*=/.test(z) ? z : z.replace(/^(<[^>]*?)(\s*\/?>)/, '$1 w:percent="100"$2')));
+  // ECMA-376 ilk sürümünün yalnız arayüz ayarı; ISO/IEC 29500 şemasında yok (şemaya aykırı çıktı yazılmaz).
+  part.set("uiCompat97To2003", null);
+  notePr(part, "footnote", notes.footnote);
+  notePr(part, "endnote", notes.endnote);
+  return part;
+}
+
+/**
+ * Yamanan settings.xml'in ilişkileri (şablon, adres mektup veri kaynağı…) yeniden kurulur. Özgünde karşılığı
+ * olmayan kimliğe başvuran üst düzey öğe atılır (kırık ilişki yazılmaz).
+ */
+async function settingsWithRels(src: OpcPackage, srcPart: string, part: XmlPart, carry: Carry): Promise<{ xml: string; rels: Rels | null }> {
+  let xml = part.toString();
+  const all = explicitRelIds(xml);
+  if (!all.size) return { xml, rels: null };
+  const refs = await collectRefs(src, srcPart, xml).catch(() => []);
+  const good = refs.filter((r) => r.external || src.has(r.target));
+  const ok = new Set(good.map((r) => r.id));
+  if ([...all].some((id) => !ok.has(id))) {
+    const prefixes = relPrefixes(part.open);
+    part.children = part.children.filter((c) => [...explicitRelIds(c.xml, { prefixes })].every((id) => ok.has(id)));
+    xml = part.toString();
+  }
+  const rels = new Rels();
+  const out = reattach(xml, good, carry.instance(src), (r) => rels.add(r.type, r.external ? r.target : relativeTarget("word/settings.xml", r.target), r.external));
+  return { xml: out.xml, rels: rels.size ? rels : null };
+}
+
+/** Kendi settings.xml'imiz (özgün paket yoksa). */
+function ownSettingsXml(settings: DocSettings, notes: { footnote: boolean; endnote: boolean }): string {
+  return `${XML_HEAD}<w:settings xmlns:w="${NS.w}" xmlns:r="${NS.r}"><w:zoom w:percent="100"/>${settings.pageColor ? "<w:displayBackgroundShape/>" : ""}${protectionXml(settings.protection)}<w:defaultTabStop w:val="708"/><w:hyphenationZone w:val="425"/><w:characterSpacingControl w:val="doNotCompress"/>${settings.oddEven ? "<w:evenAndOddHeaders/>" : ""}${notes.footnote ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}${notes.endnote ? '<w:endnotePr><w:endnote w:id="-1"/><w:endnote w:id="0"/></w:endnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat><w:themeFontLang w:val="tr-TR"/></w:settings>`;
+}
+
+export interface DocxWriteOptions {
+  /**
+   * Hedef makrolu belge (.docm): özgündeki makro projesi korunur (çalıştırılmaz), ana parça makrolu türle
+   * yazılır. Değilse makro projesi düşürülür (rapor: "macro").
+   */
+  macro?: boolean;
+  /** Paket düzeyi taşıma raporu (kaydetme bildirimleri için; taşıma yapılmadıysa çağrılmaz). */
+  onReport?: (report: CarryReport) => void;
+}
+
+export async function writeDocx(doc: BelgeDocument, opts: DocxWriteOptions = {}): Promise<Uint8Array> {
   const { settings } = doc;
+  const src = getSource(settings.kaynak);
+  const info = src ? await sourceInfo(src) : NO_SOURCE;
+  /** Öğe düzeyi taşıma planı (yazma turu başına bir tane; opak öğeler ve settings ilişkileri). */
+  const carry = new Carry();
   const zip = new JSZip();
+  // [Content_Types].xml paketin ilk parçası (içeriği sonda yazılır; JSZip ekleme sırasını korur).
+  zip.file("[Content_Types].xml", "");
   const ctx = new Ctx(settings);
+  // Öğe düzeyi taşıyıcı (opak öğeler) aynı planı `ctx.carry` üzerinden kullanır; carryParts bu planla çağrılır.
+  Object.assign(ctx, { carry });
   const docRels = new Rels();
   const contentWidthTw = settings.page.width - settings.page.margin.left - settings.page.margin.right - settings.page.margin.gutter;
   docRels.add(REL.styles, "styles.xml");
@@ -191,10 +399,13 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
     hfParts.push({ name, kind: which });
     return rid;
   };
-  const variants: HfVariant[] = settings.oddEven ? ["default", "first", "even"] : ["default", "first"];
+  // Çift sayfa türü tek/çift kapalıyken de içeriği ya da özgünde başvurusu varsa yazılır (okuyucular yok sayar).
+  const even = settings.oddEven || !!settings.headerEven || !!settings.footerEven || info.hf.has("header:even") || info.hf.has("footer:even");
+  const variants: HfVariant[] = even ? ["default", "first", "even"] : ["default", "first"];
   for (const v of variants) {
     for (const w of ["header", "footer"] as const) {
-      const rid = writeHf(w, v, settings[hfKeyOf(w, v)]);
+      // Özgünün ilk bölümünün başvurduğu tür boş da olsa yazılır (paket yapısı korunur).
+      const rid = writeHf(w, v, settings[hfKeyOf(w, v)], info.hf.has(`${w}:${v}`));
       if (rid) refs[w][v] = rid;
     }
   }
@@ -263,10 +474,14 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
   const styles = resolveStyles(settings.styleSet, settings.theme, settings.fontTheme, settings.paragraphSpacing, settings.customStyles);
   zip.file("word/styles.xml", buildStylesXml(styles, settings.docDefaults));
   zip.file("word/numbering.xml", numberingXml(ctx));
-  zip.file(
-    "word/settings.xml",
-    `${XML_HEAD}<w:settings xmlns:w="${NS.w}" xmlns:r="${NS.r}"><w:zoom w:percent="100"/>${settings.pageColor ? "<w:displayBackgroundShape/>" : ""}${protectionXml(settings.protection)}<w:defaultTabStop w:val="708"/><w:hyphenationZone w:val="425"/><w:characterSpacingControl w:val="doNotCompress"/>${settings.oddEven ? "<w:evenAndOddHeaders/>" : ""}${ctx.footnotes.length ? '<w:footnotePr><w:footnote w:id="-1"/><w:footnote w:id="0"/></w:footnotePr>' : ""}${ctx.endnotes.length ? '<w:endnotePr><w:endnote w:id="-1"/><w:endnote w:id="0"/></w:endnotePr>' : ""}<w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat><w:themeFontLang w:val="tr-TR"/></w:settings>`,
-  );
+  // Dipnot / son not parçası: not varsa ya da özgünde (yalnız ayraçlarla da olsa) varsa yazılır.
+  const notes = { footnote: ctx.footnotes.length > 0 || info.footnotes, endnote: ctx.endnotes.length > 0 || info.endnotes };
+  const patched = src && info.settings ? patchSettings(info.settings.xml, settings, notes) : null;
+  if (src && info.settings && patched) {
+    const { xml, rels } = await settingsWithRels(src, info.settings.part, patched, carry);
+    zip.file("word/settings.xml", xml);
+    if (rels) zip.file("word/_rels/settings.xml.rels", rels.xml());
+  } else zip.file("word/settings.xml", ownSettingsXml(settings, notes));
   if (ctx.usedComments.size) {
     zip.file("word/comments.xml", commentsXml(ctx, settings.comments));
     docRels.add(REL.comments, "comments.xml");
@@ -275,7 +490,7 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
     ["footnote", ctx.footnotes, "footnotes.xml", REL.footnotes],
     ["endnote", ctx.endnotes, "endnotes.xml", REL.endnotes],
   ] as const) {
-    if (!list.length) continue;
+    if (!notes[kind]) continue;
     const rels = new Rels();
     zip.file(`word/${part}`, notesXml(kind, list, ctx, rels));
     if (rels.size) zip.file(`word/_rels/${part}.rels`, rels.xml());
@@ -309,8 +524,8 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
       ov("word/numbering.xml", "wordprocessingml.numbering+xml") +
       hfParts.map((h) => ov(`word/${h.name}`, `wordprocessingml.${h.kind}+xml`)).join("") +
       (ctx.usedComments.size ? ov("word/comments.xml", "wordprocessingml.comments+xml") : "") +
-      (ctx.footnotes.length ? ov("word/footnotes.xml", "wordprocessingml.footnotes+xml") : "") +
-      (ctx.endnotes.length ? ov("word/endnotes.xml", "wordprocessingml.endnotes+xml") : "") +
+      (notes.footnote ? ov("word/footnotes.xml", "wordprocessingml.footnotes+xml") : "") +
+      (notes.endnote ? ov("word/endnotes.xml", "wordprocessingml.endnotes+xml") : "") +
       `<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>` +
       ov("docProps/app.xml", "extended-properties+xml") +
       ov("docProps/custom.xml", "custom-properties+xml") +
@@ -335,5 +550,11 @@ export async function writeDocx(doc: BelgeDocument): Promise<Uint8Array> {
     "docProps/custom.xml",
     `${XML_HEAD}<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="OfficeHereBelge"><vt:lpwstr>${esc(JSON.stringify(custom))}</vt:lpwstr></property></Properties>`,
   );
-  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+  const out = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+  if (!settings.kaynak && !opts.macro && !carry.size) return out;
+  // Özgün .docx'te klavye özelleştirmesi (makrosuz) belgenin parçasıdır; yalnız makrolu kaynakta makroyla gider.
+  const overrides = src && !src.macroEnabled && !opts.macro ? { carry: ["keyMapCustomizations"] } : undefined;
+  const { bytes, report } = await carryParts({ app: "belge", source: src ?? settings.kaynak, output: out, macro: !!opts.macro, carry, overrides });
+  opts.onReport?.(report);
+  return bytes;
 }

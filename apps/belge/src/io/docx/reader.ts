@@ -1,6 +1,7 @@
 // DOCX okuyucu: OOXML (JSZip + DOMParser) → ProseMirror JSON + belge ayarları.
 import JSZip from "jszip";
 import type { JSONContent } from "@tiptap/core";
+import { OpcPackage, registerSource, sha256Hex } from "@officehere/core/opc";
 import { defaultSettings, normalizeDoc, pageMetrics, samePage, type BelgeDocument, type CommentData, type DocDefaults, type DocSettings, type PageSetup } from "../../model/document";
 import { noteText } from "../../editor/notes";
 import { effectiveProps, resolveStyles, type StyleDef } from "../../model/styles";
@@ -69,6 +70,15 @@ export class DocxReader {
   /** Belge (son bölüm) metin alanı genişliği ve sol kenar boşluğu (px; kaydırmalı resim konumu için). */
   contentWPx = 605;
   marginLPx = 94;
+  /**
+   * Özgün paket (geçiş katmanı): kaydederken taşınacak parçalar ve opak öğelerin ilişkileri buradan okunur
+   * (`collectRefs`). Merkez dizini okunamayan pakette null.
+   */
+  source: OpcPackage | null = null;
+  /** Kaynak kaydındaki kimlik (`settings.kaynak`; özgün baytların SHA-256'sı). */
+  kaynak: string | null = null;
+  /** Özgün paket kaynak kaydına eklensin mi (kaydedilen dosyanın doğrulama okumasında hayır). */
+  register = true;
 
   mapParagraphStyle(id: string | null): { type: "heading" | "paragraph"; level?: number; ourId: string } {
     const info = id ? this.sheet.styles.get(id) : undefined;
@@ -183,6 +193,8 @@ export class DocxReader {
       throw new Error("Geçerli bir DOCX dosyası değil (document.xml yok).");
     }
     const docRels = await readRels(zip, main);
+    const settings = defaultSettings();
+    await this.openSource(data, zip, rootRels, docRels, settings);
     const loadXml = async (p: string | undefined) => {
       if (!p) return null;
       const f = zip.file(p);
@@ -191,7 +203,6 @@ export class DocxReader {
     const relOf = (suffix: string) => [...docRels.values()].find((r) => r.type.endsWith(suffix))?.target;
 
     // Ayarlar (OfficeHere özel özellikleri)
-    const settings = defaultSettings();
     const custom = await loadXml("docProps/custom.xml");
     if (custom) {
       for (const pr of descendants(custom.documentElement, "property")) {
@@ -475,6 +486,25 @@ export class DocxReader {
     this.diffCache.clear();
   }
 
+  /**
+   * Özgün paket kaynak kaydına eklenir (kimlik: özgün baytların SHA-256'sı → `settings.kaynak`); kaydederken
+   * modelin tanımadığı parçalar buradan taşınır. Dijital imza ve açıklama yanıt zinciri kaydedince korunamaz:
+   * açılışta uyarılır (uyarı, otomatik kaydetmeyi ilk elle kayda kadar bekletir).
+   */
+  private async openSource(data: ArrayBuffer | Uint8Array, zip: JSZip, rootRels: Map<string, Rel>, docRels: Map<string, Rel>, settings: DocSettings) {
+    const signed = [...rootRels.values()].some((r) => r.type.endsWith("/digital-signature/origin")) || Object.keys(zip.files).some((n) => /^_xmlsignatures\//i.test(n));
+    if (signed) this.warnings.add("signature");
+    if ([...docRels.values()].some((r) => COMMENT_THREAD_RELS.test(r.type))) this.warnings.add("commentThreads");
+    try {
+      this.source = await OpcPackage.open(data);
+    } catch {
+      return; // ZIP merkez dizini okunamadı: geçiş katmanı olmadan sürer
+    }
+    if (!this.register) return;
+    this.kaynak = registerSource(this.source, { id: await sha256Hex(this.source.bytes) });
+    settings.kaynak = this.kaynak;
+  }
+
   /** Okunamayan değişiklik izleme kayıtları ve gömülü içerik (uyarı için tek geçişte). */
   scanLosses(root: Element) {
     const all = root.getElementsByTagName("*");
@@ -487,6 +517,9 @@ export class DocxReader {
     }
   }
 }
+
+/** Modelin taşımadığı açıklama ayrıntıları (yanıt zinciri, "çözüldü", kişiler): kaydederken düşürülür. */
+const COMMENT_THREAD_RELS = /\/(commentsExtended|commentsIds|commentsExtensible|people)$/;
 
 /** Okunmayan değişiklik izleme öğeleri (paragraf/tablo/bölüm biçimi, hücre ekleme-silme). */
 const TRACK_FORMAT = new Set(["pPrChange", "sectPrChange", "tblPrChange", "tblPrExChange", "trPrChange", "tcPrChange", "tblGridChange", "numberingChange", "cellIns", "cellDel", "cellMerge", "customXmlInsRangeStart", "customXmlDelRangeStart"]);
@@ -517,8 +550,17 @@ export function initialsOf(name: string): string {
   );
 }
 
-export async function readDocx(data: ArrayBuffer | Uint8Array, warnings?: LoadWarnings): Promise<BelgeDocument> {
+export interface ReadDocxOptions {
+  /**
+   * Özgün paket kaynak kaydına eklensin ve `settings.kaynak` doldurulsun mu (varsayılan: evet). Kaydedilen
+   * dosyanın doğrulama okumasında kapatılır (her otomatik kayıtta bellekte yeni kaynak birikmesin).
+   */
+  kaynak?: boolean;
+}
+
+export async function readDocx(data: ArrayBuffer | Uint8Array, warnings?: LoadWarnings, opts: ReadDocxOptions = {}): Promise<BelgeDocument> {
   const r = new DocxReader();
   if (warnings) r.warnings = warnings;
+  if (opts.kaynak === false) r.register = false;
   return r.read(data);
 }

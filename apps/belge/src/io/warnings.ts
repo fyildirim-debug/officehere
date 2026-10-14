@@ -1,11 +1,13 @@
 // Açılış uyarıları ve hata sınıflandırması: okuyucunun okuyamadığı (kaydedince kaybolacak) içerik
 // türleri ileti çubuğunda Türkçe gösterilir; ham kitaplık hataları anlaşılır iletiye çevrilir.
 
-/** Okunamayan ya da tam okunamayan içerik türleri. */
+/** Okunamayan ya da tam okunamayan (ya da kaydedince korunamayan) içerik türleri. */
 export type LossKind =
+  | "signature"
   | "trackChanges"
   | "trackFormat"
   | "comments"
+  | "commentThreads"
   | "fields"
   | "objects"
   | "shapes"
@@ -18,13 +20,15 @@ export type LossKind =
   | "flattened";
 
 const MESSAGES: Record<LossKind, string> = {
+  signature: "Bu belge dijital olarak imzalanmış. Kaydederseniz dijital imza kaldırılır.",
   trackChanges: "Bu belgedeki değişiklik izleme kayıtları bu biçimde okunamadı; kaydederseniz kaybolur.",
   trackFormat: "Bu belgedeki bazı değişiklik izleme kayıtları (paragraf, tablo ya da bölüm biçimi değişiklikleri) okunamadı; kaydederseniz kaybolur.",
   comments: "Bu belgedeki açıklamalar okunamadı; kaydederseniz kaybolur.",
+  commentThreads: "Açıklama yanıtları ayrı açıklamalar olarak açıldı; kaydederseniz yanıt bağları ve \"çözüldü\" işaretleri kaybolur.",
   fields: "Bazı alanlar yalnız görünen değerleriyle açıldı; kaydederseniz alan olarak değil düz metin olarak kalır.",
   objects: "Belgedeki gömülü nesneler okunamadı ya da yalnız görüntüleriyle açıldı; kaydederseniz nesnelerin kendisi kaybolur.",
   shapes: "Belgedeki bazı metin kutuları ya da çizimler okunamadı; kaydederseniz kaybolur.",
-  macros: "Bu belgedeki makrolar çalıştırılmaz ve kaydedilirken korunmaz.",
+  macros: "Bu belgedeki makrolar çalıştırılmaz. Belge .docm olarak kaydedilince makrolar korunur; .docx ya da başka biçimde kaydedilirse kaldırılır.",
   images: "Bazı resimler bulunamadı ya da okunamadı; kaydederseniz bu resimler kaybolur.",
   corrupt: "Dosyanın bazı bölümleri bozuk olduğu için atlandı; kaydederseniz bu bölümler kaybolur.",
   unclosed: "Dosya bozuk görünüyor (yapı eksik ya da kesik); içeriğin bir kısmı okunamamış olabilir. Kaydederseniz okunamayan kısım kaybolur.",
@@ -66,6 +70,25 @@ export class LoadWarnings {
 
 export function lossMessage(kind: LossKind): string {
   return MESSAGES[kind];
+}
+
+/* ------------------------------------------------------------------ */
+/* Kaydetme (geçiş katmanı) bildirimleri                                */
+/* ------------------------------------------------------------------ */
+
+/** Kurtarılan taslağın özgün paketi bulunamadı (kaynak deposunda yok): geçiş katmanı olmadan kaydedilir. */
+export const SOURCE_MISSING =
+  "Belgenin özgün dosyası kurtarma deposunda bulunamadı. Belge kurtarılan içerikle açıldı; kaydederseniz OfficeHere'in okuyamadığı parçalar (tema, gömülü yazı tipleri, makrolar, desteklenmeyen öğeler) korunamaz.";
+
+/** Makrolu belge makrosuz biçimde kaydedildi. */
+export const MACROS_REMOVED = "Makrolar .docx biçiminde saklanamadığı için bu kayıtta kaldırıldı. Korumak için belgeyi .docm olarak kaydedin.";
+
+/**
+ * Paket düzeyi taşıma raporundan kaydederken bildirilecekler. Açılışta uyarılanlar (dijital imza, açıklama yanıt
+ * zinciri) her kayıtta yinelenmez.
+ */
+export function saveNotes(report: { dropped: readonly { reason: string }[] } | null | undefined): string[] {
+  return report?.dropped.some((d) => d.reason === "macro") ? [MACROS_REMOVED] : [];
 }
 
 /* ------------------------------------------------------------------ */
