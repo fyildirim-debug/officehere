@@ -25,12 +25,13 @@ function codeOf(s: string): number {
   return i >= 0 ? 128 + i : 63;
 }
 
-export function properTr(s: string): string {
+/** Her sözcüğün ilk harfi büyük, kalanı küçük; İ/ı kuralı yalnız Türkçe yerel ayarda ("india" → "India"). */
+export function properTr(s: string, tag: "tr-TR" | "en-US" = "tr-TR"): string {
   let out = "";
   let prevLetter = false;
   for (const ch of s) {
     const isLetter = /\p{L}/u.test(ch);
-    out += isLetter ? (prevLetter ? ch.toLocaleLowerCase("tr-TR") : ch.toLocaleUpperCase("tr-TR")) : ch;
+    out += isLetter ? (prevLetter ? ch.toLocaleLowerCase(tag) : ch.toLocaleUpperCase(tag)) : ch;
     prevLetter = isLetter;
   }
   return out;
@@ -178,7 +179,7 @@ export const textFunctions: FnDef[] = [
   fn("LEN", "UZUNLUK", "text", "metin", "Metindeki karakter sayısını verir.", 1, 1, (a, c) => text(a[0], c).length, { lift: true }),
   fn("UPPER", "BÜYÜKHARF", "text", "metin", "Metni büyük harfe çevirir.", 1, 1, (a, c) => text(a[0], c).toLocaleUpperCase(c.locale.lang === "tr" ? "tr-TR" : "en-US"), { lift: true }),
   fn("LOWER", "KÜÇÜKHARF", "text", "metin", "Metni küçük harfe çevirir.", 1, 1, (a, c) => text(a[0], c).toLocaleLowerCase(c.locale.lang === "tr" ? "tr-TR" : "en-US"), { lift: true }),
-  fn("PROPER", "YAZIM.DÜZENİ", "text", "metin", "Her sözcüğün ilk harfini büyük harfe çevirir.", 1, 1, (a, c) => properTr(text(a[0], c)), { lift: true }),
+  fn("PROPER", "YAZIM.DÜZENİ", "text", "metin", "Her sözcüğün ilk harfini büyük harfe çevirir.", 1, 1, (a, c) => properTr(text(a[0], c), c.locale.lang === "tr" ? "tr-TR" : "en-US"), { lift: true }),
   fn("TRIM", "KIRP", "text", "metin", "Sözcükler arasındaki tek boşluklar dışındaki boşlukları kaldırır.", 1, 1, (a, c) => text(a[0], c).replace(/ +/g, " ").replace(/^ | $/g, ""), { lift: true }),
   fn("CLEAN", "TEMİZ", "text", "metin", "Yazdırılamayan karakterleri kaldırır.", 1, 1, (a, c) => text(a[0], c).replace(/[\x00-\x1f]/g, ""), { lift: true }),
   fn("SUBSTITUTE", "YERİNEKOY", "text", "metin; eski_metin; yeni_metin; [yineleme_sayısı]", "Metindeki eski metni yeni metinle değiştirir.", 3, 4, (a, c) => {

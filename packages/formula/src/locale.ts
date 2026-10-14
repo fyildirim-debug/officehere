@@ -24,7 +24,10 @@ function convertTokens(tokens: Token[], from: SyntaxLocale, to: SyntaxLocale, to
         const raw = stripFunctionPrefix(t.value as string);
         const canonical = resolveFunctionName(raw, fromLocale === "tr");
         if (!canonical) {
-          out += raw.toLocaleUpperCase(fromLocale === "tr" ? "tr-TR" : "en-US");
+          // Bilinmeyen ad (kullanıcı tanımlı işlev, LAMBDA adı) yazıldığı gibi kalır: Türkçe büyük harf
+          // kuralı "i"yi "İ" yapıp dosyadaki adı bozmasın (LibreOffice hata 142293), İngilizce kural da
+          // "işle"yi "IŞLE" yapıp Türkçe adlı LAMBDA'yı koparmasın. Değerlendirici adları kendisi eşler.
+          out += raw;
           break;
         }
         out += toLocale === "tr" ? trNameOf(canonical) : canonical;
