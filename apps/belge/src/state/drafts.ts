@@ -8,6 +8,12 @@
 // BroadcastChannel üzerinden sorulur; kanal yoksa ya da pencere meşgulse yerel depodaki nabız
 // kaydına bakılır. Taslak yalnız açıkça silinince, kaydedilince ya da başka pencereye
 // devredilince (yeni sahibi kendi anahtarına yazdıktan sonra) kaldırılır.
+//
+// Kaynak deposu ("kaynaklar"): açılan .docx'in özgün paketi (geçiş katmanı; settings.kaynak = SHA-256),
+// onu anan ilk taslakla aynı işlemde bir kez yazılır. Kurtarılan taslak açılınca paket buradan yeniden
+// kaydedilir (ensureSource); bulunamazsa belge taslak içeriğiyle açılır ve uygulama uyarır. Hiçbir taslağın
+// anmadığı paketler silinir (taslak silinince ve depo açılırken).
+import { getSource, openSource, sha256Hex } from "@officehere/core/opc";
 import type { BelgeDocument, DocSettings } from "../model/document";
 
 export interface Draft {
@@ -23,6 +29,15 @@ export interface Draft {
 export interface StoredDraft extends Draft {
   key: string;
   owner: string;
+  /** Andığı kaynak paket (settings.kaynak; kaynak deposunun dizini). */
+  kaynak?: string;
+}
+
+/** Kaynak deposundaki özgün paket (anahtar: özgün baytların SHA-256'sı = settings.kaynak). */
+export interface StoredSource {
+  key: string;
+  bytes: Uint8Array;
+  savedAt: number;
 }
 
 /** Taslak yazma sonucu. */
@@ -37,7 +52,10 @@ const HEARTBEAT_MS = 2000;
 /** Nabız bu süreden yeniyse pencere canlı sayılır (kanal yanıtı gecikse bile). */
 const ALIVE_MS = 5000;
 const DB_NAME = "officehere-belge";
+/** 2: kaynak deposu ve taslaklarda "kaynak" dizini. */
+const DB_VERSION = 2;
 const STORE = "drafts";
+const SOURCES = "kaynaklar";
 
 function makeId(): string {
   try {
@@ -69,10 +87,15 @@ type PutResult = "ok" | "quota" | "error";
 /** Taslak deposu (IndexedDB; yoksa yerel depo; testlerde bellek). */
 export interface DraftBackend {
   readonly kind: "indexeddb" | "localStorage" | "memory";
-  put(rec: StoredDraft): Promise<PutResult>;
+  /** Taslağı yazar; `source` verilir ve depoda yoksa aynı işlemde (bölünmez) kaynak paketi de yazılır. */
+  put(rec: StoredDraft, source?: StoredSource | null): Promise<PutResult>;
   get(key: string): Promise<StoredDraft | null>;
   all(): Promise<StoredDraft[]>;
   delete(key: string): Promise<void>;
+  /** Kaynak deposundaki paket (yoksa null). */
+  getSource(key: string): Promise<StoredSource | null>;
+  /** Hiçbir taslağın anmadığı kaynak paketlerini siler; silinen sayısı. */
+  pruneSources(): Promise<number>;
 }
 
 function isQuota(err: unknown): boolean {
@@ -81,22 +104,34 @@ function isQuota(err: unknown): boolean {
 }
 
 function valid(rec: unknown, key?: string): StoredDraft | null {
-  const d = rec as (Draft & { key?: string; owner?: string }) | null;
+  const d = rec as (Draft & { key?: string; owner?: string; kaynak?: string }) | null;
   if (!d?.content || typeof d !== "object") return null;
   const k = key ?? d.key ?? "";
   const owner = k === LEGACY_DRAFT_KEY ? "" : (d.owner ?? k.slice(DRAFT_PREFIX.length));
-  return { content: d.content, settings: d.settings, fileName: d.fileName ?? "Belge", savedAt: Number(d.savedAt) || 0, ...(d.path ? { path: d.path } : {}), key: k, owner };
+  const kaynak = d.kaynak ?? d.settings?.kaynak ?? undefined;
+  return { content: d.content, settings: d.settings, fileName: d.fileName ?? "Belge", savedAt: Number(d.savedAt) || 0, ...(d.path ? { path: d.path } : {}), key: k, owner, ...(kaynak ? { kaynak } : {}) };
 }
 
 function openDb(): Promise<IDBDatabase | null> {
   return new Promise((resolve) => {
     try {
       if (typeof indexedDB === "undefined") return resolve(null);
-      const req = indexedDB.open(DB_NAME, 1);
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {
-        if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE, { keyPath: "key" });
+        const db = req.result;
+        const drafts = db.objectStoreNames.contains(STORE) ? req.transaction!.objectStore(STORE) : db.createObjectStore(STORE, { keyPath: "key" });
+        if (!drafts.indexNames.contains("kaynak")) drafts.createIndex("kaynak", "kaynak");
+        if (!db.objectStoreNames.contains(SOURCES)) db.createObjectStore(SOURCES, { keyPath: "key" });
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        // Daha yeni bir sürüm yükseltmek isterse bağlantı bırakılır; sonraki işlem depoyu yeniden açar.
+        db.onversionchange = () => {
+          db.close();
+          backendPromise = null;
+        };
+        resolve(db);
+      };
       req.onerror = () => resolve(null);
       req.onblocked = () => resolve(null);
     } catch {
@@ -106,12 +141,12 @@ function openDb(): Promise<IDBDatabase | null> {
 }
 
 /** İşlem tamamlanınca (veri diske yazılınca) çözülür; kota aşımı işlemi iptal ettirir. */
-function txDone<T>(db: IDBDatabase, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T> | void): Promise<{ ok: boolean; quota: boolean; value?: T }> {
+function txDone<T>(db: IDBDatabase, stores: string | string[], mode: IDBTransactionMode, fn: (tx: IDBTransaction) => IDBRequest<T> | void): Promise<{ ok: boolean; quota: boolean; value?: T }> {
   return new Promise((resolve) => {
     try {
-      const tx = db.transaction(STORE, mode);
+      const tx = db.transaction(stores, mode);
       let value: T | undefined;
-      const req = fn(tx.objectStore(STORE));
+      const req = fn(tx);
       if (req) req.onsuccess = () => (value = req.result);
       tx.oncomplete = () => resolve({ ok: true, quota: false, value });
       tx.onabort = () => resolve({ ok: false, quota: isQuota(tx.error) });
@@ -122,23 +157,60 @@ function txDone<T>(db: IDBDatabase, mode: IDBTransactionMode, fn: (s: IDBObjectS
   });
 }
 
+function validSource(rec: unknown): StoredSource | null {
+  const s = rec as StoredSource | null;
+  return s && typeof s.key === "string" && s.bytes instanceof Uint8Array ? s : null;
+}
+
 function idbBackend(db: IDBDatabase): DraftBackend {
   return {
     kind: "indexeddb",
-    async put(rec) {
-      const r = await txDone(db, "readwrite", (s) => void s.put(rec));
+    async put(rec, source) {
+      const r = await txDone(db, source ? [STORE, SOURCES] : STORE, "readwrite", (tx) => {
+        tx.objectStore(STORE).put(rec);
+        if (!source) return;
+        const s = tx.objectStore(SOURCES);
+        const q = s.count(source.key);
+        q.onsuccess = () => {
+          if (!q.result) s.put(source);
+        };
+      });
       return r.ok ? "ok" : r.quota ? "quota" : "error";
     },
     async get(key) {
-      const r = await txDone(db, "readonly", (s) => s.get(key) as IDBRequest<unknown>);
+      const r = await txDone(db, STORE, "readonly", (tx) => tx.objectStore(STORE).get(key) as IDBRequest<unknown>);
       return r.ok ? valid(r.value, key) : null;
     },
     async all() {
-      const r = await txDone(db, "readonly", (s) => s.getAll() as IDBRequest<unknown[]>);
+      const r = await txDone(db, STORE, "readonly", (tx) => tx.objectStore(STORE).getAll() as IDBRequest<unknown[]>);
       return r.ok ? (r.value ?? []).map((v) => valid(v)).filter((d): d is StoredDraft => !!d) : [];
     },
     async delete(key) {
-      await txDone(db, "readwrite", (s) => void s.delete(key));
+      await txDone(db, STORE, "readwrite", (tx) => void tx.objectStore(STORE).delete(key));
+    },
+    async getSource(key) {
+      const r = await txDone(db, SOURCES, "readonly", (tx) => tx.objectStore(SOURCES).get(key) as IDBRequest<unknown>);
+      return r.ok ? validSource(r.value) : null;
+    },
+    async pruneSources() {
+      let removed = 0;
+      // Taslaklar ve paketler tek işlemde: arada yazılan taslağın paketi silinmez.
+      await txDone(db, [STORE, SOURCES], "readwrite", (tx) => {
+        const sources = tx.objectStore(SOURCES);
+        const index = tx.objectStore(STORE).index("kaynak");
+        const keys = sources.getAllKeys();
+        keys.onsuccess = () => {
+          for (const key of keys.result) {
+            const c = index.count(key);
+            c.onsuccess = () => {
+              if (c.result) return;
+              sources.delete(key);
+              removed++;
+            };
+          }
+        };
+      });
+      return removed;
     },
   };
 }
@@ -175,6 +247,13 @@ function localBackend(): DraftBackend {
         // yok say
       }
     },
+    // Yerel depoya paket sığmaz: kurtarılan taslak kaynaksız açılır (uyarıyla).
+    async getSource() {
+      return null;
+    },
+    async pruneSources() {
+      return 0;
+    },
   };
 }
 
@@ -209,6 +288,7 @@ function backend(): Promise<DraftBackend> {
     if (!db) return localBackend();
     const b = idbBackend(db);
     await migrateLocal(b);
+    await b.pruneSources();
     return b;
   })();
   return backendPromise;
@@ -244,21 +324,40 @@ export function setDraftBackendForTest(b: DraftBackend | null, migrate = true): 
 }
 
 /** Bellekte depo (testler; isteğe bağlı kota sınırı). */
-export function memoryDraftBackend(opts: { quotaBytes?: number } = {}): DraftBackend & { records: Map<string, StoredDraft> } {
+export function memoryDraftBackend(opts: { quotaBytes?: number } = {}): DraftBackend & { records: Map<string, StoredDraft>; sources: Map<string, StoredSource> } {
   const records = new Map<string, StoredDraft>();
-  const size = () => [...records.values()].reduce((n, r) => n + JSON.stringify(r).length, 0);
+  const sources = new Map<string, StoredSource>();
+  const size = () => [...records.values()].reduce((n, r) => n + JSON.stringify(r).length, 0) + [...sources.values()].reduce((n, s) => n + s.bytes.byteLength, 0);
   return {
     kind: "memory",
     records,
-    async put(rec) {
+    sources,
+    async put(rec, source) {
       const prev = records.get(rec.key);
+      const newSource = !!source && !sources.has(source.key);
       records.set(rec.key, structuredClone(rec));
+      if (newSource) sources.set(source.key, structuredClone(source));
       if (opts.quotaBytes !== undefined && size() > opts.quotaBytes) {
         if (prev) records.set(rec.key, prev);
         else records.delete(rec.key);
+        if (newSource) sources.delete(source.key);
         return "quota";
       }
       return "ok";
+    },
+    async getSource(key) {
+      const s = sources.get(key);
+      return s ? structuredClone(s) : null;
+    },
+    async pruneSources() {
+      const used = new Set([...records.values()].map((r) => r.kaynak).filter(Boolean));
+      let removed = 0;
+      for (const key of [...sources.keys()]) {
+        if (used.has(key)) continue;
+        sources.delete(key);
+        removed++;
+      }
+      return removed;
     },
     async get(key) {
       const r = records.get(key);
@@ -291,11 +390,67 @@ function serial<T>(fn: (b: DraftBackend) => Promise<T>): Promise<T> {
 /** Pencere kullanıcı isteğiyle kapanıyor: artık taslak yazılmaz. */
 let closing = false;
 
-/** Bu pencerenin taslağını yazar. */
+/** Kotaya sığmadığı için bu oturumda yeniden denenmeyen kaynak paketleri. */
+const tooBig = new Set<string>();
+
+/** Bellekteki kaynak paketin depo kaydı (yoksa null). */
+function sourceRecord(id: string | undefined): StoredSource | null {
+  const pkg = id && !tooBig.has(id) ? getSource(id) : undefined;
+  if (!pkg) return null;
+  const b = pkg.bytes;
+  // Görünüm daha büyük bir arabelleğin parçasıysa yalnız kendisi saklanır.
+  const bytes = b.byteOffset === 0 && b.byteLength === b.buffer.byteLength ? b : b.slice();
+  return { key: id!, bytes, savedAt: Date.now() };
+}
+
+/**
+ * Bu pencerenin taslağını yazar. Belge bir kaynak paketi anıyorsa (settings.kaynak) ve paket depoda yoksa
+ * aynı işlemde o da yazılır; paket kotaya sığmazsa taslak paketsiz yazılır (kurtarmada uyarılır).
+ */
 export function writeDraft(d: Draft): Promise<DraftWriteResult> {
   if (closing) return Promise.resolve("closing");
-  const rec: StoredDraft = { content: d.content, settings: d.settings, fileName: d.fileName, savedAt: d.savedAt, ...(d.path ? { path: d.path } : {}), key: draftKey(), owner: windowId };
-  return serial(async (b) => (closing ? "closing" : b.put(rec))).catch((): DraftWriteResult => "error");
+  const kaynak = d.settings?.kaynak ?? undefined;
+  const rec: StoredDraft = { content: d.content, settings: d.settings, fileName: d.fileName, savedAt: d.savedAt, ...(d.path ? { path: d.path } : {}), key: draftKey(), owner: windowId, ...(kaynak ? { kaynak } : {}) };
+  return serial(async (b): Promise<DraftWriteResult> => {
+    if (closing) return "closing";
+    const source = sourceRecord(kaynak);
+    const r = await b.put(rec, source);
+    if (r !== "quota" || !source) return r;
+    tooBig.add(source.key);
+    return b.put(rec);
+  }).catch((): DraftWriteResult => "error");
+}
+
+/** Kaynak paketin durumu: bellekte, kurtarma deposundan yeniden açıldı ya da bulunamadı. */
+export type SourceState = "bellek" | "depo" | "yok";
+
+const restoring = new Map<string, Promise<SourceState>>();
+
+/**
+ * Belgenin andığı kaynak paketi kaydetmeye hazırlar: bellekte yoksa (kurtarılan taslak, yeni oturum) kaynak
+ * deposundan açılıp aynı kimlikle kaydedilir. Kimlik yoksa null (taşınacak bir şey yok). "yok" dönerse
+ * belge geçiş katmanı olmadan kaydedilir; uygulama kullanıcıyı uyarır.
+ */
+export function ensureSource(id: string | null | undefined): Promise<SourceState | null> {
+  if (!id) return Promise.resolve(null);
+  if (getSource(id)) return Promise.resolve("bellek");
+  let p = restoring.get(id);
+  if (!p) {
+    p = (async (): Promise<SourceState> => {
+      const rec = await serial((b) => b.getSource(id)).catch(() => null);
+      // Bozulmuş kayıt kullanılmaz: içerik kimliğiyle (SHA-256) eşleşmeli.
+      if (!rec || (await sha256Hex(rec.bytes)) !== id) return "yok";
+      try {
+        await openSource(rec.bytes, { id });
+        return "depo";
+      } catch {
+        return "yok";
+      }
+    })();
+    restoring.set(id, p);
+    void p.finally(() => restoring.delete(id));
+  }
+  return p;
 }
 
 export function readDraftByKey(key: string): Promise<StoredDraft | null> {
@@ -307,8 +462,12 @@ export function readOwnDraft(): Promise<StoredDraft | null> {
   return readDraftByKey(draftKey());
 }
 
+/** Taslağı siler; artık hiçbir taslağın anmadığı kaynak paketi de silinir. */
 export function removeDraft(key: string): Promise<void> {
-  return serial((b) => b.delete(key)).catch(() => undefined);
+  return serial(async (b) => {
+    await b.delete(key);
+    await b.pruneSources();
+  }).catch(() => undefined);
 }
 
 export function clearOwnDraft(): Promise<void> {

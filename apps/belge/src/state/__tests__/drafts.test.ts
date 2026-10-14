@@ -1,7 +1,10 @@
 // Otomatik kurtarma taslakları: pencereye özgü anahtar, sahipsiz taslakların bulunması, devralma,
 // eski yerel depo (localStorage) taslaklarının bir kez taşınması ve kota hatasının bildirilmesi.
-// IndexedDB yerine aynı arayüzdeki bellek deposu kullanılır.
+// IndexedDB yerine aynı arayüzdeki bellek deposu kullanılır. Kaynak deposu: açılan .docx'in özgün paketi
+// taslakla birlikte saklanır ve kurtarmada yeniden kaydedilir.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import JSZip from "jszip";
+import { getSource, openSource, releaseSource, sha256Hex } from "@officehere/core/opc";
 
 class MemoryStorage {
   private m = new Map<string, string>();
@@ -152,5 +155,68 @@ describe("IndexedDB'ye taşıma ve kota", () => {
     const big = { ...draft("RESİMLİ"), content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "image", attrs: { src: image } }] }] } };
     expect(await D.writeDraft(big as never)).toBe("ok");
     expect(JSON.stringify((await D.readOwnDraft())?.content).length).toBeGreaterThan(6 * 1024 * 1024);
+  });
+});
+
+describe("kaynak deposu (geçiş katmanı: kurtarmada özgün paket)", () => {
+  /** Kaynak kaydına girmiş küçük bir paket (içeriği önemsiz, ZIP olması yeter). */
+  async function registered(text = "özgün", extra?: Uint8Array) {
+    const zip = new JSZip();
+    zip.file("[Content_Types].xml", `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>`);
+    zip.file("veri.txt", text);
+    if (extra) zip.file("buyuk.bin", extra);
+    const bytes = await zip.generateAsync({ type: "uint8array", compression: "STORE" });
+    const id = await sha256Hex(bytes);
+    await openSource(bytes, { id });
+    return { id, bytes };
+  }
+  const withSource = (t: string, id: string) => ({ ...draft(t), settings: { kaynak: id } as never });
+
+  it("paket, onu anan ilk taslakla bir kez yazılır; taslak silinince paket de silinir", async () => {
+    const { id, bytes } = await registered();
+    expect(await D.writeDraft(withSource("BİR", id))).toBe("ok");
+    expect(await D.writeDraft(withSource("İKİ", id))).toBe("ok");
+    expect(db.sources.size).toBe(1);
+    expect([...db.sources.get(id)!.bytes]).toEqual([...bytes]);
+    expect(db.records.get(D.draftKey())?.kaynak).toBe(id);
+    await D.clearOwnDraft();
+    expect(db.sources.size).toBe(0);
+  });
+
+  it("başka bir taslak andıkça paket silinmez", async () => {
+    const { id } = await registered("paylaşılan");
+    await D.writeDraft(withSource("BENİM", id));
+    await db.put({ ...stored("diger", "DİĞER"), kaynak: id });
+    await D.clearOwnDraft();
+    expect(db.sources.has(id)).toBe(true);
+  });
+
+  it("kurtarma: bellekte olmayan paket depodan aynı kimlikle açılır; bulunamazsa 'yok'", async () => {
+    const { id } = await registered("kurtarma");
+    await D.writeDraft(withSource("KURTAR", id));
+    releaseSource(id);
+    expect(getSource(id)).toBeUndefined();
+    expect(await D.ensureSource(id)).toBe("depo");
+    expect(getSource(id)).toBeTruthy();
+    expect(await D.ensureSource(id)).toBe("bellek");
+    expect(await D.ensureSource("0".repeat(64))).toBe("yok");
+    expect(await D.ensureSource(null)).toBeNull();
+  });
+
+  it("içerik kimliğiyle eşleşmeyen (bozulmuş) paket kullanılmaz", async () => {
+    const { id } = await registered("bozulacak");
+    await D.writeDraft(withSource("BOZUK", id));
+    releaseSource(id);
+    db.sources.get(id)!.bytes[0] ^= 0xff;
+    expect(await D.ensureSource(id)).toBe("yok");
+  });
+
+  it("paket kotaya sığmazsa taslak paketsiz yazılır (taslak kaybolmaz)", async () => {
+    const { id } = await registered("büyük", crypto.getRandomValues(new Uint8Array(20_000)));
+    const small = D.memoryDraftBackend({ quotaBytes: 5_000 });
+    await D.setDraftBackendForTest(small);
+    expect(await D.writeDraft(withSource("KÜÇÜK TASLAK", id))).toBe("ok");
+    expect(small.sources.size).toBe(0);
+    expect(small.records.get(D.draftKey())?.kaynak).toBe(id);
   });
 });

@@ -4,8 +4,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FileRef } from "@officehere/core";
 import { saveStatus } from "@officehere/ui";
-import { defaultSettings, type BelgeDocument } from "../model/document";
-import { adoptDraft, orphanDrafts, pruneHeartbeats, readDraftByKey, readOwnDraft, removeDraft, type StoredDraft } from "./drafts";
+import { defaultSettings, type BelgeDocument, type DocSettings } from "../model/document";
+import { SOURCE_MISSING } from "../io/warnings";
+import { adoptDraft, ensureSource, orphanDrafts, pruneHeartbeats, readDraftByKey, readOwnDraft, removeDraft, type StoredDraft } from "./drafts";
 import { openInNewWindow, takeHandoff } from "../mailmerge/data";
 import { takeAutoRestore } from "../views/ErrorBoundary";
 
@@ -30,6 +31,14 @@ const RECOVERED_HOLD = "Kurtarılan taslak; ilk kaydı siz onaylayın";
 export function useDraftRecovery({ load, setDirty, isPristine, onPrint, notify }: Options) {
   const [drafts, setDrafts] = useState<StoredDraft[]>([]);
   const started = useRef(false);
+  /**
+   * Kurtarılan belgenin özgün paketi (geçiş katmanı) kurtarma deposundan hazırlanır; bulunamazsa belge taslak
+   * içeriğiyle (yedek görünüm) açık kalır ve kaydederken korunamayacak parçalar için uyarılır.
+   */
+  const checkSource = (s: Partial<DocSettings> | undefined) =>
+    void ensureSource(s?.kaynak).then((r) => {
+      if (r === "yok") notify(SOURCE_MISSING, "warning");
+    });
 
   useEffect(() => {
     let alive = true;
@@ -41,6 +50,7 @@ export function useDraftRecovery({ load, setDirty, isPristine, onPrint, notify }
           load({ content: d.content, settings: { ...defaultSettings(), ...d.settings } }, d.fileName, refOf(d));
           saveStatus.hold(RECOVERED_HOLD);
           setDirty(true);
+          checkSource(d.settings);
           return;
         }
       }
@@ -52,6 +62,8 @@ export function useDraftRecovery({ load, setDirty, isPristine, onPrint, notify }
         setDirty(true);
         // Kurtarılan taslak bu pencereye devredilir (önce kendi anahtarına yazılır, sonra eskisi silinir).
         const d = h.restoreKey ? await readDraftByKey(h.restoreKey) : null;
+        if (h.restoreKey) checkSource(h.doc.settings);
+        else void ensureSource(h.doc.settings?.kaynak);
         if (d) await adoptDraft(d);
         if (h.then === "print") onPrint();
         return;
@@ -72,6 +84,7 @@ export function useDraftRecovery({ load, setDirty, isPristine, onPrint, notify }
         load({ content: d.content, settings: { ...defaultSettings(), ...d.settings } }, d.fileName, refOf(d));
         saveStatus.hold(RECOVERED_HOLD);
         setDirty(true);
+        checkSource(d.settings);
         void adoptDraft(d);
       } else if (!openInNewWindow({ content: d.content, settings: d.settings }, d.fileName, undefined, d.key)) {
         notify(`“${d.fileName}” yeni pencerede açılamadı. Yeni, boş bir belge penceresinde yeniden deneyin.`, "error");

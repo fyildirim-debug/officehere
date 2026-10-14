@@ -2,16 +2,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/core";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
-import { addRecentFile, baseName, extensionOf, getNative, openFile, readPath, saveFile, saveFileAs, type FileRef, type SaveData } from "@officehere/core";
+import { addRecentFile, baseName, extensionOf, getNative, openFile, readPath, releaseSource, saveFile, saveFileAs, type FileFilter, type FileRef, type SaveData } from "@officehere/core";
 import { getUserName, isDirectSave, saveStatus, trackSave, useAutoSave } from "@officehere/ui";
 import { defaultSettings, normalizeDoc, type BelgeDocument, type DocSettings } from "../model/document";
 import { FORMATS, LoadWarnings, OPEN_FILTERS, docToText, formatOfExt, htmlDocument, isWritable, openDocument, readDocx, saveFilters, writeDocx, writeMarkdown, writeOdt, writeRtf, type FormatId } from "../io";
+import { lossMessage, saveNotes } from "../io/warnings";
 import { TEMPLATES } from "../templates/templates";
 import { annotateNotesHtml } from "../editor/notes";
-import { clearOwnDraft, writeDraft, type Draft } from "./drafts";
+import { clearOwnDraft, ensureSource, writeDraft, type Draft } from "./drafts";
 
 /** Açılışta okunamayan içerik varsa otomatik kaydetme ilk elle kayda kadar bekler (rozet nedeni gösterir). */
 export const LOAD_WARNING_HOLD = "Bu dosyada desteklenmeyen öğeler var; ilk kaydı siz onaylayın";
+
+/** Dijital imzalı belge: kaydetmek imzayı kaldırır; otomatik kaydetme ilk elle kayda kadar bekler. */
+export const SIGNATURE_HOLD = "Dijital imzalı belge; kaydederseniz imza kaldırılır. İlk kaydı siz onaylayın";
+
+/** Makrolu belge (.docm/.dotm): makrolar korunur, çalıştırılmaz. */
+const isMacroName = (name: string) => /\.(docm|dotm)$/i.test(name);
+const DOCM_FILTER: FileFilter[] = [{ name: "Makro İçerebilen Belge (.docm)", extensions: ["docm"] }];
 
 /**
  * Otomatik kaydedilen .docx kendi okuyucumuzla yeniden açılabiliyor mu: okuyucu hata vermemeli ve
@@ -19,7 +27,7 @@ export const LOAD_WARNING_HOLD = "Bu dosyada desteklenmeyen öğeler var; ilk ka
  */
 export async function canReopenDocx(data: ArrayBuffer): Promise<boolean> {
   const warnings = new LoadWarnings();
-  const doc = await readDocx(data, warnings);
+  const doc = await readDocx(data, warnings, { kaynak: false });
   if (!doc?.content || (["corrupt", "unclosed", "simplified", "flattened"] as const).some((k) => warnings.has(k))) return false;
   return true;
 }
@@ -77,9 +85,19 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
     [editor],
   );
 
-  /** Belgeyi istenen biçimde kodlar. */
+  /**
+   * .docx/.docm baytları: kaynak paket hazırlanır (kurtarılan taslakta kurtarma deposundan), yazıcı modelin
+   * tanımadığı parçaları ondan taşır; makrolu hedefte makrolar korunur (çalıştırılmaz). `notes`: kaydetmede
+   * bildirilecekler (ör. makrolu belge .docx'e kaydedilince makroların kaldırılması).
+   */
+  const docxData = useCallback(async (doc: BelgeDocument, macro = false, notes?: string[]): Promise<Uint8Array> => {
+    await ensureSource(doc.settings.kaynak);
+    return writeDocx(doc, { macro, onReport: (r) => notes?.push(...saveNotes(r)) });
+  }, []);
+
+  /** Belgeyi istenen biçimde kodlar (`macro`: .docx biçimi makrolu .docm olarak). */
   const encode = useCallback(
-    async (f: FormatId, doc = currentDoc()): Promise<SaveData> => {
+    async (f: FormatId, doc = currentDoc(), macro = false, notes?: string[]): Promise<SaveData> => {
       switch (f) {
         case "odt":
           return writeOdt(doc);
@@ -92,14 +110,17 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
         case "txt":
           return "﻿" + docToText(doc.content);
         default:
-          return writeDocx(doc);
+          return docxData(doc, macro, notes);
       }
     },
-    [currentDoc, editor],
+    [currentDoc, docxData, editor],
   );
 
   const load = useCallback(
     (doc: BelgeDocument, name: string, ref: FileRef | null, fmt: FormatId = "docx", ext = "docx") => {
+      // Önceki belgenin özgün paketi bellekten bırakılır (kurtarma deposundaki kopyası taslağıyla yaşar).
+      const prev = settingsRef.current.kaynak;
+      if (prev && prev !== doc.settings.kaynak) releaseSource(prev);
       setSettings(doc.settings);
       loadIntoEditor(editor, doc.content);
       setFileName(name);
@@ -144,8 +165,9 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
         const opened = await openDocument(name, data, { resolveImage });
         const { doc, warning, format: fmt } = opened;
         load(doc, baseName(name), ref, fmt, extensionOf(name) || FORMATS[fmt].extensions[0]);
-        // Okunamayan (kaydedilince kaybolacak) içerik: özgün dosyanın üzerine sessizce yazılmaz.
-        if ((opened.warnings ?? []).length > 0) setLoadHold(LOAD_WARNING_HOLD);
+        // Okunamayan (kaydedilince kaybolacak) içerik ya da dijital imza: özgün dosyanın üzerine sessizce yazılmaz.
+        const lw = opened.warnings ?? [];
+        if (lw.length > 0) setLoadHold(lw.includes(lossMessage("signature")) ? SIGNATURE_HOLD : LOAD_WARNING_HOLD);
         // Önceki (vazgeçilen) belgenin taslağı bu pencereden kaldırılır.
         clearOwnDraft();
         if (warning) notify(warning, "warning");
@@ -196,28 +218,39 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
   const saveAsFormat = useCallback(
     async (first: FormatId): Promise<boolean> => {
       try {
-        const ext = FORMATS[first].saveExt ?? "docx";
-        const ref = await trackSave(false, async () => saveFileAs(`${baseName(fileNameRef.current)}.${ext}`, saveFilters(first), await encode(first)));
+        // Makrolu belge önce .docm olarak önerilir (makrolar korunur); .docx seçilirse makrolar kaldırılır.
+        const macro = first === "docx" && isMacroName(`.${fileExt}`);
+        const ext = macro ? "docm" : (FORMATS[first].saveExt ?? "docx");
+        const filters = macro ? [...DOCM_FILTER, ...saveFilters(first)] : saveFilters(first);
+        let notes: string[] = [];
+        const ref = await trackSave(false, async () => saveFileAs(`${baseName(fileNameRef.current)}.${ext}`, filters, await encode(first, undefined, macro, notes)));
         if (!ref) return false;
         // İletişim kutusunda başka bir biçim seçildiyse dosya o biçimde yeniden yazılır.
         const chosen = formatOfExt(extensionOf(ref.name));
         let fmt: FormatId = first;
-        if (chosen && chosen !== first && isWritable(chosen)) {
-          const data = await encode(chosen);
+        const rewrite = async (f: FormatId, data: SaveData) => {
           const native = getNative();
-          if (ref.path && native) await saveFile(ref, ref.name, saveFilters(chosen), data);
-          else if (ref.handle) await saveFile(ref, ref.name, saveFilters(chosen), data);
+          if (ref.path && native) await saveFile(ref, ref.name, saveFilters(f), data);
+          else if (ref.handle) await saveFile(ref, ref.name, saveFilters(f), data);
+        };
+        if (chosen && chosen !== first && isWritable(chosen)) {
+          await rewrite(chosen, await encode(chosen));
           fmt = chosen;
+          notes = [];
+        } else if (chosen === "docx" && isMacroName(ref.name) !== macro) {
+          notes = [];
+          await rewrite(chosen, await encode(chosen, undefined, !macro, notes));
         }
         keepAsked.current = true;
         await saved(ref, fmt);
+        if (notes.length) notify(notes.join(" "), "warning");
         return true;
       } catch (err) {
         notify(`Kaydedilemedi: ${(err as Error).message}`, "error");
         return false;
       }
     },
-    [encode, notify, saved],
+    [encode, fileExt, notify, saved],
   );
 
   const saveAs = useCallback(async (): Promise<boolean> => saveAsFormat(isWritable(format) ? format : "docx"), [format, saveAsFormat]);
@@ -248,12 +281,16 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
     // Yeni belge (dosyası yok): biçim listesiyle Farklı Kaydet.
     if (!fileRef) return saveAsFormat("docx");
     try {
-      const target = /\.docx$/i.test(fileRef.name) ? fileRef : null;
-      const name = `${baseName(fileNameRef.current)}.docx`;
-      const ref = await trackSave(isDirectSave(target), async () => saveFile(target, name, target ? saveFilters("docx").slice(0, 1) : saveFilters("docx"), await writeDocx(currentDoc())));
+      // .docm .docm olarak kaydedilir: makrolar korunur (çalıştırılmaz); .dotm'den yeni .docm.
+      const macro = isMacroName(fileRef.name);
+      const target = /\.(docx|docm)$/i.test(fileRef.name) ? fileRef : null;
+      const name = `${baseName(fileNameRef.current)}.${macro ? "docm" : "docx"}`;
+      const filters = macro ? DOCM_FILTER : target ? saveFilters("docx").slice(0, 1) : saveFilters("docx");
+      const ref = await trackSave(isDirectSave(target), async () => saveFile(target, name, filters, await docxData(currentDoc(), macro)));
       if (!ref) return false;
       const chosen = formatOfExt(extensionOf(ref.name));
       if (chosen && chosen !== "docx" && isWritable(chosen) && (ref.path || ref.handle)) await saveFile(ref, ref.name, saveFilters(chosen), await encode(chosen));
+      else if (chosen === "docx" && isMacroName(ref.name) !== macro && (ref.path || ref.handle)) await saveFile(ref, ref.name, saveFilters("docx"), await docxData(currentDoc(), !macro));
       keepAsked.current = chosen !== "docx";
       await saved(ref, chosen && isWritable(chosen) ? chosen : "docx");
       notify(`"${ref.name}" kaydedildi.`, "success");
@@ -262,7 +299,7 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       notify(`Kaydedilemedi: ${(err as Error).message}`, "error");
       return false;
     }
-  }, [askFormat, currentDoc, encode, fileExt, fileRef, format, notify, saveAsFormat, saved]);
+  }, [askFormat, currentDoc, docxData, encode, fileExt, fileRef, format, notify, saveAsFormat, saved]);
 
   const exportAs = useCallback(
     async (kind: string) => {
@@ -270,9 +307,11 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       const fmt = kind as FormatId;
       if (!FORMATS[fmt]?.saveExt) return;
       const ext = FORMATS[fmt].saveExt!;
-      await saveFileAs(`${base}.${ext}`, [{ name: FORMATS[fmt].label, extensions: [ext] }], await encode(fmt));
+      const notes: string[] = [];
+      await saveFileAs(`${base}.${ext}`, [{ name: FORMATS[fmt].label, extensions: [ext] }], await encode(fmt, undefined, false, notes));
+      if (notes.length) notify(notes.join(" "), "warning");
     },
-    [encode, fileName],
+    [encode, fileName, notify],
   );
 
   const closeDocument = useCallback(async () => {
@@ -347,7 +386,7 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
     prepare: async () => {
       const doc = editor.state.doc;
       const s = settingsRef.current;
-      return { data: await writeDocx(currentDoc()), isCurrent: () => !editor.isDestroyed && editor.state.doc === doc && settingsRef.current === s };
+      return { data: await docxData(currentDoc()), isCurrent: () => !editor.isDestroyed && editor.state.doc === doc && settingsRef.current === s };
     },
     markClean: () => {
       // Taslak yazıcı yeniden çizimi beklemeden temiz görsün.
