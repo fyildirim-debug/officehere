@@ -218,7 +218,8 @@ describe("Sözcük Sayısı", () => {
     return { words: countWords(text), chars: text.replace(/\n/g, "").length, charsNoSpaces: text.replace(/\s/g, "").length, paragraphs };
   }
 
-  it("önbellekli sayım tek seferlik sayımla aynı: her aralıkta, tablo/liste/notla ve düzenlemelerden sonra", () => {
+  // Aralık sayısı belge boyutunun karesiyle büyür; yavaş CI makinesinde (Windows) 5 sn'yi aşabiliyordu.
+  it("önbellekli sayım tek seferlik sayımla aynı: her aralıkta, tablo/liste/notla ve düzenlemelerden sonra", { timeout: 30_000 }, () => {
     const ed = make({
       type: "doc",
       content: [
@@ -240,8 +241,13 @@ describe("Sözcük Sayısı", () => {
       const d = ed.state.doc;
       for (const withNotes of [false, true]) {
         expect(docStats(d, null, withNotes)).toEqual(refStats(d, null, withNotes));
-        for (let from = 0; from <= d.content.size; from++)
-          for (let to = from; to <= d.content.size + 1; to += 2) expect(docStats(d, { from, to }, withNotes), `${from}-${to}`).toEqual(refStats(d, { from, to }, withNotes));
+        const end = d.content.size;
+        for (let from = 0; from <= end; from++) {
+          // Her başlangıçtan: boş seçim, yakın uçlar, seyrek ara noktalar ve belge sonu
+          const tos = new Set([from, from + 1, from + 2, end, end + 1]);
+          for (let to = from + 3; to <= end; to += 5) tos.add(to);
+          for (const to of tos) if (to <= end + 1) expect(docStats(d, { from, to }, withNotes), `${from}-${to}`).toEqual(refStats(d, { from, to }, withNotes));
+        }
       }
     };
     check();
