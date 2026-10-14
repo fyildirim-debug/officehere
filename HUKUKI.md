@@ -94,6 +94,52 @@ adları (Calibri, Aptos…) yalnız belgedeki biçim bilgisi olarak okunup yazı
 tiplerine düşülür: Carlito (Calibri), Caladea (Cambria), Liberation
 Sans/Serif/Mono (Arial, Times New Roman, Courier New).
 
+## Yazım denetimi sözlükleri
+
+Windows ve Linux'ta yazım denetimini Electron'un içindeki Chromium Hunspell sözlükleriyle yapar.
+Bu sözlükler **pakette yoktur ve OfficeHere tarafından dağıtılmaz**: Chromium'un Türkçe sözlüğü
+(`tr_TR`) GPL/LGPL/MPL üçlü lisanslıdır; bu lisanslar yukarıdaki izin verici listede değildir.
+Sözlüğü kendi sunucumuzdan vermek (`setSpellCheckerDictionaryDownloadURL` ile) de aynı dosyayı bizim
+dağıtmamız anlamına geleceğinden yapılmaz.
+
+- Sözlükler (`tr-TR-4-0.bdic`, `en-US-10-1.bdic`; toplam yaklaşık 10 MB) yalnız kullanıcı başlangıç
+  ekranındaki soruya ya da Seçenekler'de **İndir** derse, Chromium'un kendi mekanizmasıyla Google'ın
+  sunucusundan (`redirector.gvt1.com`) kullanıcının bilgisayarına indirilir ve `Dictionaries`
+  klasöründe (kullanıcı veri dizini) saklanır. Onay yokken dil listesi boştur ve indirme adresi ağa
+  çıkmayan bir adrese çevrilir; Chromium'un sistem diline göre kendiliğinden başlattığı indirme de
+  böylece gitmez.
+- **Kaldır** bu iki dosyayı siler ve yazım denetimini kapatır; kullanıcının eklediği sözcükler
+  (`Custom Dictionary.txt`) silinmez.
+- macOS işletim sisteminin yazım denetleyicisini kullanır; hiçbir sözlük indirilmez.
+- İleride kendi yazım denetleyicisi için MPL-2.0 lisanslı bir sözlüğü (ör. `hunspell-tr`)
+  değiştirmeden, ayrı dosya olarak dağıtmak ayrı bir lisans kararı gerektirir.
+
+## Ağ erişimi
+
+Hesap, reklam, abonelik ve telemetri yoktur. Masaüstü uygulaması ağa yalnız güncelleştirme denetimi
+(GitHub; Seçenekler'den kapatılabilir) ve kullanıcının onayladığı sözlük indirmesi (Google) için çıkar;
+bağlantılar sistem tarayıcısında açılır. Sayfalar yalnız kendi dosyalarına izin veren bir içerik güvenlik
+ilkesiyle (Content-Security-Policy) çalışır: belgedeki dış görsel, yazı tipi ya da betik yüklenmez. Bu,
+CI'da Chromium ağ günlüğüyle ölçülür (onay verilmemiş temiz profilde dış istek sayısı 0). Ayrıntılı tablo:
+[README](README.md#ağ-erişimi).
+
+## Yapay zekâ ilkesi
+
+OfficeHere'de üretken yapay zekâ yoktur. Bu bir eksiklik değil, ilkedir. İleride eklenirse The Document
+Foundation'ın 2026 ilkesinden ([kaynak](https://blog.documentfoundation.org/blog/2026/09/03/yes-no-ai-is-now-a-feature/))
+uyarlanan şu koşullarla eklenir:
+
+1. **İsteğe bağlı:** Ayrı bir paket olur; varsayılan kurulumda yoktur, açılmadıkça kapalıdır ve kaldırılabilir.
+2. **Yeri kullanıcı seçer:** İşlem kullanıcının kendi bilgisayarında ya da kendi tanımladığı bir uç noktada
+   (ör. `localhost`'ta kendi kurduğu bir sunucu) yapılır. Model OfficeHere paketine girmez.
+3. **Onaysız gönderim yok:** Gönderilecek metin önce gösterilir; kullanıcı onaylamadan hiçbir içerik gönderilmez.
+4. **Telemetri yok:** Kullanım bilgisi toplanmaz.
+5. **Sağlayıcıya bağımlılık yok:** Tek bir hizmete ya da modele bağlanılmaz.
+6. **Açık biçimler:** Çıktı `.docx`, `.xlsx`, `.pptx` ve OpenDocument biçimlerinde kalır.
+
+Yazım denetimi, ileride gelebilecek yazı tanıma (OCR) ya da dikte gibi **yerel tanıma** işlevleri
+üretken yapay zekâ sayılmaz; bunlar da ağa çıkmadan çalışır (sözlüğün onaylı tek seferlik indirmesi dışında).
+
 ## Bağımlılıkların lisansları
 
 Projeye yalnız izin verici (permissive) lisanslı bağımlılıklar eklenir: MIT, ISC,

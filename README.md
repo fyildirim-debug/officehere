@@ -8,6 +8,9 @@
 Belge, Tablo ve Sunum — `.docx`, `.xlsx`, `.pptx` başta olmak üzere OpenDocument (`.odt` `.ods` `.odp`),
 eski 97-2003 (`.doc` `.xls` `.ppt`), RTF, Markdown ve CSV dosyalarını açar, düzenler ve kaydeder.
 
+**Hesap yok · Reklam yok · Abonelik yok · Telemetri yok · Yapay zekâ yok.**
+Belgeleriniz bilgisayarınızda kalır; uygulamanın ağa ne zaman çıktığı [aşağıda](#ağ-erişimi) tek tek yazılıdır ve ölçülür.
+
 [İndir](https://github.com/fyildirim-debug/officehere/releases) ·
 [Hukuki çerçeve](HUKUKI.md) ·
 [Mimari](MIMARI.md) ·
@@ -92,10 +95,26 @@ işletim sisteminize uygun paketi indirin:
 | --- | --- |
 | Windows 10/11 | `OfficeHere-<sürüm>-win-x64.exe` (64 bit kurulum), `-win-arm64.exe` (ARM), `-win.exe` (iki mimari tek kurulumda) ya da `-tasinabilir.exe` (kurulumsuz) |
 | Linux | `.AppImage` ya da `.deb` |
-| macOS (Apple Silicon) | `-mac-arm64.dmg` (imzasız: ilk açılışta sağ tık → Aç) |
+| macOS (Apple Silicon) | `-mac-arm64.dmg` (imzasız: ilk açılış için aşağıdaki nota bakın) |
 
 Kurulum `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`, `.ods`, `.csv`, `.tsv`,
 `.pptx`, `.ppt`, `.ppsx` ve `.odp` dosyalarını OfficeHere ile ilişkilendirir.
+
+**macOS'ta ilk açılış:** Paket Apple tarafından imzalanmadığı için macOS ilk açılışı engeller.
+macOS 15 (Sequoia) ve sonrasında sağ tık → Aç artık işe yaramaz: OfficeHere'yi bir kez açmayı deneyin,
+uyarıyı kapatın, ardından **Sistem Ayarları → Gizlilik ve Güvenlik** sayfasının altındaki
+"OfficeHere engellendi" satırında **Yine de Aç**'a basıp parolanızla onaylayın. Bu yalnız ilk açılışta
+gerekir. macOS 14 ve öncesinde Finder'da uygulamaya sağ tıklayıp **Aç** demek yeterlidir. "Hasarlı"
+uyarısı görürseniz Terminal'de `xattr -dr com.apple.quarantine /Applications/OfficeHere.app` komutu
+indirme karantinası işaretini kaldırır.
+
+**Yazım denetimi:** Windows ve Linux'ta Türkçe ve İngilizce yazım sözlükleri pakette yoktur (lisansları
+[izin verici değildir](HUKUKI.md#yazım-denetimi-sözlükleri)). İlk açılışta başlangıç ekranında sorulur:
+**İndir** derseniz sözlükler (yaklaşık 10 MB) bir kez Google sunucusundan indirilir ve bilgisayarınızda
+saklanır; **Şimdi değil** derseniz hiçbir istek gitmez ve yazım denetimi kapalı kalır. Seçenekler →
+*Yazım denetimi sözlükleri*'nden istediğiniz zaman indirip kaldırabilirsiniz. macOS sistemin kendi yazım
+denetimini kullanır; indirme yoktur. 0.1.x sürümleri sözlükleri sormadan indiriyordu; o sürümlerle
+inmiş sözlükler yerinde kullanılmaya devam eder, yeniden indirilmez.
 
 **Diğer biçimler:** Eski `.doc`/`.xls`/`.ppt` dosyaları yalnız açılır; kaydedince
 `.docx`/`.xlsx`/`.pptx` olur (özgün dosya değişmez). `.odt`, `.ods`, `.odp`, `.rtf`,
@@ -107,6 +126,9 @@ denetler (Seçenekler'den kapatılabilir). Windows kurulumu ve AppImage yeni sü
 arka planda indirir, yeniden başlatınca kurar; taşınabilir `.exe`, `.deb` ve
 macOS paketi yeni sürümü bildirir ve indirme sayfasını açar. Otomatik
 güncelleştirme 0.1.2 ile gelir; daha eski sürümlerden bir kez elle yükseltin.
+Seçenekler'den **güncelleme kanalı** seçilir: *Kararlı* (varsayılan) yalnız kararlı sürümleri, *Beta*
+ayrıca `-beta.N` ön sürümlerini alır. Beta'dan Kararlı'ya dönünce kurulu sürüm geri alınmaz; bir
+sonraki kararlı sürüm beklenir.
 
 **Otomatik kaydetme:** Masaüstünde diskte kayıtlı `.docx`, `.xlsx` ve `.pptx`
 belgeleri değiştikçe kendiliğinden kaydedilir; ilk otomatik kayıttan önce özgün
@@ -115,6 +137,34 @@ açılışta uyarı gösterebilir ("Ek bilgi" → "Yine de çalıştır").
 
 Tarayıcıda kurulumsuz kullanmak için web sürümünü derleyip herhangi bir statik
 sunucuda yayınlayabilirsiniz (`pnpm web` ya da `docker build -t officehere .`).
+
+### Ağ erişimi
+
+Hesap, reklam, abonelik, telemetri ve yapay zekâ yoktur; belgeler, ayarlar ve hata günlüğü
+bilgisayarınızda kalır. Masaüstü uygulaması ağa yalnız şu durumlarda çıkar:
+
+| Ne zaman | Nereye | Nasıl kapatılır |
+| --- | --- | --- |
+| Güncelleştirme denetimi: açılıştan 10 sn sonra ve 6 saatte bir | GitHub (`api.github.com`, `github.com`; indirmede GitHub'ın dosya sunucuları). GitHub her web isteğindeki gibi IP adresinizi ve OfficeHere sürümünü görür | Seçenekler → "Güncelleştirmeleri otomatik denetle" |
+| Yazım sözlükleri: yalnız siz **İndir** deyince, bir kez | Google (`redirector.gvt1.com`), yaklaşık 10 MB; macOS'ta hiç | İlk açılış sorusunda **Şimdi değil** |
+| Bir bağlantıya tıkladığınızda | Bağlantı uygulamada değil, sistem tarayıcınızda açılır | — |
+
+**Hata bildir**, sizin görüp düzenlediğiniz metinle tarayıcınızda bir GitHub sayfası açar; siz
+göndermeden hiçbir şey paylaşılmaz. Belgeye gömülü bağlantılı görseller ve başka dış kaynaklar
+yüklenmez (sayfalar yalnız kendi dosyalarına izin veren bir içerik güvenlik ilkesiyle çalışır). Bu liste ölçülür: CI her gönderimde uygulamayı temiz bir profille
+Chromium ağ günlüğü (`--log-net-log`) altında açar, belge yazar ve onay verilmemişken dış istek
+sayısının **0** olduğunu doğrular (`e2e-masaustu/agistegi.spec.ts`).
+
+### Yapay zekâ ilkesi
+
+OfficeHere'de üretken yapay zekâ yoktur ve varsayılan kurulumda hiçbir zaman olmayacaktır. İleride
+eklenirse [The Document Foundation'ın 2026 ilkesinden](https://blog.documentfoundation.org/blog/2026/09/03/yes-no-ai-is-now-a-feature/)
+uyarlanan şu koşullarla eklenir: (1) ayrı ve isteğe bağlı bir paket olur, varsayılan olarak kapalıdır ve
+kaldırılabilir; (2) işlemin nerede yapılacağını kullanıcı seçer (kendi bilgisayarındaki ya da kendi
+tanımladığı bir uç nokta), model pakete girmez; (3) kullanıcı gönderilecek metni görüp onaylamadan
+hiçbir içerik gönderilmez; (4) telemetri yoktur; (5) tek bir sağlayıcıya bağlanılmaz; (6) çıktı açık
+biçimlerde (`.docx` `.xlsx` `.pptx`, OpenDocument) kalır. Yazım denetimi gibi yerel tanıma işlevleri
+üretken yapay zekâ değildir. Ayrıntı: [HUKUKI.md](HUKUKI.md#yapay-zekâ-ilkesi).
 
 ### İndirilen paketi doğrulama
 
@@ -173,6 +223,7 @@ Ayrıntılar: [MIMARI.md](MIMARI.md), [KATKI.md](KATKI.md).
 - **Sağlamlık** (CI, her gönderimde): LibreOffice ve python ile üretilmiş gerçek dünya derlemi ve Apache POI test verisinden seçilmiş 41 gerçek Office dosyası ([test-derlem/poi](test-derlem/poi/README.md), Apache-2.0, [NOTICE](test-derlem/poi/NOTICE)) kaydet-aç turundan geçirilir (`pnpm derlem`: metin, biçim, hücre, slayt, not ve OOXML/ODF parça, ilişki ve uzantı öğesi kayıpları sayılır), kaydedilen paketlerin tutarlılığı denetlenir (`pnpm derlem:opc`), dosyalar LibreOffice'e açtırılır (`pnpm derlem:lo`) ve 759 bozuk dosyayla bulanık test yapılır (`pnpm bulanik`: takılma, yığın taşması ve anlaşılmaz hata iletileri). Sonuçlar kaydedilmiş temel çizgiyle karşılaştırılır; yeni takılma, yığın taşması, POI derleminde artan parça kaybı ya da yeni paket hatası derlemeyi durdurur.
 - Formül motorunun sonuçları LibreOffice ile yüzlerce formülde çapraz doğrulanır.
 - Uçtan uca testler her uygulamayı gerçek bir tarayıcıda kullanıcı gibi kullanır; CI her gönderimde hepsini çalıştırır. Windows ve macOS'ta duman testi `main` dalına her gönderimde koşar.
+- **Ağ isteği:** Masaüstü uygulaması temiz bir profille Chromium ağ günlüğü altında açılır; onay verilmemişken dış istek sayısı 0 olmalıdır (Linux her gönderimde, Windows ve macOS `main`'de). Güncelleme kanalı kuralları gerçek güncelleyiciyle (electron-updater) yerel bir sahte GitHub sunucusuna karşı sınanır: beta sürüm kararlı kanala hiçbir yoldan ulaşmaz, kanal dönüşünde geri sürüme inilmez.
 
 ## Hukuki
 
