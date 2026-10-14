@@ -178,6 +178,21 @@ test.describe("Klavye: Belge", () => {
     await expect(body(page).locator(`span[style*="${chosen}"]`)).toHaveText("Yazı");
   });
 
+  test("yazı tipi kutusunda Enter: odak bir sonraki kareyi beklemeden belgeye döner", async ({ page }) => {
+    const font = ribbon(page).getByRole("combobox", { name: "Yazı Tipi", exact: true });
+    await font.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByRole("listbox", { name: "Yazı Tipi" })).toBeVisible();
+    await page.keyboard.press("ArrowDown");
+    // Enter ile hemen ardından gelen tuş arasında kare çizilmeyebilir: odak aynı görevde taşınmalı.
+    const inEditor = await font.evaluate(async (input) => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      await Promise.resolve();
+      return !!document.activeElement?.closest(".ProseMirror");
+    });
+    expect(inEditor).toBe(true);
+  });
+
   test("galeri: ok tuşları öğeler arasında gezer, galeri tek Tab durağıdır", async ({ page }) => {
     const tiles = ribbon(page).locator(".oh-gallery-items .oh-gallery-item");
     await expect(tiles.locator('xpath=self::*[@tabindex="0"]')).toHaveCount(1);

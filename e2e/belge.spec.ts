@@ -138,10 +138,13 @@ test.describe("OfficeHere Belge senaryoları", () => {
     await expect(pages(page)).toHaveCount(3);
     await button(page, "Yönlendirme").click();
     await menuItem(page, "Yatay").click();
-    const third = (await pages(page).nth(2).boundingBox())!;
-    const first = (await pages(page).nth(0).boundingBox())!;
-    expect(third.width).toBeGreaterThan(third.height);
-    expect(first.width).toBeLessThan(first.height);
+    // Yönlendirme sayfalamadan sonra uygulanır: tek seferlik ölçüm yerine yerleşim oturana dek beklenir.
+    const landscape = async (i: number) => {
+      const b = (await pages(page).nth(i).boundingBox())!;
+      return b.width > b.height;
+    };
+    await expect.poll(() => landscape(2)).toBe(true);
+    expect(await landscape(0)).toBe(false);
   });
 
   test("bul ve değiştir: Ctrl+H, Tümünü Değiştir büyük harfi korur, geri al", async ({ page }) => {

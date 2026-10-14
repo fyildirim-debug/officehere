@@ -8,6 +8,7 @@ import Highlight from "@tiptap/extension-highlight";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import { ParagraphFormat } from "./paragraphFormat";
+import { ImmediateFocus } from "./immediateFocus";
 import { CharStyle, CommentMark, Deletion, FormatChange, Insertion, TextStyleExtras, Underline } from "./marks";
 import { Bookmark, ListStyles, PageBreak, PageField, TableOfContents } from "./nodes";
 import { BelgeTable, BelgeTableCell, BelgeTableHeader, BelgeTableRow } from "./table";
@@ -159,11 +160,12 @@ export function editorExtensions(controller: PaginationController, hooks: Editor
     Repeat,
     SelectionSync,
     Protection,
+    ImmediateFocus,
     createSectionLayout({ enabled: () => controller.geometry.enabled, defaultPage: () => controller.geometry.defaultPage, tiled: () => controller.geometry.tiles > 0 }),
   ];
 }
 
 /** Üst/alt bilgi editörü: gövdeyle aynı biçimlendirme, sayfalama yok. */
 export function headerFooterExtensions(): AnyExtension[] {
-  return [...contentExtensions(), PlainDocument, NoBreakKeys, AutoCorrect, Repeat, Protection];
+  return [...contentExtensions(), PlainDocument, NoBreakKeys, AutoCorrect, Repeat, Protection, ImmediateFocus];
 }
