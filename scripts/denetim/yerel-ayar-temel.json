@@ -39,7 +39,6 @@
   "apps/sunum/src/io/odp/writeStyles.ts": 3,
   "apps/sunum/src/io/ppt/testCfb.ts": 2,
   "apps/sunum/src/io/ppt/text.ts": 1,
-  "apps/sunum/src/io/pptxReader.ts": 3,
   "apps/sunum/src/io/pptxWriter.ts": 1,
   "apps/sunum/src/io/presProps.ts": 3,
   "apps/sunum/src/io/readStyle.ts": 4,
