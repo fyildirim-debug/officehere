@@ -227,9 +227,14 @@ test.describe("OfficeHere Belge 5. tur", () => {
     await page.keyboard.type("Tarih: ");
     await tab(page, "Ekle");
     await button(page, "Tarih ve Saat").click();
-    const now = new Date();
+    // Beklenen tarih tarayıcının saat diliminde (Europe/Istanbul) hesaplanır; test süreci UTC'de
+    // çalışınca gece yarısına yakın saatlerde gün farklı çıkıyordu.
+    const [day, month, year] = await page.evaluate(() => {
+      const d = new Date();
+      return [d.getDate(), d.getMonth(), d.getFullYear()];
+    });
     const months = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
-    const long = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+    const long = `${day} ${months[month]} ${year}`;
     await dialog(page).getByLabel("Kullanılabilir biçimler").selectOption("d MMMM yyyy");
     await dialog(page).getByText("Otomatik olarak güncelleştir").click();
     await dialog(page).getByRole("button", { name: "Tamam" }).click();
@@ -241,7 +246,7 @@ test.describe("OfficeHere Belge 5. tur", () => {
     await dialog(page).getByLabel("Otomatik olarak güncelleştir").uncheck();
     await dialog(page).getByLabel("Kullanılabilir biçimler").selectOption("yyyy-MM-dd");
     await dialog(page).getByRole("button", { name: "Tamam" }).click();
-    const iso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const iso = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     await expect(body(page)).toContainText(`Tarih: ${long} / ${iso}`);
     await expect(body(page).locator(".bl-field")).toHaveCount(1);
 
