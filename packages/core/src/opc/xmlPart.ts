@@ -300,15 +300,15 @@ export function topLevelNames(xml: string): string[] {
 export function upsertExt(part: XmlPart, uri: string, extXml: string | null, extOrder: readonly string[] = WORKSHEET_EXT_ORDER): void {
   const cur = part.get("extLst");
   let exts = cur ? childElements(cur).map((c) => c.xml) : [];
-  exts = exts.filter((e) => attrOf(e, "uri")?.toUpperCase() !== uri.toUpperCase());
+  exts = exts.filter((e) => attrOf(e, "uri")?.toUpperCase() !== uri.toUpperCase()); // yerel-ayar: ascii
   if (extXml) exts.push(extXml);
   if (!exts.length) {
     part.set("extLst", null);
     return;
   }
   const rank = (e: string) => {
-    const u = attrOf(e, "uri")?.toUpperCase() ?? "";
-    const i = extOrder.findIndex((x) => x.toUpperCase() === u);
+    const u = attrOf(e, "uri")?.toUpperCase() ?? ""; // yerel-ayar: ascii
+    const i = extOrder.findIndex((x) => x.toUpperCase() === u); // yerel-ayar: ascii
     return i < 0 ? extOrder.length : i;
   };
   exts = exts.map((e, i) => ({ e, i })).sort((a, b) => rank(a.e) - rank(b.e) || a.i - b.i).map((x) => x.e);
@@ -319,5 +319,5 @@ export function upsertExt(part: XmlPart, uri: string, extXml: string | null, ext
 export function getExt(part: XmlPart, uri: string): string | undefined {
   const cur = part.get("extLst");
   if (!cur) return undefined;
-  return childElements(cur).find((c) => attrOf(c.xml, "uri")?.toUpperCase() === uri.toUpperCase())?.xml;
+  return childElements(cur).find((c) => attrOf(c.xml, "uri")?.toUpperCase() === uri.toUpperCase())?.xml; // yerel-ayar: ascii
 }

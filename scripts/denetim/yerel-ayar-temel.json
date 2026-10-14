@@ -78,7 +78,6 @@
   "apps/tablo/src/io/xlsxSlicers.ts": 1,
   "apps/tablo/src/io/xlsxSpark.ts": 3,
   "apps/tablo/src/io/xlsxStyles.ts": 4,
-  "apps/tablo/src/io/xmlPart.ts": 6,
   "apps/tablo/src/model/clipboard.ts": 2,
   "apps/tablo/src/model/formatInherit.ts": 1,
   "apps/tablo/src/model/inputRules.ts": 1,

@@ -133,7 +133,7 @@ export function readZip(data: Uint8Array | ArrayBuffer): ZipArchive {
     }
     p = nameEnd + extraLen + commentLen;
     if (name.endsWith("/")) continue;
-    const key = name.toLowerCase();
+    const key = name.toLowerCase(); // yerel-ayar: ascii
     if (seen.has(key)) {
       skipped++;
       continue;
@@ -275,7 +275,7 @@ export class ZipWriter {
   }
 
   has(name: string): boolean {
-    return this.index.has(name.toLowerCase());
+    return this.index.has(name.toLowerCase()); // yerel-ayar: ascii
   }
 
   get size(): number {
@@ -294,14 +294,14 @@ export class ZipWriter {
   }
 
   remove(name: string): void {
-    const i = this.index.get(name.toLowerCase());
+    const i = this.index.get(name.toLowerCase()); // yerel-ayar: ascii
     if (i === undefined) return;
     this.items.splice(i, 1);
     this.reindex();
   }
 
   private put(item: PendingItem): void {
-    const key = item.name.toLowerCase();
+    const key = item.name.toLowerCase(); // yerel-ayar: ascii
     const i = this.index.get(key);
     if (i !== undefined) this.items[i] = item;
     else {
@@ -312,7 +312,7 @@ export class ZipWriter {
 
   private reindex(): void {
     this.index.clear();
-    this.items.forEach((it, i) => this.index.set(it.name.toLowerCase(), i));
+    this.items.forEach((it, i) => this.index.set(it.name.toLowerCase(), i)); // yerel-ayar: ascii
   }
 
   /** Arşivi kurar. 65535'ten çok girdi ya da 4 GB'tan büyük çıktı OpcError("too-large"). */

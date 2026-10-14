@@ -139,7 +139,7 @@ export class Carry {
       copy: (part) => {
         const name = pkg?.canonicalName(part);
         if (!pkg || !name || isReservedName(name)) return null;
-        const key = name.toLowerCase();
+        const key = name.toLowerCase(); // yerel-ayar: ascii
         let to = map.get(key);
         if (!to) {
           to = prefixed(name, k);
@@ -148,13 +148,13 @@ export class Carry {
         }
         return to;
       },
-      mapped: (part) => map.get(part.toLowerCase()),
+      mapped: (part) => map.get(part.toLowerCase()), // yerel-ayar: ascii
     };
   }
 
   /** Kopyalanan parçanın (yeni adıyla) metnini yazmadan önce dönüştürür (ör. SmartArt relId yaması). */
   patch(to: string, fn: (xml: string) => string): void {
-    const key = to.toLowerCase();
+    const key = to.toLowerCase(); // yerel-ayar: ascii
     const p = this.patchMap.get(key) ?? { to, fns: [] };
     p.fns.push(fn);
     this.patchMap.set(key, p);
@@ -172,7 +172,7 @@ export class Carry {
 
   /** @internal */
   patchesFor(to: string): ((xml: string) => string)[] | undefined {
-    return this.patchMap.get(to.toLowerCase())?.fns;
+    return this.patchMap.get(to.toLowerCase())?.fns; // yerel-ayar: ascii
   }
 
   /** @internal Sonraki önek numarası (kapanış kopyaları için). */
@@ -294,7 +294,7 @@ export async function carryParts(opts: CarryPartsOptions): Promise<{ bytes: Uint
   const ct = out.contentTypes.clone();
   const modified = new Map<string, { name: string; text: string }>(); // küçük harf ad → yeni içerik
   const builders = new Map<string, RelsBuilder>(); // küçük harf çıktı parçası → .rels kurucusu
-  const taken = new Set(out.names.map((n) => n.toLowerCase()));
+  const taken = new Set(out.names.map((n) => n.toLowerCase())); // yerel-ayar: ascii
   const plans: Plan[] = [];
   const planIndex = new Map<OpcPackage, Map<string, Plan>>();
   let seq = 0;
@@ -307,7 +307,7 @@ export async function carryParts(opts: CarryPartsOptions): Promise<{ bytes: Uint
     return m;
   };
   const builder = async (part: string) => {
-    const key = part.toLowerCase();
+    const key = part.toLowerCase(); // yerel-ayar: ascii
     let b = builders.get(key);
     if (!b) builders.set(key, (b = new RelsBuilder(part, await out.rels(part))));
     return b;
@@ -315,29 +315,29 @@ export async function carryParts(opts: CarryPartsOptions): Promise<{ bytes: Uint
   /** Kaynak parçayı kopya planına ekler (varsa olanı döner); ad çakışırsa (ya da öğe düzeyindeyse) önek alır. */
   const plan = (pkg: OpcPackage, from: string, type: string, kind: Plan["kind"], forcePrefix: boolean): Plan => {
     const idx = indexOf(pkg);
-    const hit = idx.get(from.toLowerCase());
+    const hit = idx.get(from.toLowerCase()); // yerel-ayar: ascii
     if (hit) return hit;
     let to = from;
-    if (forcePrefix || taken.has(to.toLowerCase())) {
+    if (forcePrefix || taken.has(to.toLowerCase())) { // yerel-ayar: ascii
       do to = prefixed(from, nextN());
-      while (taken.has(to.toLowerCase()));
+      while (taken.has(to.toLowerCase())); // yerel-ayar: ascii
     }
-    taken.add(to.toLowerCase());
+    taken.add(to.toLowerCase()); // yerel-ayar: ascii
     const p: Plan = { pkg, from, to, type, kind };
-    idx.set(from.toLowerCase(), p);
+    idx.set(from.toLowerCase(), p); // yerel-ayar: ascii
     plans.push(p);
     return p;
   };
 
   // 1) Öğe düzeyi planlar: adları yazıcının parçalarıyla çakışmamalı
   for (const p of carry?.plans() ?? []) {
-    if (taken.has(p.to.toLowerCase())) {
+    if (taken.has(p.to.toLowerCase())) { // yerel-ayar: ascii
       drop(p.from, p.type, "conflict", "");
       continue;
     }
-    taken.add(p.to.toLowerCase());
+    taken.add(p.to.toLowerCase()); // yerel-ayar: ascii
     const idx = indexOf(p.pkg);
-    if (!idx.has(p.from.toLowerCase())) idx.set(p.from.toLowerCase(), p);
+    if (!idx.has(p.from.toLowerCase())) idx.set(p.from.toLowerCase(), p); // yerel-ayar: ascii
     plans.push(p);
   }
 
@@ -350,9 +350,9 @@ export async function carryParts(opts: CarryPartsOptions): Promise<{ bytes: Uint
     for (const [a, b] of pairsOf(opts.partMap)) {
       const ca = src.canonicalName(a);
       const cb = out.canonicalName(b);
-      if (ca && cb && !pairs.some(([x]) => x.toLowerCase() === ca.toLowerCase())) pairs.push([ca, cb]);
+      if (ca && cb && !pairs.some(([x]) => x.toLowerCase() === ca.toLowerCase())) pairs.push([ca, cb]); // yerel-ayar: ascii
     }
-    for (const [a, b] of pairs) if (a) partMap.set(a.toLowerCase(), b);
+    for (const [a, b] of pairs) if (a) partMap.set(a.toLowerCase(), b); // yerel-ayar: ascii
   }
   let customRel: Relationship | undefined;
   for (const [a, b] of pairs) {
@@ -429,12 +429,12 @@ export async function carryParts(opts: CarryPartsOptions): Promise<{ bytes: Uint
         continue;
       }
       const link = (to: string) => list.push({ id: r.id, type: r.type, target: relativeTarget(p.to, to), external: false, part: to });
-      const mapped = p.pkg === src ? partMap.get(name.toLowerCase()) : undefined;
+      const mapped = p.pkg === src ? partMap.get(name.toLowerCase()) : undefined; // yerel-ayar: ascii
       if (mapped) {
         link(mapped);
         continue;
       }
-      const known = indexOf(p.pkg).get(name.toLowerCase());
+      const known = indexOf(p.pkg).get(name.toLowerCase()); // yerel-ayar: ascii
       if (known) {
         link(known.to);
         continue;
@@ -459,9 +459,9 @@ export async function carryParts(opts: CarryPartsOptions): Promise<{ bytes: Uint
   // 4) Çöp toplama: öğe düzeyi kopyalar yalnız yeni paketin kökünden ulaşılıyorsa yazılır
   let live = plans;
   if (plans.some((p) => p.kind === "element")) {
-    const byTo = new Map(plans.map((p) => [p.to.toLowerCase(), p]));
+    const byTo = new Map(plans.map((p) => [p.to.toLowerCase(), p])); // yerel-ayar: ascii
     const relsOf = async (name: string): Promise<Relationship[]> => {
-      const key = name.toLowerCase();
+      const key = name.toLowerCase(); // yerel-ayar: ascii
       const b = builders.get(key);
       if (b) return [...b.relationships];
       const p = byTo.get(key);
@@ -475,13 +475,13 @@ export async function carryParts(opts: CarryPartsOptions): Promise<{ bytes: Uint
       queue = [];
       for (const r of lists.flat()) {
         if (r.external || !r.part) continue;
-        const k = r.part.toLowerCase();
+        const k = r.part.toLowerCase(); // yerel-ayar: ascii
         if (seen.has(k)) continue;
         seen.add(k);
         queue.push(r.part);
       }
     }
-    live = plans.filter((p) => seen.has(p.to.toLowerCase()));
+    live = plans.filter((p) => seen.has(p.to.toLowerCase())); // yerel-ayar: ascii
     report.collected = plans.length - live.length;
   }
 
@@ -521,7 +521,7 @@ export async function carryParts(opts: CarryPartsOptions): Promise<{ bytes: Uint
   for (const b of builders.values()) {
     if (b.size === (await out.rels(b.source)).length) continue;
     const path = relsPathOf(b.source);
-    modified.set(path.toLowerCase(), { name: out.canonicalName(path) ?? path, text: b.xml() });
+    modified.set(path.toLowerCase(), { name: out.canonicalName(path) ?? path, text: b.xml() }); // yerel-ayar: ascii
   }
   const ctEntry = out.entry(CONTENT_TYPES_PART);
   const ctChanged = ct.toXml() !== out.contentTypes.toXml();
@@ -534,10 +534,10 @@ export async function carryParts(opts: CarryPartsOptions): Promise<{ bytes: Uint
   else zw.addRaw(CONTENT_TYPES_PART, out.bytes, ctEntry);
   for (const e of out.entries) {
     if (e.name === CONTENT_TYPES_PART) continue;
-    const m = modified.get(e.name.toLowerCase());
+    const m = modified.get(e.name.toLowerCase()); // yerel-ayar: ascii
     if (m) {
       zw.add(e.name, m.text);
-      modified.delete(e.name.toLowerCase());
+      modified.delete(e.name.toLowerCase()); // yerel-ayar: ascii
     } else zw.addRaw(e.name, out.bytes, e);
   }
   for (const m of modified.values()) zw.add(m.name, m.text);
@@ -602,10 +602,10 @@ async function mergeCustomProperties(
   const outXml = outName ? await out.text(outName).catch(() => null) : null;
   const outRoot = outXml ? ROOT_RE.exec(outXml) : null;
   const outProps = outXml && outRoot ? [...outXml.matchAll(PROP_RE)].map((m) => m[0]) : [];
-  const have = new Set(outProps.map((p) => propName(p).toLowerCase()));
+  const have = new Set(outProps.map((p) => propName(p).toLowerCase())); // yerel-ayar: ascii
   const add = [...srcXml.matchAll(PROP_RE)].map((m) => m[0]).filter((p) => {
     const n = propName(p);
-    return n && !ctx.owned(n) && !have.has(n.toLowerCase());
+    return n && !ctx.owned(n) && !have.has(n.toLowerCase()); // yerel-ayar: ascii
   });
   if (!add.length) return;
   const all = [...outProps, ...add].map((p, i) => p.replace(/^(<[^>]*?\bpid\s*=\s*)(?:"[^"]*"|'[^']*')/, `$1"${i + 2}"`));
@@ -615,15 +615,15 @@ async function mergeCustomProperties(
   const decl = parseAttrs(open);
   for (const [k, v] of parseAttrs(srcRoot[2])) if (k.startsWith("xmlns") && !decl.has(k)) open = open.replace(/>$/, ` ${k}="${escapeXml(v)}">`);
   const xml = `${XML_DECL}${open}${all.join("")}</${qname}>`;
-  if (outName) ctx.modified.set(outName.toLowerCase(), { name: outName, text: xml });
+  if (outName) ctx.modified.set(outName.toLowerCase(), { name: outName, text: xml }); // yerel-ayar: ascii
   else {
     let to = name;
-    if (ctx.taken.has(to.toLowerCase())) {
+    if (ctx.taken.has(to.toLowerCase())) { // yerel-ayar: ascii
       do to = prefixed(name, ctx.nextN());
-      while (ctx.taken.has(to.toLowerCase()));
+      while (ctx.taken.has(to.toLowerCase())); // yerel-ayar: ascii
     }
-    ctx.taken.add(to.toLowerCase());
-    ctx.modified.set(to.toLowerCase(), { name: to, text: xml });
+    ctx.taken.add(to.toLowerCase()); // yerel-ayar: ascii
+    ctx.modified.set(to.toLowerCase(), { name: to, text: xml }); // yerel-ayar: ascii
     (await ctx.rootBuilder()).addPart(REL_TYPES.customProperties, to);
     ctx.ct.setOverride(to, CT_CUSTOM);
     ctx.report.carried.push({ from: name, to, type: rel.type, kind: "implicit" });

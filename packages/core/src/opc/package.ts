@@ -78,15 +78,15 @@ export function relsPathOf(part: string): string {
 
 /** İlişki dosyasının kaynak parçası ("_rels/.rels" → ""); ilişki dosyası değilse null. */
 export function partOfRels(relsPath: string): string | null {
-  if (relsPath.toLowerCase() === "_rels/.rels") return "";
+  if (relsPath.toLowerCase() === "_rels/.rels") return ""; // yerel-ayar: ascii
   const m = /^(.*?)_rels\/([^/]+)\.rels$/i.exec(relsPath);
   return m ? m[1] + m[2] : null;
 }
 
 /** Paket parçası olamayacak adlar: içerik türleri ve ilişki dosyaları. */
 export function isReservedName(name: string): boolean {
-  const k = name.toLowerCase();
-  return k === CONTENT_TYPES_PART.toLowerCase() || k.endsWith(".rels") || /(^|\/)_rels\//.test(k);
+  const k = name.toLowerCase(); // yerel-ayar: ascii
+  return k === CONTENT_TYPES_PART.toLowerCase() || k.endsWith(".rels") || /(^|\/)_rels\//.test(k); // yerel-ayar: ascii
 }
 
 /**
@@ -129,7 +129,7 @@ export class ContentTypes {
       const a = parseAttrs(m[1]);
       const e = a.get("Extension");
       const t = a.get("ContentType");
-      if (e && t && !ct.defaults.has(e.toLowerCase())) ct.defaults.set(e.toLowerCase(), t);
+      if (e && t && !ct.defaults.has(e.toLowerCase())) ct.defaults.set(e.toLowerCase(), t); // yerel-ayar: ascii
     }
     for (const m of xml.matchAll(/<(?:[\w.-]+:)?Override\b([^>]*)>/g)) {
       const a = parseAttrs(m[1]);
@@ -137,7 +137,7 @@ export class ContentTypes {
       const t = a.get("ContentType");
       if (!p || !t) continue;
       const name = percentDecode(p.replace(/^\/+/, ""));
-      if (!ct.overrides.has(name.toLowerCase())) ct.overrides.set(name.toLowerCase(), { name, type: t });
+      if (!ct.overrides.has(name.toLowerCase())) ct.overrides.set(name.toLowerCase(), { name, type: t }); // yerel-ayar: ascii
     }
     return ct;
   }
@@ -151,27 +151,27 @@ export class ContentTypes {
 
   /** Parçanın içerik türü: önce Override, sonra uzantı varsayılanı. */
   get(part: string): string | undefined {
-    return this.overrides.get(part.toLowerCase())?.type ?? this.defaults.get(extOf(part));
+    return this.overrides.get(part.toLowerCase())?.type ?? this.defaults.get(extOf(part)); // yerel-ayar: ascii
   }
 
   getOverride(part: string): string | undefined {
-    return this.overrides.get(part.toLowerCase())?.type;
+    return this.overrides.get(part.toLowerCase())?.type; // yerel-ayar: ascii
   }
 
   getDefault(ext: string): string | undefined {
-    return this.defaults.get(ext.toLowerCase());
+    return this.defaults.get(ext.toLowerCase()); // yerel-ayar: ascii
   }
 
   setOverride(part: string, type: string): void {
-    this.overrides.set(part.toLowerCase(), { name: part, type });
+    this.overrides.set(part.toLowerCase(), { name: part, type }); // yerel-ayar: ascii
   }
 
   deleteOverride(part: string): void {
-    this.overrides.delete(part.toLowerCase());
+    this.overrides.delete(part.toLowerCase()); // yerel-ayar: ascii
   }
 
   setDefault(ext: string, type: string): void {
-    this.defaults.set(ext.toLowerCase(), type);
+    this.defaults.set(ext.toLowerCase(), type); // yerel-ayar: ascii
   }
 
   /** Override girdileri: [parça adı, tür]. */
@@ -193,7 +193,7 @@ export class ContentTypes {
 function extOf(part: string): string {
   const slash = part.lastIndexOf("/");
   const dot = part.lastIndexOf(".");
-  return dot > slash ? part.slice(dot + 1).toLowerCase() : "";
+  return dot > slash ? part.slice(dot + 1).toLowerCase() : ""; // yerel-ayar: ascii
 }
 
 /* ------------------------------------------------------------ ilişkiler */
@@ -221,7 +221,7 @@ export function parseRels(xml: string | null | undefined, source: string): Relat
     const target = a.get("Target");
     if (!id || !type || target === undefined || ids.has(id)) continue;
     ids.add(id);
-    const external = (a.get("TargetMode") ?? "").toLowerCase() === "external";
+    const external = (a.get("TargetMode") ?? "").toLowerCase() === "external"; // yerel-ayar: ascii
     out.push({ id, type, target, external, part: external ? null : resolveTarget(source, target) });
   }
   return out;
@@ -341,7 +341,7 @@ export class RelsGraph {
 
   /** Kaynak parçanın ilişkileri ("" = paket kökü). .rels yoksa ya da bozuksa boş liste. */
   rels(source: string): Promise<Relationship[]> {
-    const key = source.toLowerCase();
+    const key = source.toLowerCase(); // yerel-ayar: ascii
     let p = this.cache.get(key);
     if (!p) {
       p = this.pkg.textLimited(relsPathOf(source), OPC_LIMITS.maxRelsSize).then(
@@ -403,7 +403,7 @@ export class OpcPackage {
     this.bytes = bytes;
     this.entries = entries;
     this.skippedEntries = skipped;
-    for (const e of entries) this.byName.set(e.name.toLowerCase(), e);
+    for (const e of entries) this.byName.set(e.name.toLowerCase(), e); // yerel-ayar: ascii
     this.maxPartSize = maxPartSize;
     this.graph = new RelsGraph(this);
   }
@@ -436,7 +436,7 @@ export class OpcPackage {
 
   /** [Content_Types].xml var mı (OOXML paketi mi)? */
   get isOpc(): boolean {
-    return this.byName.has(CONTENT_TYPES_PART.toLowerCase());
+    return this.byName.has(CONTENT_TYPES_PART.toLowerCase()); // yerel-ayar: ascii
   }
 
   /** Parça adları (arşiv sırasıyla, [Content_Types].xml ve .rels dahil). */
@@ -445,16 +445,16 @@ export class OpcPackage {
   }
 
   has(name: string): boolean {
-    return this.byName.has(name.toLowerCase());
+    return this.byName.has(name.toLowerCase()); // yerel-ayar: ascii
   }
 
   entry(name: string): ZipEntry | undefined {
-    return this.byName.get(name.toLowerCase());
+    return this.byName.get(name.toLowerCase()); // yerel-ayar: ascii
   }
 
   /** Büyük/küçük harf duyarsız adın paketteki yazımı. */
   canonicalName(name: string): string | undefined {
-    return this.byName.get(name.toLowerCase())?.name;
+    return this.byName.get(name.toLowerCase())?.name; // yerel-ayar: ascii
   }
 
   contentType(name: string): string | undefined {
@@ -490,7 +490,7 @@ export class OpcPackage {
 
   /** Parça XML'inde geçen ilişki kimlikleri (önbellekli). Parça yoksa boş küme; okunamazsa OpcError. */
   explicitRelIds(part: string): Promise<Set<string>> {
-    const key = part.toLowerCase();
+    const key = part.toLowerCase(); // yerel-ayar: ascii
     let p = this.explicitCache.get(key);
     if (!p) {
       p = this.text(part).then((x) => (x ? explicitRelIds(x) : new Set<string>()));

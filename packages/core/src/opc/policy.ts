@@ -165,14 +165,14 @@ const MACRO_CT: [string, string][] = [
 
 /** Ana parça içerik türünün makrolu karşılığı (zaten makroluysa ya da bilinmiyorsa aynısı). */
 export function macroContentType(ct: string): string {
-  const k = ct.trim().toLowerCase();
+  const k = ct.trim().toLowerCase(); // yerel-ayar: ascii
   return MACRO_CT.find(([plain]) => plain === k)?.[1] ?? ct;
 }
 
 /** Ana parça içerik türünün makrosuz karşılığı. */
 export function plainContentType(ct: string): string {
-  const k = ct.trim().toLowerCase();
-  return MACRO_CT.find(([, macro]) => macro.toLowerCase() === k)?.[0] ?? ct;
+  const k = ct.trim().toLowerCase(); // yerel-ayar: ascii
+  return MACRO_CT.find(([, macro]) => macro.toLowerCase() === k)?.[0] ?? ct; // yerel-ayar: ascii
 }
 
 /** İçerik türü makrolu bir ana parça mı? */
