@@ -14,6 +14,7 @@ import { Check, OkCancel, Radio, SimpleDialog, fmtTr, parseTrNumber } from "./co
 import type { PasteOptions } from "../model/clipboard";
 import { getUserName } from "@officehere/ui";
 import { sizeSelection } from "../actions/format";
+import { resizeTable } from "../actions/tableAuto";
 
 type P = { ctl: Controller; onClose: () => void; arg?: unknown };
 
@@ -401,6 +402,36 @@ export function CreateTableDialog({ ctl, onClose, arg }: P) {
       <Check checked={header} onChange={setHeader}>
         Tablomda üst bilgi var
       </Check>
+    </SimpleDialog>
+  );
+}
+
+/** Tablo Tasarımı › Tabloyu Yeniden Boyutlandır: tablonun yeni aralığı. */
+export function ResizeTableDialog({ ctl, onClose, arg }: P) {
+  const id = (arg as { tableId?: string } | undefined)?.tableId;
+  const table = ctl.sheet.tables.find((t) => t.id === id) ?? ctl.sheet.tableAt(ctl.sel.active.row, ctl.sel.active.col);
+  const [ref, setRef] = useState(() => (table ? "=" + rectToA1(table.ref).replace(/([A-Z]+)(\d+)/g, "$$$1$$$2") : ""));
+  if (!table) return null;
+  const ok = () => {
+    const r = parseRangeLoose(ref.replace(/^=/, "").replace(/^.*!/, ""));
+    if (!r) {
+      ctl.alert("Başvuru geçerli değil.");
+      return;
+    }
+    const err = resizeTable(ctl, table, r);
+    if (err) {
+      ctl.alert(err, "Tabloyu Yeniden Boyutlandır");
+      return;
+    }
+    ctl.emit();
+    onClose();
+  };
+  return (
+    <SimpleDialog title="Tabloyu Yeniden Boyutlandır" onClose={onClose} onOk={ok} width={340}>
+      <Field label="Tablonuz için yeni veri aralığını seçin:">
+        <input type="text" value={ref} onChange={(e) => setRef(e.target.value)} data-autofocus="true" aria-label="Yeni tablo aralığı" />
+      </Field>
+      <p className="tb-dlg-note">Not: Üst bilgiler aynı satırda kalmalı ve yeni tablo aralığı özgün tablo aralığıyla örtüşmelidir.</p>
     </SimpleDialog>
   );
 }

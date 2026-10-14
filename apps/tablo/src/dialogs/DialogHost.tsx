@@ -192,6 +192,8 @@ function OneDialog({ ctl, state, onClose, files, onBackstage }: { ctl: Controlle
       return <M.ZoomDialog {...p} />;
     case "createTable":
       return <M.CreateTableDialog {...p} />;
+    case "resizeTable":
+      return <M.ResizeTableDialog {...p} />;
     case "chartType":
       return <ChartTypeDialog {...p} />;
     case "chartData":

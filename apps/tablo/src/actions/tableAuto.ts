@@ -9,7 +9,8 @@
 import { cellKey, qualifyStructRefs, shiftFormula } from "@officehere/formula";
 import type { Controller } from "../controller";
 import { displayText } from "../model/display";
-import type { TableDef } from "../model/types";
+import { intersects } from "../model/rect";
+import type { Rect, TableDef } from "../model/types";
 import type { SheetModel } from "../model/workbook";
 
 function dataRows(t: TableDef): [number, number] {
@@ -52,6 +53,113 @@ function columnName(t: TableDef, wanted: string): string {
   while (taken(`${stem}${k}`)) k++;
   base = `${stem}${k}`;
   return base;
+}
+
+/**
+ * Tabloyu `next` aralığına getirir (değişiklik işleminin içinde çağrılır). Yeni sütunlar başlık
+ * hücresinden ad alır; yeni satırlarda boş hücrelere hesaplanmış sütun formülleri sürer ve
+ * (`inheritStyle` ise) son veri satırının biçimi gelir; doğrulama ve koşullu biçim kuralları büyür.
+ */
+function applyResize(ctl: Controller, sheet: SheetModel, cur: TableDef, next: Rect, inheritStyle: boolean): void {
+  const { wb } = ctl;
+  const old = cur.ref;
+  const [d1] = dataRows(cur);
+  // Sütunlar: eski aralıktakiler adını korur, yeniler başlık hücresinden ad alır
+  if (next.c1 !== old.c1 || next.c2 !== old.c2) {
+    const columns: string[] = [];
+    for (let c = next.c1; c <= next.c2; c++) {
+      if (c >= old.c1 && c <= old.c2) {
+        columns.push(cur.columns[c - old.c1]);
+        continue;
+      }
+      const text = cur.headerRow ? displayText(wb, sheet, next.r1, c) : "";
+      const name = columnName({ ...cur, columns: [...columns, ...cur.columns.slice(Math.max(0, c - old.c1))] }, text);
+      if (cur.headerRow && text !== name) wb.setInputRaw(sheet, next.r1, c, name);
+      columns.push(name);
+    }
+    if (cur.filter) {
+      const shift = old.c1 - next.c1;
+      const crit: typeof cur.filter.columns = {};
+      for (const [k, v] of Object.entries(cur.filter.columns)) {
+        const i = Number(k) + shift;
+        if (i >= 0 && i < columns.length) crit[i] = v;
+      }
+      cur.filter.columns = crit;
+    }
+    cur.columns = columns;
+  }
+  cur.ref = { ...next };
+  syncFilter(cur);
+  if (next.r2 <= old.r2) return;
+  growRulesDown(sheet, { ...cur, ref: old }, old.r2, next.r2);
+  const last = old.r2;
+  for (let c = Math.max(next.c1, old.c1); c <= Math.min(next.c2, old.c2); c++) {
+    const f = last >= d1 ? calculatedFormula(ctl, sheet, { ...cur, ref: old }, c, last) : null;
+    const st = inheritStyle && last >= d1 ? sheet.styles.get(cellKey(last, c)) : undefined;
+    for (let r = last + 1; r <= next.r2; r++) {
+      if (f && !wb.engine.hasInput(sheet.id, r, c)) wb.setInputRaw(sheet, r, c, { formula: shiftFormula(f, r - last, 0) });
+      if (st !== undefined && !sheet.styles.has(cellKey(r, c))) wb.setStyleRaw(sheet, r, c, st);
+    }
+  }
+}
+
+/** Boyutlandırmada yeni katılan alan (geri alma için hücre görüntüsü alınır). */
+function addedArea(old: Rect, next: Rect): Rect[] {
+  const out: Rect[] = [];
+  if (next.r2 > old.r2) out.push({ r1: old.r2 + 1, c1: next.c1, r2: next.r2, c2: next.c2 });
+  if (next.c2 > old.c2) out.push({ r1: next.r1, c1: old.c2 + 1, r2: Math.min(next.r2, old.r2), c2: next.c2 });
+  if (next.c1 < old.c1) out.push({ r1: next.r1, c1: next.c1, r2: Math.min(next.r2, old.r2), c2: old.c1 - 1 });
+  return out;
+}
+
+/**
+ * Tabloyu Yeniden Boyutlandır (Tablo Tasarımı › Özellikler ve tablonun köşe tutamacı). Başlık
+ * satırı aynı satırda kalmalı, yeni aralık eskisiyle örtüşmeli ve başka bir tabloyla ya da
+ * birleştirilmiş hücreyle çakışmamalı. Yapılamıyorsa nedeni döner.
+ */
+export function resizeTable(ctl: Controller, t: TableDef, next: Rect): string | null {
+  const sheet = ctl.sheet;
+  if (next.r1 !== t.ref.r1) return "Üst bilgiler aynı satırda kalmalı ve yeni tablo aralığı özgün tablo aralığıyla örtüşmelidir.";
+  if (next.r2 < t.ref.r1 + (t.headerRow ? 1 : 0) + (t.totalRow ? 1 : 0)) return "Tabloda üst bilgi satırının altında en az bir satır olmalıdır.";
+  if (next.c2 < t.ref.c1 || next.c1 > t.ref.c2 || next.c2 < next.c1) return "Üst bilgiler aynı satırda kalmalı ve yeni tablo aralığı özgün tablo aralığıyla örtüşmelidir.";
+  if (t.totalRow && next.r2 !== t.ref.r2) return "Toplam satırı olan bir tablonun satır sayısını değiştirmek için önce Toplam Satırı seçeneğini kapatın.";
+  if (sheet.tables.some((o) => o.id !== t.id && intersects(o.ref, next))) return "Tablolar başka bir tabloyla çakışamaz.";
+  const added = addedArea(t.ref, next);
+  if (added.some((a) => sheet.mergesIn(a).length > 0)) return "Tablo birleştirilmiş hücreleri içeremez.";
+  if (next.r1 === t.ref.r1 && next.c1 === t.ref.c1 && next.r2 === t.ref.r2 && next.c2 === t.ref.c2) return null;
+  ctl.ops.sheetOp(
+    sheet,
+    "Tabloyu Yeniden Boyutlandır",
+    () => applyResize(ctl, sheet, sheet.tables.find((x) => x.id === t.id)!, next, true),
+    added,
+  );
+  ctl.wb.syncTables();
+  return null;
+}
+
+/**
+ * Yapıştırılan ya da doldurulan aralık tablonun hemen altına (ya da sağına) taşıyorsa tablo
+ * o aralığı kapsayacak kadar büyür ("Tabloya yeni satır ve sütunlar ekle"). Toplam satırı olan
+ * tablolar büyümez. Çağıran, işlemi önceki adımla tek geri alma adımında birleştirir.
+ */
+export function expandTablesForRange(ctl: Controller, sheet: SheetModel, dst: Rect): boolean {
+  let changed = false;
+  for (const t of [...sheet.tables]) {
+    if (t.totalRow) continue;
+    const cols = dst.c1 <= t.ref.c2 && dst.c2 >= t.ref.c1;
+    const rows = dst.r1 <= t.ref.r2 && dst.r2 >= t.ref.r1;
+    const down = cols && dst.r2 > t.ref.r2 && dst.r1 <= t.ref.r2 + 1 && dst.r1 >= t.ref.r1;
+    const right = rows && dst.c2 > t.ref.c2 && dst.c1 <= t.ref.c2 + 1 && dst.c1 >= t.ref.c1 && dst.r1 >= t.ref.r1 && dst.r2 <= t.ref.r2;
+    if (!down && !right) continue;
+    const next: Rect = { ...t.ref, r2: down ? dst.r2 : t.ref.r2, c2: right ? dst.c2 : t.ref.c2 };
+    if (sheet.tables.some((o) => o.id !== t.id && intersects(o.ref, next))) continue;
+    const added = addedArea(t.ref, next);
+    if (added.some((a) => sheet.mergesIn(a).length > 0)) continue;
+    ctl.ops.sheetOp(sheet, "Yazma", () => applyResize(ctl, sheet, sheet.tables.find((x) => x.id === t.id)!, next, false), added);
+    changed = true;
+  }
+  if (changed) ctl.wb.syncTables();
+  return changed;
 }
 
 /** Yazma sonrası tablo davranışları; değişiklik yaptıysa true. Tek geri alma adımına katılır. */

@@ -14,6 +14,7 @@ import { widthPxToChars, pxToPt, type AxisSizes } from "../model/axis";
 import { CellEditor } from "./CellEditor";
 import { handleGridKey } from "./keys";
 import { toggleCheckboxAt } from "../actions/checkbox";
+import { resizeTable } from "../actions/tableAuto";
 import { GridOverlays } from "./GridOverlays";
 import { sizeSelection } from "../actions/format";
 import { handleOutlineClick } from "../actions/outline";
@@ -35,6 +36,7 @@ type Drag =
   | { kind: "colresize"; col: number; startX: number; startW: number; saved: AxisSizes }
   | { kind: "rowresize"; row: number; startY: number; startH: number; saved: AxisSizes }
   | { kind: "fill"; src: Rect; target: Rect | null }
+  | { kind: "tableResize"; id: string; target: Rect | null }
   | { kind: "point"; anchor: CellPos; sheetId: number }
   | { kind: "move"; src: Rect; grab: CellPos; target: Rect | null; copy: boolean }
   | { kind: "pagebreak"; pb: PageBreakDrag }
@@ -117,7 +119,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         showSelection: !(e && e.pointSpan && e.sheetId !== sheet.id),
         refs,
         clip: ctl.clip && ctl.clip.sheetId === sheet.id ? { rect: ctl.clip.rect, cut: ctl.clip.cut, offset: march.current } : null,
-        fillPreview: drag.current?.kind === "fill" ? drag.current.target : null,
+        fillPreview: drag.current?.kind === "fill" || drag.current?.kind === "tableResize" ? drag.current.target : null,
         movePreview: drag.current?.kind === "move" ? drag.current.target : null,
         editing: e && e.sheetId === sheet.id ? { row: e.row, col: e.col } : null,
         filterButtons,
@@ -323,6 +325,10 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
           drag.current = { kind: "fill", src: { ...ctl.range }, target: null };
           return;
         }
+        if (hit.tableHandle) {
+          drag.current = { kind: "tableResize", id: hit.tableHandle, target: null };
+          return;
+        }
         if (hit.selBorder) {
           drag.current = { kind: "move", src: { ...ctl.range }, grab: { row: hit.row, col: hit.col }, target: null, copy: add };
           return;
@@ -424,6 +430,16 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
         draw();
         return;
       }
+      case "tableResize": {
+        const t = sheet.tables.find((x) => x.id === d.id);
+        if (!t) return;
+        const p = cellAt(x, y);
+        const minRow = t.ref.r1 + (t.headerRow ? 1 : 0) + (t.totalRow ? 1 : 0);
+        d.target = rect(t.ref.r1, t.ref.c1, t.totalRow ? t.ref.r2 : Math.max(p.row, minRow), Math.max(p.col, t.ref.c1));
+        setTip({ x: x + 14, y: y + 14, text: `${rectRows(d.target)} satır × ${rectCols(d.target)} sütun` });
+        draw();
+        return;
+      }
       case "move": {
         const p = cellAt(x, y);
         const dr = p.row - d.grab.row;
@@ -466,7 +482,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
       const L = layoutRef.current!;
       const out = x < L.cellsX || x > L.width || y < L.cellsY || y > L.height;
       const k = drag.current.kind;
-      if (out && (k === "select" || k === "fill" || k === "move" || k === "point" || k === "colsel" || k === "rowsel")) {
+      if (out && (k === "select" || k === "fill" || k === "tableResize" || k === "move" || k === "point" || k === "colsel" || k === "rowsel")) {
         if (autoScroll.current === null) {
           autoScroll.current = window.setInterval(() => {
             const lp = lastPointer.current;
@@ -566,13 +582,24 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
             ctl.ops.clear(sheet, [clearR], "contents");
           } else {
             const mode = e.ctrlKey ? "alt" : "series";
-            ctl.ops.fill(sheet, d.src, d.target, mode);
+            E.fillAndGrow(ctl, sheet, d.src, d.target, mode);
             // Otomatik Doldurma Seçenekleri düğmesi hedefin sağ altında belirir
             ctl.fillOptions = { sheetId: sheet.id, src: { ...d.src }, target: { ...d.target }, mode, undo: ctl.ops.history.undoCount };
           }
           ctl.selectRange(d.target, ctl.sel.active);
         }
         break;
+      case "tableResize": {
+        setTip(null);
+        const t = sheet.tables.find((x) => x.id === d.id);
+        if (t && d.target) {
+          const err = resizeTable(ctl, t, d.target);
+          if (err) ctl.alert(err, "Tabloyu Yeniden Boyutlandır");
+          ctl.emit();
+        }
+        draw();
+        break;
+      }
       case "pagebreak":
         pageBreakDrop(ctl, d.pb);
         draw();

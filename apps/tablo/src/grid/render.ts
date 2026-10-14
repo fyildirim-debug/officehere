@@ -17,6 +17,7 @@ import { drawArrows, drawErrorTriangles } from "./renderAudit";
 import { drawIcon } from "./icons";
 import { drawOutline } from "./renderOutline";
 import { drawSparkGroupOutline, drawSparklines } from "./renderSpark";
+import { presetOf } from "../model/tablestyles";
 import type { TraceArrow } from "../actions/audit";
 
 export { cellFont, measureText, wrapLines } from "./renderCell";
@@ -504,6 +505,21 @@ function drawOverlays(ctx: CanvasRenderingContext2D, st: RenderState, q: Quadran
       ctx.strokeRect(snap(vr.x, dpr), snap(vr.y, dpr), snap(vr.w, dpr) - px, snap(vr.h, dpr) - px);
       ctx.setLineDash([]);
     }
+  }
+  // Tablonun sağ alt köşesindeki boyutlandırma tutamacı (sürükleyerek tablo büyür/küçülür)
+  for (const t of st.sheet.tables) {
+    const vr = visibleRect(st, q, { r1: t.ref.r2, c1: t.ref.c2, r2: t.ref.r2, c2: t.ref.c2 });
+    if (!vr) continue;
+    const s = Math.max(5, Math.round(6 * L.z));
+    const x = snap(vr.x + vr.w, dpr) - px;
+    const y = snap(vr.y + vr.h, dpr) - px;
+    ctx.fillStyle = presetOf(t.style).color === "#000000" ? (st.dark ? "#C8C8C8" : "#5F5F5F") : presetOf(t.style).color;
+    ctx.beginPath();
+    ctx.moveTo(x, y - s);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x - s, y);
+    ctx.closePath();
+    ctx.fill();
   }
   for (const pr of [st.fillPreview, st.movePreview]) {
     if (!pr) continue;

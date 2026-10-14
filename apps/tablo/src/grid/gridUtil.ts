@@ -16,6 +16,8 @@ export interface Hit {
   colBorder?: number;
   rowBorder?: number;
   fillHandle?: boolean;
+  /** Tablonun sağ alt köşesindeki boyutlandırma tutamacı (tablo kimliği). */
+  tableHandle?: string;
   selBorder?: boolean;
   filterButton?: boolean;
 }
@@ -27,6 +29,7 @@ export function cursorFor(hit: Hit, sheet: SheetModel): string {
   if (hit.area === "rowHeader") return hit.rowBorder !== undefined ? "row-resize" : "e-resize";
   if (hit.area === "corner") return "se-resize";
   if (hit.fillHandle) return "crosshair";
+  if (hit.tableHandle) return "nwse-resize";
   if (hit.selBorder) return "move";
   if (hit.filterButton) return "default";
   return hit.area === "cell" && sheet.linkAt(hit.row, hit.col) ? "pointer" : "cell";
@@ -79,6 +82,18 @@ export function hitTestGrid(L: GridLayout, ctl: Controller, sheet: SheetModel, x
     const onH = (Math.abs(y - lr.y) <= 3 || Math.abs(y - (lr.y + lr.h)) <= 3) && x >= lr.x - 3 && x <= lr.x + lr.w + 3;
     if ((onV || onH) && last.r2 < MAX_ROWS - 1 && last.c2 < MAX_COLS - 1) hit.selBorder = true;
   }
+  // Tablo boyutlandırma tutamacı (doldurma tutamacı öncelikli)
+  if (!hit.fillHandle && !ctl.edit)
+    for (const t of sheet.tables) {
+      const tr = L.cellRect(t.ref.r2, t.ref.c2);
+      const cx = tr.x + tr.w;
+      const cy = tr.y + tr.h;
+      if (x <= cx + 1 && x >= cx - 7 * z && y <= cy + 1 && y >= cy - 7 * z) {
+        hit.tableHandle = t.id;
+        hit.selBorder = false;
+        break;
+      }
+    }
   // Filtre düğmesi
   if (filterAt(sheet, row, col) || (sheet.pivots.length && sheet.pivots.some((p) => p.buttons?.some((b) => b.row === row && b.col === col)))) {
     const rc = L.cellRect(row, col);

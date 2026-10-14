@@ -28,6 +28,7 @@ type Api = {
   sparklines(sheet?: string): { type: string; cells: string[] }[];
   isRowHidden(row: number, sheet?: string): boolean;
   undoCount(): number;
+  tables(sheet?: string): { name: string; ref: string; columns: string[] }[];
 };
 
 declare global {
@@ -512,6 +513,64 @@ test.describe("OfficeHere Tablo 3. tur", () => {
     expect((await cell(page, "D4"))!.value).toBe(100);
     await enter(page, "F1", "=TOPLA(Tablo1[Tutar])");
     expect(await cell(page, "F1")).toMatchObject({ value: 245, formula: "=SUM(Tablo1[Tutar])", edit: "=TOPLA(Tablo1[Tutar])" });
+  });
+
+  test("tablo alta yapıştırma, doldurma tutamacı, köşe tutamacı ve Tabloyu Yeniden Boyutlandır ile büyür", async ({ page }) => {
+    await open(page);
+    await fillData(page, [["Ad", "Adet"], ["Çay", "3"], ["Un", "5"]]);
+    await clickCell(page, "A1");
+    await tab(page, "Ekle").click();
+    await ribbon(page, "Tablo").click();
+    await page.getByRole("dialog", { name: "Tablo Oluştur" }).getByRole("button", { name: "Tamam" }).click();
+    const tableRef = async () => (await page.evaluate(() => window.__ohTablo!.tables()))[0].ref;
+    expect(await tableRef()).toBe("A1:B3");
+    // Alta yapıştırma: tablo yapıştırılan satırı kapsar
+    const box = page.getByRole("textbox", { name: "Ad Kutusu" });
+    await box.fill("A2:B2");
+    await box.press("Enter");
+    await page.keyboard.press("Control+c");
+    await clickCell(page, "A4");
+    await page.keyboard.press("Control+v");
+    await expect.poll(tableRef).toBe("A1:B4");
+    // Doldurma tutamacıyla aşağı çekme
+    await box.fill("A4:B4");
+    await box.press("Enter");
+    const from = (await page.evaluate(() => window.__ohTablo!.cellRect("B4")))!;
+    const to = (await page.evaluate(() => window.__ohTablo!.cellRect("B6")))!;
+    await page.mouse.move(from.x + from.w - 1, from.y + from.h - 1);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.w - 2, to.y + to.h - 2, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(tableRef).toBe("A1:B6");
+    expect((await cell(page, "A6"))!.value).toBe("Çay");
+    // Tek geri alma: doldurma ve genişleme birlikte geri alınır
+    await page.keyboard.press("Control+z");
+    await expect.poll(tableRef).toBe("A1:B4");
+    expect((await cell(page, "A6"))!.value).toBeNull();
+    // Köşe tutamacını sürükleme (seçim tablonun dışında)
+    await clickCell(page, "E10");
+    const corner = (await page.evaluate(() => window.__ohTablo!.cellRect("B4")))!;
+    const dest = (await page.evaluate(() => window.__ohTablo!.cellRect("B8")))!;
+    await page.mouse.move(corner.x + corner.w - 2, corner.y + corner.h - 2);
+    await page.mouse.down();
+    await page.mouse.move(dest.x + dest.w / 2, dest.y + dest.h / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(tableRef).toBe("A1:B8");
+    // Tablo Tasarımı › Tabloyu Yeniden Boyutlandır
+    await clickCell(page, "A2");
+    await tab(page, "Tablo Tasarımı").click();
+    await ribbon(page, "Tabloyu Yeniden Boyutlandır").click();
+    const dlg = page.getByRole("dialog", { name: "Tabloyu Yeniden Boyutlandır" });
+    await dlg.getByLabel("Yeni tablo aralığı").fill("=$A$1:$C$10");
+    await dlg.getByRole("button", { name: "Tamam" }).click();
+    await expect.poll(tableRef).toBe("A1:C10");
+    expect((await page.evaluate(() => window.__ohTablo!.tables()))[0].columns).toEqual(["Ad", "Adet", "Sütun3"]);
+    // Başlık satırı değişemez
+    await ribbon(page, "Tabloyu Yeniden Boyutlandır").click();
+    await dlg.getByLabel("Yeni tablo aralığı").fill("=$A$2:$C$10");
+    await dlg.getByRole("button", { name: "Tamam" }).click();
+    await expect(page.getByRole("dialog").filter({ hasText: "aynı satırda kalmalı" }).filter({ hasNotText: "yeni veri aralığını seçin" })).toBeVisible();
+    expect(await tableRef()).toBe("A1:C10");
   });
 
   test("F4 son biçim işlemini yineler", async ({ page }) => {

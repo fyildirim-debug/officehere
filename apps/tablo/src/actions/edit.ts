@@ -6,6 +6,10 @@ import { buildClipboard, clipIdFromHtml, getInternalClipboard, pastePayload, pas
 import { MAX_COLS, MAX_ROWS, isFullCols, isFullRows, rect, rectCols, rectRows } from "../model/rect";
 import { currentRegion, guessSumRange } from "../model/selection";
 import { applyWiden } from "../grid/autofit";
+import { expandTablesForRange } from "./tableAuto";
+import type { FillMode } from "../model/ops";
+import type { SheetModel } from "../model/workbook";
+import type { Rect } from "../model/types";
 
 /* ------------------------------ Pano ------------------------------ */
 
@@ -53,6 +57,8 @@ export function pasteData(ctl: Controller, text: string, html: string | undefine
     dst = pasteText(ctl.ops, ctl.sheet, target, text, html);
   }
   if (dst) {
+    // Tablonun hemen altına/sağına yapıştırılan veri tabloyu büyütür
+    if (expandTablesForRange(ctl, ctl.sheet, dst)) ctl.ops.history.squash(mark, "Yapıştır");
     // Yapıştırılan biçimli sayı/tarih sığmıyorsa sütun genişler
     applyWiden(ctl, [dst], "Yapıştır", mark);
     ctl.selectRange(dst, ctl.sel.active.row >= dst.r1 && ctl.sel.active.row <= dst.r2 ? ctl.sel.active : undefined);
@@ -277,4 +283,11 @@ export function copyFromAbove(ctl: Controller, valueOnly: boolean): void {
   const text = valueOnly ? displayText(ctl.wb, ctl.sheet, row - 1, col) : ctl.wb.editText(ctl.sheet, row - 1, col);
   ctl.startEdit(text);
   if (ctl.edit) ctl.setEditMode("edit");
+}
+
+/** Doldurma tutamacı: doldurur; hedef tablonun altına taşıyorsa tablo da büyür (tek geri alma adımı). */
+export function fillAndGrow(ctl: Controller, sheet: SheetModel, src: Rect, dst: Rect, mode: FillMode): void {
+  const mark = ctl.ops.history.mark();
+  ctl.ops.fill(sheet, src, dst, mode);
+  if (expandTablesForRange(ctl, sheet, dst)) ctl.ops.history.squash(mark, "Otomatik Doldurma");
 }

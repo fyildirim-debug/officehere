@@ -1,6 +1,6 @@
 /** Bağlamsal Tablo Tasarımı sekmesi: Özellikler, Araçlar, Tablo Stili Seçenekleri, Tablo Stilleri. */
 import { useEffect, useRef, useState } from "react";
-import { Filter20Regular, TableDismiss20Regular, TableSettings24Regular, ArrowSync20Regular, Table24Regular } from "@fluentui/react-icons";
+import { Filter20Regular, TableDismiss20Regular, TableSettings24Regular, ArrowSync20Regular, Table24Regular, TableResizeRow20Regular } from "@fluentui/react-icons";
 import { RibbonButton, RibbonCheckbox, RibbonGallery, RibbonGroup, RibbonLabel, RibbonStack } from "@officehere/ui";
 import type { Controller } from "../controller";
 import * as D from "../actions/data";
@@ -61,6 +61,7 @@ export function TableDesignTab({ ctl, table }: { ctl: Controller; table: TableDe
             }}
             aria-label="Tablo Adı"
           />
+          <RibbonButton icon={<TableResizeRow20Regular />} label="Tabloyu Yeniden Boyutlandır" description="Satır ya da sütun ekleyip çıkararak tablonun aralığını değiştirir." onClick={() => ctl.openDialog("resizeTable", { tableId: table.id })} />
         </RibbonStack>
       </RibbonGroup>
       <RibbonGroup label="Araçlar" icon={<TableDismiss20Regular />}>

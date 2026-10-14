@@ -10,6 +10,7 @@ import type { Controller } from "../controller";
 import type { FillMode } from "../model/ops";
 import type { Rect } from "../model/types";
 import { flashFill } from "../actions/whatIf";
+import { fillAndGrow } from "../actions/edit";
 import type { GridLayout } from "./layout";
 
 type Option = { mode: FillMode | "flash"; label: string };
@@ -61,7 +62,7 @@ export function refill(ctl: Controller, mode: FillMode | "flash"): void {
     ctl.emit();
     return;
   }
-  ctl.ops.fill(sheet, fo.src, fo.target, mode);
+  fillAndGrow(ctl, sheet, fo.src, fo.target, mode);
   ctl.fillOptions = { ...fo, mode, undo: ctl.ops.history.undoCount };
   ctl.selectRange(fo.target, ctl.sel.active);
 }
