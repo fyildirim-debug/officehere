@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      gorsel_temel:
+        description: "Yalnız görsel regresyon temellerini üret (gorsel-temel artefaktı; diğer işler atlanır)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -12,6 +19,8 @@ concurrency:
 jobs:
   denetim:
     name: Tip denetimi, test, derleme, uçtan uca
+    # Elle tetiklemede yalnız görsel temeller isteniyorsa atlanır (aşağıda gorsel işi).
+    if: ${{ !inputs.gorsel_temel }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +57,8 @@ jobs:
   # Ana işi yavaşlatmasın diye ayrı ve paralel koşar; ölçüm araçları testleri yavaşlattığı için zaman aşımı uzun.
   kapsam:
     name: Test kapsamı (rapor)
+    # Elle tetiklemede yalnız görsel temeller isteniyorsa atlanır (aşağıda gorsel işi).
+    if: ${{ !inputs.gorsel_temel }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,6 +83,8 @@ jobs:
 
   masaustu:
     name: Masaüstü (Electron) uçtan uca
+    # Elle tetiklemede yalnız görsel temeller isteniyorsa atlanır (aşağıda gorsel işi).
+    if: ${{ !inputs.gorsel_temel }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,3 +99,70 @@ jobs:
       - run: pnpm --filter @officehere/desktop build:electron
       - run: pnpm exec playwright install --with-deps chromium
       - run: xvfb-run -a pnpm e2e:masaustu
+
+  # Görsel regresyon (e2e/gorsel, playwright.gorsel.config.ts). Temel görüntüler (e2e/gorsel/__ekran__/linux/)
+  # yalnız bu imajda ve sürümü sabit yazı tipleriyle üretilir; yerelde aynısı: pnpm gorsel (Docker).
+  # Kip: temel yoksa, elle tetiklemede "gorsel_temel" seçiliyse ya da PR'da "gorsel-degisti" etiketi varsa
+  # görüntüler üretilir (iş kırmızıya düşmez) ve "gorsel-temel" artefaktına yüklenir; içindeki PNG'ler
+  # e2e/gorsel/__ekran__/linux/ altına commit'lenir. Aksi halde karşılaştırılır; fark varsa iş başarısız olur
+  # ve fark görüntüleri "gorsel-fark" artefaktındadır. Ayrıntı: e2e/gorsel/__ekran__/README.md
+  gorsel:
+    name: Görsel regresyon
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      options: --ipc=host
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      OH_GORSEL_KONTEYNER: "1"
+    steps:
+      - uses: actions/checkout@v4
+      # e2e/gorsel/calistir.mjs'teki YAZI_TIPLERI ile aynı tutun (noble, Release cebi; sürüm sabit).
+      - name: Yazı tipleri
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends \
+            fonts-crosextra-carlito=20230309-2 fonts-crosextra-caladea=20200211-2 \
+            fonts-liberation=1:2.1.5-3 fonts-dejavu-core=2.37-8
+          fc-cache -f
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Kip (karşılaştır / üret)
+        id: kip
+        env:
+          ELLE: ${{ inputs.gorsel_temel && 'true' || 'false' }}
+          ETIKET: ${{ contains(github.event.pull_request.labels.*.name, 'gorsel-degisti') && 'true' || 'false' }}
+        run: |
+          adet=0
+          if [ -d e2e/gorsel/__ekran__/linux ]; then adet=$(find e2e/gorsel/__ekran__/linux -name '*.png' | wc -l); fi
+          if [ "$ELLE" = "true" ]; then kip=uret; arg="--guncelle --hepsi"; neden="elle tetikleme (gorsel_temel)"
+          elif [ "$adet" -eq 0 ]; then kip=uret; arg="--guncelle --hepsi"; neden="depoda temel görüntü yok"
+          elif [ "$ETIKET" = "true" ]; then kip=uret; arg="--guncelle"; neden="PR etiketi gorsel-degisti"
+          else kip=karsilastir; arg=""; neden="$adet temel görüntü"; fi
+          echo "kip=$kip" >> "$GITHUB_OUTPUT"
+          echo "arg=$arg" >> "$GITHUB_OUTPUT"
+          echo "Görsel regresyon kipi: $kip ($neden)" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Uygulamaları derle
+        run: pnpm -r --filter ./apps/belge --filter ./apps/tablo --filter ./apps/sunum run build
+      - name: Görsel regresyon (${{ steps.kip.outputs.kip }})
+        run: node e2e/gorsel/calistir.mjs ${{ steps.kip.outputs.arg }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.kip.outputs.kip == 'uret' }}
+        with:
+          name: gorsel-temel
+          path: e2e/gorsel/__ekran__/linux/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: gorsel-fark
+          path: |
+            test-results/gorsel
+            playwright-report/gorsel
+          retention-days: 7

@@ -14,6 +14,8 @@ const apps = [
 
 export default defineConfig({
   testDir: "e2e",
+  // Görsel regresyon ayrı yapılandırmayla, sabit imajda çalışır (playwright.gorsel.config.ts, pnpm gorsel).
+  testIgnore: "gorsel/**",
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,

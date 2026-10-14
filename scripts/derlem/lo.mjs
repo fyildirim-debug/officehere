@@ -3,7 +3,8 @@
 // LibreOffice yoksa uyarıp çıkar (hata değil). Önce `pnpm derlem` çalışmış olmalı (çıktılar ve
 // .derlem/rapor/derlem.json). lo_pdf.py her çıktıyı ve özgününü PDF'e çevirir; bu betik özeti
 // (.derlem/rapor/lo_pdf.md) yazar ve temel çizgiyle karşılaştırır: LibreOffice'in artık açamadığı
-// çıktı ya da özgünden fazla boş sayfa = gerileme (kip "siki"de hata).
+// çıktı ya da özgünden fazla boş sayfa = gerileme (kip "siki"de hata). lo_pdf.py ayrıca özgün ↔ çıktı piksel
+// farkını ölçer (lo_piksel.md bu özete eklenir; temel çizgisine göre gerileme her kipte hata).
 //
 // Kullanım: pnpm derlem:lo [--temelsiz] [--kip siki|baslangic]
 import { spawnSync } from "node:child_process";
@@ -23,7 +24,8 @@ if (!existsSync(join(RAPOR, "derlem.json"))) {
   process.exit(1);
 }
 const r = spawnSync("python3", [join(KOK, "scripts/derlem/lo_pdf.py")], { stdio: "inherit", cwd: KOK });
-if (r.status !== 0) process.exit(r.status ?? 1);
+// 3: piksel farkında temel çizgiye göre gerileme (raporlar yazıldı; özet yine çıkarılır, sonunda hata).
+if (r.status !== 0 && r.status !== 3) process.exit(r.status ?? 1);
 
 const { sureSn, satirlar } = JSON.parse(readFileSync(join(RAPOR, "lo_pdf.json"), "utf8"));
 const L = ["# LibreOffice denetimi (OfficeHere çıktıları → PDF)", "", `${satirlar.length} çıktı · ${sureSn} sn`, ""];
@@ -44,6 +46,9 @@ if (!A.temelsiz) {
   md += "\n" + kmd + "\n";
   if (hataVar) kod = 1;
 }
+// Özgün ↔ çıktı piksel farkı (lo_pdf.py yazar; kendi temel çizgisi scripts/derlem/lo_piksel_temel.json).
+if (existsSync(join(RAPOR, "lo_piksel.md"))) md += "\n" + readFileSync(join(RAPOR, "lo_piksel.md"), "utf8");
+if (r.status === 3) kod = 1;
 writeFileSync(join(RAPOR, "lo_pdf.md"), md);
 console.log(`\nLibreOffice denetimi: ${satirlar.length} çıktı, ${satirlar.filter((s) => s.ohHata).length} açılamadı, ${satirlar.filter((s) => s.bosFazla).length} fazladan boş sayfalı (${sureSn} sn). Rapor: ${join(RAPOR, "lo_pdf.md")}`);
 process.exitCode = kod;
