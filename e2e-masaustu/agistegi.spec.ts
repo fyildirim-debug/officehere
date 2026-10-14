@@ -31,11 +31,15 @@ async function launch(userData: string, env: Record<string, string> = {}): Promi
   return { app, win, netLog };
 }
 
-/** Kaydedilmemiş belge sorusu çıkmadan kapatır; ağ günlüğü süreç çıkarken tamamlanır. */
+/**
+ * Kaydedilmemiş belge sorusu çıkmadan kapatır; ağ günlüğü süreç çıkarken tamamlanır. macOS'ta son
+ * pencere kapanınca uygulama çıkmadığı için ayrıca app.quit() çağrılır (yoksa süreç hiç bitmez).
+ */
 async function close(app: ElectronApplication) {
   const exited = new Promise((r) => app.process().once("exit", r));
-  await app.evaluate(({ BrowserWindow }) => {
+  await app.evaluate(({ app: electronApp, BrowserWindow }) => {
     for (const w of BrowserWindow.getAllWindows()) w.destroy();
+    electronApp.quit();
   });
   await exited;
 }
