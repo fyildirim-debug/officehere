@@ -14,6 +14,9 @@ import { odpTransitionAttrs, transitionTimingXml } from "./transitions";
 import { odpSettingsXml } from "./showSettings";
 import { listStyleXml, textBodyXml } from "./writeText";
 
+/** meta.xml'deki uygulama teması kullanıcı özelliğinin adı. */
+export const THEME_META = "OfficeHere.Tema";
+
 const EXTRA_NS = 'xmlns:loext="urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0" xmlns:drawooo="http://openoffice.org/2010/draw"';
 
 function levelBody(lv: LevelStyle, sh: Shared, list?: string): string {
@@ -24,15 +27,46 @@ function levelBody(lv: LevelStyle, sh: Shared, list?: string): string {
   return g + paraProps(p, true) + textProps(lv.run, sh);
 }
 
-/** Bir ana sayfanın sunu stilleri (başlık, alt başlık, anahat 1–9, notlar). */
-function masterPresStyles(name: string, pres: Presentation, layout: Layout, sh: Shared): string {
+const resolverCache = new WeakMap<Layout, WeakMap<Presentation, ReturnType<typeof buildResolvers>>>();
+
+/**
+ * Bir düzenin (ana sayfanın) başlık, alt başlık ve anahat düzey çözücüleri.
+ * Düzeni kullanan ilk slaytın yer tutucusu temsilci alınır: slayt yer
+ * tutucularının kendi düzey stilleri (ör. ODP'den gelen ana sayfa stilleri) ana
+ * sayfa sunu stillerine yazılır; böylece çalıştırmalara sabitlenmez.
+ */
+function masterResolvers(pres: Presentation, layout: Layout) {
+  let byPres = resolverCache.get(layout);
+  if (!byPres) resolverCache.set(layout, (byPres = new WeakMap()));
+  let r = byPres.get(pres);
+  if (!r) byPres.set(pres, (r = buildResolvers(pres, layout)));
+  return r;
+}
+
+function buildResolvers(pres: Presentation, layout: Layout) {
   const ctx = { master: pres.master, layout };
-  const title = findPlaceholder(layout.shapes, { type: "title" }) ?? findPlaceholder(pres.master.shapes, { type: "title" });
-  const body = layout.shapes.find((s): s is SpShape => s.kind === "sp" && (s.ph?.type === "obj" || s.ph?.type === "body")) ?? findPlaceholder(pres.master.shapes, { type: "body" });
-  const sub = findPlaceholder(layout.shapes, { type: "subTitle" });
+  const slidePh = (pred: (s: SpShape) => boolean): SpShape | undefined => {
+    for (const sl of pres.slides) {
+      if (sl.layoutId !== layout.id) continue;
+      const hit = sl.shapes.find((s): s is SpShape => s.kind === "sp" && !!s.ph && !!s.text && s.text.paragraphs.some((p) => p.runs.some((r) => r.text)) && pred(s));
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  const isTitle = (s: SpShape) => s.ph?.type === "title" || s.ph?.type === "ctrTitle";
+  const isBody = (s: SpShape) => s.ph?.type === "obj" || s.ph?.type === "body";
+  const title = slidePh(isTitle) ?? findPlaceholder(layout.shapes, { type: "title" }) ?? findPlaceholder(pres.master.shapes, { type: "title" });
+  const body = slidePh(isBody) ?? layout.shapes.find((s): s is SpShape => s.kind === "sp" && (s.ph?.type === "obj" || s.ph?.type === "body")) ?? findPlaceholder(pres.master.shapes, { type: "body" });
+  const sub = slidePh((s) => s.ph?.type === "subTitle") ?? findPlaceholder(layout.shapes, { type: "subTitle" });
   const tl = levelResolver(title ?? { ph: { type: "title" } }, ctx, "title");
   const bl = levelResolver(body ?? { ph: { type: "body" } }, ctx, "body");
   const sl = sub ? levelResolver(sub, ctx) : bl;
+  return { tl, bl, sl };
+}
+
+/** Bir ana sayfanın sunu stilleri (başlık, alt başlık, anahat 1–9, notlar). */
+function masterPresStyles(name: string, pres: Presentation, layout: Layout, sh: Shared): string {
+  const { tl, bl, sl } = masterResolvers(pres, layout);
   const style = (suffix: string, inner: string, parent?: string) => `<style:style${odfAttrs({ "style:name": `${name}-${suffix}`, "style:family": "presentation", "style:parent-style-name": parent })}>${inner}</style:style>`;
   const levels = new Map(Array.from({ length: 9 }, (_, k) => {
     const lv = bl(k);
@@ -41,7 +75,19 @@ function masterPresStyles(name: string, pres: Presentation, layout: Layout, sh: 
   const list = `<text:list-style style:name="${name}-outline1">${listStyleXml(levels, sh)}</text:list-style>`;
   let out = style("title", levelBody(tl(0), sh).replace('draw:fill="none">', 'draw:fill="none" draw:textarea-vertical-align="middle">'));
   out += style("subtitle", levelBody({ ...sl(0), para: { ...sl(0).para, bullet: undefined } }, sh).replace('draw:fill="none">', 'draw:fill="none" draw:textarea-vertical-align="middle">'));
-  for (let k = 1; k <= 9; k++) out += style(`outline${k}`, levelBody(bl(k - 1), sh, k === 1 ? list : undefined), k > 1 ? `${name}-outline${k - 1}` : undefined);
+  // Anahat düzeyleri bir öncekinden türer (outline2 → outline1): üst düzeyde açık olup bu düzeyde
+  // olmayan açık/kapalı biçimler (kalın, italik…) kapalı yazılır ki alt düzeylere sızmasın.
+  const NEUTRAL = { bold: false, italic: false, underline: false, strike: false, shadow: false, caps: "none" } as const;
+  for (let k = 1; k <= 9; k++) {
+    const lv = bl(k - 1);
+    const prev = k > 1 ? bl(k - 2).run : {};
+    const run = { ...lv.run };
+    for (const [key, off] of Object.entries(NEUTRAL)) {
+      const rk = key as keyof typeof NEUTRAL;
+      if (run[rk] === undefined && prev[rk] !== undefined && prev[rk] !== off) (run as Record<string, unknown>)[rk] = off;
+    }
+    out += style(`outline${k}`, levelBody({ ...lv, run }, sh, k === 1 ? list : undefined), k > 1 ? `${name}-outline${k - 1}` : undefined);
+  }
   out += style("notes", `<style:graphic-properties draw:stroke="none" draw:fill="none"/>${textProps({ size: 12, font: "+mn" }, sh)}`);
   out += style("background", `<style:graphic-properties draw:stroke="none" draw:fill="none"/>`);
   out += style("backgroundobjects", `<style:graphic-properties draw:shadow="hidden"/>`);
@@ -93,7 +139,10 @@ export async function writeOdp(pres: Presentation): Promise<Uint8Array> {
         ...odpTransitionAttrs(slide.transition),
       })}/>`,
     );
-    const ctx: ShapeWriteCtx = { sh, auto, pres, layout, master: mname, link };
+    const r = masterResolvers(pres, layout);
+    // Yer tutucu metni ana sayfa sunu stillerinden devralır (masterPresStyles ile aynı çözücüler).
+    const phInherited: ShapeWriteCtx["phInherited"] = (cls, level) => (cls === "title" ? r.tl(0).run : cls === "subtitle" ? r.sl(0).run : r.bl(level).run);
+    const ctx: ShapeWriteCtx = { sh, auto, pres, layout, master: mname, link, phInherited };
     let notes = "";
     if (slide.notes.trim()) {
       const body = { paragraphs: slide.notes.split("\n").map((t) => ({ runs: t ? [{ text: t, props: {} }] : [], level: 0, props: {} })) };
@@ -139,6 +188,9 @@ export async function writeOdp(pres: Presentation): Promise<Uint8Array> {
     p.creator ? `<meta:initial-creator>${esc(p.creator)}</meta:initial-creator><dc:creator>${esc(p.creator)}</dc:creator>` : "",
     `<meta:creation-date>${esc((p.created ?? new Date().toISOString()).replace(/\.\d+Z$|Z$/, ""))}</meta:creation-date>`,
     `<dc:date>${now}</dc:date>`,
+    // ODF'de tema yok: renk/yazı tipi teması uygulamaya özgü kullanıcı özelliği olarak saklanır
+    // (yeniden açılınca devralınan renkler temaya bağlı kalsın). Diğer uygulamalar yok sayar.
+    `<meta:user-defined meta:name="${THEME_META}" meta:value-type="string">${esc(JSON.stringify({ name: pres.theme.name, id: pres.theme.id, variant: pres.theme.variant, colors: pres.theme.colors, fonts: pres.theme.fonts }))}</meta:user-defined>`,
   ].join("");
   const meta = `${XML_HEAD}<office:document-meta xmlns:office="${ODF_NS.office}" xmlns:meta="${ODF_NS.meta}" xmlns:dc="${ODF_NS.dc}" office:version="1.3"><office:meta>${metaItems}</office:meta></office:document-meta>`;
 

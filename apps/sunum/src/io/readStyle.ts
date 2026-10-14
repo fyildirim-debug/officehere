@@ -29,6 +29,8 @@ export interface ReadCtx {
   charts?: Map<string, ChartData>;
   /** Tema efekt stilleri (effectStyleLst; effectRef idx-1). */
   effectStyles?: (Effects | undefined)[];
+  /** Başvurulan ama pakette bulunamayan ortam parçaları (açılış uyarısı için). */
+  missingMedia?: Set<string>;
 }
 
 export const DEFAULT_CLRMAP: Record<string, SchemeColorName> = {
@@ -152,7 +154,9 @@ export function mediaFor(rid: string | undefined, ctx: ReadCtx): string | undefi
   if (!rid) return undefined;
   const rel = ctx.rels.get(rid);
   if (!rel || rel.external) return undefined;
-  return ctx.media.get(rel.target);
+  const data = ctx.media.get(rel.target);
+  if (data === undefined) ctx.missingMedia?.add(rel.target);
+  return data;
 }
 
 /** Dolgu öğesi (noFill/solidFill/…); bulunamazsa undefined. */

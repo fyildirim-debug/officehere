@@ -287,6 +287,7 @@ function readPic(el: Element, ctx: ReadCtx): PicShape {
     const embed = descendants(nvPr, "media")[0];
     const rel = ctx.rels.get(relId(embed) ?? "") ?? ctx.rels.get(attr(vf, "link") ?? "");
     const data = rel && !rel.external ? ctx.media.get(rel.target) : undefined;
+    if (rel && !rel.external && data === undefined) ctx.missingMedia?.add(rel.target);
     if (data) {
       media = { kind: vf.localName === "videoFile" ? "video" : "audio", src: data, mime: /^data:([^;,]+)/.exec(data)?.[1] ?? "" };
       const opt = descendants(nvPr, "media").find((m) => m !== embed);

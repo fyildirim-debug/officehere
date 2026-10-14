@@ -3,10 +3,10 @@
  * slayt üretir. Girintisiz satır (ya da Başlık 1) yeni slaydın başlığıdır;
  * sekmeyle/boşlukla girintili satırlar (ya da Başlık 2–6) madde düzeyleridir.
  */
-import JSZip from "jszip";
 import { bodyShape, linesToBody, titleShape } from "./outline";
 import { layoutByType, newSlide } from "./presentation";
 import type { Presentation, Slide } from "./types";
+import { loadIo } from "../io/formats";
 
 export interface OutlineEntry {
   title: string;
@@ -40,6 +40,7 @@ export function parseTextOutline(text: string): OutlineEntry[] {
 
 /** .docx: Başlık 1 → slayt başlığı, Başlık 2..6 → madde düzeyi; diğer paragraflar yok sayılır. */
 export async function parseDocxOutline(data: ArrayBuffer | Uint8Array): Promise<OutlineEntry[]> {
+  const { JSZip } = await loadIo();
   const zip = await JSZip.loadAsync(data);
   const xml = await zip.file("word/document.xml")?.async("string");
   if (!xml) return [];

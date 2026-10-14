@@ -19,7 +19,6 @@ import { useKeyboard } from "./app/keyboard";
 import { insertImageFiles, useClipboard } from "./app/clipboard";
 import { loadPresentation, newFromTemplate, openBytes, openDialog, openFromPath, openRecent, save } from "./app/fileOps";
 import { exportPdfNative, exportPngs, outlineText } from "./app/exporting";
-import { PrintRoot } from "./app/PrintPages";
 import { buildPrintPages, paperSize, type PrintJob } from "./app/printLayout";
 import { masterMenu, objectMenu, sectionMenu, slideAreaMenu, thumbMenu } from "./app/menus";
 import { keyboardMenuTarget, type CanvasMenuKind } from "./editor/contextKind";
@@ -30,12 +29,13 @@ import { StatusArea } from "./app/StatusArea";
 import { FileBackstage } from "./app/FileBackstage";
 import { OutlinePane } from "./panes/OutlinePane";
 import type { DialogKind, RibbonCtx } from "./ribbon/types";
-import { SlideShow } from "./show/SlideShow";
 import { NotesPageView, SorterView } from "./views/SorterView";
 import { DEFAULT_SHOW_SETTINGS, type ShowSettings } from "./show/settings";
 import type { ShowStroke } from "./show/ShowInk";
 import type { RehearsalResult } from "./show/Rehearsal";
-import { AppDialogs, type ExtraDialog } from "./app/AppDialogs";
+import type { ExtraDialog } from "./app/AppDialogs";
+// Gösteri, iletişim kutuları ve yazdırma ayrı parçalardan (boşta önceden) yüklenir.
+import { AppDialogs, PrintRoot, SlideShow } from "./app/lazyChunks";
 import { appSession, recoveryHandlers, type ShowState } from "./app/appState";
 import { useAppCommands } from "./app/useAppCommands";
 import { buildRibbonTabs } from "./app/ribbonTabs";
@@ -407,6 +407,12 @@ export function App() {
                   }
                 >
                   {state.message.text}
+                  {state.message.details && (
+                    <details className="msg-details">
+                      <summary>Ayrıntılar</summary>
+                      <pre>{state.message.details}</pre>
+                    </details>
+                  )}
                 </MessageBar>
               )}
             </>

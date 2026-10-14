@@ -7,7 +7,7 @@ import { reuseSlide } from "../model/reuse";
 import { isTextEmpty } from "../model/textStyle";
 import type { Presentation } from "../model/types";
 import { ScaledSlide } from "../render/SlideView";
-import { slideTitle } from "../show/SlideShow";
+import { slideTitle } from "../show/slideTitle";
 import type { Actions } from "../state/actions";
 import type { AppState } from "../state/store";
 import { PaneShell } from "./paneControls";

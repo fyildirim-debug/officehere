@@ -1,5 +1,6 @@
 /** OpenDocument sunusu (ODF 1.3) ortak yardımcıları: ad alanları, birimler, renkler. */
 import type { Color } from "../../model/types";
+import { PackageError } from "../errors";
 
 export const ODF_NS = {
   office: "urn:oasis:names:tc:opendocument:xmlns:office:1.0",
@@ -27,7 +28,8 @@ export const ODF_NS_DECL = Object.entries(ODF_NS)
 export const ODP_MIME = "application/vnd.oasis.opendocument.presentation";
 export const OTP_MIME = "application/vnd.oasis.opendocument.presentation-template";
 
-export class OdpError extends Error {}
+/** ODP okuma hatası: Türkçe ileti (+ günlük için teknik ayrıntı). */
+export class OdpError extends PackageError {}
 
 /** ODF uzunluğu ("2cm", "12pt", "1in"…) → 96 dpi piksel. Geçersizse undefined. */
 export function lengthPx(v: string | undefined | null): number | undefined {

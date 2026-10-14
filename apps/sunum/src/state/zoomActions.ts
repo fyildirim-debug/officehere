@@ -9,7 +9,7 @@ import { updateSlideShapes } from "../model/ops";
 import { newSlide } from "../model/presentation";
 import { addSectionAt } from "../model/sections";
 import type { PicShape, Presentation, Slide } from "../model/types";
-import { slideTitle } from "../show/SlideShow";
+import { slideTitle } from "../show/slideTitle";
 import type { Actions } from "./actions";
 
 const blobToDataUrl = (b: Blob) =>

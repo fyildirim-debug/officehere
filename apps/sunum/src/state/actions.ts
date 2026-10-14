@@ -61,8 +61,8 @@ export class Actions {
     return this.s.sel.map((id) => findShape(sl.shapes, id)).filter((x): x is Shape => !!x);
   }
 
-  message(text: string, kind: "info" | "warning" | "error" | "success" = "info", action?: "startShow") {
-    this.store.set({ message: action ? { text, kind, action } : { text, kind } });
+  message(text: string, kind: "info" | "warning" | "error" | "success" = "info", action?: "startShow", details?: string) {
+    this.store.set({ message: { text, kind, ...(action ? { action } : {}), ...(details ? { details } : {}) } });
   }
 
   /* ------------------------------ Slaytlar ------------------------------ */

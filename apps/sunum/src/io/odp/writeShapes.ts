@@ -1,13 +1,15 @@
 /** ODP şekil yazıcısı: metin çerçeveleri, yer tutucular, özel şekiller, çizgiler, resimler, tablolar, gruplar. */
+import { resolveHex } from "../../model/color";
+import { newPresentation } from "../../model/presentation";
 import { effectiveBodyProps, levelResolver, type TextContext } from "../../model/textStyle";
-import type { Layout, PicShape, Presentation, Shape, SpShape, TableShape, TextBody } from "../../model/types";
+import type { Layout, PicShape, Presentation, RunProps, Shape, SpShape, TableShape, TextBody } from "../../model/types";
 import { customPathD, isLineGeom, presetGeometry } from "../../render/geometry";
 import { svgPathToCmds } from "../../render/svgPath";
 import { cellFormat } from "../../render/tableStyles";
 import { esc } from "../xml";
 import { cm, odfAttrs } from "./common";
-import { fillAttrs, strokeAttrs, type Attrs, type AutoStyles, type Shared } from "./writeStyles";
-import { textBodyXml } from "./writeText";
+import { fillAttrs, strokeAttrs, textProps, type Attrs, type AutoStyles, type Shared } from "./writeStyles";
+import { ownRun, textBodyXml } from "./writeText";
 
 export interface ShapeWriteCtx {
   sh: Shared;
@@ -19,6 +21,25 @@ export interface ShapeWriteCtx {
   link: (l: string) => string | undefined;
   /** Ana sayfa (styles.xml) içinde mi. */
   inMaster?: boolean;
+  /**
+   * Yer tutucu metninin ana sayfa sunu stillerinden (başlık, alt başlık, anahat
+   * düzeyleri) devralacağı çalıştırma biçimi; okuyucu bu stilleri düzey olarak okur.
+   */
+  phInherited?: (cls: "title" | "subtitle" | "outline", level: number) => RunProps;
+}
+
+let tableDefaults: RunProps | undefined;
+/**
+ * Biçimsiz tablo hücresi metninin yeniden açılışta alacağı biçim: ODP okuyucusu
+ * hücre metnine düzey yazmaz; sunu varsayılan temanın "diğer" metin stilini kullanır.
+ */
+function tableTextDefaults(): RunProps {
+  if (!tableDefaults) {
+    const p = newPresentation("varsayilan", 0);
+    const run = p.master.textStyles.other[0]?.run ?? {};
+    tableDefaults = { ...run, color: run.color ? { rgb: resolveHex(run.color, p.theme, "#000000") } : undefined };
+  }
+  return tableDefaults;
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -75,12 +96,40 @@ function shadowAttrs(s: SpShape | PicShape, ctx: ShapeWriteCtx): Attrs {
   };
 }
 
-function graphicStyle(ctx: ShapeWriteCtx, a: Attrs, family = "graphic", parent: string | undefined = "standard", kind = "gr"): string {
-  return ctx.auto.style(family, kind, `<style:graphic-properties${odfAttrs(a)}/>`, parent);
+function graphicStyle(ctx: ShapeWriteCtx, a: Attrs, family = "graphic", parent: string | undefined = "standard", kind = "gr", extra = ""): string {
+  return ctx.auto.style(family, kind, `<style:graphic-properties${odfAttrs(a)}/>${extra}`, parent);
 }
 
-function textXml(s: SpShape, body: TextBody | undefined, ctx: ShapeWriteCtx): string {
-  return textBodyXml(body, { sh: ctx.sh, auto: ctx.auto, lvl: levelResolver(s, textCtx(ctx)), link: ctx.link });
+/**
+ * Metin. Yer tutucuda devralınan biçim ana sayfa sunu stillerinden, diğer
+ * şekillerde şeklin grafik stiline yazılan düzey biçiminden gelir; çalıştırmalara
+ * yalnız açık ya da farklı özellikler yazılır.
+ */
+function textXml(s: SpShape, body: TextBody | undefined, ctx: ShapeWriteCtx, phCls?: "title" | "subtitle" | "outline", phOwn: RunProps = {}): string {
+  const lvl = levelResolver(s, textCtx(ctx));
+  const inherited = phCls && ctx.phInherited ? (level: number) => ({ ...ctx.phInherited!(phCls, level), ...phOwn }) : () => lvl(0).run;
+  return textBodyXml(body, { sh: ctx.sh, auto: ctx.auto, lvl, link: ctx.link, inherited });
+}
+
+/**
+ * Yer tutucunun kendi düzey biçiminin ana sayfa stilinden farkı: şeklin sunu
+ * stiline yazılır (okuyucu tüm düzeylere uygular). Anahatta yalnız kullanılan
+ * düzeylerin farkı aynıysa; değilse fark çalıştırmalara kalır.
+ */
+function placeholderOwnRun(s: SpShape, cls: "title" | "subtitle" | "outline", ctx: ShapeWriteCtx): RunProps {
+  if (!ctx.phInherited || !s.text) return {};
+  const lvl = levelResolver(s, textCtx(ctx));
+  const levels = cls === "outline" ? [...new Set(s.text.paragraphs.map((p) => p.level))] : [0];
+  const diffs = levels.map((l) => ownRun({}, lvl(l).run, ctx.phInherited!(cls, l), ctx.sh));
+  const first = textProps(diffs[0] ?? {}, ctx.sh);
+  return diffs.every((d) => textProps(d, ctx.sh) === first) ? { ...diffs[0], link: undefined, field: undefined } : {};
+}
+
+/** Yer tutucu olmayan metinli şeklin düzey biçimi grafik stiline yazılır (okuyucu şekil düzeyi olarak okur). */
+function shapeTextProps(s: SpShape, ctx: ShapeWriteCtx): string {
+  if (!s.text) return "";
+  const run = { ...levelResolver(s, textCtx(ctx))(0).run, link: undefined, field: undefined };
+  return textProps(run, ctx.sh);
 }
 
 const PH_CLASS: Record<string, [string, string]> = {
@@ -99,15 +148,17 @@ function spXml(s: SpShape, ctx: ShapeWriteCtx): string {
   const name = odfAttrs({ "draw:name": s.name || undefined });
   const ph = s.ph ? PH_CLASS[s.ph.type] : undefined;
   if (ph && (s.text || ctx.inMaster)) {
-    const st = graphicStyle(ctx, { ...fillAttrs(s.fill, ctx.sh), ...strokeAttrs(s.line, ctx.sh), ...bodyAttrs(s, ctx, true) }, "presentation", `${ctx.master}-${ph[1]}`, "pr");
+    const cls = ph[0] === "title" ? "title" : ph[0] === "subtitle" ? "subtitle" : "outline";
     const empty = isEmpty(s.text);
-    const body = empty ? "" : textXml(s, s.text, ctx);
+    const own = empty ? {} : placeholderOwnRun(s, cls, ctx);
+    const st = graphicStyle(ctx, { ...fillAttrs(s.fill, ctx.sh), ...strokeAttrs(s.line, ctx.sh), ...bodyAttrs(s, ctx, true) }, "presentation", `${ctx.master}-${ph[1]}`, "pr", textProps(own, ctx.sh));
+    const body = empty ? "" : textXml(s, s.text, ctx, cls, own);
     return `<draw:frame${name}${odfAttrs({ "presentation:style-name": st, "draw:layer": ctx.inMaster ? "backgroundobjects" : "layout", ...boxAttrs(s), "presentation:class": ph[0], "presentation:placeholder": empty ? "true" : undefined })}><draw:text-box>${body}</draw:text-box></draw:frame>`;
   }
   const g = s.geom === "custom" ? "custom" : s.geom;
   if (isLineGeom(g) && (g === "line" || g === "straightConnector1")) return lineXml(s, ctx);
   const frame = !!s.txBox || (g === "rect" && !!s.text && s.fill.type === "none" && s.line.fill.type === "none" && !s.ph);
-  const st = graphicStyle(ctx, { ...fillAttrs(isLineGeom(g) ? { type: "none" } : s.fill, ctx.sh), ...strokeAttrs(s.line, ctx.sh), ...(s.text ? bodyAttrs(s, ctx, frame) : {}), ...shadowAttrs(s, ctx) });
+  const st = graphicStyle(ctx, { ...fillAttrs(isLineGeom(g) ? { type: "none" } : s.fill, ctx.sh), ...strokeAttrs(s.line, ctx.sh), ...(s.text ? bodyAttrs(s, ctx, frame) : {}), ...shadowAttrs(s, ctx) }, "graphic", "standard", "gr", shapeTextProps(s, ctx));
   const layer = odfAttrs({ "draw:layer": ctx.inMaster ? "backgroundobjects" : "layout" });
   if (frame) return `<draw:frame${name}${odfAttrs({ "draw:style-name": st })}${layer}${odfAttrs(boxAttrs(s))}><draw:text-box>${textXml(s, s.text, ctx)}</draw:text-box></draw:frame>`;
   const text = s.text && !isEmpty(s.text) ? textXml(s, s.text, ctx) : "";
@@ -204,7 +255,7 @@ function tableXml(t: TableShape, ctx: ShapeWriteCtx): string {
             `<style:graphic-properties${odfAttrs({ ...fillAttrs(f.fill, ctx.sh), "draw:textarea-vertical-align": cell.anchor === "ctr" ? "middle" : cell.anchor === "b" ? "bottom" : "top" })}/><style:paragraph-properties${odfAttrs({ "fo:border-top": border(f.borders.t), "fo:border-bottom": border(f.borders.b), "fo:border-left": border(f.borders.l), "fo:border-right": border(f.borders.r) })}/>`,
           );
           const pseudo = { kind: "sp", text: cell.text } as unknown as SpShape;
-          const body = textBodyXml(cell.text, { sh: ctx.sh, auto: ctx.auto, lvl: levelResolver(pseudo, textCtx(ctx), "other"), link: ctx.link, cell: { color: f.text, bold: f.bold || undefined } });
+          const body = textBodyXml(cell.text, { sh: ctx.sh, auto: ctx.auto, lvl: levelResolver(pseudo, textCtx(ctx), "other"), link: ctx.link, cell: { color: f.text, bold: f.bold || undefined }, inherited: tableTextDefaults });
           return `<table:table-cell${odfAttrs({ "table:style-name": cs, "table:number-columns-spanned": cell.gridSpan && cell.gridSpan > 1 ? cell.gridSpan : undefined, "table:number-rows-spanned": cell.rowSpan && cell.rowSpan > 1 ? cell.rowSpan : undefined })}>${body || "<text:p/>"}</table:table-cell>`;
         })
         .join("");

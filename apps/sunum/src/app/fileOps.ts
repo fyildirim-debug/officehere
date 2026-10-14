@@ -2,7 +2,7 @@
 import { addRecentFile, baseName, extensionOf, getNative, openFile, readPath, saveFile, saveFileAs, type FileFilter, type FileRef, type RecentFile } from "@officehere/core";
 import { isDirectSave, saveStatus, trackSave } from "@officehere/ui";
 import type { Presentation } from "../model/types";
-import { FORMATS, isSaveFormat, isSunuFormat, OPEN_FILTERS, readPresentationFile, saveFilters, writePresentationFormat, type SaveFormat, type SunuFormat } from "../io/formats";
+import { FORMATS, isSaveFormat, isSunuFormat, OPEN_FILTERS, readPresentationFile, saveFilters, toFormatError, writePresentationFormat, type SaveFormat, type SunuFormat } from "../io/formats";
 import type { Actions } from "../state/actions";
 import type { AppState } from "../state/store";
 import { abortMasterView, documentPres } from "../state/masterActions";
@@ -19,7 +19,11 @@ export function nextUntitled(): string {
   return `Sunu${untitled}`;
 }
 
-export function loadPresentation(a: Actions, pres: Presentation, fileName: string, fileRef: FileRef | null, format: string = "pptx") {
+/**
+ * Sunuyu düzenleyiciye yükler. `loadWarnings`: açılışta okunamayan bölümler
+ * (AppState.loadWarnings; boş değilse dosya tam açılmamıştır).
+ */
+export function loadPresentation(a: Actions, pres: Presentation, fileName: string, fileRef: FileRef | null, format: string = "pptx", loadWarnings: string[] = []) {
   abortMasterView(a);
   a.store.set({
     pres,
@@ -43,6 +47,7 @@ export function loadPresentation(a: Actions, pres: Presentation, fileName: strin
     masterBase: null,
     fileFormat: format,
     formatAsked: false,
+    loadWarnings,
   });
   a.store.resetHistory();
   saveStatus.reset();
@@ -67,21 +72,37 @@ function openNotice(a: Actions, format: SunuFormat) {
   else if (info.show) a.message("Bu dosya bir slayt gösterisi. Düzenleyebilir ya da gösteriyi başlatabilirsiniz.", "info", "startShow");
 }
 
+/** Açılış uyarıları iletisi: ilk sorun metinde, tümü ve teknik ayrıntılar "Ayrıntılar"da. */
+export function loadWarningMessage(warnings: string[], details: string[] = []): { text: string; details: string } {
+  const more = warnings.length > 1 ? ` Ayrıca ${warnings.length - 1} sorun daha var (Ayrıntılar).` : "";
+  return {
+    text: `Dosya hasarlı. ${warnings[0]}${more} Özgün dosyanın üzerine kaydetmeden önce içeriği denetleyin.`,
+    details: [...warnings, ...(details.length ? ["", "Teknik ayrıntılar:", ...details] : [])].join("\n"),
+  };
+}
+
 export async function openBytes(a: Actions, data: ArrayBuffer, name: string, ref: FileRef | null): Promise<boolean> {
   try {
-    const { pres, format } = await readPresentationFile(data, name);
+    const { pres, format, warnings, details } = await readPresentationFile(data, name);
     if (FORMATS[format].template) {
       // Şablon: adsız yeni sunu olarak açılır (özgün dosyanın üzerine yazılmaz).
-      loadPresentation(a, pres, nextUntitled(), null, "pptx");
+      loadPresentation(a, pres, nextUntitled(), null, "pptx", warnings);
       a.message(`“${name}” şablonundan yeni sunu oluşturuldu.`, "info");
     } else {
-      loadPresentation(a, pres, baseName(name), ref, format);
+      loadPresentation(a, pres, baseName(name), ref, format, warnings);
       openNotice(a, format);
+    }
+    if (warnings.length) {
+      const m = loadWarningMessage(warnings, details);
+      a.message(m.text, "warning", undefined, m.details);
+      console.warn(`[Sunum] “${name}” açılış uyarıları:\n${m.details}`);
     }
     void addRecentFile({ path: ref?.path ?? name, name, app: "sunum", openedAt: Date.now() });
     return true;
   } catch (e) {
-    a.message(`Dosya açılamadı: ${(e as Error).message}`, "error");
+    const fe = toFormatError(e);
+    a.message(`Dosya açılamadı: ${fe.message}`, "error", undefined, fe.detail);
+    if (fe.detail) console.warn(`[Sunum] “${name}” açılamadı: ${fe.detail}`);
     return false;
   }
 }

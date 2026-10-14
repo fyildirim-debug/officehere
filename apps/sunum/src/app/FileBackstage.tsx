@@ -9,7 +9,7 @@ import type { Actions } from "../state/actions";
 import type { AppState } from "../state/store";
 import { TEMPLATES } from "../templates/templates";
 import { cm } from "../ribbon/common";
-import { PrintPage } from "./PrintPage";
+import { PrintPage } from "./lazyChunks";
 import type { PrintJob } from "./printLayout";
 
 const built = new Map<string, Presentation>();

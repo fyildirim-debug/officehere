@@ -13,6 +13,52 @@ export interface TextWriteCtx {
   link: (l: string) => string | undefined;
   /** Tablo stilinden gelen hücre metni biçimi (çalıştırmada yoksa). */
   cell?: { color?: Color; bold?: boolean };
+  /**
+   * Okuyucunun yeniden açılışta bu metne stillerden (ana sayfa sunu stili, şekil
+   * grafik stili ya da varsayılanlar) devralacağı çalıştırma biçimi, düzey başına.
+   * Verilirse çalıştırmalara yalnız açıkça ayarlanmış ya da devralınandan farklı
+   * özellikler yazılır; devralınan değerler çalıştırmalara sabitlenmez (tema/asıl
+   * slayt değişince metin de değişsin).
+   */
+  inherited?: (level: number) => RunProps;
+}
+
+/** ODF metin özelliklerine yazılabilen çalıştırma biçimi anahtarları. */
+const RUN_KEYS = ["size", "bold", "italic", "underline", "strike", "color", "font", "caps", "baseline", "highlight", "shadow", "spacing"] as const;
+
+/** Bir özelliğin ODF'deki yazılı biçimi (renk/yazı tipi çözülmüş olarak karşılaştırmak için). */
+const written = (k: (typeof RUN_KEYS)[number], v: unknown, sh: Shared) => textProps({ [k]: v } as RunProps, sh);
+
+/**
+ * Yazılacak çalıştırma biçimi: açıkça ayarlanmış özellikler + devralınan değerden
+ * farklı olan etkin özellikler. `inh` yoksa (eski davranış) etkin biçimin tamamı.
+ */
+/** Açık/kapalı biçimlerin "kapalı" değeri: devralınan açık değeri iptal etmek için yazılır. */
+const NEUTRAL: Partial<RunProps> = { bold: false, italic: false, underline: false, strike: false, shadow: false, caps: "none" };
+
+export function ownRun(explicit: RunProps, eff: RunProps, inh: RunProps | undefined, sh: Shared): RunProps {
+  if (!inh) return eff;
+  const out: RunProps = {};
+  for (const k of RUN_KEYS) {
+    // Etkin değeri olmayan (kapalı) biçim, devralınan açık değerin altında kalmasın.
+    const v = eff[k] ?? (inh[k] !== undefined ? NEUTRAL[k] : undefined);
+    if (v === undefined) continue;
+    if (explicit[k] !== undefined || written(k, v, sh) !== written(k, inh[k], sh)) (out as Record<string, unknown>)[k] = v;
+  }
+  return out;
+}
+
+/** Paragraf stilindeki metin özellikleri (ODF'de tüm çalıştırmalara geçer): yalnız her çalıştırmada aynı olanlar. */
+function commonRun(end: RunProps, runs: RunProps[], sh: Shared): RunProps {
+  if (!runs.length) return end;
+  const out: RunProps = {};
+  for (const k of RUN_KEYS) {
+    const v = end[k];
+    if (v === undefined) continue;
+    const w = written(k, v, sh);
+    if (runs.every((r) => r[k] !== undefined && written(k, r[k], sh) === w)) (out as Record<string, unknown>)[k] = v;
+  }
+  return out;
 }
 
 /** Metni ODF öğelerine çevirir (satır sonu, sekme, ardışık boşluk). */
@@ -44,8 +90,8 @@ function textXml(t: string, paraStart: boolean): string {
   return out;
 }
 
-function runXml(text: string, props: RunProps, eff: RunProps, ctx: TextWriteCtx, paraStart: boolean): string {
-  const st = ctx.auto.style("text", "T", textProps(eff, ctx.sh));
+function runXml(text: string, props: RunProps, own: RunProps, ctx: TextWriteCtx, paraStart: boolean): string {
+  const st = ctx.auto.style("text", "T", textProps(own, ctx.sh));
   let inner: string;
   if (props.field === "slidenum") inner = `<text:page-number text:select-page="current">${esc(text === "‹#›" ? "1" : text)}</text:page-number>`;
   else if (props.field === "datetime") inner = `<text:date>${esc(text)}</text:date>`;
@@ -57,12 +103,17 @@ function runXml(text: string, props: RunProps, eff: RunProps, ctx: TextWriteCtx,
 
 function paraXml(p: Paragraph, eff: ParaProps, inList: boolean, ctx: TextWriteCtx): string {
   const withCell = (r: RunProps): RunProps => (ctx.cell ? { ...r, color: r.color ?? ctx.cell.color, bold: r.bold ?? ctx.cell.bold } : r);
-  const end = effectiveRun(withCell(p.endProps ?? p.runs[p.runs.length - 1]?.props ?? {}), p, ctx.lvl);
-  const ps = ctx.auto.style("paragraph", "P", paraProps(eff, inList) + textProps({ ...end, link: undefined, field: undefined }, ctx.sh));
+  const inh = ctx.inherited?.(p.level);
+  // Tablo stilinden gelen hücre biçimi açık değil etkin biçim sayılır (devralınandan farklıysa yazılır).
+  const own = (r: RunProps) => ownRun(r, effectiveRun(withCell(r), p, ctx.lvl), inh, ctx.sh);
+  const runs = p.runs.map((r) => own(r.props));
+  const end = own(p.endProps ?? p.runs[p.runs.length - 1]?.props ?? {});
+  const common = inh ? commonRun(end, runs, ctx.sh) : end;
+  const ps = ctx.auto.style("paragraph", "P", paraProps(eff, inList) + textProps({ ...common, link: undefined, field: undefined }, ctx.sh));
   let pos = 0;
   const body = p.runs
-    .map((r) => {
-      const x = runXml(r.text, r.props, effectiveRun(withCell(r.props), p, ctx.lvl), ctx, pos === 0);
+    .map((r, i) => {
+      const x = runXml(r.text, r.props, runs[i], ctx, pos === 0);
       pos += r.text.length;
       return x;
     })

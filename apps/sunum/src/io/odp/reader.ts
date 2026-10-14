@@ -3,11 +3,14 @@
  * (arka plan, süs şekilleri, başlık/anahat stilleri), slaytlar, yer tutucular,
  * metin kutuları, şekiller, resimler, tablolar ve konuşmacı notları okunur.
  */
-import JSZip from "jszip";
 import { uid } from "../../model/factory";
 import { newPresentation } from "../../model/presentation";
 import type { Fill, LevelStyle, Presentation, Slide, SpShape, TextBody } from "../../model/types";
 import { applyPrimaryMaster, chooseLayout, layoutResolver, type ImportMaster } from "../importBuild";
+import { flatShapes } from "../../model/ops";
+import { resolveHex } from "../../model/color";
+import { levelResolver, resolveFont } from "../../model/textStyle";
+import type { Color, LevelStyle as LS, SchemeColorName, Theme } from "../../model/types";
 import { attr, kid, kids, parseXml } from "../xml";
 import { DISPLAYABLE, IMAGE_MIME, lengthPx, OdpError, toBase64 } from "./common";
 import { readFillProps, readShapes, type ShapeReadCtx } from "./shapes";
@@ -15,6 +18,8 @@ import { type Resolved, StyleSheet } from "./styles";
 import { readOdpTransition, transitionDur } from "./transitions";
 import { readOdpSettings } from "./showSettings";
 import { listLevel, paragraphsText, paraPropsOf, readParagraphs, runPropsOf } from "./text";
+import { LoadWarnings } from "../loadWarnings";
+import { formatMB, openZip, PackageError, PartError, xmlHealth, ZIP_LIMITS, type SafeZip } from "../zipSafe";
 
 const MAX_SLIDES = 2000;
 const MAX_IMAGE = 40 * 1024 * 1024;
@@ -24,6 +29,68 @@ function parse(xml: string, what: string): Element {
   const root = doc.documentElement;
   if (!root || root.localName === "parsererror" || doc.getElementsByTagName("parsererror").length) throw new OdpError(`${what} okunamadı (bozuk XML).`);
   return root;
+}
+
+const SCHEME: SchemeColorName[] = ["dk1", "lt1", "dk2", "lt2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "hlink", "folHlink"];
+
+/** OfficeHere'nin meta.xml'e yazdığı tema (yoksa ya da geçersizse undefined). */
+function themeFromMeta(meta: Element | undefined): Theme | undefined {
+  const el = kids(meta).find((e) => e.localName === "user-defined" && attr(e, "name") === "OfficeHere.Tema");
+  if (!el) return undefined;
+  try {
+    const t = JSON.parse(el.textContent ?? "") as Partial<Theme>;
+    const colors = {} as Theme["colors"];
+    for (const k of SCHEME) {
+      const v = t.colors?.[k];
+      if (typeof v !== "string" || !/^#[0-9a-f]{6}$/i.test(v)) return undefined;
+      colors[k] = v.toUpperCase();
+    }
+    const major = t.fonts?.major;
+    const minor = t.fonts?.minor;
+    if (typeof major !== "string" || typeof minor !== "string" || !major || !minor) return undefined;
+    return { name: typeof t.name === "string" && t.name ? t.name.slice(0, 200) : "Tema", ...(typeof t.id === "string" ? { id: t.id } : {}), ...(typeof t.variant === "number" ? { variant: t.variant } : {}), colors, fonts: { major, minor } };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Şekil düzeyi metin stillerinden, zincirin (asıl slayt + düzen) zaten verdiği
+ * değerler atılır: ODF'de tema olmadığından okunan renk/yazı tipi mutlak gelir;
+ * temanın çözdüğü değere eşit olanlar devralınan sayılır (tema değişince izlesin).
+ */
+function pruneInheritedLevels(pres: Presentation) {
+  const theme = pres.theme;
+  const same = (k: string, a: unknown, b: unknown): boolean => {
+    if (a === undefined) return true;
+    if (b === undefined) return false;
+    if (k === "color") {
+      const x = a as Color;
+      const y = b as Color;
+      return resolveHex(x, theme) === resolveHex(y, theme) && (x.alpha ?? 1) === (y.alpha ?? 1);
+    }
+    if (k === "font") return resolveFont(a as string, theme) === resolveFont(b as string, theme);
+    return JSON.stringify(a) === JSON.stringify(b);
+  };
+  const prune = <T extends object>(own: T | undefined, base: T): T => {
+    const out = {} as T;
+    for (const [k, v] of Object.entries(own ?? {})) if (v !== undefined && !same(k, v, (base as Record<string, unknown>)[k])) (out as Record<string, unknown>)[k] = v;
+    return out;
+  };
+  for (const slide of pres.slides) {
+    const layout = pres.layouts.find((l) => l.id === slide.layoutId);
+    for (const sh of flatShapes(slide.shapes)) {
+      if (sh.kind !== "sp" || !sh.text?.levels?.length) continue;
+      const chain = levelResolver({ ...sh, text: { ...sh.text, levels: undefined } }, { master: pres.master, layout });
+      const levels: LS[] = sh.text.levels.map((lv, i) => ({ para: prune(lv?.para, chain(i).para), run: prune(lv?.run, chain(i).run) }));
+      sh.text.levels = levels.some((l) => Object.keys(l.para).length || Object.keys(l.run).length) ? levels : undefined;
+    }
+  }
+}
+
+export interface OdpReadOptions {
+  /** Açılış uyarıları (eksik/bozuk parçalar); verilmezse yok sayılır. */
+  warnings?: LoadWarnings;
 }
 
 /** Ana sayfa stilinden düzey stili. */
@@ -38,39 +105,79 @@ function mergeLevel(a: LevelStyle, b: Partial<LevelStyle>): LevelStyle {
   return { para: { ...a.para, ...strip(b.para) }, run: { ...a.run, ...strip(b.run) } };
 }
 
-export async function readOdp(data: ArrayBuffer | Uint8Array): Promise<Presentation> {
-  let zip: JSZip;
+export async function readOdp(data: ArrayBuffer | Uint8Array, opts: OdpReadOptions = {}): Promise<Presentation> {
+  const W = opts.warnings ?? new LoadWarnings();
+  let pkg: SafeZip;
   try {
-    zip = await JSZip.loadAsync(data);
-  } catch {
-    throw new OdpError("Dosya geçerli bir OpenDocument (ZIP) paketi değil.");
+    pkg = await openZip(data, "Dosya geçerli bir OpenDocument (ZIP) paketi değil.");
+  } catch (e) {
+    if (e instanceof PackageError) throw new OdpError(e.message, e.detail);
+    throw e;
   }
-  const text = async (p: string) => {
-    const f = zip.file(p);
-    return f ? f.async("string") : undefined;
+  /** Metin parçası; bozuk ya da sınırı aşan parça atlanır (verilirse uyarı yazılır). */
+  const text = async (p: string, label?: string) => {
+    try {
+      return await pkg.text(p);
+    } catch (e) {
+      if (!(e instanceof PartError)) throw e;
+      if (label) W.add(label, `${p}: ${e.detail ?? e.message}`);
+      else W.detail(`${p}: ${e.detail ?? e.message}`);
+      return undefined;
+    }
   };
   const mime = (await text("mimetype"))?.trim();
   if (mime && !mime.startsWith("application/vnd.oasis.opendocument.presentation")) throw new OdpError("Bu dosya bir OpenDocument sunusu değil.");
   const manifest = await text("META-INF/manifest.xml");
   if (manifest && /encryption-data/.test(manifest)) throw new OdpError("Bu sunu parola ile korunuyor (şifreli); açılamıyor.");
-  const contentXml = await text("content.xml");
+  const listed = (p: string) => !!manifest && new RegExp(`full-path="${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`).test(manifest);
+  let contentXml: string | undefined;
+  try {
+    contentXml = await pkg.text("content.xml");
+  } catch (e) {
+    if (!(e instanceof PartError)) throw e;
+    if (e.kind === "tooLarge") throw new OdpError(`Sunu içeriği (content.xml) olağandışı büyük${pkg.size("content.xml") ? ` (${formatMB(pkg.size("content.xml")!)})` : ""}; dosya bozuk ya da zararlı olabilir.`, e.detail);
+    throw new OdpError("Sunu içeriği (content.xml) bozuk; dosya açılamadı.", e.detail);
+  }
   if (!contentXml) throw new OdpError("Sunu içeriği (content.xml) bulunamadı.");
-  const content = parse(contentXml, "Sunu içeriği");
-  const stylesXml = await text("styles.xml");
-  const styles = stylesXml ? parse(stylesXml, "Stil bölümü") : undefined;
+  // Kısmen ayrıştırılabilen içerikte (tarayıcılar okunabilen kısmı korur) okunabilen slaytlar açılır.
+  const contentDoc = parseXml(contentXml);
+  const contentHealth = xmlHealth(contentDoc, "document-content");
+  if (contentHealth === "bad") throw new OdpError("Sunu içeriği okunamadı (bozuk XML).");
+  const content = contentDoc.documentElement;
+  if (contentHealth === "partial") W.add("Sunu içeriği bozuk; yalnız okunabilen slaytlar açıldı.", "content.xml: XML yalnız kısmen ayrıştırılabildi");
+  const stylesXml = await text("styles.xml", "Stil bölümü (styles.xml) bozuk; asıl sayfa biçimleri varsayılanlarla açıldı.");
+  let styles: Element | undefined;
+  if (stylesXml) {
+    const sd = parseXml(stylesXml);
+    const h = xmlHealth(sd, "document-styles");
+    if (h === "bad") W.add("Stil bölümü (styles.xml) bozuk; asıl sayfa biçimleri varsayılanlarla açıldı.", "styles.xml: XML ayrıştırılamadı");
+    else {
+      styles = sd.documentElement;
+      if (h === "partial") W.add("Stil bölümü (styles.xml) bozuk; yalnız okunabilen kısmı kullanıldı.", "styles.xml: XML yalnız kısmen ayrıştırılabildi");
+    }
+  } else if (!pkg.has("styles.xml") && listed("styles.xml")) W.add("Stil bölümü (styles.xml) dosyada bulunamadı; asıl sayfa biçimleri varsayılanlarla açıldı.");
 
   // Resimler (paket içi): eşzamanlı erişim için önceden okunur.
   const images = new Map<string, string>();
+  const badImages = new Set<string>();
   await Promise.all(
-    Object.keys(zip.files)
-      .filter((p) => !zip.files[p].dir && /\.(png|jpe?g|gif|bmp|svg|webp)$/i.test(p))
+    pkg.paths
+      .filter((p) => /\.(png|jpe?g|gif|bmp|svg|webp)$/i.test(p))
       .map(async (p) => {
-        const bytes = await zip.file(p)!.async("uint8array");
-        if (bytes.length > MAX_IMAGE) return;
-        const ext = p.split(".").pop()!.toLowerCase();
-        images.set(p, `data:${IMAGE_MIME[ext]};base64,${toBase64(bytes)}`);
+        try {
+          const bytes = await pkg.bytes(p, Math.min(MAX_IMAGE, ZIP_LIMITS.media));
+          if (!bytes) return;
+          const ext = p.split(".").pop()!.toLowerCase();
+          images.set(p, `data:${IMAGE_MIME[ext]};base64,${toBase64(bytes)}`);
+        } catch (e) {
+          if (!(e instanceof PartError)) throw e;
+          badImages.add(p);
+          W.detail(`${p}: ${e.detail ?? e.message}`);
+        }
       }),
   );
+  if (badImages.size) W.add(`${badImages.size} resim bozuk ya da çok büyük olduğu için yüklenemedi.`);
+  const missingImages = new Set<string>();
   const image: ShapeReadCtx["image"] = (href, mimeType, inline) => {
     if (inline) {
       const m = mimeType ?? "image/png";
@@ -79,7 +186,9 @@ export async function readOdp(data: ArrayBuffer | Uint8Array): Promise<Presentat
     if (!href) return undefined;
     const path = href.replace(/^\.\//, "");
     if (mimeType && !DISPLAYABLE.has(mimeType)) return undefined;
-    return images.get(path);
+    const got = images.get(path);
+    if (got === undefined && !/^[a-z][a-z0-9+.-]*:/i.test(path) && !pkg.has(path) && !badImages.has(path)) missingImages.add(path);
+    return got;
   };
 
   const stylesCommon = kid(styles, "styles");
@@ -91,7 +200,9 @@ export async function readOdp(data: ArrayBuffer | Uint8Array): Promise<Presentat
 
   const body = kid(kid(content, "body"), "presentation");
   if (!body) throw new OdpError("Dosyada sunu gövdesi yok.");
-  const pages = kids(body, "page").slice(0, MAX_SLIDES);
+  const allPages = kids(body, "page");
+  if (allPages.length > MAX_SLIDES) W.add(`Sunuda ${allPages.length.toLocaleString("tr-TR")} slayt var; yalnız ilk ${MAX_SLIDES.toLocaleString("tr-TR")} slayt açıldı.`);
+  const pages = allPages.slice(0, MAX_SLIDES);
   const masterPages = kids(kid(styles, "master-styles"), "master-page");
 
   // Sayfa boyutu: ilk slaydın ana sayfasının sayfa düzeni.
@@ -187,6 +298,14 @@ export async function readOdp(data: ArrayBuffer | Uint8Array): Promise<Presentat
 
   // Slaytlar.
   pages.forEach((page, i) => {
+    try {
+      pres.slides.push(readPage(page, i));
+    } catch (e) {
+      W.slide("corrupt", i + 1, `draw:page ${i + 1}: ${(e as Error)?.message ?? e}`);
+      pres.slides.push({ id: slideIds[i], layoutId: layoutFor(primaryName, "blank").id, shapes: [], notes: "", animations: [] });
+    }
+  });
+  function readPage(page: Element, i: number): Slide {
     const masterName = attr(page, "master-page-name");
     const ps = contentSheet.resolve("drawing-page", attr(page, "style-name"));
     const shapes = readShapes(page, { sheet: contentSheet, image, link, count: { n: 0 }, placeholderLevels: placeholderLevels(masterName ?? primaryName) });
@@ -214,17 +333,30 @@ export async function readOdp(data: ArrayBuffer | Uint8Array): Promise<Presentat
     const tr = readOdpTransition(ps.page, transitionDur(page));
     if (tr) slide.transition = tr;
     if (ps.page["background-objects-visible"] === "false") slide.hideMasterShapes = true;
-    pres.slides.push(slide);
-  });
+    return slide;
+  }
   if (!pres.slides.length) throw new OdpError("Sunuda slayt bulunamadı.");
+  // Uygulamanın kendi yazdığı tema (meta.xml) geri yüklenir; devralınan değerler temaya bağlanır.
+  const metaXml = await text("meta.xml", "Belge özellikleri (başlık, yazar) okunamadı.");
+  let metaEl: Element | undefined;
+  if (metaXml) {
+    try {
+      metaEl = kid(parse(metaXml, "Özellikler"), "meta");
+    } catch {
+      metaEl = undefined;
+    }
+  }
+  const saved = themeFromMeta(metaEl);
+  if (saved) pres.theme = saved;
+  pruneInheritedLevels(pres);
+  if (missingImages.size) W.add(`${missingImages.size} resim pakette bulunamadı; bu resimler slaytlarda görünmüyor.`, `eksik resimler: ${[...missingImages].slice(0, 20).join(", ")}`);
   // Özel gösteriler ve gösteri ayarları.
   Object.assign(pres, readOdpSettings(body, byName, slideIds));
 
   // Belge özellikleri.
-  const metaXml = await text("meta.xml");
-  if (metaXml) {
+  if (metaEl) {
     try {
-      const meta = kid(parse(metaXml, "Özellikler"), "meta");
+      const meta = metaEl;
       const val = (n: string) => kid(meta, n)?.textContent?.trim() || undefined;
       // Kesirli saniyeler 3 haneye indirilir (Date.parse uyumu).
       const date = (n: string) => val(n)?.replace(/(\.\d{3})\d+/, "$1");

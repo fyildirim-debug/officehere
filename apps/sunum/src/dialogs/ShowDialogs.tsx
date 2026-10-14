@@ -11,7 +11,7 @@ import { formatTime } from "../show/showKeys";
 import { SHOW_INK_COLORS } from "../show/ShowInk";
 import type { RehearsalResult } from "../show/Rehearsal";
 import { uniqueShowName, type ShowSettings } from "../show/settings";
-import { slideTitle } from "../show/SlideShow";
+import { slideTitle } from "../show/slideTitle";
 import type { Actions } from "../state/actions";
 
 function Radio({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {

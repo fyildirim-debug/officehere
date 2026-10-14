@@ -80,7 +80,13 @@ export interface AppState {
   collapsedSections: string[];
   /** Asıl Slayt Görünümü açıkken: girişteki sunu ve slayt dizini. */
   masterBase: { pres: Presentation; slideIdx: number; dirty: boolean; tab: string } | null;
-  message: { text: string; kind: "info" | "warning" | "error" | "success"; action?: "startShow" } | null;
+  message: { text: string; kind: "info" | "warning" | "error" | "success"; action?: "startShow"; details?: string } | null;
+  /**
+   * Açılan dosyanın okunamayan/eksik bölümleri (açılış uyarıları). Boş değilse
+   * dosya tam açılmamıştır; otomatik kaydetme özgün dosyanın üzerine yazmamalıdır.
+   * Yeni dosya açılınca sıfırlanır.
+   */
+  loadWarnings?: string[];
   /** Açılan dosyanın biçimi (uzantı; yolu olmayan dosyalarda kaydetme biçimi buradan). */
   fileFormat?: string;
   /** Biçim kaybı sorusu bu belge için soruldu mu (ODP ilk kayıt). */

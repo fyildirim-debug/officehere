@@ -34,6 +34,14 @@ function extEl(el: Element | undefined, local: string): Element | undefined {
 }
 
 export function readTransition(sld: Element): Transition | undefined {
+  const t = readTransitionEl(sld);
+  // Etkisiz geçiş (efektsiz, tıklamayla ilerleyen, sessiz; ör. LibreOffice'in <p:transition spd="slow"/>'u)
+  // geçiş yok demektir; yazıcı da bunu yazmaz (gidiş-dönüşte fark üretmesin).
+  if (t && t.type === "none" && t.advanceOnClick && t.advanceAfter === undefined && !t.sound) return undefined;
+  return t;
+}
+
+function readTransitionEl(sld: Element): Transition | undefined {
   const t = findTransition(sld);
   if (!t) return undefined;
   const spd = attr(t, "spd");

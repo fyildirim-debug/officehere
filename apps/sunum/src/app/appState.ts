@@ -1,7 +1,7 @@
 /** Uygulamanın başlangıç durumu, oturum deposu ve önizleme alanı yardımcıları. */
 import { downloadBlob } from "@officehere/core";
 import { blankPresentation } from "../model/presentation";
-import { writePptx } from "../io/pptxWriter";
+import { writePresentationFormat } from "../io/formats";
 import { Actions } from "../state/actions";
 import { documentPres } from "../state/masterActions";
 import { Store, type AppState } from "../state/store";
@@ -68,7 +68,7 @@ export function appSession(): { store: Store; actions: Actions } {
 export async function downloadRecovery(a: Actions): Promise<void> {
   const name = a.s.fileName || "Sunu";
   try {
-    const bytes = await writePptx(documentPres(a));
+    const bytes = await writePresentationFormat(documentPres(a), "pptx");
     downloadBlob(new Blob([bytes as BlobPart], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" }), `${name} (Kurtarılan).pptx`);
   } catch {
     downloadBlob(new Blob([JSON.stringify(documentPres(a))], { type: "application/json" }), `${name} (Kurtarılan).json`);

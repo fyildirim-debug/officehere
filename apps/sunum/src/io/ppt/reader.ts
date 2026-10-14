@@ -13,6 +13,7 @@ import { blipStore } from "./blips";
 import { readDrawing, readProps, type DrawCtx } from "./drawing";
 import { PptError, RT, Stream, type Rec } from "./records";
 import { hex, masterLevels, textItems, type TextItem } from "./text";
+import { LoadWarnings } from "../loadWarnings";
 
 export { PptError };
 
@@ -159,7 +160,13 @@ function pptTransition(doc: Stream, r: Rec): Transition | undefined {
 /** Metin türü → model metin stili grubu. */
 const KIND = (t: number): "title" | "body" | "other" => (t === 0 || t === 6 ? "title" : t === 1 || t === 5 || t === 7 || t === 8 ? "body" : "other");
 
-export async function readPpt(data: ArrayBuffer | Uint8Array): Promise<Presentation> {
+export interface PptReadOptions {
+  /** Açılış uyarıları (eksik/bozuk kayıtlar); verilmezse yok sayılır. */
+  warnings?: LoadWarnings;
+}
+
+export async function readPpt(data: ArrayBuffer | Uint8Array, opts: PptReadOptions = {}): Promise<Presentation> {
+  const W = opts.warnings ?? new LoadWarnings();
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
   const cfb = openCfb(bytes);
   if (!cfb.has("PowerPoint Document")) {
@@ -291,9 +298,29 @@ export async function readPpt(data: ArrayBuffer | Uint8Array): Promise<Presentat
   }
   const layoutFor = layoutResolver(pres, masters, primary);
 
-  for (const se of slideEntries.slice(0, MAX_SLIDES)) {
+  if (slideEntries.length > MAX_SLIDES) W.add(`Sunuda ${slideEntries.length.toLocaleString("tr-TR")} slayt var; yalnız ilk ${MAX_SLIDES.toLocaleString("tr-TR")} slayt açıldı.`);
+  let readable = 0;
+  for (const [i, se] of slideEntries.slice(0, MAX_SLIDES).entries()) {
     const rec = at(se.persistId, RT.Slide);
-    if (!rec) continue;
+    const blank = (kind: "missing" | "corrupt", detail: string) => {
+      W.slide(kind, i + 1, detail);
+      pres.slides.push({ id: uid("sl"), layoutId: layoutFor(primary?.key, "blank").id, shapes: [], notes: "", animations: [] });
+    };
+    if (!rec) {
+      blank("missing", `persistId ${se.persistId}: slayt kaydı bulunamadı`);
+      continue;
+    }
+    try {
+      pres.slides.push(readSlideRec(rec, se));
+      readable++;
+    } catch (e) {
+      blank("corrupt", `persistId ${se.persistId}: ${(e as Error)?.message ?? e}`);
+    }
+  }
+  if (!readable) throw new PptError("Sunuda okunabilen slayt bulunamadı; dosya bozuk olabilir.");
+  return pres;
+
+  function readSlideRec(rec: Rec, se: PersistEntry): Slide {
     const sa = doc.kid(rec, RT.SlideAtom);
     const masterRef = sa ? doc.u32(sa.start + 12) : 0;
     const flags = sa ? doc.u16(sa.start + 20) : 7;
@@ -309,8 +336,6 @@ export async function readPpt(data: ArrayBuffer | Uint8Array): Promise<Presentat
     if (info && doc.u16(info.start + 10) & 0x4) slide.hidden = true;
     const tr = info ? pptTransition(doc, info) : undefined;
     if (tr) slide.transition = tr;
-    pres.slides.push(slide);
+    return slide;
   }
-  if (!pres.slides.length) throw new PptError("Sunuda slayt bulunamadı.");
-  return pres;
 }

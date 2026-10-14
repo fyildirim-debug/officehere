@@ -4,7 +4,7 @@ import { Dialog, DialogButton, DialogTabs, Field } from "@officehere/ui";
 import { JUMP_LABELS, normalizeUrl, parseLink } from "../model/links";
 import type { Presentation, Shape } from "../model/types";
 import { ScaledSlide } from "../render/SlideView";
-import { slideTitle } from "../show/SlideShow";
+import { slideTitle } from "../show/slideTitle";
 import type { Actions } from "../state/actions";
 import { compressPictures, COMPRESS_PPI, type CompressOptions } from "../state/compress";
 import { insertSlideZoom, insertSummaryZoom } from "../state/zoomActions";

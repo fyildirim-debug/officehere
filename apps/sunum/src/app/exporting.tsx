@@ -1,7 +1,7 @@
 /** Slayt resmi (PNG) dışa aktarma, ana hat metni ve masaüstünde doğrudan PDF. */
 import { createRoot } from "react-dom/client";
-import JSZip from "jszip";
 import { downloadBlob, getNative } from "@officehere/core";
+import { loadIo } from "../io/formats";
 import type { Presentation, Shape } from "../model/types";
 import { SlideView } from "../render/SlideView";
 import slideCss from "../styles/slide.css?raw";
@@ -59,6 +59,8 @@ export async function exportPngs(pres: Presentation, baseName: string, which: "c
     if (b) downloadBlob(b, `${baseName}-Slayt${current + 1}.png`);
     return;
   }
+  // JSZip yalnız çok slaytlı dışa aktarmada gerekir: ayrı parçadan yüklenir.
+  const { JSZip } = await loadIo();
   const zip = new JSZip();
   for (let i = 0; i < pres.slides.length; i++) {
     const b = await slideToPng(pres, i);

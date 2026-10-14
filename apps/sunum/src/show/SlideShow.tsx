@@ -21,6 +21,7 @@ import { RehearsalBar, useRehearsal, type RehearsalResult } from "./Rehearsal";
 import type { PresenterLink, RemoteCmd, SyncState } from "./showSync";
 import { WindowBar } from "./WindowBar";
 import { playTransitionSound } from "./sounds";
+import { slideTitle } from "./slideTitle";
 
 export type ShowMode = "full" | "window" | "presenter";
 
@@ -664,8 +665,4 @@ export function SlideShow({ pres, startIndex, mode, onExit, opts = {}, onViewCha
   );
 }
 
-export function slideTitle(s: Slide): string {
-  const t = s.shapes.find((x) => x.kind === "sp" && (x.ph?.type === "title" || x.ph?.type === "ctrTitle"));
-  if (!t || t.kind !== "sp" || !t.text) return "";
-  return t.text.paragraphs.map((p) => p.runs.map((r) => r.text).join("")).join(" ").trim();
-}
+export { slideTitle };

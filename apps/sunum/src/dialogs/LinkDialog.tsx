@@ -4,7 +4,7 @@ import { Globe20Regular, Mail20Regular, SlideText20Regular } from "@fluentui/rea
 import { Dialog, DialogButton, Field } from "@officehere/ui";
 import { JUMP_LABELS, normalizeUrl, parseLink } from "../model/links";
 import type { Presentation } from "../model/types";
-import { slideTitle } from "../show/SlideShow";
+import { slideTitle } from "../show/slideTitle";
 import type { LinkContext } from "../state/linkActions";
 
 type Kind = "web" | "place" | "mail";
