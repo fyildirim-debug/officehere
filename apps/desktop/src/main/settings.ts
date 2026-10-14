@@ -1,5 +1,6 @@
 // Kullanıcı ayarları: userData/ayarlar.json. Dosyayı güncelleştirme denetimi (otomatikGuncellemeDenetimi,
-// guncellemeKanali: "kararli" | "beta") da kullanır; yazarken mevcut anahtarlar korunur.
+// guncellemeKanali: "kararli" | "beta") ve yazım sözlüğü onayı (yazimSozlugu: "izinli" | "reddedildi";
+// yoksa hiç sorulmamıştır) da kullanır; yazarken mevcut anahtarlar korunur.
 import { app } from "electron";
 import fs from "node:fs";
 import path from "node:path";
@@ -27,7 +28,7 @@ export function writeSettings(patch: Record<string, unknown>) {
   }
 }
 
-/** Sayfaların köprü üzerinden okuyup yazabildiği ayarlar (güncelleştirme ayarının kendi IPC'si var). */
+/** Sayfaların köprü üzerinden okuyup yazabildiği ayarlar (güncelleştirme ve yazım sözlüğünün kendi IPC'si var). */
 export interface DesktopSettings {
   oturumuGeriYukle: boolean;
 }

@@ -12,6 +12,7 @@ import { errorCode, pendingWrites, queueKey, hasPendingWrites } from "./safeWrit
 import { SaveService } from "./saveService";
 import { restorableSession, writeSession, type SessionDoc } from "./session";
 import { desktopSettings, setDesktopSetting } from "./settings";
+import { initSpellcheck } from "./spellcheck";
 import { initUpdates } from "./updates";
 import { planFor, rememberBounds } from "./windowState";
 
@@ -218,13 +219,13 @@ function createWindow(kind: WindowKind, filePath?: string, extra?: Record<string
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Diller ve sözlükler oturum düzeyinde (spellcheck.ts): onay yoksa dil listesi boştur, sözlük indirilmez.
       spellcheck: true,
     },
   });
   states.set(win.id, { kind, dirty: false, title: APP_TITLES[kind], hasCloseHandler: false, allowClose: false, path: filePath, loads: 0, closeSeq: 0, closeAcked: 0, logWindowStart: 0, logCount: 0 });
   rememberBounds(kind, win);
   if (filePath) snapshotSession();
-  win.webContents.session.setSpellCheckerLanguages(["tr-TR", "en-US"]);
   loadPage(win, kind, filePath, extra);
 
   win.once("ready-to-show", () => {
@@ -775,6 +776,8 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    // Oturuma ilk erişim burada olmalı: yazım sözlüğü onayı sorulmadan hiçbir indirme başlamaz.
+    initSpellcheck();
     log.write("bilgi", "ana", `OfficeHere ${app.getVersion()} başlatıldı · ${process.platform} ${os.release()} ${process.arch} · Electron ${process.versions.electron}`);
     if (process.platform === "win32") app.setAppUserModelId("com.officehere.suite");
     buildMenu();

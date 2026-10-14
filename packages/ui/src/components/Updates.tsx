@@ -1,8 +1,8 @@
 // Güncelleştirme bildirimi: başlık çubuğunda rozet ve Hakkında sayfasında denetim bölümü (kanal
-// seçimiyle).
+// seçimiyle); ayrıca yazım denetimi sözlüklerinin indirme onayı (ilk açılış sorusu ve Seçenekler).
 // Yalnız masaüstünde görünür; tarayıcı sürümünde köprü olmadığı için hiçbir şey çizilmez.
 import { useEffect, useState } from "react";
-import { getNative, type UpdateChannel, type UpdateState } from "@officehere/core";
+import { getNative, type SpellcheckState, type UpdateChannel, type UpdateState } from "@officehere/core";
 import { ArrowClockwise16Regular, ArrowDownload16Regular } from "@fluentui/react-icons";
 import { tipProps } from "./Tooltip";
 
@@ -161,3 +161,90 @@ export function UpdateSection() {
   );
 }
 
+/** Masaüstündeki yazım sözlüğü durumu; tarayıcıda null. */
+export function useSpellcheck(): [SpellcheckState | null, (on: boolean) => void] {
+  const [state, setState] = useState<SpellcheckState | null>(null);
+  useEffect(() => {
+    const api = getNative()?.spellcheck;
+    if (!api) return;
+    let live = true;
+    void api.getState().then((s) => live && setState(s));
+    const off = api.onChange((s) => live && setState(s));
+    return () => {
+      live = false;
+      off();
+    };
+  }, []);
+  const choose = (on: boolean) => {
+    void getNative()
+      ?.spellcheck?.setDownload(on)
+      .then((s) => setState(s));
+  };
+  return [state, choose];
+}
+
+const SPELL_STATUS: Record<SpellcheckState["status"], string> = {
+  sistem: "macOS'un kendi yazım denetimi kullanılır; sözlük indirilmez.",
+  yok: "Sözlükler indirilmedi; yazım denetimi kapalı.",
+  indiriliyor: "Sözlükler indiriliyor…",
+  hazir: "Türkçe ve İngilizce sözlükler yüklü; yazım denetimi ağa çıkmadan çalışır.",
+  hata: "Sözlükler indirilemedi. İnternet bağlantınızı denetleyip yeniden deneyin.",
+};
+
+/** Seçenekler: yazım denetimi sözlüklerini indir / kaldır ve durum. */
+export function SpellcheckSection() {
+  const [s, choose] = useSpellcheck();
+  if (!s) return null;
+  const installed = s.status === "hazir" || s.status === "indiriliyor";
+  return (
+    <section className="oh-spell-section" aria-label="Yazım denetimi sözlükleri">
+      <div className="oh-update-row">
+        <div>
+          <div className="oh-update-version">Yazım denetimi sözlükleri</div>
+          <div className={`oh-update-status is-${s.status === "hata" ? "error" : s.status}`} role="status">
+            {SPELL_STATUS[s.status]}
+          </div>
+        </div>
+        {s.status !== "sistem" && (
+          <div className="oh-update-actions">
+            {installed ? (
+              <button type="button" className="oh-btn" onClick={() => choose(false)}>
+                Kaldır
+              </button>
+            ) : (
+              <button type="button" className="oh-btn is-primary" onClick={() => choose(true)}>
+                İndir
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {s.status !== "sistem" && (
+        <p className="oh-update-note">
+          Türkçe ve İngilizce sözlükler (yaklaşık {s.sizeMb} MB) yalnız siz isteyince, bir kez Google sunucusundan indirilir ve bilgisayarınızda
+          saklanır. Sonrasında yazım denetimi ağa çıkmaz.
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** İlk açılış sorusu (başlangıç ekranı): yalnız hiç sorulmadıysa ve sözlük yerelde yoksa görünür. */
+export function SpellcheckPrompt() {
+  const [s, choose] = useSpellcheck();
+  if (!s?.ask) return null;
+  return (
+    <section className="oh-spell-prompt" aria-label="Yazım denetimi sözlükleri">
+      <p>Yazım denetimi için Türkçe ve İngilizce sözlükler (yaklaşık {s.sizeMb} MB) bir kez Google sunucusundan indirilir. İndirilsin mi?</p>
+      <div className="oh-spell-prompt-actions">
+        <button type="button" className="oh-btn is-primary" onClick={() => choose(true)}>
+          İndir
+        </button>
+        <button type="button" className="oh-btn" onClick={() => choose(false)}>
+          Şimdi değil
+        </button>
+      </div>
+      <p className="oh-update-note">Seçiminizi Seçenekler'den istediğiniz zaman değiştirebilirsiniz.</p>
+    </section>
+  );
+}

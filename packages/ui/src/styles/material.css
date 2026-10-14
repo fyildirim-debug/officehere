@@ -217,8 +217,9 @@
   background: color-mix(in srgb, var(--oh-titlebar-fg) 88%, var(--oh-titlebar-bg));
 }
 
-/* Hakkında / Seçenekler: güncelleştirme bölümü */
-.oh-update-section {
+/* Hakkında / Seçenekler: güncelleştirme ve yazım sözlüğü bölümleri */
+.oh-update-section,
+.oh-spell-section {
   max-width: 640px;
   margin: 12px 0 16px;
   padding: 14px 16px;
@@ -277,6 +278,27 @@
   color: var(--oh-text-muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+/* Başlangıç ekranı: yazım sözlüğü için tek seferlik soru */
+.oh-spell-prompt {
+  max-width: 640px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--oh-surface-2);
+  box-shadow: 0 0 0 1px var(--oh-separator);
+}
+
+.oh-spell-prompt > p:first-child {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.oh-spell-prompt-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 @media (prefers-reduced-motion: reduce) {

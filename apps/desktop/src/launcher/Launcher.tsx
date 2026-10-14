@@ -12,6 +12,8 @@ import {
   BugReportDialog,
   DeveloperCredit,
   RecentFileList,
+  SpellcheckPrompt,
+  SpellcheckSection,
   TemplateRow,
   TemplateTile,
   TitleBar,
@@ -151,6 +153,7 @@ export function Launcher() {
     content = (
       <>
         <BackstageHeading>{greeting()}</BackstageHeading>
+        <SpellcheckPrompt />
         <div className="ohl-apps">
           {APPS.map((a) => (
             <button key={a.app} type="button" className={`ohl-app is-${a.app}`} onClick={() => launch(a.app)}>
@@ -198,6 +201,7 @@ export function Launcher() {
         </label>
         <SessionOption />
         <UpdateSection />
+        <SpellcheckSection />
         <BackstageSubheading>Sorun bildirme</BackstageSubheading>
         <BackstageAction
           icon={<Bug24Regular />}

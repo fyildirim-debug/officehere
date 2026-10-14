@@ -39,8 +39,9 @@ jobs:
       - run: pnpm test
       - run: pnpm web
       - run: pnpm --filter @officehere/desktop build:electron
-      - name: Electron duman testi (başlangıç ekranı + komut satırından .docx/.xlsx/.pptx açma)
-        run: pnpm exec playwright test -c playwright.masaustu.config.ts e2e-masaustu/masaustu.spec.ts -g "başlangıç ekranı açılır|komut satırından açılan dosya"
+      # Ağ isteği testi: onay verilmemiş temiz profilde dış istek yok (macOS'ta sistemin yazım denetleyicisi, Windows'ta sözlük onayı).
+      - name: Electron duman testi (başlangıç ekranı + komut satırından .docx/.xlsx/.pptx açma + ağ isteği yok)
+        run: pnpm exec playwright test -c playwright.masaustu.config.ts e2e-masaustu/masaustu.spec.ts e2e-masaustu/agistegi.spec.ts -g "başlangıç ekranı açılır|komut satırından açılan dosya|dış ağ isteği yok"
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

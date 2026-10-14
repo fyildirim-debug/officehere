@@ -123,6 +123,25 @@ export interface UpdatesApi {
   onChange(callback: (state: UpdateState) => void): () => void;
 }
 
+/**
+ * Yazım denetimi sözlükleri (masaüstü). "sistem": macOS'un kendi denetleyicisi; "yok": indirilmedi
+ * (onay yok); "indiriliyor"; "hazir"; "hata": indirilemedi.
+ */
+export interface SpellcheckState {
+  status: "sistem" | "yok" | "indiriliyor" | "hazir" | "hata";
+  /** İlk açılış sorusu gösterilsin mi (hiç sorulmadı ve sözlük yerelde yok). */
+  ask: boolean;
+  /** İndirilecek yaklaşık boyut (MB). */
+  sizeMb: number;
+}
+
+export interface SpellcheckApi {
+  getState(): Promise<SpellcheckState>;
+  /** true: sözlükleri indir (onay); false: indirme / kaldır. */
+  setDownload(on: boolean): Promise<SpellcheckState>;
+  onChange(callback: (state: SpellcheckState) => void): () => void;
+}
+
 export interface OfficehereNative {
   platform: string;
   openFile(filters: FileFilter[]): Promise<NativeOpenResult | null>;
@@ -171,6 +190,8 @@ export interface OfficehereNative {
   exportPdf?(suggestedName: string, options?: { landscape?: boolean; pageSize?: "A4" | "A3" | "A5" | "Letter" | "Legal" | { width: number; height: number } }): Promise<NativeSaveResult | null>;
   /** GitHub Sürümleri üzerinden güncelleştirme denetimi ve kurulumu. */
   updates?: UpdatesApi;
+  /** Yazım denetimi sözlüklerinin indirme onayı ve durumu. */
+  spellcheck?: SpellcheckApi;
 }
 
 declare global {

@@ -31,7 +31,7 @@ import {
 } from "./Backstage";
 import { APP_NAMES } from "./AppShell";
 import { UI_THEMES, useUiTheme } from "../hooks/useUiTheme";
-import { UpdateSection } from "./Updates";
+import { SpellcheckSection, UpdateSection } from "./Updates";
 import { useAutoSavePref } from "../hooks/useAutoSave";
 import { DeveloperCredit } from "./DeveloperCredit";
 import { BugReportDialog } from "./BugReport";
@@ -212,6 +212,7 @@ export function OfficeBackstage(props: OfficeBackstageProps) {
             {isDesktop() && <AutoSaveField />}
             {extraOptions}
           </div>
+          <SpellcheckSection />
         </>
       );
       break;

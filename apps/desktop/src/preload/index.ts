@@ -27,6 +27,9 @@ ipcRenderer.on("oh:path-conflict", (_e, p: string) => conflictListeners.forEach(
 const updateListeners = new Set<(s: unknown) => void>();
 ipcRenderer.on("oh:update-state", (_e, s: unknown) => updateListeners.forEach((cb) => cb(s)));
 
+const spellcheckListeners = new Set<(s: unknown) => void>();
+ipcRenderer.on("oh:spellcheck-state", (_e, s: unknown) => spellcheckListeners.forEach((cb) => cb(s)));
+
 type WriteOutcome = { ok: boolean; code?: string; reason?: string; message?: string };
 
 contextBridge.exposeInMainWorld("officehereNative", {
@@ -84,6 +87,14 @@ contextBridge.exposeInMainWorld("officehereNative", {
     onChange: (cb: (s: unknown) => void) => {
       updateListeners.add(cb);
       return () => updateListeners.delete(cb);
+    },
+  },
+  spellcheck: {
+    getState: () => ipcRenderer.invoke("oh:spellcheck-get"),
+    setDownload: (on: boolean) => ipcRenderer.invoke("oh:spellcheck-set", on === true),
+    onChange: (cb: (s: unknown) => void) => {
+      spellcheckListeners.add(cb);
+      return () => spellcheckListeners.delete(cb);
     },
   },
 });
