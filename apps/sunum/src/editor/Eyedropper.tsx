@@ -69,22 +69,47 @@ export function EyedropperOverlay({ pres, slideIdx, toSlide, rasterize }: Props)
   const [tip, setTip] = useState<{ x: number; y: number; hex: string } | null>(null);
   const [ready, setReady] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Çizim bitmeden gelen son imleç konumu: hazır olunca ipucu bu noktada gösterilir.
+  const lastRef = useRef<{ x: number; y: number } | null>(null);
+  const toSlideRef = useRef(toSlide);
+  toSlideRef.current = toSlide;
+
+  const colorAt = (cx: number, cy: number): string | null => {
+    const c = pixelsRef.current;
+    if (!c) return null;
+    const [sx, sy] = toSlideRef.current(cx, cy);
+    return samplePixels(c, SCALE, sx, sy);
+  };
+
+  const showTip = (cx: number, cy: number) => {
+    const root = rootRef.current;
+    const hex = root ? colorAt(cx, cy) : null;
+    if (!root || !hex) return setTip(null);
+    const r = root.getBoundingClientRect();
+    setTip({ x: cx - r.left, y: cy - r.top, hex });
+  };
 
   // Kip açılınca slayt bir kez çizilir.
   useEffect(() => {
     if (!pick) return;
     let alive = true;
-    setReady(false);
     pixelsRef.current = null;
     void rasterize(pres, slideIdx, SCALE)
       .then((c) => {
         if (!alive) return;
         pixelsRef.current = c.getContext("2d")?.getImageData(0, 0, c.width, c.height) ?? null;
         setReady(true);
+        if (lastRef.current) showTip(lastRef.current.x, lastRef.current.y);
       })
       .catch(() => alive && stopEyedropper());
     return () => {
       alive = false;
+      // Bileşen kip kapanınca da yerinde kalır: önceki oturumun "hazır" durumu ve ipucu
+      // yeni oturuma taşınmamalı (piksel verisi yokken katman hazır görünüyordu).
+      pixelsRef.current = null;
+      lastRef.current = null;
+      setReady(false);
+      setTip(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pick, slideIdx]);
@@ -107,18 +132,6 @@ export function EyedropperOverlay({ pres, slideIdx, toSlide, rasterize }: Props)
 
   if (!pick) return null;
 
-  const colorAt = (cx: number, cy: number): string | null => {
-    const c = pixelsRef.current;
-    if (!c) return null;
-    const [sx, sy] = toSlide(cx, cy);
-    return samplePixels(c, SCALE, sx, sy);
-  };
-
-  const local = (cx: number, cy: number) => {
-    const r = rootRef.current!.getBoundingClientRect();
-    return { x: cx - r.left, y: cy - r.top };
-  };
-
   return (
     <div
       ref={rootRef}
@@ -138,10 +151,13 @@ export function EyedropperOverlay({ pres, slideIdx, toSlide, rasterize }: Props)
         pick(hex);
       }}
       onPointerMove={(e) => {
-        const hex = colorAt(e.clientX, e.clientY);
-        setTip(hex ? { ...local(e.clientX, e.clientY), hex } : null);
+        lastRef.current = { x: e.clientX, y: e.clientY };
+        showTip(e.clientX, e.clientY);
       }}
-      onPointerLeave={() => setTip(null)}
+      onPointerLeave={() => {
+        lastRef.current = null;
+        setTip(null);
+      }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {tip && (

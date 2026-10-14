@@ -41,8 +41,8 @@ describe("PrintRoot", () => {
     const print = vi.spyOn(window, "print").mockImplementation(() => undefined);
     const onDone = vi.fn();
     const root = render({ onDone });
-    await wait(50);
-    expect(print).toHaveBeenCalledTimes(1);
+    // İki kare + yazı tipi beklemesi yavaş makinede 50 ms'yi aşabilir: sabit süre yerine koşul beklenir.
+    await vi.waitFor(() => expect(print).toHaveBeenCalledTimes(1));
     window.dispatchEvent(new Event("afterprint"));
     await wait(600);
     // afterprint ve yedek zamanlayıcı birlikte gelse de tek bitiş.
@@ -56,7 +56,7 @@ describe("PrintRoot", () => {
     const onReady = vi.fn(async () => undefined);
     const onDone = vi.fn();
     const root = render({ onDone, onReady });
-    await wait(50);
+    await vi.waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
     expect(onReady).toHaveBeenCalledTimes(1);
     expect(print).not.toHaveBeenCalled();
     expect(onDone).toHaveBeenCalledTimes(1);
@@ -67,7 +67,7 @@ describe("PrintRoot", () => {
     const print = vi.spyOn(window, "print").mockImplementation(() => undefined);
     const root = render({ onDone: vi.fn() });
     act(() => root.unmount());
-    await wait(50);
+    await wait(200);
     expect(print).not.toHaveBeenCalled();
   });
 });
