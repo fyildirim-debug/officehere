@@ -8,16 +8,18 @@
  *   (loadWarnings dolu olduğundan otomatik kayıt özgünün üzerine yazmaz).
  * - Sayfa XML'i: yarıda kesilmiş sayfa son tam satıra kadar kurtarılır; Excel
  *   sınırları dışındaki satır/hücre numaraları düzeltilir; sütun aralıkları
- *   kırpılır; çakışan ve dev birleştirmeler ayıklanır (exceljs birleştirmedeki
- *   her hücre için nesne üretir: A1:XFD1048576 = 17 milyar hücre); ilişkisi
- *   olmayan çizim/köprü/tablo başvuruları çıkarılır.
+ *   kırpılır; geçersiz ve çakışan birleştirmeler ayıklanır; ilişkisi olmayan
+ *   çizim/köprü/tablo başvuruları çıkarılır.
  * - exceljs'e verilen kopyada tablo parçaları zararsız bir taslakla değiştirilir
- *   (tablolar xlsxTables ile doğrudan okunur).
+ *   (tablolar xlsxTables ile doğrudan okunur) ve birleştirmeler tümüyle çıkarılır:
+ *   exceljs her birleştirmede öncekilerin hepsini gezer (50.000 birleştirmede
+ *   dakikalar) ve birleştirmedeki her hücre için nesne üretir (A1:XFD1048576 =
+ *   17 milyar hücre). Birleştirmeler buradaki taramayla okunur (merges).
  */
 import JSZip from "jszip";
 import { colToName, MAX_COLS, MAX_ROWS, nameToCol, parseRangeAddress } from "@officehere/formula";
 import type { Rect } from "../model/types";
-import { BIG_MERGE_CELLS, FormatError } from "./bookUtil";
+import { disjointMerges, FormatError } from "./bookUtil";
 import { toOpenError } from "./openErrors";
 import { relsPathOf, unescapeXml } from "./ooxmlZip";
 import { normalizeZip, resolvePath } from "./xlsxPackage";
@@ -35,8 +37,6 @@ export const XLSX_LIMITS = {
   /** Bu boyutu ve sıkıştırma oranını aşan parçalarda dev boşluk dolguları ayıklanır. */
   bombPart: 8 * MB,
   bombRatio: 200,
-  /** exceljs'e verilen tek birleştirmenin en çok hücresi; büyükleri ayrıca eklenir. */
-  excelMerge: BIG_MERGE_CELLS,
 };
 
 const NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -46,11 +46,11 @@ const REL_TYPE = NS_REL + "/";
 export interface PreparedXlsx {
   /** Onarılmış paket: kendi okuyucularımız için. */
   data: ArrayBuffer;
-  /** exceljs'e verilecek paket (tablo parçaları taslakla değiştirilmiş). */
+  /** exceljs'e verilecek paket (tablo parçaları taslakla değiştirilmiş, birleştirmeler çıkarılmış). */
   excel: ArrayBuffer;
   zip: JSZip;
-  /** Sayfa adı → exceljs'e verilmeyen büyük birleştirmeler (okuma sonrası kullanılan alana kırpılarak eklenir). */
-  bigMerges: Map<string, Rect[]>;
+  /** Sayfa adı → birleştirmeler (geçerli, çakışmasız, dosyadaki sırayla; exceljs'e verilmez). */
+  merges: Map<string, Rect[]>;
   /** Okunamayan, atlanan ya da onarılan öğeler (loadWarnings). */
   warnings: string[];
   /** Yapısal onarım yapıldıysa kullanıcıya gösterilecek ileti. */
@@ -373,53 +373,60 @@ export function repairCols(xml: string): string | null {
   return changed ? fixed + xml.slice(head.length) : null;
 }
 
-const area = (r: Rect) => (r.r2 - r.r1 + 1) * (r.c2 - r.c1 + 1);
-const overlaps = (a: Rect, b: Rect) => !(a.r2 < b.r1 || a.r1 > b.r2 || a.c2 < b.c1 || a.c1 > b.c2);
-
 /**
- * Birleştirmeler: geçersizler ve çakışanlar atılır (exceljs çakışmada dosyanın
- * tamamını reddeder), büyükleri exceljs'e verilmez, ayrıca döndürülür.
+ * Birleştirmeler: ayrıştırılamayan, tek hücrelik ve çakışan aralıklar atılır (blok yalnız o zaman
+ * yeniden yazılır); geçerli liste dosyadaki sırayla döner. `excel`: mergeCells'i tümüyle çıkarılmış
+ * XML (exceljs'e verilecek kopya). Kapanmamış blok son birleştirme öğesine kadar okunur; birden çok
+ * blok tek blokta toplanır. `big`: küçük birleştirmeyle çakıştığı için atılan dev birleştirmeler.
+ * Tarama doğrusal, çakışma denetimi O(n log n).
  */
-export function repairMerges(xml: string): { xml: string; big: Rect[]; dropped: number } | null {
-  const at = xml.search(/<(?:\w+:)?mergeCells\b/);
-  if (at < 0) return null;
-  const m = /<((?:\w+:)?)mergeCells\b[^>]*?(?:\/>|>([\s\S]*?)<\/\1mergeCells>)/.exec(xml.slice(at));
-  if (!m) return null;
-  const p = m[1];
-  const kept: Rect[] = [];
-  const big: Rect[] = [];
-  let dropped = 0;
-  let changed = false;
-  const all = [...(m[2] ?? "").matchAll(/<(?:\w+:)?mergeCell\b[^>]*>/g)].map((x) => parseRangeAddress((attrOf(x[0], "ref") ?? "").replace(/\$/g, "")));
-  const sorted: Rect[] = [];
-  for (const r of all) {
-    if (!r || (r.r1 === r.r2 && r.c1 === r.c2)) {
-      dropped += r ? 0 : 1;
-      changed = true;
-      continue;
+export function repairMerges(xml: string): { xml: string; excel: string; merges: Rect[]; dropped: number; big: number } | null {
+  const spans: [number, number][] = [];
+  const all: Rect[] = [];
+  let bad = 0;
+  let p = "";
+  const OPEN = /<((?:\w+:)?)mergeCells\b[^>]*?(\/?)>/g;
+  for (let open = OPEN.exec(xml); open; open = OPEN.exec(xml)) {
+    const at = open.index;
+    const from = at + open[0].length;
+    let end = from;
+    if (!open[2]) {
+      const closeTag = `</${open[1]}mergeCells>`;
+      const close = xml.indexOf(closeTag, from);
+      if (close >= 0) end = close + closeTag.length;
+      else {
+        bad++;
+        const item = /<(?:\w+:)?mergeCell\b[^>]*>(?:\s*<\/(?:\w+:)?mergeCell>)?/g;
+        item.lastIndex = from;
+        while (item.exec(xml)) end = item.lastIndex;
+      }
     }
-    sorted.push(r);
-  }
-  sorted.sort((a, b) => a.r1 - b.r1 || a.c1 - b.c1);
-  // Süpürme: etkin (alt sınırı geçilmemiş) birleştirmelerle çakışma denetimi
-  let active: Rect[] = [];
-  for (const r of sorted) {
-    active = active.filter((x) => x.r2 >= r.r1);
-    if (active.some((x) => overlaps(x, r))) {
-      dropped++;
-      changed = true;
-      continue;
+    for (const x of xml.slice(from, end).matchAll(/<(?:\w+:)?mergeCell\b[^>]*>/g)) {
+      const r = parseRangeAddress((/\sref="([^"]*)"/.exec(x[0])?.[1] ?? "").replace(/\$/g, ""));
+      if (r) all.push(r);
+      else bad++;
     }
-    active.push(r);
-    if (area(r) > XLSX_LIMITS.excelMerge) {
-      big.push(r);
-      changed = true;
-    } else kept.push(r);
+    if (!spans.length) p = open[1];
+    spans.push([at, end]);
+    OPEN.lastIndex = end;
   }
-  if (!changed) return null;
+  if (!spans.length) return null;
+  // Tek hücrelik birleştirme anlamsızdır, sessizce atılır (invalid); ayrıştırılamayan ve çakışanlar uyarılır
+  const { merges, invalid, overlapping, bigDropped } = disjointMerges(all);
+  const splice = (first: string) => {
+    let out = "";
+    let k = 0;
+    spans.forEach(([a, b], j) => {
+      out += xml.slice(k, a) + (j ? "" : first);
+      k = b;
+    });
+    return out + xml.slice(k);
+  };
+  const excel = splice("");
+  if (!bad && !invalid && !overlapping && !bigDropped && spans.length === 1) return { xml, excel, merges, dropped: 0, big: 0 };
   const ref = (r: Rect) => `${colToName(r.c1)}${r.r1 + 1}:${colToName(r.c2)}${r.r2 + 1}`;
-  const block = kept.length ? `<${p}mergeCells count="${kept.length}">${kept.map((r) => `<${p}mergeCell ref="${ref(r)}"/>`).join("")}</${p}mergeCells>` : "";
-  return { xml: xml.slice(0, at) + block + xml.slice(at + m[0].length), big, dropped };
+  const block = merges.length ? `<${p}mergeCells count="${merges.length}">${merges.map((r) => `<${p}mergeCell ref="${ref(r)}"/>`).join("")}</${p}mergeCells>` : "";
+  return { xml: splice(block), excel, merges, dropped: bad + overlapping, big: bigDropped };
 }
 
 /** İlişkisi olmayan r:id başvuruları (silinmiş .rels ya da eksik giriş): exceljs "Target" hatasıyla düşer. */
@@ -464,7 +471,9 @@ export function dropDanglingRefs(xml: string, rels: Rel[] | null, exists: (r: Re
 class Guard {
   warnings: string[] = [];
   notices: string[] = [];
-  bigMerges = new Map<string, Rect[]>();
+  merges = new Map<string, Rect[]>();
+  /** Parça yolu → exceljs'e verilecek (birleştirmeleri çıkarılmış) sayfa XML'i. */
+  excelSheets = new Map<string, string>();
   hadCells = false;
   /** Sayfa adı → parça yolu. */
   sheets: { name: string; path: string }[] = [];
@@ -677,12 +686,6 @@ class Guard {
       }
       const cols = repairCols(xml);
       if (cols !== null) xml = cols;
-      const merges = repairMerges(xml);
-      if (merges) {
-        xml = merges.xml;
-        if (merges.big.length) this.bigMerges.set(s.name, merges.big);
-        if (merges.dropped) this.warn("geçersiz ya da çakışan birleştirmeler");
-      }
       // İlişkiler: hedefi olmayan iç ilişkiler çıkarılır (exceljs "comments"/"Target" hatasıyla düşer)
       const relsPath = relsPathOf(s.path);
       const relsXml = await this.text(relsPath);
@@ -701,6 +704,15 @@ class Guard {
       if (refs) {
         xml = refs.xml;
         for (const l of refs.lost) this.warn(l);
+      }
+      // Birleştirmeler en son: exceljs kopyası sayfanın son hâlinden çıkarılır
+      const merges = repairMerges(xml);
+      if (merges) {
+        xml = merges.xml;
+        if (merges.merges.length && !this.merges.has(s.name)) this.merges.set(s.name, merges.merges);
+        if (merges.dropped) this.warn("geçersiz ya da çakışan birleştirmeler");
+        if (merges.big) this.warn("çok büyük birleştirilmiş alanlar");
+        this.excelSheets.set(s.path, merges.excel);
       }
       if (!this.hadCells && /<(?:\w+:)?c\b[^>]*>\s*<(?:\w+:)?(?:v|is|f)\b/.test(xml)) this.hadCells = true;
       if (!hasSst && xml.includes(' t="s"')) {
@@ -812,13 +824,14 @@ export async function prepareXlsx(input: ArrayBuffer): Promise<PreparedXlsx> {
       throw toOpenError(e);
     }
   }
-  // exceljs kopyası: tablo parçaları zararsız taslakla değiştirilir
+  // exceljs kopyası: tablo parçaları zararsız taslakla değiştirilir, birleştirmeler çıkarılır
   let excel = data;
   const tables = Object.keys(zip.files).filter((n) => /^xl\/tables\/[^/]+\.xml$/i.test(n));
-  if (tables.length) {
+  if (tables.length || g.excelSheets.size) {
     const copy = await JSZip.loadAsync(data);
     tables.forEach((p, i) => copy.file(p, TABLE_STUB(i + 1)));
+    for (const [p, x] of g.excelSheets) copy.file(p, x, { compression: x.length > 4 * MB ? "STORE" : "DEFLATE" });
     excel = await generate(copy);
   }
-  return { data, excel, zip, bigMerges: g.bigMerges, warnings: g.warnings, notice: g.notices.length ? g.notices.join(" ") : undefined, hadCells: g.hadCells, sheetNames: g.sheets.map((s) => s.name) };
+  return { data, excel, zip, merges: g.merges, warnings: g.warnings, notice: g.notices.length ? g.notices.join(" ") : undefined, hadCells: g.hadCells, sheetNames: g.sheets.map((s) => s.name) };
 }

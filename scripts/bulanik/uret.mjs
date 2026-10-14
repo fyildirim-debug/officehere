@@ -1,11 +1,11 @@
 // Bozuk/hatalı dosya örnekleri üretir (bulanık test girdileri). Tohumlu ve deterministiktir: aynı
-// tohum dosyaları ve aynı betikle her seferinde aynı 756 örnek çıkar; örnekler depoya konmaz.
+// tohum dosyaları ve aynı betikle her seferinde aynı 759 örnek çıkar; örnekler depoya konmaz.
 //
 // Tohumlar depodaki derlemden (test-derlem/) ve uygulama fikstürlerinden alınır. Mutasyonlar:
 // bayt bozma, kesik dosya, başlık bozma, ZIP parçası silme, ana XML'i kesme/boşaltma/çöp, sayısal
 // öznitelikleri uç değerlere çekme, derin iç içe yapı, varlık genişlemesi (billion laughs), zip bombası
-// (300 MB), ilişki hedefi yok / döngü, uç hücre başvurusu, CFB FAT döngüsü/halkası, RTF/Markdown
-// derinliği, yanlış uzantı, boş/sahte ZIP ve CFB, CSV uç durumları.
+// (300 MB), ilişki hedefi yok / döngü, uç hücre başvurusu, çok sayıda küçük birleştirme, CFB FAT
+// döngüsü/halkası, RTF/Markdown derinliği, yanlış uzantı, boş/sahte ZIP ve CFB, CSV uç durumları.
 //
 // Kullanım: node scripts/bulanik/uret.mjs [--zorla]   → <CIKTI>/bulanik/<uygulama>/NNN_ad + liste.json
 // (bulanik/calistir.mjs gerekirse kendisi çağırır; tohumlar ve betik değişmediyse yeniden üretmez.)
@@ -132,6 +132,20 @@ export async function uret({ zorla = false } = {}) {
         if (ext === "xlsx") {
           kaydet(app, `${kok}_xfd.${ext}`, await zipDegistir(b, async (zz) => yaz(zz, ana, xml.replace(/<dimension ref="[^"]*"\/>/, '<dimension ref="A1:XFD1048576"/>').replace("</sheetData>", '<row r="1048576"><c r="XFD1048576"><v>1</v></c></row></sheetData>'))), "uç-hücre-XFD1048576", sf);
           kaydet(app, `${kok}_birlesik_tum.${ext}`, await zipDegistir(b, async (zz) => yaz(zz, ana, xml.replace(/<mergeCells[^>]*>/, '<mergeCells count="1"><mergeCell ref="A1:XFD1048576"/>').replace(/<\/sheetData>(?![\s\S]*<mergeCells)/, '</sheetData><mergeCells count="1"><mergeCell ref="A1:XFD1048576"/></mergeCells>'))), "tüm-sayfa-birleşik", sf);
+          // Çok sayıda küçük birleştirme (POI 57893 gibi 50.000 adet): exceljs'in denetimi O(n²) idi.
+          // Sayfanın özgün birleştirmeleri yerine geçer; satırlar veriden sonra başlar, sıra karışıktır.
+          {
+            const r0 = 1100;
+            const refs = [];
+            for (let i = 0; i < 50000; i++) {
+              const r = r0 + (i * 7919) % 50000;
+              refs.push(r % 2 ? `A${r}:B${r}` : `B${r}:C${r}`);
+            }
+            const blok = `<mergeCells count="${refs.length}">${refs.map((x) => `<mergeCell ref="${x}"/>`).join("")}</mergeCells>`;
+            const eski = /<mergeCells[\s\S]*?<\/mergeCells>|<mergeCells[^>]*\/>/;
+            const mut = eski.test(xml) ? xml.replace(eski, () => blok) : xml.replace(/<\/sheetData>|<sheetData\/>/, (m) => m + blok);
+            kaydet(app, `${kok}_cok_birlesik.${ext}`, await zipDegistir(b, async (zz) => yaz(zz, ana, mut)), "çok-sayıda-küçük-birleşim", sf);
+          }
           kaydet(app, `${kok}_satir_sifir.${ext}`, await zipDegistir(b, async (zz) => yaz(zz, ana, xml.replace(/<row r="\d+"/, '<row r="0"').replace(/<c r="[A-Z]+\d+"/, '<c r="A0"'))), "satır-0", sf);
           kaydet(app, `${kok}_formul_dongu.${ext}`, await zipDegistir(b, async (zz) => yaz(zz, ana, xml.replace("</sheetData>", '<row r="2000"><c r="A2000"><f>B2000+1</f></c><c r="B2000"><f>A2000+1</f></c><c r="C2000"><f>' + "SUM(".repeat(2000) + "1" + ")".repeat(2000) + "</f></c></row></sheetData>"))), "döngüsel/derin formül", sf);
         }

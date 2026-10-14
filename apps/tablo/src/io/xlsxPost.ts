@@ -7,7 +7,7 @@
  */
 import JSZip from "jszip";
 import { colToName } from "@officehere/formula";
-import { BIG_MERGE_CELLS } from "./bookUtil";
+import { disjointMerges } from "./bookUtil";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
 import { sheetPaths } from "./ooxmlZip";
 import { WORKBOOK_ORDER, WORKSHEET_ORDER, XmlPart, attrOf, childElements, getExt, rebuildElement, upsertExt } from "./xmlPart";
@@ -47,12 +47,17 @@ export class PackageParts {
   }
 }
 
-/** exceljs'e verilmeyen dev birleştirmeler mergeCells'e doğrudan eklenir. */
-function writeBigMerges(part: XmlPart, sheet: SheetModel): void {
-  const big = sheet.merges.filter((m) => (m.r2 - m.r1 + 1) * (m.c2 - m.c1 + 1) > BIG_MERGE_CELLS);
-  if (!big.length) return;
-  const items = [...(part.get("mergeCells") ?? "").matchAll(/<mergeCell\b[^>]*\/>/g)].map((m) => m[0]);
-  for (const m of big) items.push(`<mergeCell ref="${colToName(m.c1)}${m.r1 + 1}:${colToName(m.c2)}${m.r2 + 1}"/>`);
+/**
+ * Birleştirmelerin tamamı mergeCells'e doğrudan yazılır (exceljs'e verilmez: mergeCells'i her
+ * birleştirmede öncekilerin hepsini gezer). Geçersiz, tek hücrelik ve çakışanlar atılır.
+ */
+function writeMerges(part: XmlPart, sheet: SheetModel): void {
+  const list = sheet.merges.length ? disjointMerges(sheet.merges).merges : [];
+  if (!list.length) {
+    part.set("mergeCells", null);
+    return;
+  }
+  const items = list.map((m) => `<mergeCell ref="${colToName(m.c1)}${m.r1 + 1}:${colToName(m.c2)}${m.r2 + 1}"/>`);
   part.set("mergeCells", `<mergeCells count="${items.length}">${items.join("")}</mergeCells>`);
 }
 
@@ -145,7 +150,7 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise
     if (!part) continue;
     fixRows(part, sheet);
     fixDataBars(part);
-    writeBigMerges(part, sheet);
+    writeMerges(part, sheet);
   }
   if (wb.sheets.some((s) => s.charts.length)) await writeChartsInto(zip, wb, paths, parts);
   if (wb.sheets.some((s) => s.pivots.length)) await writePivotsInto(zip, wb, paths, parts);

@@ -23,7 +23,7 @@ export { compressCells, addXlfnPrefixes, normalizeFileFormula };
 import { readPivotsFromData } from "./xlsxPivot";
 import { OPTIONAL_PARTS, readCommentsFromData, readDefinedNamesFromData, stripOptionalParts } from "./xlsxPackage";
 import { prepareXlsx } from "./xlsxGuard";
-import { BIG_MERGE_CELLS, clampMerge, usedExtent } from "./bookUtil";
+import { BIG_MERGE_CELLS, CELL_BUDGET, clampMerge, disjointMerges, MergeLookup, usedExtent } from "./bookUtil";
 import { readTablesFromData } from "./xlsxTables";
 import { loadZip, releaseZip, seedZip } from "./zipCache";
 import { readSparklinesFromData } from "./xlsxSpark";
@@ -131,22 +131,27 @@ async function readPrepared(ExcelJS: any, pkg: Awaited<ReturnType<typeof prepare
   }
   for (const ws of worksheets) {
     const sheet = wb.addSheet(ws.name);
+    // Birleştirmeler exceljs'e verilmez (xlsxGuard: kendi taramamız, geçerli ve çakışmasız)
+    const merges = pkg.merges.get(ws.name) ?? [];
     try {
-      readSheet(wb, sheet, ws, cr, x, warnings, rawFormats);
+      readSheet(wb, sheet, ws, cr, x, warnings, rawFormats, merges);
     } catch {
       warnings.push(`"${ws.name}" sayfasının bir bölümü`);
     }
-    // exceljs'e verilmeyen büyük birleştirmeler: kullanılan alana kırpılır, yine dev ise atılır
-    const big = pkg.bigMerges.get(ws.name);
-    if (big?.length) {
-      const used = usedExtent(wb, sheet);
-      for (const m of big) {
-        const c = clampMerge(m, used);
-        if (c && !sheet.merges.some((o) => !(c.r2 < o.r1 || c.r1 > o.r2 || c.c2 < o.c1 || c.c1 > o.c2))) {
-          sheet.merges.push(c);
-          if (c.r2 !== m.r2 || c.c2 !== m.c2) warnings.push("çok büyük birleştirilmiş alanlar (kullanılan alana kırpıldı)");
-        } else warnings.push("çok büyük birleştirilmiş alanlar");
+    // Dev birleştirmeler kullanılan alana kırpılır, yine dev ise atılır (birbirleriyle çakışmadıkları
+    // için kırpılmışları da çakışmaz)
+    let used: { rows: number; cols: number } | undefined;
+    for (const m of merges) {
+      if ((m.r2 - m.r1 + 1) * (m.c2 - m.c1 + 1) <= BIG_MERGE_CELLS) {
+        sheet.merges.push(m);
+        continue;
       }
+      used ??= usedExtent(wb, sheet);
+      const c = clampMerge(m, used);
+      if (c) {
+        sheet.merges.push(c);
+        if (c.r2 !== m.r2 || c.c2 !== m.c2) warnings.push("çok büyük birleştirilmiş alanlar (kullanılan alana kırpıldı)");
+      } else warnings.push("çok büyük birleştirilmiş alanlar");
     }
   }
   // exceljs'in sessizce atladığı sayfa kalmasın (ör. ayrıştırılamayan sayfa parçası)
@@ -252,7 +257,7 @@ function countCells(wb: WorkbookModel, s: SheetModel): number {
 
 
 
-function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResolver, x: any, warnings: string[], rawFormats?: Map<string, string>): void {
+function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResolver, x: any, warnings: string[], rawFormats?: Map<string, string>, merges: Rect[] = []): void {
   if (ws.state && ws.state !== "visible") sheet.hidden = true;
   const tab = cr.resolve(ws.properties?.tabColor);
   if (tab) sheet.tabColor = tab;
@@ -276,6 +281,14 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
   const notesCells: { row: number; col: number; text: string; author?: string }[] = [];
   const arrayAreas: (Rect & { row: number; col: number })[] = [];
   const validations = new Map<string, { rule: ValidationRule; cells: [number, number][]; rects: Rect[] }>();
+  // Birleştirilmiş alanın gizli hücreleri yalnız stil taşır (exceljs birleştirirken değerlerini atardı);
+  // dev birleştirmelerde değerler korunur (kırpılıp kullanılan alanın tamamını kaplayabilirler)
+  const small = merges.filter((m) => (m.r2 - m.r1 + 1) * (m.c2 - m.c1 + 1) <= BIG_MERGE_CELLS);
+  const lookup = small.length ? new MergeLookup(small) : null;
+  const hiddenInMerge = (r: number, c: number) => {
+    const m = lookup?.at(r, c);
+    return !!m && (m.r1 !== r || m.c1 !== c);
+  };
   // Satırlar seyrek dizide durur: yalnız var olanlar dolaşılır (exceljs'in eachRow'u boşlukları da
   // nesneye çevirir; bozuk dosyada satır 2^31 olunca takılırdı). Hücreler sütun sınırıyla dolaşılır.
   const rowList: any[] = ws._rows ?? [];
@@ -297,9 +310,10 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
     for (let cn = 1; cn <= nCells; cn++) {
       const cell = row.getCell(cn);
       const c = cn - 1;
-      readCell(wb, sheet, cell, r, c, cr, rawFormats);
+      const hidden = hiddenInMerge(r, c);
+      readCell(wb, sheet, cell, r, c, cr, rawFormats, hidden);
       // Dizi formülünün (dinamik dizi) kapladığı alan: ana hücre dışındakiler yalnız önbellek değeridir
-      const v = cell.value;
+      const v = hidden ? null : cell.value;
       if (v && typeof v === "object" && v.shareType === "array" && typeof v.ref === "string") {
         const ar = parseRangeAddress(v.ref.replace(/\$/g, ""));
         if (ar && (ar.r1 !== ar.r2 || ar.c1 !== ar.c2)) arrayAreas.push({ ...ar, row: r, col: c });
@@ -330,12 +344,6 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
     else g.rects.push(rr);
   }
   for (const g of validations.values()) sheet.validations.push({ id: wb.newId("dv"), rule: g.rule, ranges: [...g.rects, ...(g.cells.length ? compressCells(g.cells) : [])] });
-  // Birleştirmeler
-  const merges: string[] = ws.model?.merges ?? [];
-  for (const m of merges) {
-    const r = parseRangeAddress(m);
-    if (r) sheet.merges.push(r);
-  }
   // Görünüm
   const v = ws.views?.[0];
   if (v) {
@@ -452,12 +460,12 @@ function bytesToBase64(bytes: Uint8Array): string {
   return typeof btoa === "function" ? btoa(s) : Buffer.from(bytes).toString("base64");
 }
 
-function readCell(wb: WorkbookModel, sheet: SheetModel, cell: any, r: number, c: number, cr: ColorResolver, rawFormats?: Map<string, string>): void {
+function readCell(wb: WorkbookModel, sheet: SheetModel, cell: any, r: number, c: number, cr: ColorResolver, rawFormats?: Map<string, string>, hiddenInMerge = false): void {
   const v = cell.value;
   const styleObj = cell.style;
   let input: Scalar | { formula: string } = null;
   let link: string | undefined;
-  if (cell.type === 1) {
+  if (hiddenInMerge || cell.type === 1) {
     // Birleştirilmiş alt hücre: yalnız stil
   } else if (v !== null && v !== undefined) {
     if (typeof v === "number" || typeof v === "boolean") input = v;
@@ -644,14 +652,27 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any, xStyle: (id: n
     const c = k % 16384;
     ws.getCell(r + 1, c + 1).note = n.text;
   }
-  // Birleştirmeler (dev olanlar postProcess'te doğrudan yazılır: exceljs her hücreyi nesneye çevirir)
-  for (const m of sheet.merges) {
-    if ((m.r2 - m.r1 + 1) * (m.c2 - m.c1 + 1) > BIG_MERGE_CELLS) continue;
-    try {
-      ws.mergeCells(m.r1 + 1, m.c1 + 1, m.r2 + 1, m.c2 + 1);
-    } catch {
-      /* çakışan birleştirme */
-    }
+  // Birleştirmeler postProcess'te (writeMerges) doğrudan yazılır: exceljs'in mergeCells'i her
+  // birleştirmede öncekilerin hepsini gezer (O(n²)). Gizli hücreler, exceljs'in birleştirmesindeki gibi,
+  // değer taşımaz ve ana hücrenin stilini alır (kenarlıklar kenardaki hücrelerden çizilir). Ana hücre
+  // biçimsizse yalnız var olan gizli hücreler boşaltılır (boş, biçimsiz hücre zaten yazılmaz). Dev
+  // birleştirmelerde ve toplam bütçe aşılınca hücre üretilmez.
+  let budget = CELL_BUDGET;
+  for (const m of disjointMerges(sheet.merges).merges) {
+    const n = (m.r2 - m.r1 + 1) * (m.c2 - m.c1 + 1);
+    if (n > BIG_MERGE_CELLS || n > budget) continue;
+    budget -= n;
+    const master = ws.findCell(m.r1 + 1, m.c1 + 1) ?? (wb.styleIdAt(sheet, m.r1, m.c1) ? ws.getCell(m.r1 + 1, m.c1 + 1) : undefined);
+    const style = master?.style;
+    const plain = !style || !Object.keys(style).length;
+    for (let r = m.r1; r <= m.r2; r++)
+      for (let c = m.c1; c <= m.c2; c++) {
+        if (r === m.r1 && c === m.c1) continue;
+        const cell = plain ? ws.findCell(r + 1, c + 1) : ws.getCell(r + 1, c + 1);
+        if (!cell) continue;
+        cell.value = null;
+        cell.style = plain ? EMPTY_X : style;
+      }
   }
   if (sheet.autoFilter) ws.autoFilter = formatRange(sheet.autoFilter.range);
   // Veri doğrulama: postProcess'te (xlsxExtras) çakışmasız ve sınırsız aralıkla yazılır
