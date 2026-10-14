@@ -7,7 +7,9 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./opc": "./src/opc/index.ts",
+    "./opc/*": "./src/opc/*.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
