@@ -10,6 +10,7 @@ import type { SheetModel, WorkbookModel } from "../model/workbook";
 import { nextRid, resolveTarget, sheetPaths } from "./ooxmlZip";
 import type { PackageParts } from "./xlsxPost";
 import { attrOf, childElements, rebuildElement } from "./xmlPart";
+import { loadZip } from "./zipCache";
 
 const FPB_NS = "http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag";
 const XF_EXT_URI = "{C7286773-470A-42A8-94C5-96B5CB345126}";
@@ -113,7 +114,7 @@ export async function writeCheckboxesInto(zip: JSZip, wb: WorkbookModel, paths: 
 
 /** Dosyadaki onay kutulu biçimleri (xfComplement → Checkbox torbası) hücre stillerine işler. */
 export async function readCheckboxesFromData(data: ArrayBuffer, wb: WorkbookModel): Promise<void> {
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadZip(data);
   const styles = await zip.file("xl/styles.xml")?.async("string");
   if (!styles || !/xfComplement/.test(styles)) return;
   // Özellik torbasında Checkbox olmalı (başka hücre denetimleri onay kutusu sayılmaz)

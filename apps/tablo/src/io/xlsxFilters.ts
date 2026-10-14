@@ -4,11 +4,11 @@
  * (<customFilters>), ilk 10 (<top10>). Sayfa otomatik filtresi sayfa XML'inde,
  * tablo filtreleri tablo parçasında durur. exceljs ölçütleri yazmaz/okumaz.
  */
-import JSZip from "jszip";
 import { formatRange } from "@officehere/formula";
 import type { AutoFilter, FilterCriteria } from "../model/types";
 import type { WorkbookModel } from "../model/workbook";
 import { esc, relsPathOf, resolveTarget, sheetPaths, unescapeXml } from "./ooxmlZip";
+import { loadZip } from "./zipCache";
 
 const OPS: Record<string, string> = { eq: "equal", ne: "notEqual", gt: "greaterThan", ge: "greaterThanOrEqual", lt: "lessThan", le: "lessThanOrEqual" };
 
@@ -98,16 +98,9 @@ export function parseFilterColumns(autoFilterXml: string): Record<number, Filter
   return out;
 }
 
-/** Tablo parçasındaki autoFilter'ı ölçütlerle değiştirir. */
-export function patchTableAutoFilter(tableXml: string, f: AutoFilter | undefined): string {
-  if (!f || !Object.keys(f.columns).length) return tableXml;
-  // Tablo autoFilter'ında colId tablo sütun sırasıdır (filtre aralığına göre)
-  return tableXml.replace(/<autoFilter\b[^>]*\/>|<autoFilter\b[\s\S]*?<\/autoFilter>/, autoFilterXml(f));
-}
-
 /** Dosyadan sayfa ve tablo filtre ölçütlerini okur. */
 export async function readFiltersFromData(data: ArrayBuffer, wb: WorkbookModel): Promise<void> {
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadZip(data);
   const paths = await sheetPaths(zip);
   for (const sheet of wb.sheets) {
     const p = paths.get(sheet.name);

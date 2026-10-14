@@ -10,6 +10,7 @@ import type { ChartDef, ChartSeriesDef, ChartType, Rect } from "../model/types";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
 import type { PackageParts } from "./xlsxPost";
 import { NS_R, esc, nextRid, relsPathOf, resolveTarget, sheetPaths, unescapeXml } from "./ooxmlZip";
+import { loadZip } from "./zipCache";
 
 const NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 const NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
@@ -272,7 +273,7 @@ function detectType(xml: string): ChartType {
 }
 
 export async function readCharts(data: ArrayBuffer, wb: WorkbookModel): Promise<void> {
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadZip(data);
   const paths = await sheetPaths(zip);
   for (const sheet of wb.sheets) {
     const sheetPath = paths.get(sheet.name);

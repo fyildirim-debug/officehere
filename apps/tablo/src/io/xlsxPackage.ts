@@ -7,6 +7,7 @@
  *   ilişkilerden çıkarıp kalanının açılabilmesini sağlar.
  */
 import JSZip from "jszip";
+import { loadZip } from "./zipCache";
 
 /** İsteğe bağlı parça türleri: ilişki türü sonekine göre, kullanıcıya gösterilecek adla. */
 export const OPTIONAL_PARTS: { kind: string; label: string; types: string[] }[] = [
@@ -160,6 +161,12 @@ export function resolvePath(source: string, target: string): string {
  */
 export async function normalizePackage(data: ArrayBuffer): Promise<ArrayBuffer> {
   const zip = await JSZip.loadAsync(data);
+  if (!(await normalizeZip(zip))) return data;
+  return zip.generateAsync({ type: "arraybuffer" });
+}
+
+/** normalizePackage'ın açılmış paket üzerinde çalışan biçimi; değişiklik olduysa true. */
+export async function normalizeZip(zip: JSZip): Promise<boolean> {
   let changed = false;
   for (const name of Object.keys(zip.files)) {
     if (!name.endsWith(".rels") || zip.files[name].dir) continue;
@@ -170,7 +177,21 @@ export async function normalizePackage(data: ArrayBuffer): Promise<ArrayBuffer> 
       changed = true;
     }
   }
-  // Parça adları
+  // Parça adları. Birden çok türde başvurulan (ör. döngüsel/bozuk ilişkiyle workbook.xml'i gösteren)
+  // parçalar taşınmaz: yanlış bir ilişki ana parçayı sayfa klasörüne taşıyıp kitabı bozmasın.
+  const typesOf = new Map<string, Set<string>>();
+  for (const name of Object.keys(zip.files)) {
+    if (!name.endsWith(".rels")) continue;
+    const src = sourceOfRels(name);
+    const xml = await zip.file(name)!.async("string");
+    for (const m of xml.matchAll(/<Relationship\b[^>]*>/g)) {
+      if (relAttr(m[0], "TargetMode") === "External") continue;
+      const p = resolvePath(src, relAttr(m[0], "Target") ?? "");
+      if (!typesOf.has(p)) typesOf.set(p, new Set());
+      typesOf.get(p)!.add(relAttr(m[0], "Type") ?? "");
+    }
+  }
+  const FIXED = /^(xl\/workbook\.xml|xl\/styles\.xml|xl\/sharedStrings\.xml|\[Content_Types\]\.xml)$|\.rels$/;
   for (const spec of PART_NAMES) {
     const targets: string[] = [];
     for (const name of Object.keys(zip.files)) {
@@ -183,7 +204,7 @@ export async function normalizePackage(data: ArrayBuffer): Promise<ArrayBuffer> 
         if (!targets.includes(p)) targets.push(p);
       }
     }
-    const bad = targets.filter((p) => !spec.ok.test(p) && zip.file(p));
+    const bad = targets.filter((p) => !spec.ok.test(p) && zip.file(p) && !FIXED.test(p) && (typesOf.get(p)?.size ?? 0) <= 1);
     if (!bad.length) continue;
     let n = 1;
     for (const p of bad) {
@@ -227,8 +248,7 @@ export async function normalizePackage(data: ArrayBuffer): Promise<ArrayBuffer> 
     }
     changed = true;
   }
-  if (!changed) return data;
-  return zip.generateAsync({ type: "arraybuffer" });
+  return changed;
 }
 
 async function replaceAsync(s: string, re: RegExp, fn: (m: string) => Promise<string>): Promise<string> {
@@ -280,7 +300,7 @@ export async function stripOptionalParts(data: ArrayBuffer, kinds: string[]): Pr
 
 /** Hücre notlarını (comments parçaları) doğrudan okur: düz <t> ya da biçimli <r><t> metinleri. */
 export async function readCommentsFromData(data: ArrayBuffer): Promise<Map<string, { ref: string; text: string; author?: string }[]>> {
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadZip(data);
   const out = new Map<string, { ref: string; text: string; author?: string }[]>();
   const wbXml = await zip.file("xl/workbook.xml")?.async("string");
   const wbRels = await zip.file("xl/_rels/workbook.xml.rels")?.async("string");
@@ -321,7 +341,7 @@ export async function readCommentsFromData(data: ArrayBuffer): Promise<Map<strin
 
 /** workbook.xml içindeki tanımlı adlar (sabit ve formül adları dahil). */
 export async function readDefinedNamesFromData(data: ArrayBuffer): Promise<{ name: string; formula: string; localSheetId?: number }[]> {
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadZip(data);
   const xml = await zip.file("xl/workbook.xml")?.async("string");
   if (!xml) return [];
   const out: { name: string; formula: string; localSheetId?: number }[] = [];

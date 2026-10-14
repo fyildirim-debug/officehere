@@ -7,9 +7,10 @@
 import JSZip from "jszip";
 import { cellKey, dateToSerial, errorFromCode, MAX_COLS, MAX_ROWS, type Scalar } from "@officehere/formula";
 import { activateTheme } from "../../model/themeRuntime";
-import { DEFAULT_FONT, DEFAULT_SIZE, type CellStyle } from "../../model/styles";
+import { DEFAULT_SIZE, type CellStyle } from "../../model/styles";
 import { WorkbookModel, type CellInput, type SheetModel } from "../../model/workbook";
-import { CELL_BUDGET, FormatError, safeSheetName } from "../bookUtil";
+import { BIG_MERGE_CELLS, CELL_BUDGET, clampMerge, FormatError, safeSheetName } from "../bookUtil";
+import { checkPackageLimits, readCollapsed } from "../xlsxGuard";
 import { odfFormulaToA1, ofRefToA1 } from "./formula";
 import { lengthToPx, OdsStyleSheet } from "./styles";
 import { child, parseXml, scanXml, TreeBuilder } from "./xml";
@@ -57,20 +58,23 @@ interface ColRun {
 const STYLED_ROW_CAP = 1000;
 const STYLED_RUN_CAP = 1024;
 
-/** ODS/OTS paketini çalışma kitabına çevirir. */
-export async function readOds(data: ArrayBuffer | Uint8Array): Promise<WorkbookModel> {
+/** ODS/OTS paketini çalışma kitabına çevirir. Yapısal sorunda report.notice doldurulur. */
+export async function readOds(data: ArrayBuffer | Uint8Array, report?: { notice?: string }): Promise<WorkbookModel> {
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(data);
-  } catch {
-    throw new FormatError("Dosya geçerli bir OpenDocument paketi değil.");
+  } catch (e) {
+    throw new FormatError("Dosya bozuk ya da eksik indirilmiş: OpenDocument paketi okunamadı.", `${(e as Error)?.name ?? "Error"}: ${(e as Error)?.message ?? e}`);
   }
+  // Paket sınırları (sıkıştırma bombası, tutarsız boyut bilgisi); aşırı sıkıştırılmış parçalar akışla ayıklanır
+  const suspicious = checkPackageLimits(zip);
+  const text = (path: string) => (suspicious.has(path) && zip.file(path) ? readCollapsed(zip.file(path)!) : zip.file(path)?.async("string"));
   const manifest = await zip.file("META-INF/manifest.xml")?.async("string");
   if (manifest && /encryption-data/.test(manifest)) throw new FormatError("Bu dosya parola ile şifrelenmiş. Şifreli OpenDocument dosyaları açılamaz.");
-  const content = await zip.file("content.xml")?.async("string");
-  if (!content) throw new FormatError("OpenDocument paketinde content.xml yok.");
+  const content = await text("content.xml");
+  if (!content) throw new FormatError("Dosya bozuk ya da eksik: OpenDocument paketinde içerik bölümü (content.xml) bulunamadı.");
   const sheetStyles = new OdsStyleSheet();
-  const stylesXml = await zip.file("styles.xml")?.async("string");
+  const stylesXml = await text("styles.xml");
   if (stylesXml) {
     try {
       const root = child(parseXml(stylesXml), "office:document-styles");
@@ -85,7 +89,15 @@ export async function readOds(data: ArrayBuffer | Uint8Array): Promise<WorkbookM
   const warnings = new Set<string>();
   // Varsayılan hücre yazı tipi tema gövde yazı tipi olur (boş hücreler de aynı görünsün)
   const reader = new ContentReader(wb, sheetStyles, warnings);
-  scanXml(content, reader);
+  try {
+    scanXml(content, reader);
+  } catch (e) {
+    // Bozuk ya da yarıda kesilmiş içerik: hata noktasına kadar okunanlar kurtarılır
+    if (!reader.hasData()) throw e;
+    reader.salvage();
+    warnings.add("içeriğin bozuk bölümden sonraki kısmı");
+    if (report) report.notice = "Dosya bozuk ya da yarıda kesilmiş: okunabilen bölüm açıldı. Kaydetmeden önce içeriği denetleyin; okunamayan kısım kaydedince kaybolur.";
+  }
   reader.finish();
   try {
     const meta = await zip.file("meta.xml")?.async("string");
@@ -166,7 +178,8 @@ class ContentReader {
     if (this.baseReady) return;
     this.baseReady = true;
     const base = this.styles.cellStyle(undefined);
-    if (base.font && base.font !== DEFAULT_FONT) this.wb.theme = { ...this.wb.theme, minorFont: base.font };
+    // Kitabın kendi teması esas alınır (modül düzeyindeki varsayılan önceki kitaptan kalmış olabilir)
+    if (base.font && base.font !== this.wb.theme.minorFont) this.wb.theme = { ...this.wb.theme, minorFont: base.font };
     activateTheme(this.wb.theme);
   }
 
@@ -359,9 +372,48 @@ class ContentReader {
     this.colIndex += count;
   }
 
-  private colDefaultStyle(col: number): string | undefined {
-    for (const r of this.colRuns) if (col >= r.start && col < r.start + r.count) return r.defaultCell;
-    return undefined;
+  /** Modelde sütuna atanacak stil (endSheet ile aynı kural: "Default" ve tanımsız → yok). */
+  private colStyleId(name: string | undefined): number {
+    return name && name !== "Default" ? this.styleId(name) : 0;
+  }
+
+  /** [col, col+n) aralığını sütun öbeklerine böler: her parçanın varsayılan hücre stili ve model sütun stili. */
+  private colSegments(col: number, n: number): { start: number; count: number; style?: string; colSid: number }[] {
+    const out: { start: number; count: number; style?: string; colSid: number }[] = [];
+    const end = col + n;
+    let at = col;
+    for (const r of this.colRuns) {
+      if (at >= end) break;
+      const rEnd = r.start + r.count;
+      if (rEnd <= at) continue;
+      if (r.start > at) {
+        // Tanımsız sütunlar (öbekler arasında boşluk)
+        const stop = Math.min(r.start, end);
+        out.push({ start: at, count: stop - at, colSid: 0 });
+        at = stop;
+        if (at >= end) break;
+      }
+      const stop = Math.min(rEnd, end);
+      out.push({ start: at, count: stop - at, style: r.defaultCell, colSid: this.colStyleId(r.defaultCell) });
+      at = stop;
+    }
+    if (at < end) out.push({ start: at, count: end - at, colSid: 0 });
+    return out;
+  }
+
+  /** Şimdiye kadar hücre okundu mu (bozuk dosyada kurtarılacak veri var mı). */
+  hasData(): boolean {
+    return this.cellsWritten > 0;
+  }
+
+  /** Ayrıştırma yarıda kaldı: açık hücre/satır/sayfa kapatılır. */
+  salvage(): void {
+    this.capture = null;
+    this.subTable = 0;
+    if (this.cell) this.endCell();
+    if (this.row && this.sheet) this.endRow(this.row);
+    this.row = null;
+    if (this.sheet) this.endSheet();
   }
 
   private endRow(row: RowRec): void {
@@ -372,8 +424,11 @@ class ContentReader {
     const count = Math.min(repeat, MAX_ROWS - start);
     this.rowIndex = start + count;
     const rowDefault = row.attrs["table:default-cell-style-name"];
-    // Hücreleri sütunlara yerleştir: içerikli mi, yalnız stilli mi?
-    type Placed = { col: number; count: number; rec: CellRec; content: boolean; styleId: number };
+    // Hücreleri sütunlara yerleştir: içerikli mi, yalnız stilli mi? Kendi stili olmayan (yinelenen)
+    // hücreler her sütunun varsayılan hücre stilini alır; bu yüzden sütun öbekleri sınırında bölünür.
+    // Model hücre stili yoksa sütun stiline düşer: yalnız etkin stil sütununkinden farklıysa hücreye yazılır
+    // (açıkça "Default" stilli hücre, stilli sütunda biçimsiz kalmalıdır).
+    type Placed = { col: number; count: number; rec: CellRec; content: boolean; styleId: number; own: boolean };
     const placed: Placed[] = [];
     let col = 0;
     let hasContent = false;
@@ -383,11 +438,16 @@ class ContentReader {
       const n = Math.min(Math.max(1, Number(rec.attrs["table:number-columns-repeated"] ?? 1) || 1), MAX_COLS - col);
       const a = rec.attrs;
       const content = !rec.covered && (a["office:value-type"] !== undefined || a["table:formula"] !== undefined || rec.paras.length > 0 || !!rec.note || a["table:number-columns-spanned"] !== undefined || a["table:number-rows-spanned"] !== undefined);
-      const styleName = a["table:style-name"] ?? rowDefault ?? this.colDefaultStyle(col);
-      const sid = styleName && styleName !== "Default" ? this.styleId(styleName) : content ? this.styleId(styleName) : 0;
-      if (content) hasContent = true;
-      if (sid) hasStyle = true;
-      if (content || sid) placed.push({ col, count: n, rec, content, styleId: sid });
+      const explicit = a["table:style-name"] ?? rowDefault;
+      for (const seg of this.colSegments(col, n)) {
+        const name = explicit ?? seg.style;
+        // İçerikli hücre varsayılan stilin yazı tipi/boyutunu taşır; boş hücrede "Default" biçimsiz demektir
+        const sid = content ? this.styleId(name) : name && name !== "Default" ? this.styleId(name) : 0;
+        const own = sid !== seg.colSid;
+        if (content) hasContent = true;
+        if (own) hasStyle = true;
+        if (content || own) placed.push({ col: seg.start, count: seg.count, rec, content, styleId: sid, own });
+      }
       col += n;
     }
     this.rowRuns.push({ start, count, styleName: row.attrs["table:style-name"], hidden: row.attrs["table:visibility"] === "collapse" || row.attrs["table:visibility"] === "filter" });
@@ -403,18 +463,18 @@ class ContentReader {
             this.warnings.add("çok büyük yinelenen alanların bir bölümü");
             return;
           }
-          this.writeCell(sheet, r, p.col + j, p.rec, p.content, p.styleId);
+          this.writeCell(sheet, r, p.col + j, p.rec, p.content, p.styleId, p.own);
         }
       }
       if (r > this.lastRow) this.lastRow = r;
     }
   }
 
-  private writeCell(sheet: SheetModel, r: number, c: number, rec: CellRec, content: boolean, styleId: number): void {
+  private writeCell(sheet: SheetModel, r: number, c: number, rec: CellRec, content: boolean, styleId: number, own: boolean): void {
     this.cellsWritten++;
     if (c > this.lastCol) this.lastCol = c;
     const k = cellKey(r, c);
-    if (styleId) sheet.styles.set(k, styleId);
+    if (own) sheet.styles.set(k, styleId);
     if (!content) return;
     const a = rec.attrs;
     const cs = Number(a["table:number-columns-spanned"] ?? 1) || 1;
@@ -475,10 +535,10 @@ class ContentReader {
     if (tailW && tailW > 2) sheet.cols.setDefault(Math.round(tailW));
     const colLimit = Math.max(this.lastCol + 1, 256);
     for (const r of this.colRuns) {
-      if (r === tail && tail.count >= 64 && !r.hidden) continue;
-      const w = width(r);
+      const isTail = r === tail && tail.count >= 64 && !r.hidden;
+      const w = isTail ? undefined : width(r);
       const end = Math.min(r.start + r.count, colLimit, MAX_COLS);
-      for (let c = r.start; c < end; c++) {
+      for (let c = r.start; c < end && !isTail; c++) {
         if (w !== undefined && Math.abs(w - sheet.cols.defaultSize) > 0.5) sheet.cols.set(c, Math.round(w));
         if (r.hidden) sheet.cols.setHidden(c, true);
       }
@@ -488,6 +548,14 @@ class ContentReader {
         if (id) for (let c = r.start; c < end; c++) sheet.colStyles.set(c, id);
       }
     }
+    // Dev birleştirmeler (bozuk yayılma sayıları): kullanılan alana kırpılır, yine dev ise atılır
+    const used = { rows: this.lastRow + 1, cols: this.lastCol + 1 };
+    sheet.merges = sheet.merges.flatMap((m) => {
+      if ((m.r2 - m.r1 + 1) * (m.c2 - m.c1 + 1) <= BIG_MERGE_CELLS) return [m];
+      const c = clampMerge(m, used);
+      if (c !== m) this.warnings.add(c ? "çok büyük birleştirilmiş alanlar (kullanılan alana kırpıldı)" : "çok büyük birleştirilmiş alanlar");
+      return c ? [c] : [];
+    });
     // Satırlar: yalnız son anlamlı satıra kadar
     const rowLimit = this.lastRow + 1;
     for (const r of this.rowRuns) {

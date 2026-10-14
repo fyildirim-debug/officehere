@@ -78,7 +78,11 @@ function border(b: any, cr: ColorResolver): BorderSide | undefined {
 }
 
 /** exceljs stil nesnesi → CellStyle. */
-export function fromXStyle(s: any, cr: ColorResolver): CellStyle {
+/**
+ * @param rawFormats exceljs sayı biçimlerindeki ters bölü kaçışlarını siler ("0\\ \\k\\m" → "0 km":
+ * harfler biçim koduna dönüşür); dosyadaki özgün kodlar bu eşlemeyle geri konur.
+ */
+export function fromXStyle(s: any, cr: ColorResolver, rawFormats?: Map<string, string>): CellStyle {
   const out: CellStyle = {};
   if (!s) return out;
   const f = s.font;
@@ -125,7 +129,7 @@ export function fromXStyle(s: any, cr: ColorResolver): CellStyle {
     if (a.indent) out.indent = a.indent;
     if (a.textRotation) out.rotation = a.textRotation === "vertical" ? 255 : Number(a.textRotation);
   }
-  if (s.numFmt && s.numFmt !== "General") out.numFmt = BUILTIN_FORMAT_FIX[s.numFmt] ?? s.numFmt;
+  if (s.numFmt && s.numFmt !== "General") out.numFmt = BUILTIN_FORMAT_FIX[s.numFmt] ?? rawFormats?.get(s.numFmt) ?? s.numFmt;
   if (s.protection) {
     if (s.protection.locked === false) out.locked = false;
     if (s.protection.hidden) out.hidden = true;
@@ -172,4 +176,17 @@ export function toXStyle(s: CellStyle): any {
 
 export function isDefaultXStyle(s: CellStyle): boolean {
   return Object.keys(s).length === 0;
+}
+
+/** styles.xml'deki özel sayı biçimleri: kaçışsız biçim → dosyadaki özgün kod (yalnız farklı olanlar). */
+export function rawNumberFormats(stylesXml: string | undefined): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!stylesXml) return out;
+  const unesc = (v: string) => v.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  for (const m of stylesXml.matchAll(/<(?:\w+:)?numFmt\b[^>]*\sformatCode="([^"]*)"/g)) {
+    const raw = unesc(m[1]);
+    const key = raw.replace(/[\\](.)/g, "$1");
+    if (key !== raw && !out.has(key)) out.set(key, raw);
+  }
+  return out;
 }

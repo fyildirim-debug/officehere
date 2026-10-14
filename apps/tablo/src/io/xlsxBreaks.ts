@@ -4,11 +4,11 @@
  * doğrudan yazılır ve oradan okunur. brk id'si yeni sayfanın ilk satırının /
  * sütununun sıfır tabanlı dizinidir (son, o satırın üstünde / sütunun solunda).
  */
-import JSZip from "jszip";
 import type { WorkbookModel } from "../model/workbook";
 import { sheetPaths } from "./ooxmlZip";
 import { WORKSHEET_ORDER, XmlPart } from "./xmlPart";
 import type { PackageParts } from "./xlsxPost";
+import { loadZip } from "./zipCache";
 
 function breaksXml(tag: "rowBreaks" | "colBreaks", list: number[], max: number): string | null {
   if (!list.length) return null;
@@ -51,7 +51,7 @@ export function parseBreaks(xml: string, tag: "rowBreaks" | "colBreaks"): number
 }
 
 export async function readPageBreaksFromData(data: ArrayBuffer, wb: WorkbookModel): Promise<void> {
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadZip(data);
   const paths = await sheetPaths(zip);
   for (const sheet of wb.sheets) {
     const path = paths.get(sheet.name);

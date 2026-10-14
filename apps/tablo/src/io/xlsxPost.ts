@@ -6,6 +6,8 @@
  * öğeler de: ör. legacyDrawing'i extLst'ten sonra yazar).
  */
 import JSZip from "jszip";
+import { colToName } from "@officehere/formula";
+import { BIG_MERGE_CELLS } from "./bookUtil";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
 import { sheetPaths } from "./ooxmlZip";
 import { WORKBOOK_ORDER, WORKSHEET_ORDER, XmlPart, attrOf, childElements, getExt, rebuildElement, upsertExt } from "./xmlPart";
@@ -43,6 +45,15 @@ export class PackageParts {
   flush(): void {
     for (const [path, p] of this.cache) this.zip.file(path, p.toString());
   }
+}
+
+/** exceljs'e verilmeyen dev birleştirmeler mergeCells'e doğrudan eklenir. */
+function writeBigMerges(part: XmlPart, sheet: SheetModel): void {
+  const big = sheet.merges.filter((m) => (m.r2 - m.r1 + 1) * (m.c2 - m.c1 + 1) > BIG_MERGE_CELLS);
+  if (!big.length) return;
+  const items = [...(part.get("mergeCells") ?? "").matchAll(/<mergeCell\b[^>]*\/>/g)].map((m) => m[0]);
+  for (const m of big) items.push(`<mergeCell ref="${colToName(m.c1)}${m.r1 + 1}:${colToName(m.c2)}${m.r2 + 1}"/>`);
+  part.set("mergeCells", `<mergeCells count="${items.length}">${items.join("")}</mergeCells>`);
 }
 
 /** İçeriği olmayan ama gizli/yüksekliği özel/anahat düzeyli satırlar sheetData'ya eklenir. */
@@ -134,6 +145,7 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise
     if (!part) continue;
     fixRows(part, sheet);
     fixDataBars(part);
+    writeBigMerges(part, sheet);
   }
   if (wb.sheets.some((s) => s.charts.length)) await writeChartsInto(zip, wb, paths, parts);
   if (wb.sheets.some((s) => s.pivots.length)) await writePivotsInto(zip, wb, paths, parts);
@@ -151,5 +163,6 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel): Promise
   // Çalışma kitabı teması (renk ve yazı tipi şemaları)
   const themeFile = zip.file("xl/theme/theme1.xml");
   if (themeFile) zip.file("xl/theme/theme1.xml", patchThemeXml(await themeFile.async("string"), wb.theme));
-  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+  // Büyük kitaplarda daha hızlı sıkıştırma düzeyi (200 bin satırda: boyut %10 artar, süre yarıya iner)
+  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: bytes.length > 24 * 1024 * 1024 ? 3 : 6 } });
 }

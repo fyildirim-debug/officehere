@@ -130,7 +130,7 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
       if (ctl.edit && id !== "insertFunction" && id !== "alert" && id !== "confirm" && id !== "validationError") ctl.commitEdit(null);
       pushDialog({ id, arg });
     };
-    ctl.alert = (message, title) => pushDialog({ id: "alert", arg: { message, title } });
+    ctl.alert = (message, title, detail) => pushDialog({ id: "alert", arg: { message, title, detail } });
   });
 
   // Pano olayları (Ctrl+C / X / V)

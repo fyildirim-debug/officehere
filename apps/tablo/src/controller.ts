@@ -127,7 +127,8 @@ export class Controller {
   /** İletişim kutusu açma isteği (App tarafından ayarlanır). */
   openDialog: (id: string, arg?: unknown) => void = () => {};
   /** Uyarı/hata mesajı göster. */
-  alert: (msg: string, title?: string) => void = () => {};
+  /** detail: teknik ayrıntı (iletişim kutusunda "Ayrıntılar" altında, kapalı). */
+  alert: (msg: string, title?: string, detail?: string) => void = () => {};
 
   constructor(wb = new WorkbookModel()) {
     this.wb = wb;

@@ -11,6 +11,7 @@ import { addr, colToName, parseCellRef, quoteSheetName } from "@officehere/formu
 import { esc, nextRid, relsPathOf, sheetPaths, unescapeXml } from "./ooxmlZip";
 import type { PackageParts } from "./xlsxPost";
 import { upsertExt } from "./xmlPart";
+import { loadZip } from "./zipCache";
 
 export const SPARK_NS = "urn:officehere:tablo:sparklines:1";
 const REL_CUSTOM_XML = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
@@ -103,7 +104,7 @@ export function applySparklinesXml(xml: string, wb: WorkbookModel): void {
 
 /** Ham dosya verisinden mini grafikleri okur: önce OfficeHere bölümü, yoksa sayfa uzantısındaki x14:sparklineGroups. */
 export async function readSparklinesFromData(data: ArrayBuffer, wb: WorkbookModel): Promise<void> {
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadZip(data);
   let found = false;
   for (const path of Object.keys(zip.files)) {
     if (!/^customXml\/item\d+\.xml$/.test(path)) continue;

@@ -2,7 +2,7 @@
  * CSV içe/dışa aktarma. Türkçe CSV ";" ayırıcı ve UTF-8 BOM ile yazılır;
  * içe aktarmada kodlama ve ayırıcı tahmin edilir.
  */
-import { parseCellInput, type Scalar } from "@officehere/formula";
+import { parseCellInput, type Scalar, MAX_COLS, MAX_ROWS } from "@officehere/formula";
 import { displayText } from "../model/display";
 import { WorkbookModel, type CellInput, type SheetModel } from "../model/workbook";
 
@@ -189,13 +189,20 @@ export function readCsv(data: ArrayBuffer | Uint8Array, sheetName = "Sayfa1", op
   const wb = new WorkbookModel(true);
   const sheet = wb.addSheet(sheetName.slice(0, 31).replace(/[\\/?*[\]:]/g, "_") || "Sayfa1");
   const { rows } = csvToInputs(decodeText(data), opts);
-  rows.forEach((r, i) =>
-    r.forEach((c, j) => {
-      if (c.input === null) return;
+  // Sayfa sınırı dışındaki satır/sütunlar atlanır (16.384. sütundan sonrası hücre anahtarında
+  // sonraki satıra taşar ve başka hücrelerin üzerine yazardı)
+  let clipped = rows.length > MAX_ROWS;
+  for (let i = 0; i < Math.min(rows.length, MAX_ROWS); i++) {
+    const r = rows[i];
+    if (r.length > MAX_COLS) clipped = true;
+    for (let j = 0; j < Math.min(r.length, MAX_COLS); j++) {
+      const c = r[j];
+      if (c.input === null) continue;
       wb.setInputRaw(sheet, i, j, c.input);
       if (c.numFmt) wb.setStyleRaw(sheet, i, j, wb.styles.intern({ numFmt: c.numFmt }));
-    }),
-  );
+    }
+  }
+  if (clipped) wb.loadWarnings = ["sayfa sınırını aşan satır ve sütunlar (en çok 1.048.576 satır, 16.384 sütun)"];
   wb.engine.recalc();
   return wb;
 }

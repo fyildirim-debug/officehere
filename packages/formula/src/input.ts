@@ -22,9 +22,15 @@ export interface InputOptions {
   numFmt?: string;
 }
 
+/** Ondalık ayırıcıya göre sayı deseni (her çağrıda yeniden derlenmesin: büyük CSV içe aktarımında sıcak yol). */
+const NUMBER_RE: Record<string, RegExp> = {
+  ",": /^[-+]?(\d{1,3}(\.\d{3})+|\d+)?(,\d+)?([eE][-+]?\d+)?$/,
+  ".": /^[-+]?(\d{1,3}(,\d{3})+|\d+)?(\.\d+)?([eE][-+]?\d+)?$/,
+};
+
 function parseLocalNumber(s: string, dec: string): number | null {
   const thou = dec === "," ? "." : ",";
-  const re = new RegExp(`^[-+]?(\\d{1,3}(\\${thou}\\d{3})+|\\d+)?(\\${dec}\\d+)?([eE][-+]?\\d+)?$`);
+  const re = NUMBER_RE[dec] ?? new RegExp(`^[-+]?(\\d{1,3}(\\${thou}\\d{3})+|\\d+)?(\\${dec}\\d+)?([eE][-+]?\\d+)?$`);
   if (!re.test(s) || !/\d/.test(s)) return null;
   // "1,5E+3" gibi
   const n = parseFloat(s.split(thou).join("").replace(dec, "."));
@@ -40,13 +46,16 @@ export function parseCellInput(raw: string, opts: InputOptions = {}): ParsedInpu
   if (raw.startsWith("=") && raw.length > 1) return { kind: "formula", formula: fromLocalFormula(raw, locale) };
   const t = raw.trim();
   if (t === "") return { kind: "value", value: raw };
-  const up = t.toLocaleUpperCase("tr-TR");
+  // Mantıksal değerler 4-6 harf: diğer metinlerde yerel büyük harf dönüşümü (yavaş) yapılmaz
+  const up = t.length >= 4 && t.length <= 6 ? t.toLocaleUpperCase("tr-TR") : "";
   if (up === "DOĞRU" || up === "TRUE") return { kind: "value", value: true };
   if (up === "YANLIŞ" || up === "FALSE") return { kind: "value", value: false };
   if (t.startsWith("#")) {
     const code = canonicalErrorName(t);
     if (code) return { kind: "value", value: errorFromCode(code) ?? t };
   }
+  // Rakamsız metin sayı, yüzde, para, tarih ya da saat olamaz: desenler denenmeden metin
+  if (!/\d/.test(t)) return { kind: "value", value: raw };
   // Yüzde
   let m = /^([-+]?)%\s*(.+)$/.exec(t) ?? /^([-+]?)(.+?)\s*%$/.exec(t);
   if (m) {

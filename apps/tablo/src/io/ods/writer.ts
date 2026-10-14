@@ -295,7 +295,8 @@ function cellXml(wb: WorkbookModel, sheet: SheetModel, r: number, c: number, reg
   const k = cellKey(r, c);
   const styleId = wb.styleIdAt(sheet, r, c);
   const st = wb.styles.get(styleId);
-  const sn = reg.cell(styleId);
+  // Biçimsiz hücre stilli satır/sütunda: açıkça "Default" yazılmazsa satır/sütun stilini devralır
+  const sn = reg.cell(styleId) ?? (sheet.rowStyles.has(r) || sheet.colStyles.has(c) ? "Default" : undefined);
   const tag = covered ? "table:covered-table-cell" : "table:table-cell";
   let attrs = sn ? ` table:style-name="${sn}"` : "";
   if (merge) attrs += ` table:number-columns-spanned="${merge.c2 - merge.c1 + 1}" table:number-rows-spanned="${merge.r2 - merge.r1 + 1}"`;
@@ -330,8 +331,8 @@ function namedXml(name: string, formula: string, firstSheet: string): string {
   return `<table:named-expression table:name="${esc(name)}" table:base-cell-address="${esc(base)}" table:expression="${esc(f)}"/>`;
 }
 
-function stylesXml(fontDecls: string): string {
-  const font = esc(DEFAULT_FONT);
+function stylesXml(fontDecls: string, defaultFont: string): string {
+  const font = esc(defaultFont);
   return (
     `<?xml version="1.0" encoding="UTF-8"?><office:document-styles ${NS}>${fontDecls}<office:styles>` +
     `<style:default-style style:family="table-cell"><style:paragraph-properties style:tab-stop-distance="0.5in"/><style:text-properties style:font-name="${font}" fo:font-size="${DEFAULT_SIZE}pt" fo:language="tr" fo:country="TR"/></style:default-style>` +
@@ -381,7 +382,9 @@ export async function writeOds(wb: WorkbookModel, opts: { template?: boolean; wa
   wb.engine.recalc();
   const reg = new StyleRegistry(wb);
   const warn = new Set<string>();
-  reg.fontName(DEFAULT_FONT);
+  // Varsayılan yazı tipi kitabın temasından (modül düzeyindeki değer başka kitaptan kalmış olabilir)
+  const defaultFont = wb.theme.minorFont || DEFAULT_FONT;
+  reg.fontName(defaultFont);
   const tables = wb.sheets.map((s) => sheetXml(wb, s, reg, warn)).join("");
   const globals = wb.engine.getNames().filter((n) => n.sheet === undefined);
   const named = globals.length ? `<table:named-expressions>${globals.map((n) => namedXml(n.name, n.formula, wb.sheets[0]?.name ?? "Sayfa1")).join("")}</table:named-expressions>` : "";
@@ -410,7 +413,7 @@ export async function writeOds(wb: WorkbookModel, opts: { template?: boolean; wa
       `</manifest:manifest>`,
   );
   zip.file("content.xml", content);
-  zip.file("styles.xml", stylesXml(fontDecls));
+  zip.file("styles.xml", stylesXml(fontDecls, defaultFont));
   zip.file("meta.xml", metaXml(wb));
   zip.file("settings.xml", settingsXml(wb));
   if (opts.warnings) opts.warnings.push(...warn);

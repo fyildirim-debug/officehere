@@ -1,5 +1,5 @@
 /** Dosya formülü dönüşümleri: _xlfn. / _xlws. / _xlpm. önekleri, tarih seri numarası. */
-import { EN_SYNTAX, FUNCTIONS, tokenize, type Token } from "@officehere/formula";
+import { EN_SYNTAX, FUNCTIONS, renderStructRef, tokenize, type Token } from "@officehere/formula";
 
 export function utcSerial(d: Date): number {
   return 25569 + d.getTime() / 86400000;
@@ -77,6 +77,10 @@ export function addXlfnPrefixes(formula: string): string {
         } else out += inScope(name) ? "_xlpm." + t.text : t.text;
         break;
       }
+      case "structref":
+        // Dosya biçiminde "@" kısaltması yoktur: Tablo1[@Adet] → Tablo1[[#This Row],[Adet]]
+        out += t.sref && /\[\s*@/.test(t.text) ? renderStructRef(t.sref, "en") : t.text;
+        break;
       default:
         out += t.text;
     }

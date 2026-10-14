@@ -17,6 +17,10 @@ export interface TabloTestApi {
   selection(): string;
   chartCount(sheet?: string): number;
   pivotCount(sheet?: string): number;
+  /** Tablolar (ListObject): ad, aralık ve sütun adları. */
+  tables(sheet?: string): { name: string; ref: string; columns: string[] }[];
+  /** Yükleme uyarıları (okunamayan/atlanan öğeler). */
+  loadWarnings(): string[];
   /** Mini grafik grupları: tür ve hücreleri ("H2"). */
   sparklines(sheet?: string): { type: string; cells: string[] }[];
   isRowHidden(row: number, sheet?: string): boolean;
@@ -63,6 +67,8 @@ export function installTestHook(ctl: Controller): void {
         .join(","),
     chartCount: (name) => sheetOf(name)?.charts.length ?? 0,
     pivotCount: (name) => sheetOf(name)?.pivots.length ?? 0,
+    tables: (name) => (sheetOf(name)?.tables ?? []).map((t) => ({ name: t.name, ref: `${colToName(t.ref.c1)}${t.ref.r1 + 1}:${colToName(t.ref.c2)}${t.ref.r2 + 1}`, columns: [...t.columns] })),
+    loadWarnings: () => [...ctl.wb.loadWarnings],
     sparklines: (name) => (sheetOf(name)?.sparklines ?? []).map((g) => ({ type: g.type, cells: g.items.map((i) => `${colToName(i.col)}${i.row + 1}`) })),
     isRowHidden: (row, name) => !!sheetOf(name)?.rows.isHidden(row),
     undoCount: () => ctl.ops.history.undoCount,

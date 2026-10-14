@@ -18,12 +18,18 @@ import { sizeSelection } from "../actions/format";
 type P = { ctl: Controller; onClose: () => void; arg?: unknown };
 
 export function AlertDialog({ onClose, arg }: P) {
-  const a = arg as { message: string; title?: string };
+  const a = arg as { message: string; title?: string; detail?: string };
   return (
     <Dialog open title={a.title ?? "OfficeHere Tablo"} onClose={onClose} width={420} onSubmit={onClose} footer={<DialogButton primary onClick={onClose}>Tamam</DialogButton>}>
       <p className="oh-dialog-message" style={{ whiteSpace: "pre-wrap" }}>
         {a.message}
       </p>
+      {a.detail ? (
+        <details className="oh-dialog-detail" data-testid="alert-detail">
+          <summary>Ayrıntılar</summary>
+          <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12, maxHeight: 160, overflow: "auto", margin: "6px 0 0", userSelect: "text" }}>{a.detail}</pre>
+        </details>
+      ) : null}
     </Dialog>
   );
 }

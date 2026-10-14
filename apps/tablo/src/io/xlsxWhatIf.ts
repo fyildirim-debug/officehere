@@ -4,13 +4,13 @@
  * - Çalışma kitabı yapı koruması: workbook.xml <workbookProtection>
  * - Veri tabloları: sonuç aralığının sol üst hücresindeki <f t="dataTable" ...>
  */
-import JSZip from "jszip";
 import { addr, parseCellRef, parseRangeAddress } from "@officehere/formula";
 import type { DataTableDef, Scenario, WorkbookProtection } from "../model/types";
 import type { WorkbookModel } from "../model/workbook";
 import { esc, sheetPaths, unescapeXml } from "./ooxmlZip";
 import type { PackageParts } from "./xlsxPost";
 import type { XmlPart } from "./xmlPart";
+import { loadZip } from "./zipCache";
 
 function attr(tag: string, name: string): string | undefined {
   const m = new RegExp(`\\s${name}="([^"]*)"`).exec(tag);
@@ -163,7 +163,7 @@ export async function writeDataTablesInto(wb: WorkbookModel, paths: Map<string, 
 
 /** Dosyadan senaryolar, veri tabloları ve kitap koruması. */
 export async function readWhatIfFromData(data: ArrayBuffer, wb: WorkbookModel): Promise<void> {
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadZip(data);
   const wbXml = await zip.file("xl/workbook.xml")?.async("string");
   if (!wbXml) return;
   wb.protection = parseWorkbookProtection(wbXml);

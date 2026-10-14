@@ -6,6 +6,7 @@ import JSZip from "jszip";
 import { baseName, extensionOf, isCfb, type FileFilter } from "@officehere/core";
 import type { SheetModel, WorkbookModel } from "../model/workbook";
 import { FormatError } from "./bookUtil";
+import { OPEN_MESSAGES, toOpenError } from "./openErrors";
 import { readCsv, writeCsv } from "./csv";
 import { readHtml } from "./html";
 import { ODS_MIME, readOds } from "./ods/reader";
@@ -56,8 +57,8 @@ export async function sniffFormat(name: string, data: ArrayBuffer): Promise<Book
     let zip: JSZip;
     try {
       zip = await JSZip.loadAsync(data);
-    } catch {
-      throw new FormatError("Dosya bozuk: ZIP paketi okunamadı.");
+    } catch (e) {
+      throw new FormatError(OPEN_MESSAGES.corruptZip, `${(e as Error)?.name ?? "Error"}: ${(e as Error)?.message ?? e}`);
     }
     const mime = (await zip.file("mimetype")?.async("string"))?.trim();
     if (mime) {
@@ -94,8 +95,19 @@ export interface OpenedBook {
   notice?: string;
 }
 
-/** Dosyayı biçimine uygun okuyucuyla açar. */
+/**
+ * Dosyayı biçimine uygun okuyucuyla açar. Her hata anlaşılır bir FormatError
+ * olarak döner (teknik ayrıntı .detail alanında).
+ */
 export async function openBook(name: string, data: ArrayBuffer): Promise<OpenedBook> {
+  try {
+    return await openBookRaw(name, data);
+  } catch (e) {
+    throw toOpenError(e);
+  }
+}
+
+async function openBookRaw(name: string, data: ArrayBuffer): Promise<OpenedBook> {
   const format = await sniffFormat(name, data);
   const sheetName = baseName(name);
   switch (format) {
@@ -103,7 +115,11 @@ export async function openBook(name: string, data: ArrayBuffer): Promise<OpenedB
       return { wb: readXls(data), format, template: false, notice: "Uyumluluk modu: bu dosya eski 97-2003 biçiminde; bazı öğeler gösterilemeyebilir. Kaydedince .xlsx olarak kaydedilir." };
     case "ods":
     case "ots":
-      return { wb: await readOds(data), format, template: format === "ots" };
+    {
+      const report: { notice?: string } = {};
+      const wb = await readOds(data, report);
+      return { wb, format, template: format === "ots", notice: report.notice };
+    }
     case "csv":
       return { wb: readCsv(data, sheetName), format, template: false };
     case "tsv":
@@ -113,9 +129,11 @@ export async function openBook(name: string, data: ArrayBuffer): Promise<OpenedB
     case "html":
       return { wb: readHtml(data, sheetName), format, template: false, notice: "Web sayfasındaki tablolar içe aktarıldı. Kaydedince .xlsx olarak kaydedilir." };
     default: {
-      const wb = await readXlsx(data);
+      const report: { notice?: string } = {};
+      const wb = await readXlsx(data, report);
       const macro = format === "xlsm" || format === "xltm";
-      return { wb, format, template: format === "xltx" || format === "xltm", notice: macro ? "Bu çalışma kitabındaki makrolar çalıştırılmaz ve kaydedilirken korunmaz. Kaydedince .xlsx olarak kaydedilir." : undefined };
+      const notice = [report.notice, macro ? "Bu çalışma kitabındaki makrolar çalıştırılmaz ve kaydedilirken korunmaz. Kaydedince .xlsx olarak kaydedilir." : undefined].filter(Boolean).join(" ");
+      return { wb, format, template: format === "xltx" || format === "xltm", notice: notice || undefined };
     }
   }
 }

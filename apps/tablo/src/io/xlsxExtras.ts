@@ -13,7 +13,7 @@ import { esc, relsPathOf, resolveTarget } from "./ooxmlZip";
 import { addXlfnPrefixes } from "./xlsxFormula";
 import type { PackageParts } from "./xlsxPost";
 import { writeScenariosInto, writeWorkbookProtection } from "./xlsxWhatIf";
-import { autoFilterXml, patchTableAutoFilter } from "./xlsxFilters";
+import { autoFilterXml } from "./xlsxFilters";
 
 /* ------------------------------ Veri doğrulama ------------------------------ */
 
@@ -106,6 +106,20 @@ function tableColumnsXml(wb: WorkbookModel, sheet: SheetModel, t: TableDef): str
   return `<tableColumns count="${cols.length}">${cols.join("")}</tableColumns>`;
 }
 
+/**
+ * Tablonun autoFilter öğesi: exceljs her sütuna boş <filterColumn hiddenButton="0"/> yazar; bu
+ * hem gereksizdir hem de (hesaplanmış sütunlarla birlikte) exceljs'in kendi okuyucusunu çökertiyordu.
+ * Excel'in yazdığı biçim kullanılır: başlık satırı ve filtre düğmeleri varsa yalnız aralık + ölçütler,
+ * yoksa autoFilter hiç yazılmaz.
+ */
+export function tableAutoFilter(tableXml: string, t: TableDef): string {
+  const stripped = tableXml.replace(/<autoFilter\b[^>]*\/>|<autoFilter\b[\s\S]*?<\/autoFilter>/, "");
+  if (!t.headerRow || !t.filterButton) return stripped;
+  const range = { r1: t.ref.r1, c1: t.ref.c1, r2: Math.max(t.ref.r1, t.totalRow ? t.ref.r2 - 1 : t.ref.r2), c2: t.ref.c2 };
+  const af = autoFilterXml({ range, columns: t.filter?.columns ?? {} });
+  return stripped.replace(/<tableColumns\b/, `${af}<tableColumns`);
+}
+
 async function writeTableColumns(wb: WorkbookModel, sheet: SheetModel, sheetPath: string, parts: PackageParts): Promise<void> {
   if (!sheet.tables.length) return;
   const rels = await parts.zip.file(relsPathOf(sheetPath))?.async("string");
@@ -121,7 +135,7 @@ async function writeTableColumns(wb: WorkbookModel, sheet: SheetModel, sheetPath
     const display = /\bdisplayName="([^"]*)"/.exec(xml)?.[1] ?? "";
     const t = sheet.tables.find((x) => x.name.replace(/[^\p{L}\p{N}_]/gu, "_") === display);
     if (!t) continue;
-    parts.zip.file(path, patchTableAutoFilter(xml.replace(/<tableColumns\b[\s\S]*?<\/tableColumns>/, tableColumnsXml(wb, sheet, t)), t.filter));
+    parts.zip.file(path, tableAutoFilter(xml.replace(/<tableColumns\b[\s\S]*?<\/tableColumns>/, tableColumnsXml(wb, sheet, t)), t));
   }
 }
 

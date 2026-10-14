@@ -11,7 +11,7 @@ import { ptToPx, widthCharsToPx } from "../../model/axis";
 import { DEFAULT_FONT, DEFAULT_SIZE, type CellStyle } from "../../model/styles";
 import { activateTheme } from "../../model/themeRuntime";
 import { WorkbookModel, type CellInput, type SheetModel } from "../../model/workbook";
-import { CELL_BUDGET, FormatError, safeSheetName } from "../bookUtil";
+import { CELL_BUDGET, fitMerges, FormatError, safeSheetName } from "../bookUtil";
 import { decodeFormula, errorText, sharedRef, type XlsFormulaContext } from "./formula";
 import { byteDecoder, ContinuedReader, f64, joined, R, readByteString, readRecords, readString, rk, u16, u32, u8, type BiffRecord } from "./records";
 import { XlsStyles } from "./styles";
@@ -222,6 +222,10 @@ export function readBiffStream(stream: Uint8Array): WorkbookModel {
   wb.activeIndex = Math.max(0, act && !act.hidden ? wb.sheets.indexOf(act) : wb.sheets.findIndex((s) => !s.hidden));
   wb.syncTables();
   wb.engine.recalc(true);
+  for (const s of wb.sheets) {
+    const note = fitMerges(wb, s);
+    if (note) warnings.add(note);
+  }
   wb.loadWarnings = [...warnings];
   return wb;
 }

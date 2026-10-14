@@ -92,8 +92,15 @@ export function useFileActions(ctl: Controller): FileActions {
           void addRecentFile({ path: path ?? name, name, app: "tablo", openedAt: Date.now() });
           return true;
         } catch (e) {
-          const msg = (e as Error)?.message ?? "";
-          ctl.alert((e as Error)?.name === "FormatError" ? `"${name}" dosyası açılamadı.\n\n${msg}` : `"${name}" dosyası açılamadı. Dosya biçimi geçersiz ya da dosya bozuk olabilir.\n\n${msg}`);
+          // openBook her hatayı anlaşılır Türkçe iletiye çevirir; kitaplığın teknik iletisi ayrıntıdadır
+          const err = e as Error & { detail?: string };
+          const known = err?.name === "FormatError";
+          if (err?.detail) console.warn(`[tablo] "${name}" açılamadı: ${err.detail}`);
+          ctl.alert(
+            known ? `"${name}" dosyası açılamadı.\n\n${err.message}` : `"${name}" dosyası açılamadı. Dosya biçimi geçersiz ya da dosya bozuk olabilir.`,
+            undefined,
+            known ? err.detail : `${err?.name ?? "Error"}: ${err?.message ?? e}`,
+          );
           return false;
         }
       },

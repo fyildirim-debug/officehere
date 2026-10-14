@@ -10,7 +10,7 @@ import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import { widthCharsToPx, widthPxToChars, ptToPx, pxToPt } from "../model/axis";
 import type { PageSetup, Rect, ValidationRule } from "../model/types";
 import { WorkbookModel, type SheetModel } from "../model/workbook";
-import { ColorResolver, fromXStyle, toXStyle } from "./xlsxStyles";
+import { ColorResolver, fromXStyle, rawNumberFormats, toXStyle } from "./xlsxStyles";
 import { readCharts } from "./xlsxCharts";
 import { postProcess } from "./xlsxPost";
 import { compressCells, readCondRule, readValidation, writeCondRule } from "./xlsxRules";
@@ -21,7 +21,11 @@ import { addXlfnPrefixes, normalizeFileFormula, utcSerial } from "./xlsxFormula"
 
 export { compressCells, addXlfnPrefixes, normalizeFileFormula };
 import { readPivotsFromData } from "./xlsxPivot";
-import { normalizePackage, OPTIONAL_PARTS, readCommentsFromData, readDefinedNamesFromData, stripOptionalParts } from "./xlsxPackage";
+import { OPTIONAL_PARTS, readCommentsFromData, readDefinedNamesFromData, stripOptionalParts } from "./xlsxPackage";
+import { prepareXlsx } from "./xlsxGuard";
+import { BIG_MERGE_CELLS, clampMerge, usedExtent } from "./bookUtil";
+import { readTablesFromData } from "./xlsxTables";
+import { loadZip, releaseZip, seedZip } from "./zipCache";
 import { readSparklinesFromData } from "./xlsxSpark";
 import { readWhatIfFromData } from "./xlsxWhatIf";
 import { readFiltersFromData } from "./xlsxFilters";
@@ -75,16 +79,29 @@ async function loadTolerant(ExcelJS: any, data: ArrayBuffer, warnings: string[])
   throw firstError;
 }
 
-export async function readXlsx(input: ArrayBuffer): Promise<WorkbookModel> {
+/** Okuma raporu: yapısal onarım yapıldıysa kullanıcıya gösterilecek ileti. */
+export interface XlsxReadReport {
+  notice?: string;
+}
+
+export async function readXlsx(input: ArrayBuffer, report?: XlsxReadReport): Promise<WorkbookModel> {
   const ExcelJS = await loadExcelJS();
-  const warnings: string[] = [];
-  let data = input;
+  // Paket denetimi ve onarımı (sınırlar, eksik yapı, sayfa XML'i); ölümcül sorunlarda anlaşılır hata
+  const pkg = await prepareXlsx(input);
+  const data = pkg.data;
+  seedZip(data, pkg.zip);
   try {
-    data = await normalizePackage(input);
-  } catch {
-    /* ZIP değilse aşağıdaki yükleme anlamlı hatayı verir */
+    return await readPrepared(ExcelJS, pkg, report);
+  } finally {
+    releaseZip(data);
   }
-  const x = await loadTolerant(ExcelJS, data, warnings);
+}
+
+async function readPrepared(ExcelJS: any, pkg: Awaited<ReturnType<typeof prepareXlsx>>, report?: XlsxReadReport): Promise<WorkbookModel> {
+  const data = pkg.data;
+  const warnings: string[] = [...pkg.warnings];
+  const notices: string[] = pkg.notice ? [pkg.notice] : [];
+  const x = await loadTolerant(ExcelJS, pkg.excel, warnings);
   const wb = new WorkbookModel(true);
   wb.loadWarnings = warnings;
   const cr = new ColorResolver();
@@ -106,13 +123,40 @@ export async function readXlsx(input: ArrayBuffer): Promise<WorkbookModel> {
   wb.props = { title: x.title || undefined, subject: x.subject || undefined, author: x.creator || undefined, company: x.company || undefined, created: x.created, modified: x.modified };
 
   const worksheets: any[] = [...x.worksheets].sort((a: any, b: any) => (a.orderNo ?? 0) - (b.orderNo ?? 0));
+  let rawFormats: Map<string, string> | undefined;
+  try {
+    rawFormats = rawNumberFormats(await (await loadZip(data)).file("xl/styles.xml")?.async("string"));
+  } catch {
+    /* özgün biçim kodları isteğe bağlı */
+  }
   for (const ws of worksheets) {
     const sheet = wb.addSheet(ws.name);
     try {
-      readSheet(wb, sheet, ws, cr, x, warnings);
+      readSheet(wb, sheet, ws, cr, x, warnings, rawFormats);
     } catch {
       warnings.push(`"${ws.name}" sayfasının bir bölümü`);
     }
+    // exceljs'e verilmeyen büyük birleştirmeler: kullanılan alana kırpılır, yine dev ise atılır
+    const big = pkg.bigMerges.get(ws.name);
+    if (big?.length) {
+      const used = usedExtent(wb, sheet);
+      for (const m of big) {
+        const c = clampMerge(m, used);
+        if (c && !sheet.merges.some((o) => !(c.r2 < o.r1 || c.r1 > o.r2 || c.c2 < o.c1 || c.c1 > o.c2))) {
+          sheet.merges.push(c);
+          if (c.r2 !== m.r2 || c.c2 !== m.c2) warnings.push("çok büyük birleştirilmiş alanlar (kullanılan alana kırpıldı)");
+        } else warnings.push("çok büyük birleştirilmiş alanlar");
+      }
+    }
+  }
+  // exceljs'in sessizce atladığı sayfa kalmasın (ör. ayrıştırılamayan sayfa parçası)
+  const loaded = new Set(worksheets.map((ws) => ws.name));
+  for (const name of pkg.sheetNames) if (!loaded.has(name)) warnings.push(`"${name}" sayfası (okunamadı)`);
+  // Tablolar (exceljs'in tablo okuyucusu güvenilmez; paket doğrudan okunur)
+  try {
+    if (await readTablesFromData(data, wb)) warnings.push("tabloların bir bölümü");
+  } catch {
+    warnings.push("tablolar");
   }
   // Adlandırılmış aralıklar (sabit/formül adları da): paket doğrudan okunur, olmazsa exceljs modeli
   let names: { name: string; formula: string; localSheetId?: number }[] = [];
@@ -188,42 +232,72 @@ export async function readXlsx(input: ArrayBuffer): Promise<WorkbookModel> {
   } catch {
     warnings.push("onay kutuları");
   }
+  // Sessiz kayıp denetimi: sayfalarda veri vardı ama hiçbir hücre okunamadıysa uyarılır
+  if (pkg.hadCells && wb.sheets.every((s) => countCells(wb, s) === 0)) {
+    warnings.push("sayfa verileri");
+    notices.push("Dosyadaki hücre verileri okunamadı; dosya bozuk olabilir. Kaydederseniz özgün içerik kaybolabilir.");
+  }
   wb.loadWarnings = [...new Set(warnings)];
+  if (report && notices.length) report.notice = notices.join(" ");
   return wb;
 }
 
-function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResolver, x: any, warnings: string[]): void {
+function countCells(wb: WorkbookModel, s: SheetModel): number {
+  let n = 0;
+  wb.engine.forEachCell(s.id, () => {
+    n++;
+  });
+  return n;
+}
+
+
+
+function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResolver, x: any, warnings: string[], rawFormats?: Map<string, string>): void {
   if (ws.state && ws.state !== "visible") sheet.hidden = true;
   const tab = cr.resolve(ws.properties?.tabColor);
   if (tab) sheet.tabColor = tab;
   if (ws.properties?.defaultColWidth) sheet.cols.setDefault(widthCharsToPx(ws.properties.defaultColWidth));
   if (ws.properties?.defaultRowHeight && Math.abs(ws.properties.defaultRowHeight - 15) > 0.1) sheet.rows.setDefault(ptToPx(ws.properties.defaultRowHeight));
   // Sütunlar
-  const colCount = Math.min(Math.max(ws.columnCount ?? 0, ws._columns?.length ?? 0, ws.columns?.length ?? 0), MAX_COLS);
+  // exceljs'in columnCount'u tüm satırları dolaşır; tanımlı sütunlar yeterli (sınırla)
+  const colCount = Math.min(ws._columns?.length ?? ws.columns?.length ?? 0, MAX_COLS);
   for (let c = 1; c <= colCount; c++) {
     const col = ws.getColumn(c);
     if (col.width !== undefined && col.width !== null && (col as any)._worksheet) {
-      const w = widthCharsToPx(col.width);
+      // Excel en çok 255 karakter genişlik kabul eder (bozuk dosyada 2^31 olabilir)
+      const w = widthCharsToPx(Math.min(255, Math.max(0, Number(col.width) || 0)));
       if (Math.abs(w - sheet.cols.defaultSize) > 0.5) sheet.cols.set(c - 1, w);
     }
     if (col.hidden) sheet.cols.setHidden(c - 1, true);
     if (col.outlineLevel) sheet.cols.setLevel(c - 1, col.outlineLevel);
-    const st = col.style && Object.keys(col.style).length ? fromXStyle(col.style, cr) : null;
+    const st = col.style && Object.keys(col.style).length ? fromXStyle(col.style, cr, rawFormats) : null;
     if (st && Object.keys(st).length) sheet.colStyles.set(c - 1, wb.styles.intern(st));
   }
   const notesCells: { row: number; col: number; text: string; author?: string }[] = [];
   const arrayAreas: (Rect & { row: number; col: number })[] = [];
   const validations = new Map<string, { rule: ValidationRule; cells: [number, number][]; rects: Rect[] }>();
-  ws.eachRow({ includeEmpty: true }, (row: any, rn: number) => {
+  // Satırlar seyrek dizide durur: yalnız var olanlar dolaşılır (exceljs'in eachRow'u boşlukları da
+  // nesneye çevirir; bozuk dosyada satır 2^31 olunca takılırdı). Hücreler sütun sınırıyla dolaşılır.
+  const rowList: any[] = ws._rows ?? [];
+  const eachRow = (fn: (row: any, rn: number) => void) => {
+    if (!ws._rows) return ws.eachRow({ includeEmpty: true }, fn);
+    for (const key of Object.keys(rowList)) {
+      const row = rowList[Number(key)];
+      if (row) fn(row, row.number ?? Number(key) + 1);
+    }
+  };
+  eachRow((row: any, rn: number) => {
     const r = rn - 1;
-    if (r >= MAX_ROWS) return;
-    if (row.height !== undefined && row.height !== null && (row.customHeight || Math.abs(row.height - 15) > 0.1)) sheet.rows.set(r, ptToPx(row.height), !!row.customHeight);
+    if (!(r >= 0) || r >= MAX_ROWS) return;
+    if (row.height !== undefined && row.height !== null && (row.customHeight || Math.abs(row.height - 15) > 0.1)) sheet.rows.set(r, ptToPx(Math.min(409.5, Math.max(0, Number(row.height) || 0))), !!row.customHeight);
     if (row.hidden) sheet.rows.setHidden(r, true);
     if (row.outlineLevel) sheet.rows.setLevel(r, row.outlineLevel);
     if (row.collapsed) sheet.rows.setCollapsed(r, true);
-    row.eachCell({ includeEmpty: true }, (cell: any, cn: number) => {
+    const nCells = Math.min(row._cells?.length ?? row.cellCount ?? 0, MAX_COLS);
+    for (let cn = 1; cn <= nCells; cn++) {
+      const cell = row.getCell(cn);
       const c = cn - 1;
-      readCell(wb, sheet, cell, r, c, cr);
+      readCell(wb, sheet, cell, r, c, cr, rawFormats);
       // Dizi formülünün (dinamik dizi) kapladığı alan: ana hücre dışındakiler yalnız önbellek değeridir
       const v = cell.value;
       if (v && typeof v === "object" && v.shareType === "array" && typeof v.ref === "string") {
@@ -235,7 +309,7 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
         const text = typeof n === "string" ? n : (n.texts ?? []).map((t: any) => t.text).join("");
         if (text) notesCells.push({ row: r, col: c, text: text.replace(/^[^:\n]{1,40}:\n/, "") });
       }
-    });
+    }
   });
   for (const n of notesCells) sheet.notes.set(cellKey(n.row, n.col), { text: n.text });
   // Taşma alanındaki önbellek değerleri sabit olarak kalırsa formülün taşmasını engeller (#TAŞMA!)
@@ -317,39 +391,6 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
   if (hf.oddHeader) sheet.page.header = stripHF(hf.oddHeader);
   if (hf.oddFooter) sheet.page.footer = stripHF(hf.oddFooter);
   if (ws.sheetProtection?.sheet) sheet.protected = true;
-  // Tablolar
-  try {
-    for (const entry of ws.getTables?.() ?? []) {
-      const t = Array.isArray(entry) ? entry[0] : entry;
-      const m = t?.table ?? t?.model ?? t;
-      if (!m?.ref && !m?.tableRef) continue;
-      const ref = parseRangeAddress(m.tableRef ?? m.ref);
-      if (!ref) continue;
-      let rr = ref;
-      if (rr.r1 === rr.r2 && m.columns?.length) {
-        const rows = (m.rows?.length ?? 0) + (m.headerRow !== false ? 1 : 0) + (m.totalsRow ? 1 : 0);
-        rr = { r1: ref.r1, c1: ref.c1, r2: ref.r1 + Math.max(0, rows - 1), c2: ref.c1 + m.columns.length - 1 };
-      }
-      const st = m.style ?? {};
-      sheet.tables.push({
-        id: wb.newId("tbl"),
-        name: m.name ?? m.displayName ?? `Tablo${sheet.tables.length + 1}`,
-        ref: rr,
-        style: st.theme ?? "TableStyleMedium2",
-        headerRow: m.headerRow !== false,
-        totalRow: !!m.totalsRow,
-        bandedRows: st.showRowStripes !== false,
-        bandedCols: !!st.showColumnStripes,
-        firstColumn: !!st.showFirstColumn,
-        lastColumn: !!st.showLastColumn,
-        filterButton: (m.columns ?? []).some((c: any) => c.filterButton !== false),
-        columns: (m.columns ?? []).map((c: any) => c.name),
-        filter: { range: m.totalsRow ? { ...rr, r2: rr.r2 - 1 } : rr, columns: {} },
-      });
-    }
-  } catch {
-    warnings.push("tablolar");
-  }
   // Resimler
   try {
     for (const img of ws.getImages?.() ?? []) {
@@ -411,7 +452,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return typeof btoa === "function" ? btoa(s) : Buffer.from(bytes).toString("base64");
 }
 
-function readCell(wb: WorkbookModel, sheet: SheetModel, cell: any, r: number, c: number, cr: ColorResolver): void {
+function readCell(wb: WorkbookModel, sheet: SheetModel, cell: any, r: number, c: number, cr: ColorResolver, rawFormats?: Map<string, string>): void {
   const v = cell.value;
   const styleObj = cell.style;
   let input: Scalar | { formula: string } = null;
@@ -436,13 +477,11 @@ function readCell(wb: WorkbookModel, sheet: SheetModel, cell: any, r: number, c:
   }
   if (input !== null) wb.setInputRaw(sheet, r, c, input);
   if (link) sheet.links.set(cellKey(r, c), link.startsWith("#") ? link : link);
-  if (styleObj && Object.keys(styleObj).length) {
-    const st = fromXStyle(styleObj, cr);
-    if (Object.keys(st).length) {
-      const id = wb.styles.intern(st);
-      const inherited = sheet.colStyles.get(c);
-      if (id !== inherited) sheet.styles.set(cellKey(r, c), id);
-    }
+  if (styleObj) {
+    const st = Object.keys(styleObj).length ? fromXStyle(styleObj, cr, rawFormats) : {};
+    const id = Object.keys(st).length ? wb.styles.intern(st) : 0;
+    // Biçimsiz hücre stilli sütunda da kendi (boş) stilini taşır; yoksa sütun stilini devralırdı
+    if (id !== (sheet.colStyles.get(c) ?? 0)) sheet.styles.set(cellKey(r, c), id);
   }
 }
 
@@ -471,15 +510,24 @@ export async function writeXlsx(wb: WorkbookModel): Promise<Uint8Array<ArrayBuff
   x.calcProperties = { fullCalcOnLoad: true };
   x.views = [{ x: 0, y: 0, width: 28800, height: 15000, firstSheet: 0, activeTab: wb.activeIndex, visibility: "visible" }];
   wb.engine.recalc();
-  for (const sheet of wb.sheets) writeSheet(wb, sheet, x);
+  // Stil nesneleri stil numarası başına bir kez üretilir: exceljs aynı nesneyi WeakMap'le tanır ve
+  // hücre başına yazı tipi/kenarlık XML'i üretip karşılaştırmaz (200 bin satırda yazma süresinin çoğuydu)
+  const xStyles = new Map<number, any>();
+  const xStyle = (id: number) => {
+    let v = xStyles.get(id);
+    if (!v) xStyles.set(id, (v = toXStyle(wb.styles.get(id))));
+    return v;
+  };
+  for (const sheet of wb.sheets) writeSheet(wb, sheet, x, xStyle);
   // Tanımlı adlar postProcess içinde workbook.xml'e doğrudan yazılır (sabit/formül adları dahil)
-  const buf = await x.xlsx.writeBuffer();
+  // exceljs sıkıştırmadan yazar; paket postProcess'te tek kez sıkıştırılır (iki kez DEFLATE yerine)
+  const buf = await x.xlsx.writeBuffer({ zip: { compression: "STORE" } });
   let bytes: Uint8Array = new Uint8Array(buf as ArrayBuffer);
   bytes = await postProcess(bytes, wb);
   return new Uint8Array(bytes);
 }
 
-function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
+function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any, xStyle: (id: number) => any): void {
   const views: any[] = [];
   const base: any = { showGridLines: sheet.showGridlines, showRowColHeaders: sheet.showHeadings, zoomScale: sheet.zoom, activeCell: addr(sheet.selection.active.row, sheet.selection.active.col) };
   if (sheet.viewMode === "pageLayout") base.view = "pageLayout";
@@ -497,11 +545,12 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
   for (const c of [...colSet].sort((a, b) => a - b)) {
     if (c >= MAX_COLS) continue;
     const col = ws.getColumn(c + 1);
-    if (sheet.cols.isCustom(c)) col.width = widthPxToChars(sheet.cols.rawSize(c));
+    // Genişliği özel olmayan (yalnız stilli/gizli) sütuna da varsayılan genişlik yazılır: exceljs boş bırakınca 9 karakter yazıyordu
+    col.width = widthPxToChars(sheet.cols.isCustom(c) ? sheet.cols.rawSize(c) : sheet.cols.defaultSize);
     if (sheet.cols.isHidden(c)) col.hidden = true;
     if (sheet.cols.level(c)) col.outlineLevel = sheet.cols.level(c);
     const cs = sheet.colStyles.get(c);
-    if (cs) col.style = toXStyle(wb.styles.get(cs));
+    if (cs) col.style = xStyle(cs);
   }
   if (sheet.rows.maxLevel()) ws.properties.outlineLevelRow = sheet.rows.maxLevel();
   if (sheet.cols.maxLevel()) ws.properties.outlineLevelCol = sheet.cols.maxLevel();
@@ -513,7 +562,7 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
     if (sheet.rows.isHidden(r)) row.hidden = true;
     if (sheet.rows.level(r)) row.outlineLevel = sheet.rows.level(r);
     const rs = sheet.rowStyles.get(r);
-    if (rs) row.style = toXStyle(wb.styles.get(rs));
+    if (rs) row.style = xStyle(rs);
   }
   // Tablolar (hücrelerden önce: addTable hücrelere yazar)
   for (const t of sheet.tables) {
@@ -541,12 +590,18 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
       /* tablo yazılamadı: hücreler yine yazılır */
     }
   }
-  // Hücreler
+  // Hücreler. Kendi stili olmayan hücreye satır/sütun stilinin (yoksa boş) paylaşılan nesnesi verilir:
+  // exceljs her hücre için birleştirilmiş yeni nesne üretip stilini baştan XML'e çeviriyordu.
   const done = new Set<number>();
+  const EMPTY_X = {};
   wb.engine.forEachCell(sheet.id, (r, c, rec) => {
     const cell = ws.getCell(r + 1, c + 1);
     const k = cellKey(r, c);
     done.add(k);
+    if (!sheet.styles.has(k)) {
+      const id = wb.styleIdAt(sheet, r, c);
+      cell.style = id ? xStyle(id) : EMPTY_X;
+    }
     if (rec.formula) {
       const result = cellResult(rec.value);
       const f = addXlfnPrefixes(rec.formula.text);
@@ -574,8 +629,7 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
   for (const [k, id] of sheet.styles) {
     const r = Math.floor(k / 16384);
     const c = k % 16384;
-    const st = wb.styles.get(id);
-    ws.getCell(r + 1, c + 1).style = toXStyle(st);
+    ws.getCell(r + 1, c + 1).style = xStyle(id);
   }
   // Köprüler (değersiz hücreler)
   for (const [k, link] of sheet.links) {
@@ -590,8 +644,9 @@ function writeSheet(wb: WorkbookModel, sheet: SheetModel, x: any): void {
     const c = k % 16384;
     ws.getCell(r + 1, c + 1).note = n.text;
   }
-  // Birleştirmeler
+  // Birleştirmeler (dev olanlar postProcess'te doğrudan yazılır: exceljs her hücreyi nesneye çevirir)
   for (const m of sheet.merges) {
+    if ((m.r2 - m.r1 + 1) * (m.c2 - m.c1 + 1) > BIG_MERGE_CELLS) continue;
     try {
       ws.mergeCells(m.r1 + 1, m.c1 + 1, m.r2 + 1, m.c2 + 1);
     } catch {

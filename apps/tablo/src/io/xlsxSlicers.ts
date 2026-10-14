@@ -8,6 +8,7 @@ import JSZip from "jszip";
 import type { SlicerDef } from "../model/types";
 import type { WorkbookModel } from "../model/workbook";
 import { esc, nextRid, relsPathOf, unescapeXml } from "./ooxmlZip";
+import { loadZip } from "./zipCache";
 
 export const SLICER_NS = "urn:officehere:tablo:slicers:1";
 const REL_CUSTOM_XML = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
@@ -86,7 +87,7 @@ export function applySlicersXml(xml: string, wb: WorkbookModel): void {
 }
 
 export async function readSlicersFromData(data: ArrayBuffer, wb: WorkbookModel): Promise<void> {
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadZip(data);
   for (const path of Object.keys(zip.files)) {
     if (!/^customXml\/item\d+\.xml$/.test(path)) continue;
     const xml = await zip.file(path)!.async("string");

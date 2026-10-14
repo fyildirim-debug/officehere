@@ -14,6 +14,7 @@ import type { SheetModel, WorkbookModel } from "../model/workbook";
 import { fieldItems, itemKey, newPivotDef, VALUES_FIELD, type PivotSource } from "../pivot/compute";
 import { planPivot, readSource, setPivotMeta } from "../pivot/pivotOps";
 import { NS_R, esc, nextRid, relsPathOf, resolveTarget, sheetPaths as sheetPathsOf, unescapeXml } from "./ooxmlZip";
+import { loadZip } from "./zipCache";
 
 const NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -341,7 +342,7 @@ function itemKeyOf(kind: string, v: string | undefined): string {
 
 /** Ham dosya verisinden PivotTable'ları okur (readXlsx sonrasında). */
 export async function readPivotsFromData(data: ArrayBuffer, wb: WorkbookModel): Promise<void> {
-  const zip = await JSZip.loadAsync(data);
+  const zip = await loadZip(data);
   if (!Object.keys(zip.files).some((f) => f.startsWith("xl/pivotTables/"))) return;
   await readPivots(zip, wb, await sheetPathsOf(zip));
 }
