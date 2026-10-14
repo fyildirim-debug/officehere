@@ -17,10 +17,15 @@ pnpm dev:desktop    # Electron kabuğu + üç uygulama
 Göndermeden önce şunlar geçmelidir:
 
 ```bash
+pnpm denetim     # yeni toUpperCase()/toLowerCase() ya da waitForTimeout eklenmedi mi
 pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+Dosya biçimi kodunu değiştirdiyseniz `pnpm derlem` ve `pnpm bulanik` ile
+derlem turunu ve bozuk dosya testini çalıştırın (CI'da "Sağlamlık" işi). Kayıp
+azaldıysa temel çizgiyi `pnpm derlem:temel` ile güncelleyin.
 
 ## Kurallar
 

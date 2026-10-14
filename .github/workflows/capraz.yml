@@ -1,0 +1,50 @@
+name: Çapraz platform
+
+# Windows ve macOS'ta hafif duman testi: kurulum, tip denetimi, birim testleri (performans testleri
+# hariç), web + Electron derlemesi ve Electron'u başlatıp örnek dosyaları açan kısa masaüstü testleri.
+# Süreyi makul tutmak için yalnız main'e gönderimde ve elle tetiklenir (Linux her gönderimde ci.yml'de).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: capraz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  duman:
+    name: Duman testi (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      # Örnek dosyalar (.md, .rtf, .csv…) bayt bayt aynı kalsın: Windows'ta CRLF dönüşümü kapalı.
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node apps/desktop/node_modules/electron/install.js
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm web
+      - run: pnpm --filter @officehere/desktop build:electron
+      - name: Electron duman testi (başlangıç ekranı + komut satırından .docx/.xlsx/.pptx açma)
+        run: pnpm exec playwright test -c playwright.masaustu.config.ts e2e-masaustu/masaustu.spec.ts -g "başlangıç ekranı açılır|komut satırından açılan dosya"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: capraz-${{ matrix.os }}-test-results
+          path: test-results
+          retention-days: 7
+          if-no-files-found: ignore

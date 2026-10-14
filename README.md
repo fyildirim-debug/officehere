@@ -116,6 +116,29 @@ açılışta uyarı gösterebilir ("Ek bilgi" → "Yine de çalıştır").
 Tarayıcıda kurulumsuz kullanmak için web sürümünü derleyip herhangi bir statik
 sunucuda yayınlayabilirsiniz (`pnpm web` ya da `docker build -t officehere .`).
 
+### İndirilen paketi doğrulama
+
+Her sürümde `SHA256SUMS.txt` (tüm paketlerin SHA-256 özetleri) ve onun
+[Sigstore](https://www.sigstore.dev/) imzası `SHA256SUMS.txt.sigstore.json` bulunur. İmza anahtarsızdır:
+sürümü üreten GitHub Actions iş akışının kimliğiyle atılır ve herkese açık şeffaflık kaydına (Rekor) yazılır.
+[cosign](https://docs.sigstore.dev/cosign/system_config/installation/) ile:
+
+```bash
+# 1) Sağlama listesinin bu depodaki sürüm iş akışınca imzalandığını doğrulayın
+#    (cosign 3.x; cosign 2.x kullanıyorsanız --new-bundle-format ekleyin)
+cosign verify-blob SHA256SUMS.txt \
+  --bundle SHA256SUMS.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/fyildirim-debug/officehere/\.github/workflows/release\.yml@' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+# 2) İndirdiğiniz paketin özetini listeyle karşılaştırın
+sha256sum --ignore-missing -c SHA256SUMS.txt          # Linux
+shasum -a 256 --ignore-missing -c SHA256SUMS.txt      # macOS
+```
+
+Windows'ta PowerShell ile: `Get-FileHash .\OfficeHere-<sürüm>-win-x64.exe -Algorithm SHA256` çıktısını
+`SHA256SUMS.txt` içindeki satırla karşılaştırın.
+
 ## Geliştirme
 
 Gereksinimler: Node.js 22+, pnpm 10.
@@ -128,19 +151,28 @@ pnpm dev:sunum        # http://localhost:5175
 pnpm dev:desktop      # Electron kabuğu + başlangıç ekranı
 
 pnpm typecheck        # tüm paketler
-pnpm test             # birim testleri (Vitest)
+pnpm test             # birim testleri (Vitest; performans testleri hariç)
+pnpm test:perf        # performans testleri (ayrı ve sıralı; makine hızına göre normalize)
+pnpm denetim          # yerel ayarsız toUpperCase/toLowerCase ve waitForTimeout sayaçları
 pnpm web && pnpm e2e  # uçtan uca testler (Playwright)
 pnpm dist:win         # Windows kurulum paketi (ayrıca dist:linux, dist:mac)
+
+pnpm derlem           # derlem kaydet-aç turu → .derlem/rapor/derlem.md
+pnpm bulanik          # 756 bozuk dosyayla bulanık test → .derlem/rapor/bulanik.md
+pnpm derlem:uret      # büyük derlem dosyaları (LibreOffice + python; isteğe bağlı)
+pnpm derlem:lo        # kaydedilen dosyaları LibreOffice ile PDF'e çevirip denetler
+pnpm derlem:temel     # iyileşmeden sonra temel çizgiyi günceller (scripts/derlem/temel.json)
 ```
 
 Ayrıntılar: [MIMARI.md](MIMARI.md), [KATKI.md](KATKI.md).
 
 ## Uyumluluk ve testler
 
-- Dosya biçimleri açık **Office Open XML (ECMA-376 / ISO/IEC 29500)** ve **OpenDocument (ISO/IEC 26300)** standartlarına, eski ikili biçimler Microsoft'un yayımladığı açık belirtimlere ([MS-CFB], [MS-DOC], [MS-XLS], [MS-PPT]) göre kendi okuyucu/yazıcılarımızla uygulanır; ek kütüphane kullanılmaz.
-- Her uygulamanın gidiş-dönüş testleri (yaz → oku → karşılaştır) vardır; üretilen dosyalar LibreOffice ve python-docx / openpyxl / python-pptx ile dış doğrulamadan geçirilir.
+- Dosya biçimleri açık **Office Open XML (ECMA-376 / ISO/IEC 29500)** ve **OpenDocument (ISO/IEC 26300)** standartlarına, eski ikili biçimler Microsoft'un yayımladığı açık belirtimlere ([MS-CFB], [MS-DOC], [MS-XLS], [MS-PPT]) göre uygulanır. Belge (`.docx` `.odt` `.rtf` `.doc` `.md`), Sunum (`.pptx` `.odp` `.ppt`) ve Tablo'nun `.ods`/`.xls`/`.csv` okuyucu/yazıcıları projenin kendi kodudur. Üç kütüphane kullanılır: **XLSX** okuma/yazmada [ExcelJS](https://github.com/exceljs/exceljs) (MIT; grafik, filtre, ad, uzantı gibi ExcelJS'in desteklemediği parçalar kendi kodumuzla okunup yazılır), ayrıştırılamayan **DOCX** dosyalarında yedek dönüşüm için [mammoth](https://github.com/mwilliamson/mammoth.js) (BSD-2-Clause) ve ZIP paketleri için [JSZip](https://github.com/Stuk/jszip) (MIT). Tam liste: [HUKUKI.md](HUKUKI.md#bağımlılıkların-lisansları).
+- Her uygulamanın gidiş-dönüş testleri (yaz → oku → karşılaştır) vardır; LibreOffice, python-docx / openpyxl / python-pptx ile üretilmiş örnek dosyalar okuma testlerindedir.
+- **Sağlamlık** (CI, her gönderimde): LibreOffice ve python ile üretilmiş gerçek dünya derlemi kaydet-aç turundan geçirilir (`pnpm derlem`: metin, biçim, hücre, slayt, not ve OOXML/ODF parça kayıpları sayılır), kaydedilen dosyalar LibreOffice'e açtırılır (`pnpm derlem:lo`) ve 756 bozuk dosyayla bulanık test yapılır (`pnpm bulanik`: takılma, yığın taşması ve anlaşılmaz hata iletileri). Sonuçlar kaydedilmiş temel çizgiyle karşılaştırılır; yeni takılma ya da yığın taşması derlemeyi durdurur.
 - Formül motorunun sonuçları LibreOffice ile yüzlerce formülde çapraz doğrulanır.
-- Uçtan uca testler her uygulamayı gerçek bir tarayıcıda kullanıcı gibi kullanır; CI her gönderimde hepsini çalıştırır.
+- Uçtan uca testler her uygulamayı gerçek bir tarayıcıda kullanıcı gibi kullanır; CI her gönderimde hepsini çalıştırır. Windows ve macOS'ta duman testi `main` dalına her gönderimde koşar.
 
 ## Hukuki
 

@@ -19,3 +19,6 @@ dist-web/
 # Geçici test/ölçüm çıktıları
 **/tmpbench/
 out_*.txt
+
+# Derlem / bulanık test çıktıları (pnpm derlem, pnpm bulanik)
+.derlem/

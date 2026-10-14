@@ -1,0 +1,88 @@
+name: Sağlamlık
+
+# Gerçek dünya derlemi kaydet-aç turu (pnpm derlem), bozuk dosya bulanık testi (pnpm bulanik) ve
+# kaydedilen dosyaların LibreOffice ile açılması (pnpm derlem:lo). Sonuçlar scripts/derlem/temel.json
+# ile karşılaştırılır:
+#   - yeni takılma / yığın taşması / bellek taşması: her zaman HATA
+#   - yeni kayıp, yeniden açılamayan dosya, kararsızlaşma, LibreOffice'in açamadığı çıktı: temel.json'daki
+#     "kip" alanına göre HATA ("siki") ya da yalnız rapor ("baslangic"; elle tetiklemede değiştirilebilir)
+#   - iyileşme: başarısız olmaz; `pnpm derlem:temel` ile temel güncellenir (artefaktta temel-aday.json var)
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      kip:
+        description: "Karşılaştırma kipi (temel: temel.json'daki kip)"
+        required: false
+        default: temel
+        type: choice
+        options: [temel, baslangic, siki]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: saglamlik-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  saglamlik:
+    name: Derlem turu, bulanık test, LibreOffice denetimi
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DERLEM_KIP: ${{ inputs.kip != 'temel' && inputs.kip || '' }}
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - name: Araçların kendi testleri (karşılaştırma kuralları, envanter)
+        run: pnpm test:betikler
+      - name: LibreOffice ve PDF araçları
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libreoffice-writer libreoffice-calc libreoffice-impress python3-uno \
+            poppler-utils fonts-liberation fonts-crosextra-carlito fonts-crosextra-caladea
+          soffice --version
+      # Depodaki alt küme (test-derlem/) dışındaki büyük dosyalar ve LibreOffice formül sonuçları
+      - name: Derlemi üret (pnpm derlem:uret)
+        run: pnpm derlem:uret
+      # Bulanık örnekler deterministiktir; tohumlar ve üretici değişmedikçe önbellekten gelir.
+      - uses: actions/cache@v4
+        with:
+          path: .derlem/bulanik
+          key: bulanik-${{ hashFiles('scripts/bulanik/uret.mjs', 'test-derlem/**', 'apps/belge/src/io/__fixtures__/bicimler/ornek.md', 'apps/tablo/test/fixtures/openpyxl/karmasik.xlsx', 'pnpm-lock.yaml') }}
+      - name: Kaydet-aç turu (pnpm derlem)
+        run: pnpm derlem
+      - name: Bulanık test (pnpm bulanik)
+        if: ${{ !cancelled() }}
+        run: pnpm bulanik
+      - name: LibreOffice denetimi (pnpm derlem:lo)
+        if: ${{ !cancelled() }}
+        run: pnpm derlem:lo
+      - name: Özet ve aday temel çizgi
+        if: ${{ !cancelled() }}
+        run: |
+          for f in derlem bulanik lo_pdf; do
+            if [ -f ".derlem/rapor/$f.md" ]; then head -c 300000 ".derlem/rapor/$f.md" >> "$GITHUB_STEP_SUMMARY"; echo >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+          node scripts/derlem/temel.mjs --aday .derlem/rapor/temel-aday.json || true
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: saglamlik-rapor
+          path: |
+            .derlem/rapor
+            .derlem/cikti
+          retention-days: 14

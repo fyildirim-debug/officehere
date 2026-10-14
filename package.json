@@ -16,13 +16,21 @@
     "build": "pnpm -r --filter ./apps/belge --filter ./apps/tablo --filter ./apps/sunum --filter ./apps/desktop run build",
     "typecheck": "pnpm -r run typecheck && tsc -p e2e/tsconfig.json",
     "test": "pnpm -r run test",
+    "test:perf": "pnpm --filter @officehere/tablo test:perf",
+    "test:betikler": "node --test scripts/derlem/temel.test.mjs",
     "dev:desktop": "pnpm --filter @officehere/desktop dev",
     "dist:win": "pnpm --filter @officehere/desktop dist --win",
     "dist:linux": "pnpm --filter @officehere/desktop dist --linux",
     "dist:mac": "pnpm --filter @officehere/desktop dist --mac",
     "web": "node scripts/build-web.mjs",
     "e2e": "playwright test",
-    "e2e:masaustu": "playwright test -c playwright.masaustu.config.ts"
+    "e2e:masaustu": "playwright test -c playwright.masaustu.config.ts",
+    "denetim": "node scripts/denetim/yerel-ayar.mjs",
+    "derlem": "node scripts/derlem/tur.mjs",
+    "derlem:uret": "node scripts/derlem/uret.mjs",
+    "derlem:lo": "node scripts/derlem/lo.mjs",
+    "derlem:temel": "node scripts/derlem/temel.mjs --calistir",
+    "bulanik": "node scripts/bulanik/calistir.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",

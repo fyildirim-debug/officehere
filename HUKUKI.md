@@ -18,6 +18,11 @@ sınırlar içinde geliştirildiğini ve katkıcıların uyması gereken kuralla
 
 ## Dosya biçimleri
 
+- Okuyucu/yazıcıların büyük bölümü projenin kendi kodudur. İstisnalar açıkça
+  şunlardır: **XLSX** okuma/yazma **ExcelJS** (MIT) üzerine kuruludur (ExcelJS'in
+  desteklemediği grafik, filtre, ad ve uzantı parçaları kendi kodumuzla okunup
+  yazılır); Belge, ayrıştıramadığı bir **DOCX** dosyasında yedek dönüşüm için
+  **mammoth** (BSD-2-Clause) kullanır; ZIP paketleri **JSZip** (MIT) ile açılır.
 - `.docx`, `.xlsx`, `.pptx` desteği **Office Open XML** standardına (ECMA-376 /
   ISO/IEC 29500) dayanır. Bu belirtimler ve Microsoft'un uzantı belirtimleri
   ([MS-DOCX], [MS-XLSX], [MS-PPTX], [MS-OI29500]) Microsoft'un *Open
@@ -35,7 +40,12 @@ sınırlar içinde geliştirildiğini ve katkıcıların uyması gereken kuralla
   **RTF** biçimi Microsoft'un yayımladığı RTF 1.9.1 belirtimine, **Markdown**
   CommonMark belirtimine (CC BY-SA, yalnız okunup uygulanmıştır) dayanır.
 - Test örnek dosyaları projenin kendi içeriğinden LibreOffice ile dönüştürülerek
-  üretilmiştir; üçüncü taraf belgesi depoya eklenmemiştir.
+  üretilmiştir; üçüncü taraf belgesi depoya eklenmemiştir. Sağlamlık derlemi
+  (`test-derlem/`) de böyledir: belgeler kendi metnimizden LibreOffice UNO
+  (`scripts/derlem/uret_lo.py`) ve python-docx / openpyxl / python-pptx
+  (`uret_py.py`) ile, görseller Pillow ile (`uret_gorsel.py`) üretilmiştir.
+  Bozuk dosya (bulanık test) örnekleri bu dosyalardan betikle türetilir ve
+  depoya konmaz.
 - Formül sözdizimi ve fonksiyon adları birlikte çalışabilirlik için gereklidir ve
   standardın parçasıdır. Türkçe fonksiyon adları (TOPLA, EĞER, DÜŞEYARA…) kısa,
   betimleyici sözcüklerdir; başka açık kaynak tablolama yazılımlarında da kullanılır.
@@ -104,6 +114,12 @@ bileşen pakete girerse derleme durur. Başlıca bağımlılıklar:
 | mammoth | DOCX içe aktarma yedeği | BSD-2-Clause |
 | @fluentui/react-icons | Simgeler | MIT |
 | electron-updater | Masaüstü güncelleyici | MIT (bağımlılıkları MIT/ISC/BlueOak/Python-2.0) |
+
+Yalnız geliştirme/CI'da kullanılan, dağıtılmayan araçlar: LibreOffice (MPL-2.0;
+derlem üretimi ve PDF denetimi için ayrı süreç olarak çalıştırılır),
+python-docx / openpyxl / python-pptx (MIT), XlsxWriter (BSD-2-Clause), Pillow
+(MIT-CMU), Playwright (Apache-2.0), Vitest/Vite (MIT), cosign (Apache-2.0;
+sürüm imzası).
 
 Denetim notları (2026-10):
 

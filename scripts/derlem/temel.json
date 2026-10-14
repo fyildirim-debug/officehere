@@ -1,0 +1,2095 @@
+{
+ "aciklama": "Derlem turu / bulanık test / LibreOffice denetimi temel çizgisi. Elle düzenlemeyin: pnpm derlem:temel ile güncellenir. Kurallar: scripts/derlem/temel.mjs başı.",
+ "kip": "baslangic",
+ "guncelleme": "2026-10-14",
+ "derlemBilgi": {
+  "tarih": "2026-10-14T09:52:35.212Z",
+  "commit": "e578961",
+  "dosya": 84
+ },
+ "bulanik": {
+  "hizMs": 137.9,
+  "sinirMs": 5000,
+  "ornekler": {
+   "belge/bos_zip.docx": "anlaşılır hata",
+   "belge/bos.doc": "anlaşılır hata",
+   "belge/bos.docx": "anlaşılır hata",
+   "belge/bos.html": "açıldı",
+   "belge/bos.md": "açıldı",
+   "belge/bos.odt": "anlaşılır hata",
+   "belge/bos.rtf": "anlaşılır hata",
+   "belge/bos.txt": "açıldı",
+   "belge/cfb_cop.doc": "anlaşılır hata",
+   "belge/cfb_cop.docx": "anlaşılır hata",
+   "belge/cfb_cop.html": "anlaşılır hata",
+   "belge/cfb_cop.md": "anlaşılır hata",
+   "belge/cfb_cop.odt": "anlaşılır hata",
+   "belge/cfb_cop.rtf": "anlaşılır hata",
+   "belge/cfb_cop.txt": "anlaşılır hata",
+   "belge/cop.doc": "anlaşılır hata",
+   "belge/cop.docx": "anlaşılır hata",
+   "belge/cop.html": "açıldı",
+   "belge/cop.md": "açıldı",
+   "belge/cop.odt": "anlaşılır hata",
+   "belge/cop.rtf": "anlaşılır hata",
+   "belge/cop.txt": "açıldı",
+   "belge/doc-icerik.docx": "uyarılı",
+   "belge/doc-icerik.html": "uyarılı",
+   "belge/doc-icerik.md": "uyarılı",
+   "belge/doc-icerik.odt": "uyarılı",
+   "belge/doc-icerik.rtf": "uyarılı",
+   "belge/doc-icerik.txt": "uyarılı",
+   "belge/docx-icerik.doc": "uyarılı",
+   "belge/docx-icerik.html": "uyarılı",
+   "belge/docx-icerik.md": "uyarılı",
+   "belge/docx-icerik.odt": "uyarılı",
+   "belge/docx-icerik.rtf": "uyarılı",
+   "belge/docx-icerik.txt": "uyarılı",
+   "belge/html-icerik.doc": "uyarılı",
+   "belge/html-icerik.docx": "anlaşılır hata",
+   "belge/html-icerik.md": "uyarılı",
+   "belge/html-icerik.odt": "anlaşılır hata",
+   "belge/html-icerik.rtf": "anlaşılır hata",
+   "belge/html-icerik.txt": "açıldı",
+   "belge/lo-rapor_akis_dev.doc": "uyarılı",
+   "belge/lo-rapor_baslik.doc": "anlaşılır hata",
+   "belge/lo-rapor_baslik.docx": "anlaşılır hata",
+   "belge/lo-rapor_baslik.odt": "anlaşılır hata",
+   "belge/lo-rapor_baslik.rtf": "anlaşılır hata",
+   "belge/lo-rapor_bin.rtf": "uyarılı",
+   "belge/lo-rapor_bomba.docx": "anlaşılır hata",
+   "belge/lo-rapor_bomba.odt": "anlaşılır hata",
+   "belge/lo-rapor_dengesiz.rtf": "uyarılı",
+   "belge/lo-rapor_derin.docx": "uyarılı",
+   "belge/lo-rapor_derin.odt": "uyarılı",
+   "belge/lo-rapor_derin.rtf": "uyarılı",
+   "belge/lo-rapor_dizin_yok.doc": "anlaşılır hata",
+   "belge/lo-rapor_fat_dongu.doc": "uyarılı",
+   "belge/lo-rapor_fat_halka.doc": "anlaşılır hata",
+   "belge/lo-rapor_fat_sayisi.doc": "uyarılı",
+   "belge/lo-rapor_flip1_0.doc": "uyarılı",
+   "belge/lo-rapor_flip1_0.docx": "uyarılı",
+   "belge/lo-rapor_flip1_0.odt": "uyarılı",
+   "belge/lo-rapor_flip1_0.rtf": "uyarılı",
+   "belge/lo-rapor_flip1_1.doc": "uyarılı",
+   "belge/lo-rapor_flip1_1.docx": "uyarılı",
+   "belge/lo-rapor_flip1_1.odt": "anlaşılır hata",
+   "belge/lo-rapor_flip1_1.rtf": "uyarılı",
+   "belge/lo-rapor_flip4096_0.doc": "anlaşılır hata",
+   "belge/lo-rapor_flip4096_0.docx": "anlaşılır hata",
+   "belge/lo-rapor_flip4096_0.odt": "anlaşılır hata",
+   "belge/lo-rapor_flip4096_0.rtf": "anlaşılır hata",
+   "belge/lo-rapor_flip4096_1.doc": "anlaşılır hata",
+   "belge/lo-rapor_flip4096_1.docx": "anlaşılır hata",
+   "belge/lo-rapor_flip4096_1.odt": "anlaşılır hata",
+   "belge/lo-rapor_flip4096_1.rtf": "anlaşılır hata",
+   "belge/lo-rapor_flip512_0.doc": "anlaşılır hata",
+   "belge/lo-rapor_flip512_0.docx": "anlaşılır hata",
+   "belge/lo-rapor_flip512_0.odt": "anlaşılır hata",
+   "belge/lo-rapor_flip512_0.rtf": "uyarılı",
+   "belge/lo-rapor_flip512_1.doc": "anlaşılır hata",
+   "belge/lo-rapor_flip512_1.docx": "anlaşılır hata",
+   "belge/lo-rapor_flip512_1.odt": "anlaşılır hata",
+   "belge/lo-rapor_flip512_1.rtf": "uyarılı",
+   "belge/lo-rapor_flip64_0.doc": "uyarılı",
+   "belge/lo-rapor_flip64_0.docx": "anlaşılır hata",
+   "belge/lo-rapor_flip64_0.odt": "anlaşılır hata",
+   "belge/lo-rapor_flip64_0.rtf": "uyarılı",
+   "belge/lo-rapor_flip64_1.doc": "uyarılı",
+   "belge/lo-rapor_flip64_1.docx": "anlaşılır hata",
+   "belge/lo-rapor_flip64_1.odt": "anlaşılır hata",
+   "belge/lo-rapor_flip64_1.rtf": "uyarılı",
+   "belge/lo-rapor_flip8_0.doc": "uyarılı",
+   "belge/lo-rapor_flip8_0.docx": "anlaşılır hata",
+   "belge/lo-rapor_flip8_0.odt": "uyarılı",
+   "belge/lo-rapor_flip8_0.rtf": "uyarılı",
+   "belge/lo-rapor_flip8_1.doc": "uyarılı",
+   "belge/lo-rapor_flip8_1.docx": "anlaşılır hata",
+   "belge/lo-rapor_flip8_1.odt": "uyarılı",
+   "belge/lo-rapor_flip8_1.rtf": "uyarılı",
+   "belge/lo-rapor_gridspan.docx": "uyarılı",
+   "belge/lo-rapor_kesik1.doc": "anlaşılır hata",
+   "belge/lo-rapor_kesik1.docx": "anlaşılır hata",
+   "belge/lo-rapor_kesik1.odt": "anlaşılır hata",
+   "belge/lo-rapor_kesik1.rtf": "uyarılı",
+   "belge/lo-rapor_kesik10.doc": "anlaşılır hata",
+   "belge/lo-rapor_kesik10.docx": "anlaşılır hata",
+   "belge/lo-rapor_kesik10.odt": "anlaşılır hata",
+   "belge/lo-rapor_kesik10.rtf": "uyarılı",
+   "belge/lo-rapor_kesik50.doc": "anlaşılır hata",
+   "belge/lo-rapor_kesik50.docx": "anlaşılır hata",
+   "belge/lo-rapor_kesik50.odt": "anlaşılır hata",
+   "belge/lo-rapor_kesik50.rtf": "uyarılı",
+   "belge/lo-rapor_kesik90.doc": "anlaşılır hata",
+   "belge/lo-rapor_kesik90.docx": "anlaşılır hata",
+   "belge/lo-rapor_kesik90.odt": "anlaşılır hata",
+   "belge/lo-rapor_kesik90.rtf": "uyarılı",
+   "belge/lo-rapor_kesik99.doc": "anlaşılır hata",
+   "belge/lo-rapor_kesik99.docx": "anlaşılır hata",
+   "belge/lo-rapor_kesik99.odt": "anlaşılır hata",
+   "belge/lo-rapor_kesik99.rtf": "uyarılı",
+   "belge/lo-rapor_numid.docx": "uyarılı",
+   "belge/lo-rapor_oznitelik_dev.docx": "uyarılı",
+   "belge/lo-rapor_oznitelik_dev.odt": "uyarılı",
+   "belge/lo-rapor_oznitelik_eksi.docx": "uyarılı",
+   "belge/lo-rapor_oznitelik_eksi.odt": "uyarılı",
+   "belge/lo-rapor_oznitelik_nan.docx": "uyarılı",
+   "belge/lo-rapor_oznitelik_nan.odt": "uyarılı",
+   "belge/lo-rapor_oznitelik_sifir.docx": "uyarılı",
+   "belge/lo-rapor_oznitelik_sifir.odt": "uyarılı",
+   "belge/lo-rapor_pict.rtf": "uyarılı",
+   "belge/lo-rapor_rels_dongu.docx": "uyarılı",
+   "belge/lo-rapor_rels_yok.docx": "uyarılı",
+   "belge/lo-rapor_sektor_dev.doc": "anlaşılır hata",
+   "belge/lo-rapor_sil__Content_Types_.xml.docx": "uyarılı",
+   "belge/lo-rapor_sil__rels_.rels.docx": "uyarılı",
+   "belge/lo-rapor_sil_content.xml.odt": "anlaşılır hata",
+   "belge/lo-rapor_sil_manifest.rdf.odt": "uyarılı",
+   "belge/lo-rapor_sil_META-INF_manifest.xml.odt": "uyarılı",
+   "belge/lo-rapor_sil_mimetype.odt": "uyarılı",
+   "belge/lo-rapor_sil_styles.xml.odt": "uyarılı",
+   "belge/lo-rapor_sil_word__rels_document.xml.rels.docx": "uyarılı",
+   "belge/lo-rapor_sil_word_comments.xml.docx": "uyarılı",
+   "belge/lo-rapor_sil_word_document.xml.docx": "anlaşılır hata",
+   "belge/lo-rapor_sil_word_footnotes.xml.docx": "uyarılı",
+   "belge/lo-rapor_sil_word_header1.xml.docx": "uyarılı",
+   "belge/lo-rapor_sil_word_numbering.xml.docx": "uyarılı",
+   "belge/lo-rapor_sil_word_styles.xml.docx": "uyarılı",
+   "belge/lo-rapor_sil_word_theme_theme1.xml.docx": "uyarılı",
+   "belge/lo-rapor_unicode.rtf": "uyarılı",
+   "belge/lo-rapor_varlik.docx": "uyarılı",
+   "belge/lo-rapor_varlik.odt": "uyarılı",
+   "belge/lo-rapor_xmlbos.docx": "anlaşılır hata",
+   "belge/lo-rapor_xmlbos.odt": "anlaşılır hata",
+   "belge/lo-rapor_xmlcop.docx": "anlaşılır hata",
+   "belge/lo-rapor_xmlcop.odt": "anlaşılır hata",
+   "belge/lo-rapor_xmlkesik.docx": "anlaşılır hata",
+   "belge/lo-rapor_xmlkesik.odt": "anlaşılır hata",
+   "belge/odp-icerik.doc": "anlaşılır hata",
+   "belge/odp-icerik.docx": "anlaşılır hata",
+   "belge/odp-icerik.html": "anlaşılır hata",
+   "belge/odp-icerik.md": "anlaşılır hata",
+   "belge/odp-icerik.odt": "anlaşılır hata",
+   "belge/odp-icerik.rtf": "anlaşılır hata",
+   "belge/odp-icerik.txt": "anlaşılır hata",
+   "belge/ods-icerik.doc": "anlaşılır hata",
+   "belge/ods-icerik.docx": "anlaşılır hata",
+   "belge/ods-icerik.html": "anlaşılır hata",
+   "belge/ods-icerik.md": "anlaşılır hata",
+   "belge/ods-icerik.odt": "anlaşılır hata",
+   "belge/ods-icerik.rtf": "anlaşılır hata",
+   "belge/ods-icerik.txt": "anlaşılır hata",
+   "belge/odt-icerik.doc": "uyarılı",
+   "belge/odt-icerik.docx": "uyarılı",
+   "belge/odt-icerik.html": "uyarılı",
+   "belge/odt-icerik.md": "uyarılı",
+   "belge/odt-icerik.rtf": "uyarılı",
+   "belge/odt-icerik.txt": "uyarılı",
+   "belge/ornek_baslik.md": "açıldı",
+   "belge/ornek_derin.md": "açıldı",
+   "belge/ornek_flip1_0.md": "açıldı",
+   "belge/ornek_flip1_1.md": "açıldı",
+   "belge/ornek_flip4096_0.md": "açıldı",
+   "belge/ornek_flip4096_1.md": "açıldı",
+   "belge/ornek_flip512_0.md": "açıldı",
+   "belge/ornek_flip512_1.md": "açıldı",
+   "belge/ornek_flip64_0.md": "açıldı",
+   "belge/ornek_flip64_1.md": "açıldı",
+   "belge/ornek_flip8_0.md": "açıldı",
+   "belge/ornek_flip8_1.md": "açıldı",
+   "belge/ornek_kesik1.md": "açıldı",
+   "belge/ornek_kesik10.md": "açıldı",
+   "belge/ornek_kesik50.md": "açıldı",
+   "belge/ornek_kesik90.md": "açıldı",
+   "belge/ornek_kesik99.md": "açıldı",
+   "belge/ornek_tablo.md": "açıldı",
+   "belge/pdf.doc": "anlaşılır hata",
+   "belge/pdf.docx": "anlaşılır hata",
+   "belge/pdf.html": "açıldı",
+   "belge/pdf.md": "açıldı",
+   "belge/pdf.odt": "anlaşılır hata",
+   "belge/pdf.rtf": "anlaşılır hata",
+   "belge/pdf.txt": "açıldı",
+   "belge/pk_cop.doc": "anlaşılır hata",
+   "belge/pk_cop.docx": "anlaşılır hata",
+   "belge/pk_cop.html": "anlaşılır hata",
+   "belge/pk_cop.md": "anlaşılır hata",
+   "belge/pk_cop.odt": "anlaşılır hata",
+   "belge/pk_cop.rtf": "anlaşılır hata",
+   "belge/pk_cop.txt": "anlaşılır hata",
+   "belge/png.doc": "anlaşılır hata",
+   "belge/png.docx": "anlaşılır hata",
+   "belge/png.html": "açıldı",
+   "belge/png.md": "açıldı",
+   "belge/png.odt": "anlaşılır hata",
+   "belge/png.rtf": "anlaşılır hata",
+   "belge/png.txt": "açıldı",
+   "belge/ppt-icerik.doc": "anlaşılır hata",
+   "belge/ppt-icerik.docx": "anlaşılır hata",
+   "belge/ppt-icerik.html": "anlaşılır hata",
+   "belge/ppt-icerik.md": "anlaşılır hata",
+   "belge/ppt-icerik.odt": "anlaşılır hata",
+   "belge/ppt-icerik.rtf": "anlaşılır hata",
+   "belge/ppt-icerik.txt": "anlaşılır hata",
+   "belge/pptx-icerik.doc": "anlaşılır hata",
+   "belge/pptx-icerik.docx": "anlaşılır hata",
+   "belge/pptx-icerik.html": "anlaşılır hata",
+   "belge/pptx-icerik.md": "anlaşılır hata",
+   "belge/pptx-icerik.odt": "anlaşılır hata",
+   "belge/pptx-icerik.rtf": "anlaşılır hata",
+   "belge/pptx-icerik.txt": "anlaşılır hata",
+   "belge/py-belge_baslik.docx": "anlaşılır hata",
+   "belge/py-belge_bomba.docx": "anlaşılır hata",
+   "belge/py-belge_derin.docx": "uyarılı",
+   "belge/py-belge_flip1_0.docx": "açıldı",
+   "belge/py-belge_flip1_1.docx": "anlaşılır hata",
+   "belge/py-belge_flip4096_0.docx": "anlaşılır hata",
+   "belge/py-belge_flip4096_1.docx": "anlaşılır hata",
+   "belge/py-belge_flip512_0.docx": "anlaşılır hata",
+   "belge/py-belge_flip512_1.docx": "anlaşılır hata",
+   "belge/py-belge_flip64_0.docx": "anlaşılır hata",
+   "belge/py-belge_flip64_1.docx": "anlaşılır hata",
+   "belge/py-belge_flip8_0.docx": "anlaşılır hata",
+   "belge/py-belge_flip8_1.docx": "anlaşılır hata",
+   "belge/py-belge_gridspan.docx": "açıldı",
+   "belge/py-belge_kesik1.docx": "anlaşılır hata",
+   "belge/py-belge_kesik10.docx": "anlaşılır hata",
+   "belge/py-belge_kesik50.docx": "anlaşılır hata",
+   "belge/py-belge_kesik90.docx": "anlaşılır hata",
+   "belge/py-belge_kesik99.docx": "anlaşılır hata",
+   "belge/py-belge_numid.docx": "açıldı",
+   "belge/py-belge_oznitelik_dev.docx": "açıldı",
+   "belge/py-belge_oznitelik_eksi.docx": "açıldı",
+   "belge/py-belge_oznitelik_nan.docx": "açıldı",
+   "belge/py-belge_oznitelik_sifir.docx": "açıldı",
+   "belge/py-belge_rels_dongu.docx": "açıldı",
+   "belge/py-belge_rels_yok.docx": "uyarılı",
+   "belge/py-belge_sil__Content_Types_.xml.docx": "açıldı",
+   "belge/py-belge_sil__rels_.rels.docx": "açıldı",
+   "belge/py-belge_sil_customXml__rels_item1.xml.rels.docx": "açıldı",
+   "belge/py-belge_sil_word__rels_document.xml.rels.docx": "uyarılı",
+   "belge/py-belge_sil_word_document.xml.docx": "anlaşılır hata",
+   "belge/py-belge_sil_word_header1.xml.docx": "açıldı",
+   "belge/py-belge_sil_word_numbering.xml.docx": "açıldı",
+   "belge/py-belge_sil_word_styles.xml.docx": "açıldı",
+   "belge/py-belge_sil_word_theme_theme1.xml.docx": "açıldı",
+   "belge/py-belge_varlik.docx": "açıldı",
+   "belge/py-belge_xmlbos.docx": "anlaşılır hata",
+   "belge/py-belge_xmlcop.docx": "anlaşılır hata",
+   "belge/py-belge_xmlkesik.docx": "anlaşılır hata",
+   "belge/rtf-icerik.doc": "uyarılı",
+   "belge/rtf-icerik.docx": "uyarılı",
+   "belge/rtf-icerik.html": "uyarılı",
+   "belge/rtf-icerik.md": "uyarılı",
+   "belge/rtf-icerik.odt": "uyarılı",
+   "belge/rtf-icerik.txt": "uyarılı",
+   "belge/xls-icerik.doc": "anlaşılır hata",
+   "belge/xls-icerik.docx": "anlaşılır hata",
+   "belge/xls-icerik.html": "anlaşılır hata",
+   "belge/xls-icerik.md": "anlaşılır hata",
+   "belge/xls-icerik.odt": "anlaşılır hata",
+   "belge/xls-icerik.rtf": "anlaşılır hata",
+   "belge/xls-icerik.txt": "anlaşılır hata",
+   "belge/xlsx-icerik.doc": "anlaşılır hata",
+   "belge/xlsx-icerik.docx": "anlaşılır hata",
+   "belge/xlsx-icerik.html": "anlaşılır hata",
+   "belge/xlsx-icerik.md": "anlaşılır hata",
+   "belge/xlsx-icerik.odt": "anlaşılır hata",
+   "belge/xlsx-icerik.rtf": "anlaşılır hata",
+   "belge/xlsx-icerik.txt": "anlaşılır hata",
+   "belge/yalniz_ct.docx": "anlaşılır hata",
+   "sunum/bos_zip.pptx": "anlaşılır hata",
+   "sunum/bos.odp": "anlaşılır hata",
+   "sunum/bos.ppt": "anlaşılır hata",
+   "sunum/bos.pptx": "anlaşılır hata",
+   "sunum/cfb_cop.odp": "anlaşılır hata",
+   "sunum/cfb_cop.ppt": "anlaşılır hata",
+   "sunum/cfb_cop.pptx": "anlaşılır hata",
+   "sunum/cop.odp": "anlaşılır hata",
+   "sunum/cop.ppt": "anlaşılır hata",
+   "sunum/cop.pptx": "anlaşılır hata",
+   "sunum/doc-icerik.odp": "anlaşılır hata",
+   "sunum/doc-icerik.ppt": "anlaşılır hata",
+   "sunum/doc-icerik.pptx": "anlaşılır hata",
+   "sunum/docx-icerik.odp": "anlaşılır hata",
+   "sunum/docx-icerik.ppt": "anlaşılır hata",
+   "sunum/docx-icerik.pptx": "anlaşılır hata",
+   "sunum/html-icerik.odp": "anlaşılır hata",
+   "sunum/html-icerik.ppt": "anlaşılır hata",
+   "sunum/html-icerik.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_akis_dev.ppt": "açıldı",
+   "sunum/lo-sunu_baslik.odp": "anlaşılır hata",
+   "sunum/lo-sunu_baslik.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_baslik.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_bomba.odp": "anlaşılır hata",
+   "sunum/lo-sunu_bomba.pptx": "uyarılı",
+   "sunum/lo-sunu_derin.odp": "anlaşılır hata",
+   "sunum/lo-sunu_derin.pptx": "uyarılı",
+   "sunum/lo-sunu_dizin_yok.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_fat_dongu.ppt": "açıldı",
+   "sunum/lo-sunu_fat_halka.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_fat_sayisi.ppt": "açıldı",
+   "sunum/lo-sunu_flip1_0.odp": "açıldı",
+   "sunum/lo-sunu_flip1_0.ppt": "açıldı",
+   "sunum/lo-sunu_flip1_0.pptx": "uyarılı",
+   "sunum/lo-sunu_flip1_1.odp": "açıldı",
+   "sunum/lo-sunu_flip1_1.ppt": "açıldı",
+   "sunum/lo-sunu_flip1_1.pptx": "uyarılı",
+   "sunum/lo-sunu_flip4096_0.odp": "anlaşılır hata",
+   "sunum/lo-sunu_flip4096_0.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_flip4096_0.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_flip4096_1.odp": "anlaşılır hata",
+   "sunum/lo-sunu_flip4096_1.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_flip4096_1.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_flip512_0.odp": "anlaşılır hata",
+   "sunum/lo-sunu_flip512_0.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_flip512_0.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_flip512_1.odp": "anlaşılır hata",
+   "sunum/lo-sunu_flip512_1.ppt": "açıldı",
+   "sunum/lo-sunu_flip512_1.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_flip64_0.odp": "anlaşılır hata",
+   "sunum/lo-sunu_flip64_0.ppt": "açıldı",
+   "sunum/lo-sunu_flip64_0.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_flip64_1.odp": "anlaşılır hata",
+   "sunum/lo-sunu_flip64_1.ppt": "açıldı",
+   "sunum/lo-sunu_flip64_1.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_flip8_0.odp": "anlaşılır hata",
+   "sunum/lo-sunu_flip8_0.ppt": "açıldı",
+   "sunum/lo-sunu_flip8_0.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_flip8_1.odp": "anlaşılır hata",
+   "sunum/lo-sunu_flip8_1.ppt": "açıldı",
+   "sunum/lo-sunu_flip8_1.pptx": "uyarılı",
+   "sunum/lo-sunu_kesik1.odp": "anlaşılır hata",
+   "sunum/lo-sunu_kesik1.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_kesik1.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_kesik10.odp": "anlaşılır hata",
+   "sunum/lo-sunu_kesik10.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_kesik10.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_kesik50.odp": "anlaşılır hata",
+   "sunum/lo-sunu_kesik50.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_kesik50.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_kesik90.odp": "anlaşılır hata",
+   "sunum/lo-sunu_kesik90.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_kesik90.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_kesik99.odp": "anlaşılır hata",
+   "sunum/lo-sunu_kesik99.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_kesik99.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_oznitelik_dev.odp": "açıldı",
+   "sunum/lo-sunu_oznitelik_dev.pptx": "açıldı",
+   "sunum/lo-sunu_oznitelik_eksi.odp": "açıldı",
+   "sunum/lo-sunu_oznitelik_eksi.pptx": "açıldı",
+   "sunum/lo-sunu_oznitelik_nan.odp": "açıldı",
+   "sunum/lo-sunu_oznitelik_nan.pptx": "açıldı",
+   "sunum/lo-sunu_oznitelik_sifir.odp": "açıldı",
+   "sunum/lo-sunu_oznitelik_sifir.pptx": "açıldı",
+   "sunum/lo-sunu_rels_dongu.pptx": "uyarılı",
+   "sunum/lo-sunu_rels_yok.pptx": "uyarılı",
+   "sunum/lo-sunu_sektor_dev.ppt": "anlaşılır hata",
+   "sunum/lo-sunu_sil__rels_.rels.pptx": "açıldı",
+   "sunum/lo-sunu_sil_content.xml.odp": "anlaşılır hata",
+   "sunum/lo-sunu_sil_META-INF_manifest.xml.odp": "açıldı",
+   "sunum/lo-sunu_sil_mimetype.odp": "açıldı",
+   "sunum/lo-sunu_sil_Object 1_content.xml.odp": "açıldı",
+   "sunum/lo-sunu_sil_Object 1_styles.xml.odp": "açıldı",
+   "sunum/lo-sunu_sil_ppt__rels_presentation.xml.rels.pptx": "uyarılı",
+   "sunum/lo-sunu_sil_ppt_notesMasters__rels_notesMaster1.xml.rels.pptx": "açıldı",
+   "sunum/lo-sunu_sil_ppt_presentation.xml.pptx": "anlaşılır hata",
+   "sunum/lo-sunu_sil_ppt_slideLayouts__rels_slideLayout1.xml.rels.pptx": "açıldı",
+   "sunum/lo-sunu_sil_ppt_slideLayouts__rels_slideLayout2.xml.rels.pptx": "açıldı",
+   "sunum/lo-sunu_sil_ppt_slideLayouts__rels_slideLayout3.xml.rels.pptx": "açıldı",
+   "sunum/lo-sunu_sil_ppt_slideLayouts__rels_slideLayout4.xml.rels.pptx": "açıldı",
+   "sunum/lo-sunu_sil_ppt_slideLayouts_slideLayout1.xml.pptx": "uyarılı",
+   "sunum/lo-sunu_sil_ppt_slideMasters__rels_slideMaster1.xml.rels.pptx": "uyarılı",
+   "sunum/lo-sunu_sil_ppt_slideMasters_slideMaster1.xml.pptx": "uyarılı",
+   "sunum/lo-sunu_sil_ppt_slides__rels_slide6.xml.rels.pptx": "uyarılı",
+   "sunum/lo-sunu_sil_ppt_slides__rels_slide7.xml.rels.pptx": "uyarılı",
+   "sunum/lo-sunu_sil_ppt_slides__rels_slide8.xml.rels.pptx": "uyarılı",
+   "sunum/lo-sunu_sil_ppt_slides_slide1.xml.pptx": "uyarılı",
+   "sunum/lo-sunu_sil_ppt_theme_theme1.xml.pptx": "uyarılı",
+   "sunum/lo-sunu_sil_styles.xml.odp": "uyarılı",
+   "sunum/lo-sunu_sldsz.pptx": "açıldı",
+   "sunum/lo-sunu_varlik.odp": "açıldı",
+   "sunum/lo-sunu_varlik.pptx": "açıldı",
+   "sunum/lo-sunu_xmlbos.odp": "anlaşılır hata",
+   "sunum/lo-sunu_xmlbos.pptx": "uyarılı",
+   "sunum/lo-sunu_xmlcop.odp": "anlaşılır hata",
+   "sunum/lo-sunu_xmlcop.pptx": "uyarılı",
+   "sunum/lo-sunu_xmlkesik.odp": "anlaşılır hata",
+   "sunum/lo-sunu_xmlkesik.pptx": "uyarılı",
+   "sunum/odp-icerik.ppt": "açıldı",
+   "sunum/odp-icerik.pptx": "açıldı",
+   "sunum/ods-icerik.odp": "anlaşılır hata",
+   "sunum/ods-icerik.ppt": "anlaşılır hata",
+   "sunum/ods-icerik.pptx": "anlaşılır hata",
+   "sunum/odt-icerik.odp": "anlaşılır hata",
+   "sunum/odt-icerik.ppt": "anlaşılır hata",
+   "sunum/odt-icerik.pptx": "anlaşılır hata",
+   "sunum/pdf.odp": "anlaşılır hata",
+   "sunum/pdf.ppt": "anlaşılır hata",
+   "sunum/pdf.pptx": "anlaşılır hata",
+   "sunum/pk_cop.odp": "anlaşılır hata",
+   "sunum/pk_cop.ppt": "anlaşılır hata",
+   "sunum/pk_cop.pptx": "anlaşılır hata",
+   "sunum/png.odp": "anlaşılır hata",
+   "sunum/png.ppt": "anlaşılır hata",
+   "sunum/png.pptx": "anlaşılır hata",
+   "sunum/ppt-icerik.odp": "açıldı",
+   "sunum/ppt-icerik.pptx": "açıldı",
+   "sunum/pptx-icerik.odp": "açıldı",
+   "sunum/pptx-icerik.ppt": "açıldı",
+   "sunum/py-sunu_baslik.pptx": "anlaşılır hata",
+   "sunum/py-sunu_bomba.pptx": "uyarılı",
+   "sunum/py-sunu_derin.pptx": "uyarılı",
+   "sunum/py-sunu_flip1_0.pptx": "açıldı",
+   "sunum/py-sunu_flip1_1.pptx": "uyarılı",
+   "sunum/py-sunu_flip4096_0.pptx": "anlaşılır hata",
+   "sunum/py-sunu_flip4096_1.pptx": "anlaşılır hata",
+   "sunum/py-sunu_flip512_0.pptx": "anlaşılır hata",
+   "sunum/py-sunu_flip512_1.pptx": "anlaşılır hata",
+   "sunum/py-sunu_flip64_0.pptx": "uyarılı",
+   "sunum/py-sunu_flip64_1.pptx": "anlaşılır hata",
+   "sunum/py-sunu_flip8_0.pptx": "uyarılı",
+   "sunum/py-sunu_flip8_1.pptx": "açıldı",
+   "sunum/py-sunu_kesik1.pptx": "anlaşılır hata",
+   "sunum/py-sunu_kesik10.pptx": "anlaşılır hata",
+   "sunum/py-sunu_kesik50.pptx": "anlaşılır hata",
+   "sunum/py-sunu_kesik90.pptx": "anlaşılır hata",
+   "sunum/py-sunu_kesik99.pptx": "anlaşılır hata",
+   "sunum/py-sunu_oznitelik_dev.pptx": "açıldı",
+   "sunum/py-sunu_oznitelik_eksi.pptx": "açıldı",
+   "sunum/py-sunu_oznitelik_nan.pptx": "açıldı",
+   "sunum/py-sunu_oznitelik_sifir.pptx": "açıldı",
+   "sunum/py-sunu_rels_dongu.pptx": "uyarılı",
+   "sunum/py-sunu_rels_yok.pptx": "uyarılı",
+   "sunum/py-sunu_sil__Content_Types_.xml.pptx": "uyarılı",
+   "sunum/py-sunu_sil__rels_.rels.pptx": "açıldı",
+   "sunum/py-sunu_sil_ppt__rels_presentation.xml.rels.pptx": "uyarılı",
+   "sunum/py-sunu_sil_ppt_presentation.xml.pptx": "anlaşılır hata",
+   "sunum/py-sunu_sil_ppt_slideLayouts__rels_slideLayout1.xml.rels.pptx": "açıldı",
+   "sunum/py-sunu_sil_ppt_slideLayouts__rels_slideLayout11.xml.rels.pptx": "açıldı",
+   "sunum/py-sunu_sil_ppt_slideLayouts__rels_slideLayout2.xml.rels.pptx": "açıldı",
+   "sunum/py-sunu_sil_ppt_slideLayouts__rels_slideLayout3.xml.rels.pptx": "açıldı",
+   "sunum/py-sunu_sil_ppt_slideLayouts__rels_slideLayout4.xml.rels.pptx": "açıldı",
+   "sunum/py-sunu_sil_ppt_slideLayouts__rels_slideLayout5.xml.rels.pptx": "açıldı",
+   "sunum/py-sunu_sil_ppt_slideLayouts__rels_slideLayout6.xml.rels.pptx": "açıldı",
+   "sunum/py-sunu_sil_ppt_slideLayouts__rels_slideLayout7.xml.rels.pptx": "açıldı",
+   "sunum/py-sunu_sil_ppt_slideLayouts_slideLayout1.xml.pptx": "uyarılı",
+   "sunum/py-sunu_sil_ppt_slideMasters__rels_slideMaster1.xml.rels.pptx": "uyarılı",
+   "sunum/py-sunu_sil_ppt_slideMasters_slideMaster1.xml.pptx": "uyarılı",
+   "sunum/py-sunu_sil_ppt_theme_theme1.xml.pptx": "uyarılı",
+   "sunum/py-sunu_sldsz.pptx": "açıldı",
+   "sunum/py-sunu_varlik.pptx": "açıldı",
+   "sunum/py-sunu_xmlbos.pptx": "uyarılı",
+   "sunum/py-sunu_xmlcop.pptx": "uyarılı",
+   "sunum/py-sunu_xmlkesik.pptx": "uyarılı",
+   "sunum/rtf-icerik.odp": "anlaşılır hata",
+   "sunum/rtf-icerik.ppt": "anlaşılır hata",
+   "sunum/rtf-icerik.pptx": "anlaşılır hata",
+   "sunum/xls-icerik.odp": "anlaşılır hata",
+   "sunum/xls-icerik.ppt": "anlaşılır hata",
+   "sunum/xls-icerik.pptx": "anlaşılır hata",
+   "sunum/xlsx-icerik.odp": "anlaşılır hata",
+   "sunum/xlsx-icerik.ppt": "anlaşılır hata",
+   "sunum/xlsx-icerik.pptx": "anlaşılır hata",
+   "sunum/yalniz_ct.pptx": "anlaşılır hata",
+   "tablo/bos_zip.xlsx": "anlaşılır hata",
+   "tablo/bos.csv": "açıldı",
+   "tablo/bos.ods": "anlaşılır hata",
+   "tablo/bos.xls": "anlaşılır hata",
+   "tablo/bos.xlsx": "anlaşılır hata",
+   "tablo/cfb_cop.csv": "anlaşılır hata",
+   "tablo/cfb_cop.ods": "anlaşılır hata",
+   "tablo/cfb_cop.xls": "anlaşılır hata",
+   "tablo/cfb_cop.xlsx": "anlaşılır hata",
+   "tablo/cok_satir.csv": "zaman aşımı",
+   "tablo/cop.csv": "açıldı",
+   "tablo/cop.ods": "anlaşılır hata",
+   "tablo/cop.xls": "anlaşılır hata",
+   "tablo/cop.xlsx": "anlaşılır hata",
+   "tablo/dev_satir.csv": "açıldı",
+   "tablo/doc-icerik.csv": "anlaşılır hata",
+   "tablo/doc-icerik.ods": "anlaşılır hata",
+   "tablo/doc-icerik.xls": "anlaşılır hata",
+   "tablo/doc-icerik.xlsx": "anlaşılır hata",
+   "tablo/docx-icerik.csv": "anlaşılır hata",
+   "tablo/docx-icerik.ods": "anlaşılır hata",
+   "tablo/docx-icerik.xls": "anlaşılır hata",
+   "tablo/docx-icerik.xlsx": "anlaşılır hata",
+   "tablo/formul_enj.csv": "açıldı",
+   "tablo/html-icerik.csv": "uyarılı",
+   "tablo/html-icerik.ods": "uyarılı",
+   "tablo/html-icerik.xls": "uyarılı",
+   "tablo/html-icerik.xlsx": "uyarılı",
+   "tablo/kapanmayan_tirnak.csv": "açıldı",
+   "tablo/karmasik_baslik.xlsx": "anlaşılır hata",
+   "tablo/karmasik_birlesik_tum.xlsx": "açıldı",
+   "tablo/karmasik_bomba.xlsx": "açıldı",
+   "tablo/karmasik_derin.xlsx": "açıldı",
+   "tablo/karmasik_flip1_0.xlsx": "anlaşılır hata",
+   "tablo/karmasik_flip1_1.xlsx": "açıldı",
+   "tablo/karmasik_flip4096_0.xlsx": "anlaşılır hata",
+   "tablo/karmasik_flip4096_1.xlsx": "anlaşılır hata",
+   "tablo/karmasik_flip512_0.xlsx": "anlaşılır hata",
+   "tablo/karmasik_flip512_1.xlsx": "anlaşılır hata",
+   "tablo/karmasik_flip64_0.xlsx": "anlaşılır hata",
+   "tablo/karmasik_flip64_1.xlsx": "anlaşılır hata",
+   "tablo/karmasik_flip8_0.xlsx": "anlaşılır hata",
+   "tablo/karmasik_flip8_1.xlsx": "anlaşılır hata",
+   "tablo/karmasik_formul_dongu.xlsx": "açıldı",
+   "tablo/karmasik_kesik1.xlsx": "anlaşılır hata",
+   "tablo/karmasik_kesik10.xlsx": "anlaşılır hata",
+   "tablo/karmasik_kesik50.xlsx": "anlaşılır hata",
+   "tablo/karmasik_kesik90.xlsx": "anlaşılır hata",
+   "tablo/karmasik_kesik99.xlsx": "anlaşılır hata",
+   "tablo/karmasik_oznitelik_dev.xlsx": "açıldı",
+   "tablo/karmasik_oznitelik_eksi.xlsx": "açıldı",
+   "tablo/karmasik_oznitelik_nan.xlsx": "açıldı",
+   "tablo/karmasik_oznitelik_sifir.xlsx": "açıldı",
+   "tablo/karmasik_rels_dongu.xlsx": "uyarılı",
+   "tablo/karmasik_rels_yok.xlsx": "uyarılı",
+   "tablo/karmasik_satir_sifir.xlsx": "açıldı",
+   "tablo/karmasik_sil__Content_Types_.xml.xlsx": "açıldı",
+   "tablo/karmasik_sil__rels_.rels.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl__rels_workbook.xml.rels.xlsx": "uyarılı",
+   "tablo/karmasik_sil_xl_charts_chart1.xml.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl_comments_comment1.xml.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl_drawings__rels_drawing1.xml.rels.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl_drawings__rels_drawing2.xml.rels.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl_drawings_commentsDrawing1.vml.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl_drawings_drawing1.xml.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl_styles.xml.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl_tables_table1.xml.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl_theme_theme1.xml.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl_workbook.xml.xlsx": "uyarılı",
+   "tablo/karmasik_sil_xl_worksheets__rels_sheet1.xml.rels.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl_worksheets__rels_sheet2.xml.rels.xlsx": "açıldı",
+   "tablo/karmasik_sil_xl_worksheets_sheet1.xml.xlsx": "uyarılı",
+   "tablo/karmasik_varlik.xlsx": "açıldı",
+   "tablo/karmasik_xfd.xlsx": "açıldı",
+   "tablo/karmasik_xmlbos.xlsx": "uyarılı",
+   "tablo/karmasik_xmlcop.xlsx": "uyarılı",
+   "tablo/karmasik_xmlkesik.xlsx": "uyarılı",
+   "tablo/lo-butce_akis_dev.xls": "uyarılı",
+   "tablo/lo-butce_baslik.ods": "anlaşılır hata",
+   "tablo/lo-butce_baslik.xls": "anlaşılır hata",
+   "tablo/lo-butce_baslik.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_birlesik_tum.xlsx": "açıldı",
+   "tablo/lo-butce_bomba.ods": "açıldı",
+   "tablo/lo-butce_bomba.xlsx": "açıldı",
+   "tablo/lo-butce_derin.ods": "açıldı",
+   "tablo/lo-butce_derin.xlsx": "açıldı",
+   "tablo/lo-butce_dizin_yok.xls": "anlaşılır hata",
+   "tablo/lo-butce_fat_dongu.xls": "anlaşılır hata",
+   "tablo/lo-butce_fat_halka.xls": "anlaşılır hata",
+   "tablo/lo-butce_fat_sayisi.xls": "uyarılı",
+   "tablo/lo-butce_flip1_0.ods": "açıldı",
+   "tablo/lo-butce_flip1_0.xls": "uyarılı",
+   "tablo/lo-butce_flip1_0.xlsx": "uyarılı",
+   "tablo/lo-butce_flip1_1.ods": "açıldı",
+   "tablo/lo-butce_flip1_1.xls": "uyarılı",
+   "tablo/lo-butce_flip1_1.xlsx": "uyarılı",
+   "tablo/lo-butce_flip4096_0.ods": "anlaşılır hata",
+   "tablo/lo-butce_flip4096_0.xls": "anlaşılır hata",
+   "tablo/lo-butce_flip4096_0.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_flip4096_1.ods": "anlaşılır hata",
+   "tablo/lo-butce_flip4096_1.xls": "anlaşılır hata",
+   "tablo/lo-butce_flip4096_1.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_flip512_0.ods": "anlaşılır hata",
+   "tablo/lo-butce_flip512_0.xls": "anlaşılır hata",
+   "tablo/lo-butce_flip512_0.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_flip512_1.ods": "anlaşılır hata",
+   "tablo/lo-butce_flip512_1.xls": "anlaşılır hata",
+   "tablo/lo-butce_flip512_1.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_flip64_0.ods": "anlaşılır hata",
+   "tablo/lo-butce_flip64_0.xls": "uyarılı",
+   "tablo/lo-butce_flip64_0.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_flip64_1.ods": "anlaşılır hata",
+   "tablo/lo-butce_flip64_1.xls": "uyarılı",
+   "tablo/lo-butce_flip64_1.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_flip8_0.ods": "anlaşılır hata",
+   "tablo/lo-butce_flip8_0.xls": "uyarılı",
+   "tablo/lo-butce_flip8_0.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_flip8_1.ods": "anlaşılır hata",
+   "tablo/lo-butce_flip8_1.xls": "uyarılı",
+   "tablo/lo-butce_flip8_1.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_formul_dongu.xlsx": "açıldı",
+   "tablo/lo-butce_kesik1.ods": "anlaşılır hata",
+   "tablo/lo-butce_kesik1.xls": "anlaşılır hata",
+   "tablo/lo-butce_kesik1.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_kesik10.ods": "anlaşılır hata",
+   "tablo/lo-butce_kesik10.xls": "anlaşılır hata",
+   "tablo/lo-butce_kesik10.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_kesik50.ods": "anlaşılır hata",
+   "tablo/lo-butce_kesik50.xls": "anlaşılır hata",
+   "tablo/lo-butce_kesik50.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_kesik90.ods": "anlaşılır hata",
+   "tablo/lo-butce_kesik90.xls": "anlaşılır hata",
+   "tablo/lo-butce_kesik90.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_kesik99.ods": "anlaşılır hata",
+   "tablo/lo-butce_kesik99.xls": "uyarılı",
+   "tablo/lo-butce_kesik99.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_oznitelik_dev.ods": "açıldı",
+   "tablo/lo-butce_oznitelik_dev.xlsx": "açıldı",
+   "tablo/lo-butce_oznitelik_eksi.ods": "açıldı",
+   "tablo/lo-butce_oznitelik_eksi.xlsx": "açıldı",
+   "tablo/lo-butce_oznitelik_nan.ods": "açıldı",
+   "tablo/lo-butce_oznitelik_nan.xlsx": "açıldı",
+   "tablo/lo-butce_oznitelik_sifir.ods": "açıldı",
+   "tablo/lo-butce_oznitelik_sifir.xlsx": "açıldı",
+   "tablo/lo-butce_rels_dongu.xlsx": "uyarılı",
+   "tablo/lo-butce_rels_yok.xlsx": "uyarılı",
+   "tablo/lo-butce_satir_sifir.xlsx": "açıldı",
+   "tablo/lo-butce_sektor_dev.xls": "anlaşılır hata",
+   "tablo/lo-butce_sil__Content_Types_.xml.xlsx": "açıldı",
+   "tablo/lo-butce_sil__rels_.rels.xlsx": "açıldı",
+   "tablo/lo-butce_sil_Cizgi_content.xml.ods": "açıldı",
+   "tablo/lo-butce_sil_Cizgi_styles.xml.ods": "açıldı",
+   "tablo/lo-butce_sil_content.xml.ods": "anlaşılır hata",
+   "tablo/lo-butce_sil_Grafik1_content.xml.ods": "açıldı",
+   "tablo/lo-butce_sil_Grafik1_styles.xml.ods": "açıldı",
+   "tablo/lo-butce_sil_manifest.rdf.ods": "açıldı",
+   "tablo/lo-butce_sil_META-INF_manifest.xml.ods": "açıldı",
+   "tablo/lo-butce_sil_mimetype.ods": "açıldı",
+   "tablo/lo-butce_sil_Pasta_content.xml.ods": "açıldı",
+   "tablo/lo-butce_sil_Pasta_styles.xml.ods": "açıldı",
+   "tablo/lo-butce_sil_styles.xml.ods": "açıldı",
+   "tablo/lo-butce_sil_xl__rels_workbook.xml.rels.xlsx": "uyarılı",
+   "tablo/lo-butce_sil_xl_charts_chart1.xml.xlsx": "açıldı",
+   "tablo/lo-butce_sil_xl_comments1.xml.xlsx": "açıldı",
+   "tablo/lo-butce_sil_xl_drawings__rels_drawing1.xml.rels.xlsx": "açıldı",
+   "tablo/lo-butce_sil_xl_drawings__rels_drawing2.xml.rels.xlsx": "açıldı",
+   "tablo/lo-butce_sil_xl_drawings_drawing1.xml.xlsx": "açıldı",
+   "tablo/lo-butce_sil_xl_sharedStrings.xml.xlsx": "uyarılı",
+   "tablo/lo-butce_sil_xl_styles.xml.xlsx": "açıldı",
+   "tablo/lo-butce_sil_xl_tables_table1.xml.xlsx": "açıldı",
+   "tablo/lo-butce_sil_xl_theme_theme1.xml.xlsx": "açıldı",
+   "tablo/lo-butce_sil_xl_workbook.xml.xlsx": "uyarılı",
+   "tablo/lo-butce_sil_xl_worksheets__rels_sheet1.xml.rels.xlsx": "açıldı",
+   "tablo/lo-butce_sil_xl_worksheets__rels_sheet2.xml.rels.xlsx": "açıldı",
+   "tablo/lo-butce_sil_xl_worksheets_sheet1.xml.xlsx": "uyarılı",
+   "tablo/lo-butce_varlik.ods": "açıldı",
+   "tablo/lo-butce_varlik.xlsx": "açıldı",
+   "tablo/lo-butce_xfd.xlsx": "açıldı",
+   "tablo/lo-butce_xmlbos.ods": "anlaşılır hata",
+   "tablo/lo-butce_xmlbos.xlsx": "uyarılı",
+   "tablo/lo-butce_xmlcop.ods": "anlaşılır hata",
+   "tablo/lo-butce_xmlcop.xlsx": "anlaşılır hata",
+   "tablo/lo-butce_xmlkesik.ods": "uyarılı",
+   "tablo/lo-butce_xmlkesik.xlsx": "uyarılı",
+   "tablo/nul.csv": "açıldı",
+   "tablo/odp-icerik.csv": "anlaşılır hata",
+   "tablo/odp-icerik.ods": "anlaşılır hata",
+   "tablo/odp-icerik.xls": "anlaşılır hata",
+   "tablo/odp-icerik.xlsx": "anlaşılır hata",
+   "tablo/ods-icerik.csv": "açıldı",
+   "tablo/ods-icerik.xls": "açıldı",
+   "tablo/ods-icerik.xlsx": "açıldı",
+   "tablo/odt-icerik.csv": "anlaşılır hata",
+   "tablo/odt-icerik.ods": "anlaşılır hata",
+   "tablo/odt-icerik.xls": "anlaşılır hata",
+   "tablo/odt-icerik.xlsx": "anlaşılır hata",
+   "tablo/pdf.csv": "açıldı",
+   "tablo/pdf.ods": "anlaşılır hata",
+   "tablo/pdf.xls": "anlaşılır hata",
+   "tablo/pdf.xlsx": "anlaşılır hata",
+   "tablo/pk_cop.csv": "anlaşılır hata",
+   "tablo/pk_cop.ods": "anlaşılır hata",
+   "tablo/pk_cop.xls": "anlaşılır hata",
+   "tablo/pk_cop.xlsx": "anlaşılır hata",
+   "tablo/png.csv": "açıldı",
+   "tablo/png.ods": "anlaşılır hata",
+   "tablo/png.xls": "anlaşılır hata",
+   "tablo/png.xlsx": "anlaşılır hata",
+   "tablo/ppt-icerik.csv": "anlaşılır hata",
+   "tablo/ppt-icerik.ods": "anlaşılır hata",
+   "tablo/ppt-icerik.xls": "anlaşılır hata",
+   "tablo/ppt-icerik.xlsx": "anlaşılır hata",
+   "tablo/pptx-icerik.csv": "anlaşılır hata",
+   "tablo/pptx-icerik.ods": "anlaşılır hata",
+   "tablo/pptx-icerik.xls": "anlaşılır hata",
+   "tablo/pptx-icerik.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_baslik.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_birlesik_tum.xlsx": "açıldı",
+   "tablo/py-tablo_bomba.xlsx": "açıldı",
+   "tablo/py-tablo_derin.xlsx": "açıldı",
+   "tablo/py-tablo_flip1_0.xlsx": "uyarılı",
+   "tablo/py-tablo_flip1_1.xlsx": "uyarılı",
+   "tablo/py-tablo_flip4096_0.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_flip4096_1.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_flip512_0.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_flip512_1.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_flip64_0.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_flip64_1.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_flip8_0.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_flip8_1.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_formul_dongu.xlsx": "açıldı",
+   "tablo/py-tablo_kesik1.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_kesik10.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_kesik50.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_kesik90.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_kesik99.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_oznitelik_dev.xlsx": "açıldı",
+   "tablo/py-tablo_oznitelik_eksi.xlsx": "açıldı",
+   "tablo/py-tablo_oznitelik_nan.xlsx": "açıldı",
+   "tablo/py-tablo_oznitelik_sifir.xlsx": "açıldı",
+   "tablo/py-tablo_rels_dongu.xlsx": "açıldı",
+   "tablo/py-tablo_rels_yok.xlsx": "uyarılı",
+   "tablo/py-tablo_satir_sifir.xlsx": "açıldı",
+   "tablo/py-tablo_sil__Content_Types_.xml.xlsx": "açıldı",
+   "tablo/py-tablo_sil__rels_.rels.xlsx": "açıldı",
+   "tablo/py-tablo_sil_xl__rels_workbook.xml.rels.xlsx": "uyarılı",
+   "tablo/py-tablo_sil_xl_charts_chart1.xml.xlsx": "açıldı",
+   "tablo/py-tablo_sil_xl_comments_comment1.xml.xlsx": "açıldı",
+   "tablo/py-tablo_sil_xl_drawings__rels_drawing1.xml.rels.xlsx": "açıldı",
+   "tablo/py-tablo_sil_xl_drawings__rels_drawing2.xml.rels.xlsx": "açıldı",
+   "tablo/py-tablo_sil_xl_drawings_commentsDrawing1.vml.xlsx": "açıldı",
+   "tablo/py-tablo_sil_xl_drawings_drawing1.xml.xlsx": "açıldı",
+   "tablo/py-tablo_sil_xl_styles.xml.xlsx": "açıldı",
+   "tablo/py-tablo_sil_xl_theme_theme1.xml.xlsx": "açıldı",
+   "tablo/py-tablo_sil_xl_workbook.xml.xlsx": "uyarılı",
+   "tablo/py-tablo_sil_xl_worksheets__rels_sheet1.xml.rels.xlsx": "açıldı",
+   "tablo/py-tablo_sil_xl_worksheets__rels_sheet2.xml.rels.xlsx": "açıldı",
+   "tablo/py-tablo_sil_xl_worksheets_sheet1.xml.xlsx": "uyarılı",
+   "tablo/py-tablo_varlik.xlsx": "açıldı",
+   "tablo/py-tablo_xfd.xlsx": "açıldı",
+   "tablo/py-tablo_xmlbos.xlsx": "uyarılı",
+   "tablo/py-tablo_xmlcop.xlsx": "anlaşılır hata",
+   "tablo/py-tablo_xmlkesik.xlsx": "uyarılı",
+   "tablo/rtf-icerik.csv": "açıldı",
+   "tablo/rtf-icerik.ods": "anlaşılır hata",
+   "tablo/rtf-icerik.xls": "anlaşılır hata",
+   "tablo/rtf-icerik.xlsx": "anlaşılır hata",
+   "tablo/utf16.csv": "açıldı",
+   "tablo/xls-icerik.csv": "uyarılı",
+   "tablo/xls-icerik.ods": "uyarılı",
+   "tablo/xls-icerik.xlsx": "uyarılı",
+   "tablo/xlsx-icerik.csv": "açıldı",
+   "tablo/xlsx-icerik.ods": "açıldı",
+   "tablo/xlsx-icerik.xls": "açıldı",
+   "tablo/yalniz_ct.xlsx": "anlaşılır hata"
+  }
+ },
+ "lo": {
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.doc→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.docx→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.fodt→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.odt→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.odt→odt": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.rtf→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.rtf→rtf": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/kaynak.fodt→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.doc→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.docx→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.odt→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.odt→odt": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.rtf→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.rtf→rtf": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/ornek.md→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/ornek.md→md": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/cok-bolumlu.docx→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/genis-tablo.docx→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/libreoffice-html.docx→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/libreoffice-resaved-report.docx→docx": {
+   "pdf": true
+  },
+  "apps/sunum/src/io/__fixtures__/lo-bicim.odp→odp": {
+   "pdf": true
+  },
+  "apps/sunum/src/io/__fixtures__/lo-bicim.odp→pptx": {
+   "pdf": true
+  },
+  "apps/sunum/src/io/__fixtures__/lo-bicim.otp→pptx": {
+   "pdf": true
+  },
+  "apps/sunum/src/io/__fixtures__/lo-bicim.ppsx→pptx": {
+   "pdf": true
+  },
+  "apps/sunum/src/io/__fixtures__/lo-bicim.ppt→pptx": {
+   "pdf": true
+  },
+  "apps/sunum/src/io/__fixtures__/lo-proje.odp→odp": {
+   "pdf": true
+  },
+  "apps/sunum/src/io/__fixtures__/lo-proje.odp→pptx": {
+   "pdf": true
+  },
+  "apps/sunum/src/io/__fixtures__/lo-proje.ppt→pptx": {
+   "pdf": true
+  },
+  "apps/sunum/src/io/__fixtures__/lo-proje.pptx→pptx": {
+   "pdf": true
+  },
+  "apps/sunum/src/io/__fixtures__/lo-urun.pptx→pptx": {
+   "pdf": true
+  },
+  "apps/sunum/src/io/__fixtures__/lo-yorum.pptx→pptx": {
+   "pdf": true
+  },
+  "apps/tablo/src/io/__fixtures__/ornek.ods→ods": {
+   "pdf": true
+  },
+  "apps/tablo/src/io/__fixtures__/ornek.ods→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/src/io/__fixtures__/ornek.xls→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/src/io/__fixtures__/sablon.ots→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/src/io/__fixtures__/sablon.xlsm→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/src/io/__fixtures__/sablon.xltm→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/src/io/__fixtures__/sablon.xltx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/src/io/__fixtures__/tarih1904.ods→ods": {
+   "pdf": true
+  },
+  "apps/tablo/src/io/__fixtures__/tarih1904.ods→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/src/io/__fixtures__/tarih1904.xls→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/lo-generated.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/lo-pivot.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/lo-stil.ods→ods": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/lo-stil.ods→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/lo-tablo.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/aciklama.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/adlar.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/birlesik.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/bozuk_aciklama.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/chart_only.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/grafikler.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/hepsi.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/karmasik_lo.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/karmasik_nochart.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/karmasik.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/kosullu.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/table_only.xlsx→xlsx": {
+   "pdf": true
+  },
+  "apps/tablo/test/fixtures/openpyxl/tablo.xlsx→xlsx": {
+   "pdf": true
+  },
+  "packages/core/test/fixtures/ornek.doc→docx": {
+   "pdf": true
+  },
+  "packages/core/test/fixtures/ornek.xls→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-butce.csv→csv": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-butce.csv→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-butce.ods→ods": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-butce.ods→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-butce.xls→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-butce.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-buyuk.ods→ods": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-buyuk.ods→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-buyuk.xlsx→xlsx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-karma.doc→docx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-karma.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-karma.odt→docx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-karma.odt→odt": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-karma.rtf→docx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-karma.rtf→rtf": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-rapor.doc→docx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-rapor.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-rapor.html→docx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-rapor.odt→docx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-rapor.odt→odt": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-rapor.rtf→docx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-rapor.rtf→rtf": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-sunu.odp→odp": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-sunu.odp→pptx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-sunu.ppt→pptx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-sunu.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-sunu24.odp→odp": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-sunu24.odp→pptx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-sunu24.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/lo/lo-uzun.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/py/py-belge.docx→docx": {
+   "pdf": true
+  },
+  "test-derlem/py/py-sunu.pptx→pptx": {
+   "pdf": true
+  },
+  "test-derlem/py/py-tablo.xlsx→xlsx": {
+   "pdf": true
+  },
+  "uretilen/lo/lo-buyuk.csv→csv": {
+   "pdf": true
+  },
+  "uretilen/lo/lo-buyuk.csv→xlsx": {
+   "pdf": true
+  },
+  "uretilen/lo/lo-buyuk.xls→xlsx": {
+   "pdf": true
+  },
+  "uretilen/lo/lo-karma.html→docx": {
+   "pdf": true
+  },
+  "uretilen/lo/lo-sunu24.ppt→pptx": {
+   "pdf": true
+  },
+  "uretilen/lo/lo-uzun.doc→docx": {
+   "pdf": true
+  },
+  "uretilen/lo/lo-uzun.html→docx": {
+   "pdf": true
+  },
+  "uretilen/lo/lo-uzun.odt→docx": {
+   "pdf": true
+  },
+  "uretilen/lo/lo-uzun.odt→odt": {
+   "pdf": true
+  },
+  "uretilen/lo/lo-uzun.rtf→docx": {
+   "pdf": true
+  },
+  "uretilen/lo/lo-uzun.rtf→rtf": {
+   "pdf": true
+  }
+ },
+ "derlem": {
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.doc": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {}
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:theme": 1
+     }
+    }
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.fodt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {}
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.odt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "öğe:paragraf": 3
+     }
+    },
+    "odt": {
+     "kayip": {
+      "parça:manifest.rdf": 1,
+      "parça:settings.xml": 1,
+      "parça:medya": 1
+     }
+    }
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/izleme.rtf": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {},
+    "rtf": {}
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/kaynak.fodt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {}
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.doc": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {}
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:theme": 1
+     }
+    }
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.odt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {},
+    "odt": {
+     "kayip": {
+      "parça:manifest.rdf": 1,
+      "parça:settings.xml": 1,
+      "parça:medya": 1,
+      "öğe:paragraf": 1
+     }
+    }
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.rtf": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {},
+    "rtf": {}
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/ornek.md": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {},
+    "md": {}
+   }
+  },
+  "apps/belge/src/io/__fixtures__/cok-bolumlu.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:ms-word.stylesWithEffects": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:theme": 1,
+      "parça:application/xml": 1,
+      "parça:customXmlProperties": 1,
+      "parça:medya": 1
+     }
+    }
+   }
+  },
+  "apps/belge/src/io/__fixtures__/genis-tablo.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:ms-word.stylesWithEffects": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:theme": 1,
+      "parça:application/xml": 1,
+      "parça:customXmlProperties": 1,
+      "parça:medya": 1
+     }
+    }
+   }
+  },
+  "apps/belge/src/io/__fixtures__/libreoffice-html.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:theme": 1
+     }
+    }
+   }
+  },
+  "apps/belge/src/io/__fixtures__/libreoffice-resaved-report.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:wordprocessingml.footer": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:theme": 1,
+      "öğe:altBilgi": 1
+     }
+    }
+   }
+  },
+  "apps/sunum/src/io/__fixtures__/lo-bicim.odp": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {},
+    "odp": {
+     "kayip": {
+      "parça:settings.xml": 1
+     }
+    }
+   }
+  },
+  "apps/sunum/src/io/__fixtures__/lo-bicim.otp": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {}
+   }
+  },
+  "apps/sunum/src/io/__fixtures__/lo-bicim.ppsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "öğe:geçişliSlayt": 4
+     }
+    }
+   }
+  },
+  "apps/sunum/src/io/__fixtures__/lo-bicim.ppt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {}
+   }
+  },
+  "apps/sunum/src/io/__fixtures__/lo-proje.odp": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "öğe:resim": 1
+     }
+    },
+    "odp": {
+     "kayip": {
+      "parça:medya": 1,
+      "parça:settings.xml": 1,
+      "öğe:resim": 1
+     }
+    }
+   }
+  },
+  "apps/sunum/src/io/__fixtures__/lo-proje.ppt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {}
+   }
+  },
+  "apps/sunum/src/io/__fixtures__/lo-proje.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:custom-properties": 1,
+      "parça:presentationml.slideMaster": 8,
+      "parça:theme": 8,
+      "öğe:geçişliSlayt": 1
+     }
+    }
+   }
+  },
+  "apps/sunum/src/io/__fixtures__/lo-urun.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:custom-properties": 1,
+      "parça:presentationml.slideMaster": 8,
+      "parça:theme": 7,
+      "öğe:geçişliSlayt": 3
+     }
+    }
+   }
+  },
+  "apps/sunum/src/io/__fixtures__/lo-yorum.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:custom-properties": 1,
+      "parça:presentationml.slideMaster": 8,
+      "parça:theme": 7,
+      "öğe:geçişliSlayt": 1
+     }
+    }
+   }
+  },
+  "apps/tablo/src/io/__fixtures__/ornek.ods": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 2,
+   "turlar": {
+    "xlsx": {},
+    "ods": {
+     "kayip": {
+      "parça:manifest.rdf": 1,
+      "parça:medya": 1
+     }
+    }
+   }
+  },
+  "apps/tablo/src/io/__fixtures__/ornek.xls": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 2,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/src/io/__fixtures__/sablon.ots": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/src/io/__fixtures__/sablon.xlsm": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:custom-properties": 1,
+      "parça:ms-office.vbaProject": 1
+     }
+    }
+   }
+  },
+  "apps/tablo/src/io/__fixtures__/sablon.xltm": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:custom-properties": 1,
+      "parça:ms-office.vbaProject": 1
+     }
+    }
+   }
+  },
+  "apps/tablo/src/io/__fixtures__/sablon.xltx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:custom-properties": 1
+     }
+    }
+   }
+  },
+  "apps/tablo/src/io/__fixtures__/sifreli.xls": {
+   "durum": "tamam",
+   "acildi": false
+  },
+  "apps/tablo/src/io/__fixtures__/tarih1904.ods": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 1,
+   "turlar": {
+    "xlsx": {},
+    "ods": {
+     "kayip": {
+      "parça:manifest.rdf": 1,
+      "parça:medya": 1
+     }
+    }
+   }
+  },
+  "apps/tablo/src/io/__fixtures__/tarih1904.xls": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 1,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/test/fixtures/lo-generated.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/test/fixtures/lo-pivot.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:custom-properties": 1
+     }
+    }
+   }
+  },
+  "apps/tablo/test/fixtures/lo-stil.ods": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "öğe:doğrulama": 1,
+      "öğe:koşullu": 1,
+      "öğe:grafik": 3
+     }
+    },
+    "ods": {
+     "kayip": {
+      "parça:ObjectReplacements/Cizgi": 1,
+      "parça:ObjectReplacements/Pasta": 1,
+      "parça:ObjectReplacements/Grafik#": 1,
+      "parça:Cizgi/meta.xml": 1,
+      "parça:Cizgi/styles.xml": 1,
+      "parça:Cizgi/content.xml": 1,
+      "parça:Pasta/meta.xml": 1,
+      "parça:Pasta/styles.xml": 1,
+      "parça:Pasta/content.xml": 1,
+      "parça:Grafik#/meta.xml": 1,
+      "parça:Grafik#/styles.xml": 1,
+      "parça:Grafik#/content.xml": 1,
+      "parça:manifest.rdf": 1,
+      "parça:medya": 1,
+      "öğe:doğrulama": 1,
+      "öğe:koşullu": 1,
+      "öğe:grafik": 3
+     }
+    }
+   }
+  },
+  "apps/tablo/test/fixtures/lo-tablo.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/aciklama.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/adlar.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/birlesik.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/bozuk_aciklama.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:spreadsheetml.comments": 1,
+      "parça:vmlDrawing": 1
+     }
+    }
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/chart_only.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/grafikler.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/hepsi.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/karmasik_lo.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "parça:custom-properties": 1,
+      "öğe:adlıAralık": 1
+     }
+    }
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/karmasik_nochart.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "öğe:adlıAralık": 1
+     }
+    }
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/karmasik.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "öğe:adlıAralık": 1
+     }
+    }
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/kosullu.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/table_only.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "apps/tablo/test/fixtures/openpyxl/tablo.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "packages/core/test/fixtures/ornek.doc": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {}
+   }
+  },
+  "packages/core/test/fixtures/ornek.xls": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "test-derlem/lo/lo-butce.csv": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {},
+    "csv": {
+     "kayip": {
+      "yapı.ad#0": 1
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-butce.ods": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 2,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "öğe:doğrulama": 1,
+      "öğe:koşullu": 1,
+      "öğe:grafik": 3
+     }
+    },
+    "ods": {
+     "kayip": {
+      "parça:ObjectReplacements/Cizgi": 1,
+      "parça:ObjectReplacements/Pasta": 1,
+      "parça:ObjectReplacements/Grafik#": 1,
+      "parça:Cizgi/meta.xml": 1,
+      "parça:Cizgi/styles.xml": 1,
+      "parça:Cizgi/content.xml": 1,
+      "parça:Pasta/meta.xml": 1,
+      "parça:Pasta/styles.xml": 1,
+      "parça:Pasta/content.xml": 1,
+      "parça:Grafik#/meta.xml": 1,
+      "parça:Grafik#/styles.xml": 1,
+      "parça:Grafik#/content.xml": 1,
+      "parça:manifest.rdf": 1,
+      "parça:medya": 1,
+      "öğe:doğrulama": 1,
+      "öğe:koşullu": 1,
+      "öğe:grafik": 3
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-butce.xls": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 2,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "test-derlem/lo/lo-butce.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 2,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "test-derlem/lo/lo-buyuk.ods": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 2,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "öğe:doğrulama": 1,
+      "öğe:koşullu": 1,
+      "öğe:grafik": 3
+     }
+    },
+    "ods": {
+     "kayip": {
+      "parça:ObjectReplacements/Cizgi": 1,
+      "parça:ObjectReplacements/Pasta": 1,
+      "parça:ObjectReplacements/Grafik#": 1,
+      "parça:Cizgi/meta.xml": 1,
+      "parça:Cizgi/styles.xml": 1,
+      "parça:Cizgi/content.xml": 1,
+      "parça:Pasta/meta.xml": 1,
+      "parça:Pasta/styles.xml": 1,
+      "parça:Pasta/content.xml": 1,
+      "parça:Grafik#/meta.xml": 1,
+      "parça:Grafik#/styles.xml": 1,
+      "parça:Grafik#/content.xml": 1,
+      "parça:manifest.rdf": 1,
+      "parça:medya": 1,
+      "öğe:doğrulama": 1,
+      "öğe:koşullu": 1,
+      "öğe:grafik": 3
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-buyuk.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 2,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "test-derlem/lo/lo-karma.doc": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {}
+   }
+  },
+  "test-derlem/lo/lo-karma.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "kelime": 2,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:theme": 1,
+      "öğe:değişiklik": 1
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-karma.odt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "ayar.sayfa": 1,
+      "öğe:paragraf": 5,
+      "öğe:değişiklik": 1
+     }
+    },
+    "odt": {
+     "kayip": {
+      "parça:manifest.rdf": 1,
+      "parça:settings.xml": 1,
+      "öğe:paragraf": 1,
+      "öğe:değişiklik": 1
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-karma.rtf": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {},
+    "rtf": {}
+   }
+  },
+  "test-derlem/lo/lo-rapor.doc": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {}
+   }
+  },
+  "test-derlem/lo/lo-rapor.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "kelime": 7,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:theme": 1,
+      "öğe:köprü": 16,
+      "öğe:değişiklik": 1
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-rapor.html": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "düğüm.tableHeader": 16,
+      "düğüm.image": 3
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-rapor.odt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "öğe:köprü": 16,
+      "öğe:değişiklik": 1
+     }
+    },
+    "odt": {
+     "kayip": {
+      "parça:manifest.rdf": 1,
+      "parça:settings.xml": 1,
+      "öğe:köprü": 16,
+      "öğe:değişiklik": 1
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-rapor.rtf": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {},
+    "rtf": {}
+   }
+  },
+  "test-derlem/lo/lo-sunu.odp": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "öğe:resim": 1,
+      "öğe:grafik": 1
+     }
+    },
+    "odp": {
+     "kayip": {
+      "parça:ObjectReplacements/Object #": 1,
+      "parça:nesne/meta.xml": 1,
+      "parça:nesne/styles.xml": 1,
+      "parça:nesne/content.xml": 1,
+      "parça:medya": 2,
+      "parça:settings.xml": 1,
+      "öğe:resim": 1,
+      "öğe:grafik": 1
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-sunu.ppt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {}
+   }
+  },
+  "test-derlem/lo/lo-sunu.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:drawingml.chart": 1,
+      "öğe:geçişliSlayt": 2,
+      "öğe:grafik": 1
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-sunu24.odp": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "öğe:resim": 3,
+      "öğe:grafik": 3
+     }
+    },
+    "odp": {
+     "kayip": {
+      "parça:ObjectReplacements/Object #": 3,
+      "parça:nesne/meta.xml": 3,
+      "parça:nesne/styles.xml": 3,
+      "parça:nesne/content.xml": 3,
+      "parça:medya": 4,
+      "parça:settings.xml": 1,
+      "öğe:resim": 3,
+      "öğe:grafik": 3
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-sunu24.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:drawingml.chart": 3,
+      "öğe:geçişliSlayt": 4,
+      "öğe:grafik": 3
+     }
+    }
+   }
+  },
+  "test-derlem/lo/lo-uzun.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "kelime": 29,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:theme": 1,
+      "öğe:köprü": 60
+     }
+    }
+   }
+  },
+  "test-derlem/py/py-belge.docx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "parça:ms-word.stylesWithEffects": 1,
+      "parça:wordprocessingml.webSettings": 1,
+      "parça:wordprocessingml.fontTable": 1,
+      "parça:theme": 1,
+      "parça:application/xml": 1,
+      "parça:customXmlProperties": 1
+     }
+    }
+   }
+  },
+  "test-derlem/py/py-sunu.pptx": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {
+     "kayip": {
+      "parça:presentationml.printerSettings": 1,
+      "parça:medya": 1
+     }
+    }
+   }
+  },
+  "test-derlem/py/py-tablo.xlsx": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 1,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "uretilen/lo/lo-buyuk.csv": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 0,
+   "turlar": {
+    "xlsx": {
+     "kayip": {
+      "stil.font": 3037
+     }
+    },
+    "csv": {
+     "kayip": {
+      "yapı.ad#0": 1
+     }
+    }
+   }
+  },
+  "uretilen/lo/lo-buyuk.xls": {
+   "durum": "tamam",
+   "acildi": true,
+   "loFormulFarkli": 2,
+   "turlar": {
+    "xlsx": {}
+   }
+  },
+  "uretilen/lo/lo-karma.html": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "düğüm.image": 4,
+      "düğüm.tableHeader": 10
+     }
+    }
+   }
+  },
+  "uretilen/lo/lo-sunu24.ppt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "pptx": {}
+   }
+  },
+  "uretilen/lo/lo-uzun.doc": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {}
+   }
+  },
+  "uretilen/lo/lo-uzun.html": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "düğüm.tableHeader": 120,
+      "düğüm.image": 3
+     }
+    }
+   }
+  },
+  "uretilen/lo/lo-uzun.odt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "öğe:köprü": 60
+     }
+    },
+    "odt": {
+     "kayip": {
+      "parça:manifest.rdf": 1,
+      "parça:settings.xml": 1,
+      "öğe:köprü": 60
+     }
+    }
+   }
+  },
+  "uretilen/lo/lo-uzun.rtf": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {},
+    "rtf": {}
+   }
+  }
+ }
+}

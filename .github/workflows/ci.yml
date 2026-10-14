@@ -23,8 +23,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      # Yerel ayarsız toUpperCase/toLowerCase ve waitForTimeout sayaçları: artış = hata
+      - run: pnpm denetim
       - run: pnpm typecheck
       - run: pnpm test
+      # Süreye bağlı performans testleri ayrı ve sıralı adımda (makine hızına göre normalize)
+      - run: pnpm test:perf
       - run: pnpm web
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm e2e

@@ -57,6 +57,9 @@ jobs:
     needs: paket
     if: startsWith(github.ref, 'refs/tags/v') || startsWith(inputs.surum, 'v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # sürümü oluşturup dosyaları yüklemek için
+      id-token: write # cosign anahtarsız imza: GitHub OIDC kimliği → Sigstore (Fulcio sertifikası + Rekor kaydı)
     steps:
       - uses: actions/checkout@v4
       # Sürüm notları docs/surumler/<etiket>.md dosyasından; yoksa GitHub otomatik üretir.
@@ -70,6 +73,26 @@ jobs:
         with:
           path: paketler
           merge-multiple: true
+      # Sürümdeki her dosyanın SHA-256 özeti; kullanıcı indirdiği paketi bununla doğrular (README: "Doğrulama").
+      - name: Sağlama toplamları (SHA256SUMS.txt)
+        working-directory: paketler
+        run: |
+          find . -maxdepth 1 -type f ! -name 'SHA256SUMS.txt*' -printf '%f\n' | LC_ALL=C sort | xargs -r -d '\n' sha256sum -- > ../SHA256SUMS.txt
+          mv ../SHA256SUMS.txt SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      # SHA256SUMS.txt anahtarsız (keyless) imzalanır: imza, Fulcio sertifikası ve Rekor kanıtı tek bir
+      # Sigstore paketinde (SHA256SUMS.txt.sigstore.json). Kimlik: bu iş akışı dosyası + etiket/dal.
+      - uses: sigstore/cosign-installer@v3
+      - name: SHA256SUMS.txt'yi imzala ve doğrula (cosign)
+        working-directory: paketler
+        env:
+          KIMLIK: ^https://github\.com/${{ github.repository }}/\.github/workflows/release\.yml@
+        run: |
+          cosign version
+          cosign sign-blob --yes --new-bundle-format --bundle SHA256SUMS.txt.sigstore.json SHA256SUMS.txt
+          cosign verify-blob --new-bundle-format --bundle SHA256SUMS.txt.sigstore.json \
+            --certificate-identity-regexp "$KIMLIK" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.surum || github.ref_name }}

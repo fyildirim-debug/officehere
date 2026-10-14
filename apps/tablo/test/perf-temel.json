@@ -1,0 +1,15 @@
+{
+ "aciklama": "pnpm --filter @officehere/tablo test:perf:temel ile üretilir",
+ "referansMs": 140.8,
+ "olcumler": {
+  "filtre uygula": 407,
+  "filtre temizle": 33,
+  "filtre geri al": 13,
+  "40k satır gizle": 23,
+  "40k satır göster": 31,
+  "sırala": 1677,
+  "sıralamayı geri al": 1516,
+  "satır ekle": 1035,
+  "satır sil": 713
+ }
+}

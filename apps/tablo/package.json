@@ -9,7 +9,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:perf": "vitest run -c vitest.perf.config.ts",
+    "test:perf:temel": "vitest run -c vitest.perf.config.ts --mode temel"
   },
   "dependencies": {
     "@fluentui/react-icons": "^2.0.344",
