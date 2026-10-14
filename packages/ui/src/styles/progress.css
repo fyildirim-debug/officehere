@@ -1,0 +1,107 @@
+/* İlerleme göstergesi: "Açılıyor… %40 [İptal]" (durum çubuğunda ya da iletişim kutusunda). */
+
+.oh-progress {
+  --oh-progress-fill: var(--oh-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.oh-progress-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.oh-progress-track {
+  position: relative;
+  flex: none;
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--oh-border);
+}
+
+.oh-progress-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  border-radius: inherit;
+  background: var(--oh-progress-fill);
+  transition: width 120ms linear;
+}
+
+.oh-progress.is-indeterminate .oh-progress-fill {
+  width: 30%;
+  animation: oh-progress-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes oh-progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+.oh-progress-pct {
+  min-width: 3.2em;
+  font-variant-numeric: tabular-nums;
+}
+
+.oh-progress-cancel {
+  height: 20px;
+  padding: 0 10px;
+  border: 1px solid var(--oh-border-strong);
+  border-radius: var(--oh-radius);
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.oh-progress-cancel:hover {
+  background: var(--oh-hover);
+}
+
+.oh-progress-cancel:active {
+  background: var(--oh-pressed);
+}
+
+.oh-progress-cancel:focus-visible {
+  outline: 2px solid var(--oh-focus);
+  outline-offset: 1px;
+}
+
+/* Koyu temalarda vurgu rengi koyu zeminde yeterli karşıtlık için açılır. */
+:root[data-oh-theme="dark"] .oh-progress,
+:root[data-oh-theme="black"] .oh-progress {
+  --oh-progress-fill: color-mix(in srgb, var(--oh-accent) 55%, white);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-oh-theme="system"] .oh-progress {
+    --oh-progress-fill: color-mix(in srgb, var(--oh-accent) 55%, white);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oh-progress-fill {
+    transition: none;
+  }
+
+  .oh-progress.is-indeterminate .oh-progress-fill {
+    width: 100%;
+    opacity: 0.5;
+    animation: none;
+  }
+}

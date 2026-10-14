@@ -8,6 +8,7 @@ export * from "./components/Gallery";
 export * from "./components/TableGridPicker";
 export * from "./components/Backstage";
 export * from "./components/StatusBar";
+export * from "./components/Progress";
 export * from "./components/Dialog";
 export * from "./components/OfficeBackstage";
 export * from "./components/Updates";
