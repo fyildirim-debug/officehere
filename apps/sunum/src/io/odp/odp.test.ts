@@ -83,6 +83,24 @@ describe("ODP okuma (LibreOffice örneği)", () => {
     expect(p.slides[3].background).toEqual({ type: "solid", color: { rgb: "#FFF2CC" } });
   });
 
+  it("tablo hücresi dolgusu ve hizası şemaya uygun yazılır ve geri okunur", async () => {
+    const p = await readOdp(load("lo-proje.odp"));
+    const table = p.slides[3].shapes.find((s): s is TableShape => s.kind === "table")!;
+    table.rows[1].cells[0].fill = { type: "solid", color: { rgb: "#FFC000" } };
+    table.rows[1].cells[0].anchor = "ctr";
+    table.cols[1] = 0;
+    const bytes = await writeOdp(p);
+    const content = await (await JSZip.loadAsync(bytes)).file("content.xml")!.async("string");
+    // ODF 1.3: tablo hücresi stilinde style:graphic-properties yok, uzunluklar pozitif
+    expect(content).not.toMatch(/style:family="table-cell"[^>]*>(?:(?!<\/style:style>).)*<style:graphic-properties/);
+    expect(content).toContain("<loext:graphic-properties");
+    expect(content).not.toMatch(/style:(column-width|row-height)="0(\.0+)?cm"/);
+    const back = (await readOdp(bytes)).slides[3].shapes.find((s): s is TableShape => s.kind === "table")!;
+    expect(back.rows[1].cells[0].fill).toEqual({ type: "solid", color: { rgb: "#FFC000" } });
+    expect(back.rows[1].cells[0].anchor).toBe("ctr");
+    expect(back.rows.map((r) => r.cells.map((c) => c.fill ?? null))).toEqual(table.rows.map((r) => r.cells.map((c) => c.fill ?? null)));
+  });
+
   it("çok ana sayfalı sunu: tablo, notlar ve ikincil ana sayfa görünümü", async () => {
     const p = await readOdp(load("lo-proje.odp"));
     expect(p.slides).toHaveLength(7);

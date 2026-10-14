@@ -240,10 +240,11 @@ function picXml(s: PicShape, ctx: ShapeWriteCtx): string {
 }
 
 function tableXml(t: TableShape, ctx: ShapeWriteCtx): string {
-  const cols = t.cols.map((w) => `<table:table-column table:style-name="${ctx.auto.style("table-column", "co", `<style:table-column-properties style:column-width="${cm(w)}"/>`)}"/>`).join("");
+  // ODF uzunlukları pozitif olmalı: 0 genişlik/yükseklik (LibreOffice özgünlerinde olabiliyor) yazılmaz
+  const cols = t.cols.map((w) => `<table:table-column table:style-name="${ctx.auto.style("table-column", "co", `<style:table-column-properties${odfAttrs({ "style:column-width": w > 0 ? cm(w) : undefined })}/>`)}"/>`).join("");
   const rows = t.rows
     .map((row, ri) => {
-      const rs = ctx.auto.style("table-row", "ro", `<style:table-row-properties style:row-height="${cm(row.h)}"/>`);
+      const rs = ctx.auto.style("table-row", "ro", `<style:table-row-properties${odfAttrs({ "style:row-height": row.h > 0 ? cm(row.h) : undefined })}/>`);
       const cells = row.cells
         .map((cell, ci) => {
           if (cell.hMerge || cell.vMerge) return "<table:covered-table-cell/>";
@@ -252,7 +253,8 @@ function tableXml(t: TableShape, ctx: ShapeWriteCtx): string {
           const cs = ctx.auto.style(
             "table-cell",
             "ce",
-            `<style:graphic-properties${odfAttrs({ ...fillAttrs(f.fill, ctx.sh), "draw:textarea-vertical-align": cell.anchor === "ctr" ? "middle" : cell.anchor === "b" ? "bottom" : "top" })}/><style:paragraph-properties${odfAttrs({ "fo:border-top": border(f.borders.t), "fo:border-bottom": border(f.borders.b), "fo:border-left": border(f.borders.l), "fo:border-right": border(f.borders.r) })}/>`,
+            // Tablo hücresi stilinde ODF 1.3 style:graphic-properties'e izin vermez; LibreOffice de loext: yazar
+            `<loext:graphic-properties${odfAttrs({ ...fillAttrs(f.fill, ctx.sh), "draw:textarea-vertical-align": cell.anchor === "ctr" ? "middle" : cell.anchor === "b" ? "bottom" : "top" })}/><style:paragraph-properties${odfAttrs({ "fo:border-top": border(f.borders.t), "fo:border-bottom": border(f.borders.b), "fo:border-left": border(f.borders.l), "fo:border-right": border(f.borders.r) })}/>`,
           );
           const pseudo = { kind: "sp", text: cell.text } as unknown as SpShape;
           const body = textBodyXml(cell.text, { sh: ctx.sh, auto: ctx.auto, lvl: levelResolver(pseudo, textCtx(ctx), "other"), link: ctx.link, cell: { color: f.text, bold: f.bold || undefined }, inherited: tableTextDefaults });

@@ -11,6 +11,7 @@ import { normalizeDropCap } from "../../editor/dropCap";
 import { atomText, marksToProps, nodeStyleId, parseDataUrl, plainBlocks, sectionsOf, sniffImage, stylesOf, textOf, type CharProps } from "../common";
 import { cleanText, esc } from "../docx/xml";
 import { ODF_CHAR, ODF_NS, ODF_PARA, StyleBook, XML_DECL, fontDecls, hasContent, metaXml, namedStyles, pageLayout, paraPropsAttrs, type ListLevelDef } from "./writerStyles";
+import { isoDateTime } from "../docx/reader";
 
 const MIME_ODT = "application/vnd.oasis.opendocument.text";
 const pxCm = (px: number) => `${+((px / 96) * 2.54).toFixed(4)}cm`;
@@ -134,7 +135,7 @@ class OdtWriter {
   /** text:tracked-changes: bölgeler (yazar, tarih; silmelerde silinen metin). */
   private trackedChangesXml(): string {
     if (!this.changes.length) return "";
-    const info = (c: { author: string; date: string }) => `<office:change-info><dc:creator>${esc(c.author)}</dc:creator>${c.date ? `<dc:date>${esc(c.date.replace(/\.\d+Z$|Z$/, ""))}</dc:date>` : ""}</office:change-info>`;
+    const info = (c: { author: string; date: string }) => `<office:change-info><dc:creator>${esc(c.author)}</dc:creator>${isoDateTime(c.date) ? `<dc:date>${esc(c.date.replace(/\.\d+Z$|Z$/, ""))}</dc:date>` : ""}</office:change-info>`;
     const regions = this.changes
       .map((c) => `<text:changed-region xml:id="${c.id}" text:id="${c.id}">${c.kind === "insertion" ? `<text:insertion>${info(c)}</text:insertion>` : `<text:deletion>${info(c)}<text:p>${odtText(c.text)}</text:p></text:deletion>`}</text:changed-region>`)
       .join("");
@@ -177,7 +178,8 @@ class OdtWriter {
       .map((t) => `<text:p>${odtText(t)}</text:p>`)
       .join("");
     const resolved = c.resolved ? ' loext:resolved="true"' : "";
-    const date = c.date ? `<dc:date>${esc(c.date.replace(/Z$/, ""))}</dc:date>` : "";
+    const iso = isoDateTime(c.date);
+    const date = iso ? `<dc:date>${esc(iso.replace(/Z$/, ""))}</dc:date>` : "";
     const initials = c.initials ? `<meta:creator-initials>${esc(c.initials)}</meta:creator-initials>` : "";
     return `<office:annotation office:name="${this.commentName(id)}"${resolved}><dc:creator>${esc(c.author ?? "")}</dc:creator>${date}${initials}${paras}</office:annotation>`;
   }

@@ -11,6 +11,7 @@ import { bulletStyleAt, charMarks, extendCommentToWord, foldLists, fromBase64, i
 import { attr, descendants, flattenedDocs, kid, kids, oversizedEntry, parseXml, zipText } from "../docx/xml";
 import type { StyleDef, StyleProps } from "../../model/styles";
 import { BelgeOpenError, LoadWarnings } from "../warnings";
+import { isoDateTime } from "../docx/reader";
 import { OdtStyles, decodeName, type ListLevel, type OdtStyle, type PageLayout, type ParaProps } from "./styles";
 
 const KNOWN_PARA: Record<string, string> = {
@@ -231,7 +232,8 @@ export class OdtReader {
         const info = kid(ch, "change-info");
         const author = kid(info, "creator")?.textContent?.trim() ?? "";
         const raw = kid(info, "date")?.textContent?.trim() ?? "";
-        const date = raw && !/Z|[+-]\d\d:\d\d$/.test(raw) ? `${raw.replace(/\.\d+$/, "")}Z` : raw;
+        // LibreOffice tarihsiz kayda 0000-00-00T00:00:00 yazar: geçersiz tarih düşer
+        const date = isoDateTime(raw && !/Z|[+-]\d\d:\d\d$/.test(raw) ? `${raw.replace(/\.\d+$/, "")}Z` : raw);
         const text = ch.localName === "deletion" ? kids(ch).filter((k) => k.localName === "p" || k.localName === "h" || k.localName === "list").map((k) => (k.textContent ?? "").replace(/\s+/g, " ")).join(" ").trim() : "";
         const kind = ch.localName === "insertion" ? "insertion" : ch.localName === "deletion" ? "deletion" : "format";
         if (kind === "format") this.warnings.add("trackFormat", "text:format-change");
@@ -464,7 +466,8 @@ export class OdtReader {
     const author = kid(e, "creator")?.textContent?.trim() ?? "";
     const initials = kid(e, "creator-initials")?.textContent?.trim() || author.split(/\s+/).map((w) => w[0] ?? "").join("").toLocaleUpperCase("tr-TR").slice(0, 3);
     const raw = kid(e, "date")?.textContent?.trim() ?? "";
-    const date = raw && !/Z|[+-]\d\d:\d\d$/.test(raw) ? `${raw.replace(/\.\d+$/, "")}Z` : raw;
+    // LibreOffice tarihsiz açıklamaya 0000-00-00T00:00:00 yazar: geçersiz tarih düşer
+        const date = isoDateTime(raw && !/Z|[+-]\d\d:\d\d$/.test(raw) ? `${raw.replace(/\.\d+$/, "")}Z` : raw);
     const text = kids(e)
       .flatMap((k) => (k.localName === "p" || k.localName === "h" ? [k] : k.localName === "list" ? descendants(k, "p") : []))
       .map((k) => k.textContent ?? "")
