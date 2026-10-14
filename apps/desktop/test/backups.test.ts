@@ -1,11 +1,15 @@
 // Yedekler: "<ad>.bak" yalnız yoksa oluşturulur (oturumlar arası ezilmez), önceki
 // sürümler en çok 3 tane döner, doğrulama başarısızsa son yazmadan önceki içerik geri gelir.
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { BackupStore, sidecarPathFor } from "../src/main/backups";
 import { SaveService } from "../src/main/saveService";
+
+// Her yazma fsync + yeniden adlandırma yapar; Windows CI'ında virüs taraması dosyayı kilitleyince
+// yeniden adlandırma tekrar denenir (sınırlı) ve tek test 5 sn varsayılanı aşabilir.
+vi.setConfig({ testTimeout: 60_000 });
 
 let dir: string;
 let root: string;
