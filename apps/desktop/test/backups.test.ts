@@ -157,7 +157,7 @@ describe("önceki sürümler", () => {
     const store = new BackupStore(root);
     await store.snapshot(f);
     const old = new Date(Date.now() - 200 * 24 * 3600_000);
-    utimesSync(path.join(store.dirFor(realpathSync(f)), "kaynak.json"), old, old);
+    utimesSync(path.join(store.dirFor(realpathSync.native(f)), "kaynak.json"), old, old);
     expect(await store.prune()).toBe(1);
     expect(await store.list(f)).toEqual([]);
   });
