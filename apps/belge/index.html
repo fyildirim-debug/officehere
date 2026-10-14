@@ -2,6 +2,9 @@
 <html lang="tr" data-app="belge" data-oh-theme="colorful">
   <head>
     <meta charset="UTF-8" />
+    <!-- Kod yalnız uygulamanın kendi dosyalarından yüklenir; dış sunucuya bağlantı, eklenti ve form gönderimi yok.
+         Satır içi stiller (belge ve yazdırma görünümü) ile data:/blob: görsel, medya ve yazı tipleri belge içeriği içindir. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
