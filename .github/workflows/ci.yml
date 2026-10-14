@@ -44,6 +44,32 @@ jobs:
           path: dist-web
           retention-days: 7
 
+  # Birim testlerinin kapsam raporu (@vitest/coverage-v8). Eşik yok, yalnız rapor: adım özeti ve artefakt.
+  # Ana işi yavaşlatmasın diye ayrı ve paralel koşar; ölçüm araçları testleri yavaşlattığı için zaman aşımı uzun.
+  kapsam:
+    name: Test kapsamı (rapor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - run: pnpm test:kapsam
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: kapsam-rapor
+          path: |
+            coverage/ozet.md
+            apps/*/coverage
+            packages/*/coverage
+          retention-days: 14
+
   masaustu:
     name: Masaüstü (Electron) uçtan uca
     runs-on: ubuntu-latest
