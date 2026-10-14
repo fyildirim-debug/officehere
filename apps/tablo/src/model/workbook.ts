@@ -284,6 +284,16 @@ export interface CellState {
   link?: string;
 }
 
+interface UsedRangeCache {
+  inputVersion: number;
+  calcVersion: number;
+  /** Zayıf başvuru: yenisiyle değiştirilen eski stil haritası önbellek yüzünden bellekte kalmasın. */
+  styles: WeakRef<Map<number, number>>;
+  styleCount: number;
+  styleWrites: number;
+  rect: Rect | null;
+}
+
 export interface DocProps {
   title?: string;
   subject?: string;
@@ -306,6 +316,10 @@ export class WorkbookModel {
   /** Çalışma kitabı yapı koruması. */
   protection: WorkbookProtection | null = null;
   private nextObjectId = 1;
+  /** usedRange önbelleği (sayfa başına sonuç ve onu üreten damga). */
+  private usedCache = new WeakMap<SheetModel, UsedRangeCache>();
+  /** setStyleRaw yazma sayacı: boyutu değiştirmeyen stil değişimlerinde önbellek damgası. */
+  private styleWrites = 0;
 
   constructor(empty = false) {
     this.engine = new FormulaEngine();
@@ -433,6 +447,7 @@ export class WorkbookModel {
 
   setStyleRaw(sheet: SheetModel, row: number, col: number, id: number | undefined): void {
     const k = cellKey(row, col);
+    this.styleWrites++;
     if (id === undefined) sheet.styles.delete(k);
     else sheet.styles.set(k, id);
   }
@@ -509,8 +524,34 @@ export class WorkbookModel {
     else sheet.links.delete(k);
   }
 
-  /** Sayfadaki son dolu hücre (Ctrl+End). */
+  /**
+   * Sayfanın kullanılan alanı: değeri olan (taşan diziler dahil) ya da kendi stili olan hücrelerin
+   * sınırları (Ctrl+End, kaydırma çubukları). Izgara bunu her karede çağırdığı için sonuç sayfa
+   * başına önbelleğe alınır. Damga O(1)'dir: motorun girdi ve hesaplama sürümleri (değer/formül,
+   * satır-sütun ekle-sil, sıralama, taşıma, geri al/yinele, yükleme) ile stil haritasının kimliği,
+   * boyutu ve setStyleRaw sayacı. Stil haritasını yerinde değiştiren kod setStyleRaw'ı kullanmalı ya
+   * da haritayı yenisiyle değiştirmeli.
+   */
   usedRange(sheet: SheetModel): Rect | null {
+    const e = this.engine;
+    const c = this.usedCache.get(sheet);
+    if (
+      !c ||
+      c.inputVersion !== e.inputVersion ||
+      c.calcVersion !== e.version ||
+      c.styles.deref() !== sheet.styles ||
+      c.styleCount !== sheet.styles.size ||
+      c.styleWrites !== this.styleWrites
+    ) {
+      const rect = this.scanUsedRange(sheet);
+      this.usedCache.set(sheet, { inputVersion: e.inputVersion, calcVersion: e.version, styles: new WeakRef(sheet.styles), styleCount: sheet.styles.size, styleWrites: this.styleWrites, rect });
+      return rect && { ...rect };
+    }
+    // Çağıran sonucu değiştirse de önbellek bozulmasın
+    return c.rect && { ...c.rect };
+  }
+
+  private scanUsedRange(sheet: SheetModel): Rect | null {
     let r2 = -1;
     let c2 = -1;
     let r1 = Infinity;

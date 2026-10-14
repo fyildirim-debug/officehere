@@ -136,6 +136,7 @@ export function Grid({ ctl, onContextMenu, onFilterButton }: GridProps) {
     });
   }, [ctl, sheet, makeLayout, dpr, darkUi]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Her karede çalışır: dataExtent motorda artımlı, usedRange önbellekli (değişiklik yokken tarama yok).
   const syncScrollbars = (L: GridLayout) => {
     const ext = ctl.wb.dataExtent(sheet);
     const used = ctl.wb.usedRange(sheet);

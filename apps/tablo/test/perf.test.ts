@@ -163,4 +163,22 @@ describe("50.000 satır performansı", { timeout: 60_000 }, () => {
     bekle(ins, "satır ekle", LIMIT_SLOW);
     bekle(del, "satır sil", LIMIT_SLOW);
   });
+
+  it("kullanılan alan önbellekte: kaydırma karesi başına tarama yok", () => {
+    // Izgara usedRange'i her karede çağırır; önbelleksiz her kare tüm hücreleri tarardı.
+    // Değişiklikten sonraki ilk çağrı tarar, sonraki 1000 çağrı (~16 sn kaydırma) önbellekten döner.
+    const wb = ctl.wb;
+    ctl.ops.setInputs(s, [{ row: N + 10, col: 1, input: "son" }], "yaz");
+    let u = null as ReturnType<typeof wb.usedRange>;
+    const tarama = time(() => (u = wb.usedRange(s)), "kullanılan alan tarama");
+    expect(u).toEqual({ r1: 0, c1: 0, r2: N + 10, c2: 7 });
+    const kareler = time(() => {
+      for (let i = 0; i < 1000; i++) u = wb.usedRange(s);
+    }, "kullanılan alan 1000 kare");
+    expect(u).toEqual({ r1: 0, c1: 0, r2: N + 10, c2: 7 });
+    ctl.ops.undo();
+    expect(wb.usedRange(s)).toEqual({ r1: 0, c1: 0, r2: N, c2: 7 });
+    bekle(tarama, "kullanılan alan tarama", LIMIT_FAST);
+    bekle(kareler, "kullanılan alan 1000 kare", 1000);
+  });
 });

@@ -73,6 +73,12 @@ export class FormulaEngine implements EvalHost {
   lookupCache = new Map<string, Map<string, number>>();
   /** Son hesaplamada değeri değişen ya da yeniden hesaplanan hücre sayısı. */
   version = 0;
+  /**
+   * Girdi ya da yapı her değiştiğinde (hücre yazma/silme, satır-sütun ekle-sil, sıralama, anlık
+   * görüntüden yükleme, ad/tablo değişimi) yeniden hesaplamayı beklemeden artar. `version` ile
+   * birlikte "veri değişti mi" önbellek anahtarıdır.
+   */
+  inputVersion = 0;
 
   constructor(opts: EngineOptions = {}) {
     this.locale = opts.locale ?? TR_LOCALE;
@@ -471,10 +477,12 @@ export class FormulaEngine implements EvalHost {
 
   /** @internal */
   noteChange(g: number): void {
+    this.inputVersion++;
     noteChangeImpl(this, g);
   }
 
   markAllDirty(): void {
+    this.inputVersion++;
     for (const id of this.order) {
       const s = this.sheets.get(id)!;
       for (const [k, rec] of s.cells) if (rec.formula) this.dirty.add(id * SHEET_STRIDE + k);
