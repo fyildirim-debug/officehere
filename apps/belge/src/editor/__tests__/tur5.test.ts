@@ -8,7 +8,8 @@ import { closeHistory } from "@tiptap/pm/history";
 import { normalizeDoc } from "../../model/document";
 import { schemaExtensions } from "../extensions";
 import { canContinueNumbering, continueNumbering, orderedListAt, restartNumbering } from "../listNumbering";
-import { docStats, nextCaseMode } from "../commands";
+import type { Node as PMNode } from "@tiptap/pm/model";
+import { countWords, docStats, nextCaseMode } from "../commands";
 import { listifySlice, textToSlice, unwrapSectionSlice } from "../paste";
 import { formatPicture, isTimePicture, parsePicture, pictureOfInstr } from "../dateFormat";
 
@@ -189,6 +190,72 @@ describe("Sözcük Sayısı", () => {
     });
     const sel = docStats(ed.state.doc, { from: a, to: b });
     expect(sel).toMatchObject({ words: 3, paragraphs: 2, charsNoSpaces: 9 });
+  });
+
+  /** Önbelleksiz başvuru: aralığın tüm metni tek seferde sayılır (önbellekten önceki uygulama). */
+  function refStats(d: PMNode, range: { from: number; to: number } | null, withNotes: boolean) {
+    const from = range ? Math.max(0, range.from) : 0;
+    const to = range ? Math.min(d.content.size, range.to) : d.content.size;
+    let text = d.textBetween(from, to, "\n", " ");
+    let paragraphs = 0;
+    const notes: string[] = [];
+    d.nodesBetween(from, to, (n, pos) => {
+      if (!n.isTextblock) return true;
+      const a = Math.max(from, pos + 1);
+      const b = Math.min(to, pos + 1 + n.content.size);
+      if (d.textBetween(a, Math.max(a, b), " ", " ").trim()) paragraphs++;
+      if (withNotes)
+        n.forEach((c, off) => {
+          const at = pos + 1 + off;
+          if (c.type.name === "note" && at >= from && at < to && c.attrs.text) notes.push(String(c.attrs.text));
+        });
+      return false;
+    });
+    if (notes.length) {
+      text += `\n${notes.join("\n")}`;
+      paragraphs += notes.filter((t) => t.trim()).length;
+    }
+    return { words: countWords(text), chars: text.replace(/\n/g, "").length, charsNoSpaces: text.replace(/\s/g, "").length, paragraphs };
+  }
+
+  it("önbellekli sayım tek seferlik sayımla aynı: her aralıkta, tablo/liste/notla ve düzenlemelerden sonra", () => {
+    const ed = make({
+      type: "doc",
+      content: [
+        {
+          type: "section",
+          content: [
+            p("Türkiye'nin başkenti Ankara'dır; 3,5 milyon-kişi."),
+            { type: "paragraph", content: [{ type: "text", text: "Satır" }, { type: "hardBreak" }, { type: "text", text: "sonu" }, { type: "note", attrs: { id: "n1", kind: "footnote", text: "Dipnot\nikinci satır" } }, { type: "text", text: "devam" }] },
+            { type: "horizontalRule" },
+            ol(["bir", "iki üç"]),
+            { type: "table", content: [{ type: "tableRow", content: [{ type: "tableCell", content: [p("hücre bir")] }, { type: "tableCell", content: [p(""), p("hücre iki")] }] }] },
+            p(""),
+          ],
+        },
+        { type: "section", content: [{ type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: "İkinci bölüm" }] }, p("son paragraf.")] },
+      ],
+    });
+    const check = () => {
+      const d = ed.state.doc;
+      for (const withNotes of [false, true]) {
+        expect(docStats(d, null, withNotes)).toEqual(refStats(d, null, withNotes));
+        for (let from = 0; from <= d.content.size; from++)
+          for (let to = from; to <= d.content.size + 1; to += 2) expect(docStats(d, { from, to }, withNotes), `${from}-${to}`).toEqual(refStats(d, { from, to }, withNotes));
+      }
+    };
+    check();
+    expect(docStats(ed.state.doc)).toMatchObject({ words: 19, paragraphs: 8 });
+    ed.view.dispatch(ed.state.tr.insertText(" yeni sözcük", 6));
+    check();
+    ed.view.dispatch(ed.state.tr.delete(12, 40));
+    check();
+    ed.view.dispatch(ed.state.tr.split(ed.state.doc.content.size - 6));
+    check();
+    // Dönen nesne önbelleği değiştirmez.
+    const s = docStats(ed.state.doc);
+    s.words = -1;
+    expect(docStats(ed.state.doc).words).not.toBe(-1);
   });
 });
 

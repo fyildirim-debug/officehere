@@ -215,7 +215,6 @@ export function App() {
     equalityFn: (a, b) => !!a && !!b && sameFormat(a, b),
   });
 
-  const stats = useMemo(() => docStats(editor.state.doc), [editor, version]); // eslint-disable-line react-hooks/exhaustive-deps
   // Yalnız sayfa sayısı izlenir (sayfa başlangıç konumları her tuşta kayar; tüm kabuğu yeniden çizmeye gerek yok).
   const pageCount = useSyncExternalStore(
     useCallback((cb: () => void) => controller.subscribe(cb), [controller]),
@@ -525,7 +524,7 @@ export function App() {
         files={files}
         settings={settings}
         pageCount={pageCount}
-        stats={stats}
+        stats={docStats(editor.state.doc)}
         printOptions={printOptions}
         setPrintOptions={setPrintOptions}
         autosave={autosave}
@@ -620,7 +619,6 @@ export function App() {
                 editor={editor}
                 controller={controller}
                 paged={view.mode === "print"}
-                words={stats.words}
                 tracking={fmt?.tracking ?? false}
                 view={view}
                 setView={setView}

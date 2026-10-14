@@ -1,19 +1,19 @@
 // Durum çubuğu: sayfa, sözcük sayısı, dil, izleme durumu, görünüm düğmeleri ve yakınlaştırma.
 import { DocumentOnePage20Regular, Globe20Regular, ReadingModeMobile20Regular, TextProofingTools20Regular, ScanText20Regular } from "@fluentui/react-icons";
 import { StatusBar, StatusItem, ViewSwitcher, ZoomSlider, tipProps } from "@officehere/ui";
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
 import type { ViewOptions } from "../state/context";
 import type { PaginationController } from "../editor/pagination";
-import { countWords } from "../editor/commands";
+import { docStats } from "../editor/commands";
 
 interface Props {
   editor: Editor;
   controller: PaginationController;
   /** Yazdırma Düzeni'nde sayfa bilgisi gösterilir. */
   paged: boolean;
-  words: number;
   tracking: boolean;
   view: ViewOptions;
   setView: (p: Partial<ViewOptions>) => void;
@@ -23,16 +23,58 @@ interface Props {
   lang: string;
 }
 
+/** İşi tarayıcı boşaldığında çalıştırır (requestIdleCallback yoksa kısa bir zamanlayıcıyla); iptal işlevi döner. */
+function whenIdle(run: () => void): () => void {
+  if (typeof requestIdleCallback === "function") {
+    // Sayfalama gibi uzun işler sürerken de en geç timeout sonra çalışır (artımlı sayım birkaç ms).
+    const id = requestIdleCallback(run, { timeout: 200 });
+    return () => cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(run, 100);
+  return () => window.clearTimeout(id);
+}
+
+/**
+ * Belgenin sözcük sayısı. Tuş yolunda sayılmaz: değişiklikten sonra boşta, yalnız değişen bloklar yeniden
+ * sayılarak (docStats önbelleği) güncellenir.
+ */
+function useDocWords(editor: Editor): number {
+  const [words, setWords] = useState(() => docStats(editor.state.doc).words);
+  useEffect(() => {
+    let cancel: (() => void) | null = null;
+    const run = () => {
+      cancel = null;
+      const w = docStats(editor.state.doc).words;
+      // Aynı görevde çizilir; ardından gelen uzun görevleri (sayfalama) beklemez.
+      flushSync(() => setWords(w));
+    };
+    const schedule = () => {
+      cancel ??= whenIdle(run);
+    };
+    const onTr = ({ transaction }: { transaction: { docChanged: boolean } }) => {
+      if (transaction.docChanged) schedule();
+    };
+    schedule();
+    editor.on("transaction", onTr);
+    return () => {
+      editor.off("transaction", onTr);
+      cancel?.();
+    };
+  }, [editor]);
+  return words;
+}
+
 const LANG_NAMES: Record<string, string> = { tr: "Türkçe (Türkiye)", "en-US": "İngilizce (ABD)", de: "Almanca (Almanya)" };
 
-export function BelgeStatusBar({ editor, controller, paged, words, tracking, view, setView, onPageClick, onWordsClick, onZoomClick, lang }: Props) {
+export function BelgeStatusBar({ editor, controller, paged, tracking, view, setView, onPageClick, onWordsClick, onZoomClick, lang }: Props) {
   const n = (x: number) => x.toLocaleString("tr-TR");
+  const words = useDocWords(editor);
   // İmleç ve seçim burada izlenir; böylece her tuşta yalnız durum çubuğu yeniden çizilir.
   const sel = useEditorState({
     editor,
     selector: ({ editor: ed }) => {
       const { from, to, empty } = ed.state.selection;
-      return { from, words: empty ? -1 : countWords(ed.state.doc.textBetween(from, to, "\n", " ")) };
+      return { from, words: empty ? -1 : docStats(ed.state.doc, { from, to }).words };
     },
     equalityFn: (a, b) => !!a && !!b && a.from === b.from && a.words === b.words,
   });

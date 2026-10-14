@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { URL, collectErrors } from "./ortak";
+import { URL, collectErrors, zipEntry } from "./ortak";
 
 // OfficeHere Belge: dosya G/Ç sağlamlığı — kötü niyetli HTML yapıştırma, açılışta kayıp uyarıları ve
 // bozuk dosyalarda anlaşılır Türkçe hata iletileri.
@@ -71,6 +71,25 @@ test.describe("OfficeHere Belge dosya G/Ç sağlamlığı", () => {
       expect(await body(page).innerHTML()).not.toMatch(/onerror|onclick|javascript:/i);
     });
   }
+
+  test("açıklama tarihi: LibreOffice'in geçersiz tarihi ekranda görünmez, kaydedilen .docx'e yazılmaz", async ({ page }, testInfo) => {
+    // LibreOffice tarihsiz açıklamaya w:date="0-00-00T00:00:00Z" yazar (şemaya aykırı).
+    const src = readFileSync(resolve(__dirname, "../test-derlem/lo/lo-karma.docx"));
+    expect(zipEntry(src, "word/comments.xml")).toContain('w:date="0-00-00T00:00:00Z"');
+    await open(page, "lo-karma.docx", src);
+    await expect(page.locator(".oh-titlebar")).toContainText("lo-karma");
+    const balloons = page.locator(".bl-balloon:not(.is-revision)");
+    await expect(balloons).toHaveCount(2);
+    await expect(balloons.locator(".bl-balloon-date")).toHaveText(["", ""]);
+    await expect(page.locator(".bl-balloon-date", { hasText: "Invalid" })).toHaveCount(0);
+    const download = page.waitForEvent("download");
+    await page.keyboard.press("Control+s");
+    const out = testInfo.outputPath("lo-karma.docx");
+    await (await download).saveAs(out);
+    const comments = zipEntry(readFileSync(out), "word/comments.xml") ?? "";
+    expect(comments.match(/<w:comment /g)).toHaveLength(2);
+    expect(comments).not.toContain("w:date=");
+  });
 
   test("okunamayan içerik açılışta ileti çubuğunda uyarılır", async ({ page }) => {
     // Kapanmamış gruplu (bozuk) RTF: boş açılmak yerine uyarı.

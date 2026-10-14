@@ -1,3 +1,4 @@
+import { inflateRawSync } from "node:zlib";
 import type { Page } from "@playwright/test";
 
 const base = Number(process.env.OH_E2E_PORT ?? 4173);
@@ -25,4 +26,17 @@ export function collectErrors(page: Page): string[] {
  */
 export function interceptFileChooser(page: Page): void {
   page.on("filechooser", () => {});
+}
+
+/** ZIP paketinden (DOCX/XLSX/PPTX) bir parçayı metin olarak okur (merkezi dizin + inflateRaw); yoksa null. */
+export function zipEntry(b: Buffer, name: string): string | null {
+  const e = b.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  for (let i = 0, p = b.readUInt32LE(e + 16), n = b.readUInt16LE(e + 10); i < n; i++, p += 46 + b.readUInt16LE(p + 28) + b.readUInt16LE(p + 30) + b.readUInt16LE(p + 32)) {
+    if (b.toString("utf8", p + 46, p + 46 + b.readUInt16LE(p + 28)) !== name) continue;
+    const l = b.readUInt32LE(p + 42);
+    const start = l + 30 + b.readUInt16LE(l + 26) + b.readUInt16LE(l + 28);
+    const data = b.subarray(start, start + b.readUInt32LE(p + 20));
+    return (b.readUInt16LE(p + 10) === 8 ? inflateRawSync(data) : data).toString("utf8");
+  }
+  return null;
 }

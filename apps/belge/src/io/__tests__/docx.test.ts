@@ -6,6 +6,7 @@ import type { JSONContent } from "@tiptap/core";
 import { Node as PMNode } from "@tiptap/pm/model";
 import { belgeSchema, readDocx, writeDocx } from "../index";
 import { defaultSettings, normalizeDoc, type BelgeDocument } from "../../model/document";
+import { isoDateTime } from "../docx/reader";
 
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGM4IScHRww4OQD1xwwxB+utmQAAAABJRU5ErkJggg==";
 
@@ -143,6 +144,34 @@ describe("DOCX gidiş-dönüş", () => {
     expect(norm(back.content)).toEqual(norm(doc.content));
     expect(back.settings.comments.c0.text).toBe("Bunu kontrol et.\nİkinci satır.");
     expect(back.settings.comments.c0.author).toBe("Furkan Yıldırım");
+  });
+
+  it("açıklama tarihi: geçersizse w:date yazılmaz; okurken geçersiz tarih düşürülür", async () => {
+    const doc = docOf(p([t("bir", [{ type: "comment", attrs: { id: "c0" } }]), t(" iki", [{ type: "comment", attrs: { id: "c1" } }]), t(" üç", [{ type: "comment", attrs: { id: "c2" } }])]));
+    const base = { author: "Ayşe", initials: "A", text: "Not" };
+    doc.settings.comments = {
+      c0: { id: "c0", ...base, date: "0-00-00T00:00:00Z" },
+      c1: { id: "c1", ...base, date: "" },
+      c2: { id: "c2", ...base, date: "2026-10-11T10:00:00.123Z" },
+    };
+    const bytes = await writeDocx(doc);
+    const zip = await JSZip.loadAsync(bytes);
+    const xml = await zip.file("word/comments.xml")!.async("string");
+    expect([...xml.matchAll(/<w:comment [^>]*>/g)].map((m) => /w:date="([^"]*)"/.exec(m[0])?.[1] ?? null).sort()).toEqual(["2026-10-11T10:00:00Z", null, null]);
+    let back = await readDocx(bytes);
+    expect(Object.values(back.settings.comments).map((c) => c.date).sort()).toEqual(["", "", "2026-10-11T10:00:00Z"]);
+    // LibreOffice'in yazdığı geçersiz tarihler okurken düşer; geçerli saat dilimli tarih korunur.
+    const dates = ["0-00-00T00:00:00Z", "0000-00-00T00:00:00", "2026-03-04T10:20:30+03:00"];
+    let i = 0;
+    zip.file("word/comments.xml", xml.replace(/<w:comment ([^>]*)>/g, (_, a: string) => `<w:comment ${a.replace(/ w:date="[^"]*"/, "")} w:date="${dates[i++]}">`));
+    back = await readDocx(await zip.generateAsync({ type: "uint8array" }));
+    expect(Object.values(back.settings.comments).map((c) => c.date).sort()).toEqual(["", "", "2026-03-04T10:20:30+03:00"]);
+  });
+
+  it("isoDateTime: yalnız geçerli xsd:dateTime kabul edilir", () => {
+    for (const ok of ["2026-10-11T10:00:00Z", "2024-02-29T23:59:59Z", "2026-10-11T10:00:00.5+03:00", "2026-10-11T10:00:00", "0001-01-01T00:00:00Z"]) expect(isoDateTime(ok)).toBe(ok);
+    for (const bad of [undefined, null, "", "0-00-00T00:00:00Z", "0000-00-00T00:00:00", "0000-01-01T00:00:00Z", "2026-02-29T00:00:00Z", "2026-13-01T00:00:00Z", "2026-04-31T00:00:00Z", "2026-10-11", "2026-10-11T24:00:00Z", "2026-10-11T10:00:00+15:00", "dün"])
+      expect(isoDateTime(bad)).toBe("");
   });
 
   it("izlenen biçim değişikliği (w:rPrChange)", async () => {

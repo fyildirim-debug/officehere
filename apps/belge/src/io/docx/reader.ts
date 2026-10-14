@@ -386,7 +386,8 @@ export class DocxReader {
           )
           .join("\n");
         const author = attr(c, "author") ?? "";
-        comments[id] = { id, author, initials: attr(c, "initials") ?? initialsOf(author), date: attr(c, "date") ?? new Date().toISOString(), text };
+        // Geçersiz tarih (LibreOffice tarihsiz açıklamaya "0-00-00T00:00:00Z" yazar) düşürülür.
+        comments[id] = { id, author, initials: attr(c, "initials") ?? initialsOf(author), date: isoDateTime(attr(c, "date")), text };
       }
       settings.comments = comments;
     }
@@ -489,6 +490,21 @@ export class DocxReader {
 
 /** Okunmayan değişiklik izleme öğeleri (paragraf/tablo/bölüm biçimi, hücre ekleme-silme). */
 const TRACK_FORMAT = new Set(["pPrChange", "sectPrChange", "tblPrChange", "tblPrExChange", "trPrChange", "tcPrChange", "tblGridChange", "numberingChange", "cellIns", "cellDel", "cellMerge", "customXmlInsRangeStart", "customXmlDelRangeStart"]);
+
+/**
+ * Değer xsd:dateTime (ST_DateTime; ISO 8601 "YYYY-MM-DDThh:mm:ss[.s][Z|±hh:mm]") olarak geçerliyse kendisi,
+ * değilse boş dize. Yıl 0001'den, ay ve gün takvimden geçerli olmalı.
+ */
+export function isoDateTime(value: string | null | undefined): string {
+  const s = value?.trim() ?? "";
+  const m = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(\.\d+)?(Z|[+-](\d\d):(\d\d))?$/.exec(s);
+  if (!m) return "";
+  const [y, mo, d, h, mi, se] = m.slice(1, 7).map(Number) as [number, number, number, number, number, number];
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1] ?? 0;
+  const tz = m[9] === undefined || (Number(m[9]) <= 14 && Number(m[10]) <= 59);
+  return y >= 1 && d >= 1 && d <= days && h <= 23 && mi <= 59 && se <= 59 && tz ? s : "";
+}
 
 export function initialsOf(name: string): string {
   return (

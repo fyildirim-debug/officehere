@@ -10,6 +10,7 @@ import { resolveStyles, type BorderSpec } from "../../model/styles";
 import { NS, REL, XML_HEAD, cleanText, esc, hex6 } from "./xml";
 import { borderXml, buildStylesXml, fontsXml } from "./styleXml";
 import { levelDef } from "./numbering";
+import { isoDateTime } from "./reader";
 
 import { Ctx, DOC_NS, PartWriter, Rels, type NoteData } from "./partWriter";
 
@@ -36,7 +37,8 @@ function commentsXml(ctx: Ctx, comments: Record<string, CommentData>): string {
     const c = comments[id];
     if (!c) continue;
     const paras = (c.text || "").split("\n");
-    x += `<w:comment w:id="${num}" w:author="${esc(c.author)}" w:date="${esc(c.date.replace(/\.\d+Z$/, "Z"))}" w:initials="${esc(c.initials)}">`;
+    const date = isoDateTime(c.date).replace(/\.\d+Z$/, "Z");
+    x += `<w:comment w:id="${num}" w:author="${esc(c.author)}"${date ? ` w:date="${date}"` : ""} w:initials="${esc(c.initials)}">`;
     paras.forEach((t, i) => {
       x += `<w:p><w:pPr><w:pStyle w:val="CommentText"/></w:pPr>${i === 0 ? '<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr><w:annotationRef/></w:r>' : ""}<w:r><w:t xml:space="preserve">${esc(cleanText(t))}</w:t></w:r></w:p>`;
     });

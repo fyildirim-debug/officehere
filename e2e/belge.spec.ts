@@ -343,6 +343,24 @@ test.describe("OfficeHere Belge senaryoları", () => {
   const dialog = (page: Page) => page.locator(".oh-dialog");
   const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAGklEQVR4nGO4HyNEEmIY1TCqYVTDqAYqagAAcKKm8RLe1JYAAAAASUVORK5CYII=", "base64");
 
+  test("sözcük sayısı tuş yolunda değil boşta sayılır: yazmayı bırakınca 1 sn içinde güncel, seçim sayısı doğru", async ({ page }) => {
+    await paste(page, Array.from({ length: 200 }, (_, i) => `Paragraf ${i} iki üç dört beş altı yedi sekiz dokuz.`).join("\n"));
+    await expect(status(page)).toContainText("2.000 sözcük");
+    await page.keyboard.press("Control+End");
+    await page.keyboard.type(" Yeni sözcükler eklendi");
+    // Sabit bekleme yok: son tuştan sonra sayaç en geç 1 sn içinde güncellenmeli.
+    await expect(status(page)).toContainText("2.003 sözcük", { timeout: 1000 });
+    await page.keyboard.press("Control+Shift+ArrowLeft");
+    await expect(status(page)).toContainText("1 / 2.003 sözcük");
+    await page.keyboard.press("Backspace");
+    await expect(status(page)).toContainText("2.002 sözcük", { timeout: 1000 });
+    // Baştaki paragrafı silmek (değişmeyen bloklar önbellekten) de doğru sayılır.
+    await page.keyboard.press("Control+Home");
+    await page.keyboard.press("Shift+End");
+    await page.keyboard.press("Delete");
+    await expect(status(page)).toContainText("1.992 sözcük", { timeout: 1000 });
+  });
+
   test("#1 sayfadan uzun ilk paragraf satır sınırından bölünür, taşma olmaz", async ({ page }) => {
     await paste(page, "Uzun ilk paragraf metni sayfalar boyunca akar. ".repeat(260).trim());
     // Sayfa sayısı sistem yazı tiplerine göre değişir (CI'da 3, yerelde 4); önemli olan birden çok sayfaya bölünmesi.

@@ -358,39 +358,91 @@ export function countWords(text: string): number {
   return m ? m.length : 0;
 }
 
+export interface TextStats {
+  words: number;
+  chars: number;
+  charsNoSpaces: number;
+  /** Boş olmayan paragraflar. */
+  paragraphs: number;
+}
+
+/** Bir düğümün gövde ve not (dipnot/son not) istatistikleri. */
+interface NodeStats {
+  body: TextStats;
+  notes: TextStats;
+}
+
+const NO_TEXT: TextStats = { words: 0, chars: 0, charsNoSpaces: 0, paragraphs: 0 };
+
+function textStats(text: string, paragraph: boolean): TextStats {
+  return { words: countWords(text), chars: text.replace(/\n/g, "").length, charsNoSpaces: text.replace(/\s/g, "").length, paragraphs: paragraph && text.trim() ? 1 : 0 };
+}
+
+function addStats(a: TextStats, b: TextStats): TextStats {
+  return { words: a.words + b.words, chars: a.chars + b.chars, charsNoSpaces: a.charsNoSpaces + b.charsNoSpaces, paragraphs: a.paragraphs + b.paragraphs };
+}
+
+/** Paragrafın içerikteki [a, b) aralığı. Bloklar arasına ayraç girdiğinden sayımlar bloklar üzerinden toplanabilir. */
+function textblockStats(n: PMNode, a: number, b: number): NodeStats {
+  const from = Math.max(0, a);
+  const to = Math.min(n.content.size, b);
+  let notes = NO_TEXT;
+  n.forEach((c, off) => {
+    if (c.type.name === "note" && off >= from && off < to && c.attrs.text) notes = addStats(notes, textStats(String(c.attrs.text), true));
+  });
+  return { body: textStats(n.textBetween(from, Math.max(from, to), "\n", " "), true), notes };
+}
+
+/**
+ * Düğüm başına sayım önbelleği. Düğümler değişmez ve düzenlemede değişmeyen alt ağaçlar paylaşıldığından
+ * bir tuştan sonra yalnız değişen paragraf ve onun üst düğümleri yeniden sayılır.
+ */
+const statsCache = new WeakMap<PMNode, NodeStats>();
+
+function nodeStats(n: PMNode): NodeStats {
+  let s = statsCache.get(n);
+  if (s) return s;
+  if (n.isTextblock) s = textblockStats(n, 0, n.content.size);
+  else if (n.isLeaf) s = { body: textStats(" ", false), notes: NO_TEXT };
+  else {
+    let body = NO_TEXT;
+    let notes = NO_TEXT;
+    n.forEach((c) => {
+      const cs = nodeStats(c);
+      body = addStats(body, cs.body);
+      notes = addStats(notes, cs.notes);
+    });
+    s = { body, notes };
+  }
+  statsCache.set(n, s);
+  return s;
+}
+
+/** Düğüm içeriğinin [from, to) aralığı: tamamen içerilen alt düğümler önbellekten gelir. */
+function rangeStats(n: PMNode, from: number, to: number): NodeStats {
+  if (from <= 0 && to >= n.content.size) return nodeStats(n);
+  if (n.isTextblock) return textblockStats(n, from, to);
+  let body = NO_TEXT;
+  let notes = NO_TEXT;
+  n.forEach((c, off) => {
+    if (off >= to || off + c.nodeSize <= from) return;
+    const cs = c.isLeaf ? nodeStats(c) : rangeStats(c, from - off - 1, to - off - 1);
+    body = addStats(body, cs.body);
+    notes = addStats(notes, cs.notes);
+  });
+  return { body, notes };
+}
+
 /**
  * Belge (ya da from–to aralığı) istatistikleri. withNotes: dipnot ve son not metinleri de sayılır
  * (Sözcük Sayısı'ndaki "Metin kutularını, dipnotları ve son notları dahil et"; metin kutuları zaten gövdededir).
+ * Değişmeyen bloklar önbellekten gelir; sonuç tüm metnin tek seferde sayımıyla aynıdır.
  */
-export function docStats(doc: PMNode, range?: { from: number; to: number } | null, withNotes = false) {
+export function docStats(doc: PMNode, range?: { from: number; to: number } | null, withNotes = false): TextStats {
   const from = range ? Math.max(0, range.from) : 0;
   const to = range ? Math.min(doc.content.size, range.to) : doc.content.size;
-  let text = doc.textBetween(from, to, "\n", " ");
-  let paragraphs = 0;
-  const notes: string[] = [];
-  doc.nodesBetween(from, to, (n, pos) => {
-    if (n.isTextblock) {
-      // Aralıktaki kısmı boş olmayan paragraflar sayılır.
-      const a = Math.max(from, pos + 1);
-      const b = Math.min(to, pos + 1 + n.content.size);
-      if (doc.textBetween(a, Math.max(a, b), " ", " ").trim()) paragraphs++;
-      if (withNotes)
-        n.forEach((c, off) => {
-          const at = pos + 1 + off;
-          if (c.type.name === "note" && at >= from && at < to && c.attrs.text) notes.push(String(c.attrs.text));
-        });
-      return false;
-    }
-    return true;
-  });
-  if (notes.length) {
-    text += `\n${notes.join("\n")}`;
-    paragraphs += notes.filter((t) => t.trim()).length;
-  }
-  return {
-    words: countWords(text),
-    chars: text.replace(/\n/g, "").length,
-    charsNoSpaces: text.replace(/\s/g, "").length,
-    paragraphs,
-  };
+  if (to <= from) return { ...NO_TEXT };
+  const s = rangeStats(doc, from, to);
+  // Önbellekteki nesne dışarı verilmez.
+  return withNotes ? addStats(s.body, s.notes) : { ...s.body };
 }
