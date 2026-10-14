@@ -32,7 +32,7 @@ import {
   Color24Regular,
   DarkTheme24Regular,
   CircleHalfFill24Regular, AccessibilityCheckmark24Regular } from "@fluentui/react-icons";
-import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonStack } from "@officehere/ui";
+import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonStack, ReportBugButton } from "@officehere/ui";
 import type { ShowSettings } from "../show/settings";
 import { getUserName } from "@officehere/ui";
 import { updateSlide } from "../model/ops";
@@ -190,6 +190,7 @@ export function HelpTab({ ctx }: { ctx: RibbonCtx }) {
         <RibbonButton size="large" icon={<QuestionCircle24Regular />} label="Yardım" description="Klavye kısayolları ve temel kullanım." onClick={() => ctx.openDialog("shortcuts")} />
         <RibbonButton size="large" icon={<Keyboard24Regular />} label="Klavye Kısayolları" onClick={() => ctx.openDialog("shortcuts")} />
         <RibbonButton size="large" icon={<Info24Regular />} label="Hakkında" onClick={() => ctx.openDialog("about")} />
+        <ReportBugButton app="sunum" />
       </RibbonGroup>
     </>
   );

@@ -24,7 +24,7 @@ import {
   Dismiss32Regular,
   ReadingModeMobile24Regular, TextBulletListTree24Regular, Drafts24Regular, DarkTheme24Regular } from "@fluentui/react-icons";
 import { getNative } from "@officehere/core";
-import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonStack } from "@officehere/ui";
+import { Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGroup, RibbonMenuButton, RibbonSpinner, RibbonStack, ReportBugButton } from "@officehere/ui";
 import { useBelge } from "../state/context";
 import { FOOTER_PRESETS, HEADER_PRESETS, pageNumberDoc } from "../templates/parts";
 import { hfKey, hfVariantOf } from "../views/PageSheets";
@@ -93,6 +93,7 @@ export function HelpTab({ onFeedback }: { onFeedback: () => void }) {
       <RibbonButton size="large" icon={<Keyboard24Regular />} label="Klavye Kısayolları" onClick={() => ctx.openDialog("shortcuts")} />
       <RibbonButton size="large" icon={<Info32Regular />} label="Hakkında" onClick={() => ctx.openBackstage("about")} />
       <RibbonButton size="large" icon={<PersonFeedback32Regular />} label="Geri Bildirim" onClick={onFeedback} />
+      <ReportBugButton app="belge" />
     </RibbonGroup>
   );
 }

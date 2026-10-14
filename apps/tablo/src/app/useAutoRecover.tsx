@@ -9,10 +9,10 @@
  * kullanılıyorsa yeni pencerede açılır).
  */
 import { useCallback, useEffect, useState } from "react";
-import { MessageBar } from "@officehere/ui";
+import { MessageBar, saveStatus } from "@officehere/ui";
 import type { Controller } from "../controller";
 import { serializeDraft, workbookFromDraft, type WorkbookDraft } from "../io/draft";
-import { SESSION_ID, adoptDraft, announceLive, deleteDraft, orphanDrafts, pruneHeartbeats, readDraft, writeDraft, type DraftMeta, type DraftRecord } from "./draftStore";
+import { SESSION_ID, adoptDraft, announceLive, deleteDraft, lastWriteQuota, orphanDrafts, pruneHeartbeats, readDraft, writeDraft, type DraftMeta, type DraftRecord } from "./draftStore";
 
 export { SESSION_ID };
 /** Son değişiklikten sonra beklenen boşluk. */
@@ -43,6 +43,8 @@ async function loadInto(ctl: Controller, rec: DraftRecord): Promise<void> {
   ctl.pristine = false;
   ctl.infoBar = { kind: "info", text: "Kurtarılan çalışma kitabı geri yüklendi. Saklamak için kaydedin." };
   ctl.emit();
+  // Kurtarılan taslak diskteki dosyanın üzerine kendiliğinden yazılmaz: ilk kaydı kullanıcı yapar.
+  if (rec.path) saveStatus.hold("Kurtarılan taslak; ilk kaydı siz onaylayın");
   await adoptDraft(rec);
 }
 
@@ -114,10 +116,22 @@ export function useAutoRecover(ctl: Controller) {
       cancelIdle = idle(step);
     };
 
+    let warned = false;
     const save = async (draft: WorkbookDraft, version: number) => {
       writing = true;
       try {
-        await writeDraft({ session: SESSION_ID, fileName: ctl.fileName, path: ctl.fileRef?.path, savedAt: Date.now(), sheetCount: draft.sheets.length, cellCount: draft.cellCount, draft });
+        const ok = await writeDraft({ session: SESSION_ID, fileName: ctl.fileName, path: ctl.fileRef?.path, savedAt: Date.now(), sheetCount: draft.sheets.length, cellCount: draft.cellCount, draft });
+        // Taslak yazılamadı (depolama dolu): kullanıcı bir kez uyarılır, sessizce yutulmaz.
+        if (!ok && !warned && !disposed) {
+          warned = true;
+          ctl.infoBar = {
+            kind: "warning",
+            text: lastWriteQuota
+              ? "Kurtarma taslağı kaydedilemedi: depolama alanı dolu. Çökme durumunda değişiklikler kurtarılamayabilir; çalışma kitabını kaydedin."
+              : "Kurtarma taslağı kaydedilemedi. Çökme durumunda değişiklikler kurtarılamayabilir; çalışma kitabını kaydedin.",
+          };
+          ctl.emit();
+        } else if (ok) warned = false;
         firstChange = 0;
       } catch {
         /* taslak yazılamazsa sessizce geç */
@@ -160,13 +174,21 @@ export function useAutoRecover(ctl: Controller) {
         flush();
       }
     };
+    // Sayfada yakalanmamış bir hata oldu ("officehere:autosave"): bekleyen taslak hemen yazılır.
+    const onFlush = () => {
+      if (!ctl.dirty || writing || cancelIdle) return;
+      window.clearTimeout(timer);
+      flush();
+    };
     document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("officehere:autosave", onFlush);
     return () => {
       disposed = true;
       unsub();
       window.clearTimeout(timer);
       cancelIdle?.();
       document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("officehere:autosave", onFlush);
     };
   }, [ctl]);
 

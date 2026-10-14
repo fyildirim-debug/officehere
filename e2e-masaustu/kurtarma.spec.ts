@@ -14,7 +14,7 @@ async function launch(): Promise<{ app: ElectronApplication; launcher: Page }> {
   const app = await electron.launch({
     executablePath: require(path.join(desktop, "node_modules/electron")) as unknown as string,
     args: [desktop, "--no-sandbox"],
-    env: { ...process.env, OH_APPS_DIR: path.join(root, "dist-web"), OH_USER_DATA: userData, ELECTRON_DISABLE_SECURITY_WARNINGS: "1" },
+    env: { ...process.env, OH_APPS_DIR: process.env.OH_E2E_APPS_DIR ?? path.join(root, "dist-web"), OH_USER_DATA: userData, ELECTRON_DISABLE_SECURITY_WARNINGS: "1" },
   });
   const launcher = await app.firstWindow();
   await launcher.waitForSelector(".oh-titlebar");

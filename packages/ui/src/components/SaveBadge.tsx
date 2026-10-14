@@ -1,16 +1,26 @@
-// Başlık çubuğundaki kayıt durumu rozeti: Kaydedilmedi / Kaydediliyor… / Kaydedildi HH:MM / Kaydedilemedi.
-import { Checkmark12Filled, ErrorCircle12Regular } from "@fluentui/react-icons";
+// Başlık çubuğundaki kayıt durumu rozeti: Kaydedilmedi / Kaydediliyor… / Kaydedildi HH:MM /
+// Kaydedilemedi: <neden> / Otomatik kayıt duraklatıldı.
+import { Checkmark12Filled, ErrorCircle12Regular, Pause12Regular } from "@fluentui/react-icons";
 import { tipProps } from "./Tooltip";
-import { formatSavedTime, saveStatus, type SaveState } from "../hooks/saveStatus";
+import { Dialog, DialogButton } from "./Dialog";
+import { formatSavedTime, saveStatus, useSaveAlert, type SaveState } from "../hooks/saveStatus";
 
 export interface SaveBadgeProps {
   state: SaveState;
   savedAt?: number;
   /** "Kaydedilemedi" tıklanınca (verilmezse kaydetme akışının kaydettiği Kaydet). */
   onRetry?: () => void;
+  /** Kaydetme hatasının kısa nedeni ("Disk dolu"). */
+  error?: string;
+  /** Hatanın uzun iletisi (ipucunda). */
+  errorDetail?: string;
+  /** Otomatik kaydetmenin duraklatılma nedeni. */
+  pausedReason?: string;
+  /** "hold": ilk elle kaydı bekliyor; "off": bu dosyada kapalı. */
+  pausedKind?: "hold" | "off";
 }
 
-export function SaveBadge({ state, savedAt, onRetry }: SaveBadgeProps) {
+export function SaveBadge({ state, savedAt, onRetry, error, errorDetail, pausedReason, pausedKind = "hold" }: SaveBadgeProps) {
   switch (state) {
     case "dirty":
       // oh-titlebar-dirty: masaüstü testleri ve eski seçiciler için korunur.
@@ -20,6 +30,26 @@ export function SaveBadge({ state, savedAt, onRetry }: SaveBadgeProps) {
           Kaydedilmedi
         </span>
       );
+    case "paused": {
+      // Sakin bir dille: kullanıcıdan yalnız ilk kaydı onaylaması istenir (tıklanınca Kaydet).
+      const hold = pausedKind === "hold";
+      const label = hold ? "Otomatik kayıt bekliyor" : "Otomatik kayıt kapalı";
+      const hint = hold
+        ? "Kaydet (Ctrl+S) ile ilk kaydı onayladığınızda otomatik kaydetme sürer."
+        : "Bu dosya için otomatik kaydetme kapatıldı; Kaydet ya da Farklı Kaydet ile kendiniz kaydedin.";
+      return (
+        <button
+          type="button"
+          className={`oh-savebadge is-paused oh-titlebar-dirty${hold ? "" : " is-off"}`}
+          onClick={onRetry ?? saveStatus.retry}
+          aria-label={`Kaydedilmedi. ${label}: ${pausedReason ?? ""}`}
+          {...tipProps(hold ? "Otomatik kaydetme ilk kaydınızı bekliyor" : "Otomatik kaydetme kapalı", undefined, `${pausedReason ? `${pausedReason}. ` : ""}${hint}`)}
+        >
+          <Pause12Regular aria-hidden="true" />
+          {label}
+        </button>
+      );
+    }
     case "saving":
       return (
         <span className="oh-savebadge is-saving" {...tipProps("Belge kaydediliyor")}>
@@ -43,10 +73,28 @@ export function SaveBadge({ state, savedAt, onRetry }: SaveBadgeProps) {
     }
     case "error":
       return (
-        <button type="button" className="oh-savebadge is-error" onClick={onRetry ?? saveStatus.retry} {...tipProps("Kaydedilemedi", undefined, "Yeniden kaydetmek için tıklayın.")}>
+        <button
+          type="button"
+          className="oh-savebadge is-error"
+          onClick={onRetry ?? saveStatus.retry}
+          {...tipProps(error ? `Kaydedilemedi: ${error}` : "Kaydedilemedi", undefined, `${errorDetail ? `${errorDetail} ` : ""}Yeniden kaydetmek için tıklayın.`)}
+        >
           <ErrorCircle12Regular aria-hidden="true" />
-          Kaydedilemedi
+          {error ? `Kaydedilemedi: ${error}` : "Kaydedilemedi"}
         </button>
       );
   }
+}
+
+/** Kayıtla ilgili önemli uyarı (ör. otomatik kaydedilen dosya doğrulanamadı): bir kez, onaylanınca kapanır. */
+export function SaveAlertDialog() {
+  const alert = useSaveAlert();
+  const close = () => saveStatus.alert(null);
+  return (
+    <Dialog open={!!alert} title={alert?.title ?? ""} onClose={close} width={460} footer={<DialogButton primary onClick={close}>Tamam</DialogButton>}>
+      <p className="oh-dialog-message" role="alert">
+        {alert?.message}
+      </p>
+    </Dialog>
+  );
 }

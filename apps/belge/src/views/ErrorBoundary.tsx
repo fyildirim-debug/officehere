@@ -16,7 +16,8 @@ export function saveRecoveryDraft(): Draft | null {
   let d: Draft | null = null;
   try {
     d = recovery.snapshot?.() ?? null;
-    if (d) writeDraft(d);
+    // Taslak eşzamansız (IndexedDB) yazılır; sonraki okumalar yazmanın ardından sıraya girer.
+    if (d) void writeDraft(d);
   } catch {
     // depolama kapalı ya da belge okunamadı
   }

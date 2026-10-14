@@ -5,10 +5,24 @@ import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { addRecentFile, baseName, extensionOf, getNative, openFile, readPath, saveFile, saveFileAs, type FileRef, type SaveData } from "@officehere/core";
 import { getUserName, isDirectSave, saveStatus, trackSave, useAutoSave } from "@officehere/ui";
 import { defaultSettings, normalizeDoc, type BelgeDocument, type DocSettings } from "../model/document";
-import { FORMATS, OPEN_FILTERS, docToText, formatOfExt, htmlDocument, isWritable, openDocument, saveFilters, writeDocx, writeMarkdown, writeOdt, writeRtf, type FormatId } from "../io";
+import { FORMATS, LoadWarnings, OPEN_FILTERS, docToText, formatOfExt, htmlDocument, isWritable, openDocument, readDocx, saveFilters, writeDocx, writeMarkdown, writeOdt, writeRtf, type FormatId } from "../io";
 import { TEMPLATES } from "../templates/templates";
 import { annotateNotesHtml } from "../editor/notes";
 import { clearOwnDraft, writeDraft, type Draft } from "./drafts";
+
+/** Açılışta okunamayan içerik varsa otomatik kaydetme ilk elle kayda kadar bekler (rozet nedeni gösterir). */
+export const LOAD_WARNING_HOLD = "Bu dosyada desteklenmeyen öğeler var; ilk kaydı siz onaylayın";
+
+/**
+ * Otomatik kaydedilen .docx kendi okuyucumuzla yeniden açılabiliyor mu: okuyucu hata vermemeli ve
+ * paketin bir kısmını bozuk/eksik saymamalı (desteklenmeyen öğe uyarıları doğrulamayı bozmaz).
+ */
+export async function canReopenDocx(data: ArrayBuffer): Promise<boolean> {
+  const warnings = new LoadWarnings();
+  const doc = await readDocx(data, warnings);
+  if (!doc?.content || (["corrupt", "unclosed", "simplified", "flattened"] as const).some((k) => warnings.has(k))) return false;
+  return true;
+}
 import type { FormatChoice } from "./useFormatPrompt";
 
 export type { Draft } from "./drafts";
@@ -49,6 +63,8 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
   const [fileExt, setFileExt] = useState("docx");
   /** Yerel olmayan biçimde kaydetme sorusu bu dosya için yanıtlandı mı. */
   const keepAsked = useRef(false);
+  /** Dosya uyarıyla açıldıysa otomatik kaydetmeyi bekleten neden (ilk elle kayda kadar). */
+  const [loadHold, setLoadHold] = useState<string | null>(null);
   const counter = useRef(1);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -91,6 +107,7 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       setFormat(fmt);
       setFileExt(ext);
       keepAsked.current = false;
+      setLoadHold(null);
       setDirty(false);
       saveStatus.reset();
       onLoaded();
@@ -124,8 +141,11 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
                 return f ? new Uint8Array(f.data) : null;
               }
             : undefined;
-        const { doc, warning, format: fmt } = await openDocument(name, data, { resolveImage });
+        const opened = await openDocument(name, data, { resolveImage });
+        const { doc, warning, format: fmt } = opened;
         load(doc, baseName(name), ref, fmt, extensionOf(name) || FORMATS[fmt].extensions[0]);
+        // Okunamayan (kaydedilince kaybolacak) içerik: özgün dosyanın üzerine sessizce yazılmaz.
+        if ((opened.warnings ?? []).length > 0) setLoadHold(LOAD_WARNING_HOLD);
         // Önceki (vazgeçilen) belgenin taslağı bu pencereden kaldırılır.
         clearOwnDraft();
         if (warning) notify(warning, "warning");
@@ -267,12 +287,34 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
   dirtyRef.current = dirty;
   const saveRef = useRef(save);
   saveRef.current = save;
+  const pathRef = useRef<string | undefined>(undefined);
+  pathRef.current = fileRef?.path;
+  const notifyRef = useRef(notify);
+  notifyRef.current = notify;
   useEffect(() => {
     if (!autosave) return;
+    /** Kota uyarısı oturumda bir kez (taslak yazılamazsa kullanıcı bilmeli). */
+    let warned = false;
+    let writing = false;
     const write = () => {
-      if (!dirtyRef.current || editor.isDestroyed) return;
-      const d: Draft = { content: editor.getJSON(), settings: settingsRef.current, fileName: fileNameRef.current, savedAt: Date.now() };
-      writeDraft(d);
+      if (!dirtyRef.current || editor.isDestroyed || writing) return;
+      const d: Draft = { content: editor.getJSON(), settings: settingsRef.current, fileName: fileNameRef.current, savedAt: Date.now(), ...(pathRef.current ? { path: pathRef.current } : {}) };
+      writing = true;
+      void writeDraft(d)
+        .then((r) => {
+          if ((r === "quota" || r === "error") && !warned) {
+            warned = true;
+            notifyRef.current(
+              r === "quota"
+                ? "Kurtarma taslağı kaydedilemedi: tarayıcı depolama alanı dolu. Çökme durumunda değişiklikler kurtarılamayabilir; belgeyi kaydedin."
+                : "Kurtarma taslağı kaydedilemedi. Çökme durumunda değişiklikler kurtarılamayabilir; belgeyi kaydedin.",
+              "warning",
+            );
+          } else if (r === "ok") warned = false;
+        })
+        .finally(() => {
+          writing = false;
+        });
     };
     const id = window.setInterval(write, 5000);
     // Sayfa kapanırken/gizlenirken son durum da yazılır (5 sn beklemeden).
@@ -293,6 +335,8 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
   const autoSave = useAutoSave({
     path: format === "docx" ? fileRef?.path : undefined,
     formats: ["docx"],
+    holdReason: loadHold,
+    verify: canReopenDocx,
     isDirty: () => dirtyRef.current,
     subscribe: (onChange) => {
       editor.on("update", onChange);

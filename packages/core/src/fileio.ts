@@ -1,4 +1,5 @@
-import { getNative, type AppKind, type FileFilter, type RecentFile } from "./bridge";
+import { getNative, type AppKind, type FileFilter, type NativeSaveResult, type NativeWriteFailure, type OfficehereNative, type RecentFile } from "./bridge";
+import { SaveError, saveErrorFrom } from "./saveErrors";
 import { orderRecent, withRecentAdded, withRecentPinned, withRecentRemoved } from "./recent";
 
 /** Açılmış ya da kaydedilmiş bir dosyanın tanıtıcısı. */
@@ -140,14 +141,31 @@ function toArrayBuffer(data: ArrayBuffer | Uint8Array | Blob | string): Promise<
 export type SaveData = ArrayBuffer | Uint8Array | Blob | string;
 
 /**
+ * Masaüstünde dosyayı ana sürecin güvenli yazma yoluyla yazar. Yazılamazsa
+ * hata kodu ve Türkçe nedeniyle SaveError fırlatır ("Disk dolu" vb.).
+ */
+export async function writeNativeFile(native: OfficehereNative, path: string, data: ArrayBuffer): Promise<void> {
+  if (native.writeFileSafe) {
+    const r = await native.writeFileSafe(path, data);
+    if (!r.ok) throw saveErrorFrom(r);
+    return;
+  }
+  if (!(await native.writeFile(path, data))) throw new SaveError("EUNKNOWN");
+}
+
+function isWriteFailure(r: NativeSaveResult | NativeWriteFailure | null): r is NativeWriteFailure {
+  return !!r && typeof (r as NativeWriteFailure).error === "object" && !!(r as NativeWriteFailure).error;
+}
+
+/**
  * "Kaydet": dosyanın bir konumu varsa üzerine yazar, yoksa "Farklı Kaydet" açar.
- * Başarıda güncel dosya tanıtıcısını, iptalde null döner.
+ * Başarıda güncel dosya tanıtıcısını, iptalde null döner; yazılamazsa SaveError fırlatır.
  */
 export async function saveFile(ref: FileRef | null, suggestedName: string, filters: FileFilter[], data: SaveData): Promise<FileRef | null> {
   const native = getNative();
   if (ref?.path && native) {
-    const ok = await native.writeFile(ref.path, await toArrayBuffer(data));
-    return ok ? ref : null;
+    await writeNativeFile(native, ref.path, await toArrayBuffer(data));
+    return ref;
   }
   if (ref?.handle) {
     try {
@@ -162,12 +180,13 @@ export async function saveFile(ref: FileRef | null, suggestedName: string, filte
   return saveFileAs(suggestedName, filters, data);
 }
 
-/** "Farklı Kaydet": her zaman konum sorar (tarayıcıda gerekirse indirir). */
+/** "Farklı Kaydet": her zaman konum sorar (tarayıcıda gerekirse indirir). Yazılamazsa SaveError fırlatır. */
 export async function saveFileAs(suggestedName: string, filters: FileFilter[], data: SaveData): Promise<FileRef | null> {
   const native = getNative();
   const buffer = await toArrayBuffer(data);
   if (native) {
     const r = await native.saveFileAs(suggestedName, filters, buffer);
+    if (isWriteFailure(r)) throw saveErrorFrom(r.error);
     return r ? { name: r.name, path: r.path } : null;
   }
   const w = window as unknown as PickerWindow;

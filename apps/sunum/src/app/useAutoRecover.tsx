@@ -5,10 +5,10 @@
  * "Kurtarılan sunu" önerilir.
  */
 import { useCallback, useEffect, useState } from "react";
-import { MessageBar } from "@officehere/ui";
+import { MessageBar, saveStatus } from "@officehere/ui";
 import type { Actions } from "../state/actions";
 import { documentPres } from "../state/masterActions";
-import { announceLive, deleteDraft, forgetDraft, listDrafts, liveSessions, newSessionId, pickDraft, writeDraft, type Draft } from "./draftStore";
+import { announceLive, deleteDraft, forgetDraft, lastWriteQuota, listDrafts, liveSessions, newSessionId, pickDraft, writeDraft, type Draft } from "./draftStore";
 import { loadPresentation } from "./fileOps";
 
 /** Bu pencerenin oturum kimliği. */
@@ -49,6 +49,7 @@ export function useAutoRecover(a: Actions) {
     let hasDraft = false;
     let writing = false;
     let disposed = false;
+    let warned = false;
 
     const flush = async () => {
       timer = undefined;
@@ -59,6 +60,16 @@ export function useAutoRecover(a: Actions) {
         const s = a.s;
         const ok = await writeDraft({ session: SESSION_ID, fileName: s.fileName, path: s.fileRef?.path, slideIdx: s.masterBase?.slideIdx ?? s.slideIdx, savedAt: Date.now(), pres: documentPres(a) });
         hasDraft = hasDraft || ok;
+        // Taslak yazılamadı (depolama dolu): kullanıcı bir kez uyarılır, sessizce yutulmaz.
+        if (!ok && !warned && !disposed) {
+          warned = true;
+          a.message(
+            lastWriteQuota
+              ? "Kurtarma taslağı kaydedilemedi: depolama alanı dolu. Çökme durumunda değişiklikler kurtarılamayabilir; sunuyu kaydedin."
+              : "Kurtarma taslağı kaydedilemedi. Çökme durumunda değişiklikler kurtarılamayabilir; sunuyu kaydedin.",
+            "warning",
+          );
+        } else if (ok) warned = false;
       } catch {
         /* taslak yazılamazsa sessizce geç */
       } finally {
@@ -106,14 +117,22 @@ export function useAutoRecover(a: Actions) {
         void flush();
       }
     };
+    // Sayfada yakalanmamış bir hata oldu ("officehere:autosave"): taslak hemen yazılır.
+    const onFlush = () => {
+      if (!a.s.dirty) return;
+      window.clearTimeout(timer);
+      void flush();
+    };
     document.addEventListener("visibilitychange", onHide);
     window.addEventListener("pagehide", onHide);
+    window.addEventListener("officehere:autosave", onFlush);
     return () => {
       disposed = true;
       unsub();
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("officehere:autosave", onFlush);
     };
   }, [a]);
 
@@ -122,6 +141,8 @@ export function useAutoRecover(a: Actions) {
     loadPresentation(a, offer.pres, offer.fileName, offer.path ? { name: `${offer.fileName}.pptx`, path: offer.path } : null);
     const idx = Math.max(0, Math.min(offer.pres.slides.length - 1, offer.slideIdx));
     a.store.set({ dirty: true, slideIdx: idx, slideSel: offer.pres.slides[idx] ? [offer.pres.slides[idx].id] : [] });
+    // Kurtarılan taslak diskteki dosyanın üzerine kendiliğinden yazılmaz: ilk kaydı kullanıcı yapar.
+    if (offer.path) saveStatus.hold("Kurtarılan taslak; ilk kaydı siz onaylayın");
     void deleteDraft(offer.session);
     setOffer(null);
     a.message("Kurtarılan sunu geri yüklendi. Saklamak için kaydedin.", "info");

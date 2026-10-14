@@ -214,6 +214,25 @@
   background: color-mix(in srgb, var(--oh-titlebar-fg) 26%, transparent);
 }
 
+/* Otomatik kaydetme duraklatıldı (dosya uyarıyla açıldı, doğrulanamadı…): tıklanınca Kaydet. */
+.oh-savebadge.is-paused {
+  border: 1px dashed color-mix(in srgb, var(--oh-titlebar-fg) 55%, transparent);
+  background: transparent;
+  color: var(--oh-titlebar-fg);
+  cursor: pointer;
+}
+
+.oh-savebadge.is-paused:hover {
+  background: color-mix(in srgb, var(--oh-titlebar-fg) 14%, transparent);
+}
+
+.oh-savebadge.is-error {
+  max-width: 28em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .oh-savebadge-spin {
     animation: none;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FolderOpen24Regular, Home20Regular, DocumentAdd20Regular, FolderOpen20Regular, Settings20Regular } from "@fluentui/react-icons";
+import { Bug20Regular, Bug24Regular, FolderOpen24Regular, Home20Regular, DocumentAdd20Regular, FolderOpen20Regular, Settings20Regular } from "@fluentui/react-icons";
 import { getNative, getRecentFiles, openFile, type AppKind, type RecentFile } from "@officehere/core";
 import { ALL_EXTENSIONS, FORMAT_GROUPS, appForFileName } from "../shared/formats";
 import {
@@ -9,6 +9,7 @@ import {
   BackstageAction,
   BackstageHeading,
   BackstageSubheading,
+  BugReportDialog,
   DeveloperCredit,
   RecentFileList,
   TemplateRow,
@@ -106,10 +107,20 @@ function SessionOption() {
   );
 }
 
+/** Ana süreç "Hata bildir…" isteyince başlangıç ekranı ?hata-bildir=1 ile açılır. */
+function wantsBugReport(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).has("hata-bildir");
+  } catch {
+    return false;
+  }
+}
+
 export function Launcher() {
   const [page, setPage] = useState("home");
   const [recent, setRecent] = useState<RecentFile[]>([]);
   const [theme, setTheme] = useUiTheme();
+  const [reporting, setReporting] = useState(wantsBugReport);
   const native = getNative();
 
   useEffect(() => {
@@ -187,6 +198,13 @@ export function Launcher() {
         </label>
         <SessionOption />
         <UpdateSection />
+        <BackstageSubheading>Sorun bildirme</BackstageSubheading>
+        <BackstageAction
+          icon={<Bug24Regular />}
+          title="Hata bildir"
+          description="Sürüm, işletim sistemi ve son günlük satırlarını görüp düzenleyebileceğiniz bir bildirim hazırlar. Siz göndermeden hiçbir şey paylaşılmaz."
+          onClick={() => setReporting(true)}
+        />
         <DeveloperCredit />
         <p className="oh-bs-note">
           OfficeHere açık kaynaklı (MIT) bağımsız bir projedir; Microsoft Corporation ile bağlantılı değildir. Microsoft, Word, Excel ve PowerPoint, Microsoft
@@ -211,10 +229,13 @@ export function Launcher() {
             { id: "home", label: "Giriş", icon: <Home20Regular /> },
             { id: "new", label: "Yeni", icon: <DocumentAdd20Regular /> },
             { id: "open", label: "Aç", icon: <FolderOpen20Regular /> },
+            { id: "report", label: "Hata bildir", icon: <Bug20Regular />, bottom: true, onClick: () => setReporting(true) },
             { id: "options", label: "Seçenekler", icon: <Settings20Regular />, bottom: true },
           ]}
           activeId={page}
-          onSelect={setPage}
+          onSelect={(id) => {
+            if (id !== "report") setPage(id);
+          }}
           onBack={() => setPage("home")}
         >
           {content}
@@ -222,6 +243,7 @@ export function Launcher() {
       }
     >
       <div />
+      <BugReportDialog open={reporting} onClose={() => setReporting(false)} app="baslangic" />
     </AppShell>
   );
 }

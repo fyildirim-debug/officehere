@@ -70,14 +70,29 @@ function openDb(): Promise<IDBDatabase | null> {
   return dbPromise;
 }
 
+/** Son yazmanın kota nedeniyle reddedilip reddedilmediği (kullanıcı uyarısı için). */
+export let lastWriteQuota = false;
+
+/**
+ * İşlem tamamlanınca (veri gerçekten yazılınca) çözülür. Kota aşımı isteğin
+ * başarısından SONRA işlemi iptal ettirebilir; bu yüzden istek değil işlem beklenir.
+ */
 function tx<T>(db: IDBDatabase, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T | null> {
   return new Promise((resolve) => {
     try {
       const t = db.transaction(STORE, mode);
       const req = fn(t.objectStore(STORE));
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-    } catch {
+      let value: T | null = null;
+      req.onsuccess = () => {
+        value = req.result;
+      };
+      t.oncomplete = () => resolve(value ?? (mode === "readwrite" ? (true as T) : null));
+      t.onabort = () => {
+        if (mode === "readwrite") lastWriteQuota = t.error?.name === "QuotaExceededError";
+        resolve(null);
+      };
+    } catch (e) {
+      if (mode === "readwrite") lastWriteQuota = (e as Error)?.name === "QuotaExceededError";
       resolve(null);
     }
   });
@@ -103,6 +118,7 @@ let closing = false;
 
 export async function writeDraft(d: Draft): Promise<boolean> {
   if (closing) return false;
+  lastWriteQuota = false;
   const db = await openDb();
   if (closing) return false;
   if (db) {
@@ -115,10 +131,14 @@ export async function writeDraft(d: Draft): Promise<boolean> {
   }
   try {
     const json = JSON.stringify(d);
-    if (json.length > LS_LIMIT) return false;
+    if (json.length > LS_LIMIT) {
+      lastWriteQuota = true;
+      return false;
+    }
     localStorage.setItem(LS_PREFIX + d.session, json);
     return true;
-  } catch {
+  } catch (e) {
+    if ((e as Error)?.name === "QuotaExceededError") lastWriteQuota = true;
     return false;
   }
 }

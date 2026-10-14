@@ -1,7 +1,7 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import type {} from "../packages/core/src/bridge";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -10,7 +10,8 @@ import path from "node:path";
 
 const root = path.resolve(__dirname, "..");
 const desktop = path.join(root, "apps/desktop");
-const appsDir = path.join(root, "dist-web");
+// Test için ayrı derleme dizini verilebilir (paralel derlemeler çakışmasın).
+const appsDir = process.env.OH_E2E_APPS_DIR ?? path.join(root, "dist-web");
 const SAVED = /^Kaydedildi \d{2}:\d{2}$/;
 
 function electronPath(): string {
@@ -40,6 +41,30 @@ function fixture(rel: string): string {
   return dest;
 }
 
+/** Belge'nin IndexedDB'deki kurtarma taslağı sayısı (veritabanı yoksa oluşturmadan 0). */
+function belgeDraftCount(win: Page): Promise<number> {
+  return win.evaluate(async () => {
+    const dbs = await indexedDB.databases();
+    if (!dbs.some((d) => d.name === "officehere-belge")) return 0;
+    return new Promise<number>((res) => {
+      const r = indexedDB.open("officehere-belge");
+      r.onerror = () => res(-1);
+      r.onsuccess = () => {
+        const db = r.result;
+        if (!db.objectStoreNames.contains("drafts")) {
+          db.close();
+          return res(0);
+        }
+        const q = db.transaction("drafts", "readonly").objectStore("drafts").count();
+        q.onsuccess = () => {
+          db.close();
+          res(q.result);
+        };
+      };
+    });
+  });
+}
+
 /** Zip (OOXML) içindeki tüm parçaların metni. */
 const zipText = (file: string) => execFileSync("unzip", ["-p", file]).toString("utf8");
 const badge = (win: Page) => win.locator(".oh-titlebar .oh-savebadge");
@@ -53,16 +78,18 @@ test("Belge: değiştirilen .docx Ctrl+S'siz diske yazılır, .bak alınır, tas
   await win.keyboard.press("Control+Home");
   await win.keyboard.type("OTOMATIK-KAYIT ");
   await expect(badge(win)).toHaveText("Kaydedilmedi");
-  // Kurtarma taslağını hemen yazdır: otomatik kaydetmeden sonra silinmeli.
+  // Kurtarma taslağını hemen yazdır (IndexedDB): otomatik kaydetmeden sonra silinmeli.
   await win.evaluate(() => window.dispatchEvent(new Event("officehere:autosave")));
-  const drafts = () => win.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("officehere.belge.draft.")).length);
-  expect(await drafts()).toBe(1);
+  const drafts = () => belgeDraftCount(win);
+  await expect.poll(drafts).toBe(1);
+  // Taslak yerel depoya (5 MB sınırlı) değil IndexedDB'ye yazılır.
+  expect(await win.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("officehere.belge.draft.")).length)).toBe(0);
 
   await expect(badge(win)).toHaveText(SAVED);
   expect(existsSync(`${file}.bak`)).toBe(true);
   expect(readFileSync(`${file}.bak`).equals(original)).toBe(true);
   expect(execFileSync("unzip", ["-p", file, "word/document.xml"]).toString("utf8")).toContain("OTOMATIK-KAYIT");
-  expect(await drafts()).toBe(0);
+  await expect.poll(drafts).toBe(0);
   await expect(win).not.toHaveTitle(/^●/);
 
   // İkinci değişiklik de yazılır; yedek aynı oturumda yeniden alınmaz.
@@ -152,3 +179,85 @@ test("Sunum: .pptx kendiliğinden kaydedilir", async () => {
   expect(zipText(file)).toContain("OTOKAYITSUNUM");
   await app.close();
 });
+
+test("Belge: iki oturum — ikinci açılışta .bak ezilmez, özgün içerik korunur", async () => {
+  const file = fixture("apps/belge/src/io/__fixtures__/libreoffice-resaved-report.docx");
+  const original = readFileSync(file);
+  for (const word of ["BIRINCI-OTURUM ", "IKINCI-OTURUM "]) {
+    const { app, win } = await launch(file);
+    await win.waitForSelector(".ProseMirror");
+    await win.locator(".ProseMirror").first().click();
+    await win.keyboard.press("Control+Home");
+    await win.keyboard.type(word);
+    await expect.poll(() => execFileSync("unzip", ["-p", file, "word/document.xml"]).toString("utf8"), { timeout: 20_000 }).toContain(word.trim());
+    await expect(badge(win)).toHaveText(SAVED);
+    expect(readFileSync(`${file}.bak`).equals(original)).toBe(true);
+    await app.close();
+  }
+});
+
+test("Belge: uyarıyla açılan dosya ilk elle kayda kadar otomatik kaydedilmez; rozet nedenini söyler", async () => {
+  const file = fixture("e2e-masaustu/fixtures/uyarili-nesne.docx");
+  const original = readFileSync(file);
+  const { app, win } = await launch(file);
+  await win.waitForSelector(".ProseMirror");
+  await win.locator(".ProseMirror").first().click();
+  await win.keyboard.press("Control+Home");
+  await win.keyboard.type("UYARILI ");
+  // Rozet: otomatik kaydetme ilk elle kaydı bekliyor; neden sakin bir dille söylenir.
+  await expect(badge(win)).toHaveText("Otomatik kayıt bekliyor");
+  await expect(badge(win)).toHaveAttribute("aria-label", /desteklenmeyen öğeler var; ilk kaydı siz onaylayın/);
+  await win.waitForTimeout(4000);
+  expect(readFileSync(file).equals(original)).toBe(true);
+  expect(existsSync(`${file}.bak`)).toBe(false);
+  // Elle Kaydet: kullanıcı kararı; sonrasında otomatik kaydetme sürer.
+  await win.keyboard.press("Control+S");
+  await expect(badge(win)).toHaveText(SAVED);
+  await win.locator(".ProseMirror").first().click();
+  await win.keyboard.type("SONRA ");
+  await expect.poll(() => execFileSync("unzip", ["-p", file, "word/document.xml"]).toString("utf8"), { timeout: 20_000 }).toContain("SONRA");
+  await expect(badge(win)).toHaveText(SAVED);
+  await app.close();
+});
+
+test("Kaydet: yazma hatası Türkçe nedeniyle rozette görünür, belge kirli kalır", async () => {
+  const file = fixture("apps/belge/src/io/__fixtures__/libreoffice-html.docx");
+  const { app, win } = await launch(file);
+  await win.waitForSelector(".ProseMirror");
+  // Otomatik kaydetme kapalı: yalnız elle Kaydet denenir.
+  await win.evaluate(() => localStorage.setItem("officehere.autoSave", "0"));
+  await win.locator(".ProseMirror").first().click();
+  await win.keyboard.type("HATA ");
+  // Klasör silindi (USB çıkarıldı, ağ sürücüsü koptu…): ENOENT → "Klasör bulunamadı".
+  rmSync(path.dirname(file), { recursive: true, force: true });
+  await win.keyboard.press("Control+S");
+  await expect(badge(win)).toHaveText("Kaydedilemedi: Klasör bulunamadı");
+  await expect(win).toHaveTitle(/^●/);
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach((w) => w.destroy()));
+  await app.close();
+});
+
+test("Önceki sürümler: Dosya › Bilgi'de listelenir ve geri yüklenir", async () => {
+  const file = fixture("apps/belge/src/io/__fixtures__/libreoffice-resaved-report.docx");
+  const original = readFileSync(file);
+  const { app, win } = await launch(file);
+  await win.waitForSelector(".ProseMirror");
+  await win.locator(".ProseMirror").first().click();
+  await win.keyboard.press("Control+Home");
+  await win.keyboard.type("SURUM-DEGISIKLIGI ");
+  await expect(badge(win)).toHaveText(SAVED);
+  expect(execFileSync("unzip", ["-p", file, "word/document.xml"]).toString("utf8")).toContain("SURUM-DEGISIKLIGI");
+  await win.locator(".oh-ribbon-file").click();
+  await win.locator(".oh-bs-item", { hasText: "Bilgi" }).first().click();
+  const versions = win.getByRole("region", { name: "Önceki sürümler" });
+  await expect(versions.locator("li")).toHaveCount(1);
+  await versions.getByRole("button", { name: "Geri yükle" }).click();
+  const dlg = win.getByRole("dialog", { name: "Önceki sürümü geri yükle" });
+  await dlg.getByRole("button", { name: "Geri yükle" }).click();
+  // Dosya özgün içeriğe döner ve pencere belgeyi diskten yeniden açar.
+  await expect.poll(() => readFileSync(file).equals(original), { timeout: 15_000 }).toBe(true);
+  await expect(win.locator(".ProseMirror").first()).not.toContainText("SURUM-DEGISIKLIGI", { timeout: 15_000 });
+  await expect(win.locator(".oh-titlebar-title")).toContainText("libreoffice-resaved-report");
+  await app.close();
+});
+

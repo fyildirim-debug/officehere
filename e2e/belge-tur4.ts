@@ -42,6 +42,28 @@ export function belgeTur4Tests() {
     };
     const dialog = (page: Page) => page.getByRole("dialog");
     const autosave = (page: Page) => page.evaluate(() => window.dispatchEvent(new Event("officehere:autosave")));
+    /** IndexedDB'deki kurtarma taslakları (JSON metni olarak; veritabanı yoksa oluşturmadan boş). */
+    const drafts = (page: Page) =>
+      page.evaluate(async () => {
+        const dbs = await indexedDB.databases();
+        if (!dbs.some((d) => d.name === "officehere-belge")) return [] as string[];
+        return new Promise<string[]>((res) => {
+          const r = indexedDB.open("officehere-belge");
+          r.onerror = () => res([]);
+          r.onsuccess = () => {
+            const db = r.result;
+            if (!db.objectStoreNames.contains("drafts")) {
+              db.close();
+              return res([]);
+            }
+            const q = db.transaction("drafts", "readonly").objectStore("drafts").getAll();
+            q.onsuccess = () => {
+              db.close();
+              res((q.result as unknown[]).map((d) => JSON.stringify(d)));
+            };
+          };
+        });
+      });
 
     test("#1 Birden Çok Sayfa: DOCX'ten açılan çok bölümlü belge satırlara sarılır, metin sayfa dışına taşmaz", async ({ page }) => {
       await page.setInputFiles("#bl-open-input", { name: "cok-bolumlu.docx", mimeType: DOCX_MIME, buffer: readFileSync(FIXTURE) });
@@ -84,14 +106,12 @@ export function belgeTur4Tests() {
       await second.locator(".bl-body .ProseMirror").click();
       await second.keyboard.type("İKİNCİ PENCERE");
       await autosave(second);
-      const drafts = await second.evaluate(() =>
-        Object.keys(localStorage)
-          .filter((k) => k.startsWith("officehere.belge.draft."))
-          .map((k) => localStorage.getItem(k) ?? ""),
-      );
-      expect(drafts).toHaveLength(2);
-      expect(drafts.join()).toContain("ANA PENCERE METNİ");
-      expect(drafts.join()).toContain("İKİNCİ PENCERE");
+      // Taslaklar IndexedDB'de (yerel deponun 5 MB sınırı yok), pencere başına bir tane.
+      await expect.poll(async () => (await drafts(second)).length).toBe(2);
+      const all = (await drafts(second)).join();
+      expect(all).toContain("ANA PENCERE METNİ");
+      expect(all).toContain("İKİNCİ PENCERE");
+      expect(await second.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("officehere.belge.draft.")).length)).toBe(0);
       await page.close();
       const third = await context.newPage();
       const thirdErrors = collectErrors(third);
@@ -102,8 +122,7 @@ export function belgeTur4Tests() {
       await expect(third.locator(".bl-body .ProseMirror")).toContainText("ANA PENCERE METNİ");
       await expect(third.locator(".bl-body .ProseMirror")).not.toContainText("İKİNCİ");
       // Devralınan taslak artık bu pencerenin anahtarında (eski anahtar silindi).
-      const after = await third.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("officehere.belge.draft.")).length);
-      expect(after).toBe(2);
+      await expect.poll(async () => (await drafts(third)).length).toBe(2);
       expect(thirdErrors).toEqual([]);
     });
 

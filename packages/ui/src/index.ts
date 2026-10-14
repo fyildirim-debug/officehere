@@ -24,3 +24,6 @@ export * from "./components/MiniToolbar";
 export * from "./components/DeveloperCredit";
 export * from "./components/ArrangeIcons";
 export * from "./components/MenuGallery";
+export * from "./components/BugReport";
+export * from "./components/PreviousVersions";
+export * from "./hooks/errorReporting";

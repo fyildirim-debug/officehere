@@ -15,6 +15,7 @@ import {
   Settings20Regular,
   Dismiss20Regular,
   QuestionCircle20Regular,
+  Bug24Regular,
 } from "@fluentui/react-icons";
 import { getRecentFiles, isDesktop, type AppKind, type RecentFile } from "@officehere/core";
 import {
@@ -33,6 +34,8 @@ import { UI_THEMES, useUiTheme } from "../hooks/useUiTheme";
 import { UpdateSection } from "./Updates";
 import { useAutoSavePref } from "../hooks/useAutoSave";
 import { DeveloperCredit } from "./DeveloperCredit";
+import { BugReportDialog } from "./BugReport";
+import { PreviousVersions } from "./PreviousVersions";
 
 export interface BackstageTemplate {
   id: string;
@@ -92,6 +95,7 @@ export function OfficeBackstage(props: OfficeBackstageProps) {
   const [page, setPage] = useState<OfficeBackstagePage>(initialPage);
   const [recent, setRecent] = useState<RecentFile[]>([]);
   const [theme, setTheme] = useUiTheme();
+  const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
     getRecentFiles(app).then(setRecent).catch(() => setRecent([]));
@@ -160,6 +164,7 @@ export function OfficeBackstage(props: OfficeBackstageProps) {
           </p>
           <BackstageSubheading>Özellikler</BackstageSubheading>
           <PropertyList rows={info ?? []} />
+          <PreviousVersions path={filePath} fileName={fileName} />
         </>
       );
       break;
@@ -231,6 +236,14 @@ export function OfficeBackstage(props: OfficeBackstageProps) {
             </a>
           </p>
           <UpdateSection />
+          <BackstageSubheading>Sorun bildirme</BackstageSubheading>
+          <BackstageAction
+            icon={<Bug24Regular />}
+            title="Hata bildir"
+            description="Sürüm, işletim sistemi ve son günlük satırlarını görüp düzenleyebileceğiniz bir bildirim hazırlar. Siz göndermeden hiçbir şey paylaşılmaz."
+            onClick={() => setReporting(true)}
+          />
+          <BugReportDialog open={reporting} onClose={() => setReporting(false)} app={app} />
           <p className="oh-bs-note">
             OfficeHere bağımsız bir projedir; Microsoft Corporation ile bağlantılı değildir, onun tarafından desteklenmez. Microsoft, Word, Excel ve PowerPoint,
             Microsoft Corporation'ın ticari markalarıdır. Dosya biçimi desteği açık ECMA-376 / ISO/IEC 29500 (Office Open XML) standardına dayanır.

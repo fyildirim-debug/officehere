@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { getNative, type DocumentState } from "@officehere/core";
 import { SaveChangesDialog, type ConfirmChoice } from "../components/Dialog";
+import { installErrorReporting, logPageEvent } from "./errorReporting";
+import { saveStatus } from "./saveStatus";
+import { disableAutoSave } from "./autoSaveCore";
 
 export interface DocumentLifecycleOptions {
   /** Pencere başlığında görünen belge adı. */
@@ -34,6 +37,20 @@ export interface DocumentLifecycle {
 }
 
 /**
+ * Pencerenin belgesiyle ilgili, uygulamadan bağımsız bileşenlerin (ör. Dosya › Bilgi ›
+ * Önceki sürümler) kullandığı kancalar. useDocumentLifecycle günceller.
+ */
+export const documentLifecycle = {
+  /** Belgede kaydedilmemiş değişiklik var mı. */
+  isDirty: (): boolean => false,
+  /** Bu pencerenin kurtarma taslağını siler (belge diskten yeniden açılmadan önce). */
+  forgetDraft: async (): Promise<void> => {},
+};
+
+/** Aynı dosya başka bir pencerede de açıkken otomatik kaydetme duraklatılır. */
+export const PATH_CONFLICT_REASON = "Bu dosya başka bir pencerede de açık";
+
+/**
  * Masaüstü kabuğuyla belge yaşam döngüsünü bağlar: başlık/kirli durumu,
  * kapatmadan önce sorma, dosya açma istekleri; tarayıcıda sayfadan ayrılma uyarısı.
  */
@@ -49,6 +66,14 @@ export function useDocumentLifecycle({ title, dirty, path, onOpenPath, onSave, o
   openRef.current = onOpenPath;
   saveRef.current = onSave;
 
+  useEffect(() => {
+    installErrorReporting();
+    documentLifecycle.isDirty = () => dirtyRef.current;
+    documentLifecycle.forgetDraft = async () => {
+      await closeRef.current?.();
+    };
+  }, []);
+
   const ask = useCallback(
     () =>
       new Promise<ConfirmChoice>((resolve) => {
@@ -62,7 +87,15 @@ export function useDocumentLifecycle({ title, dirty, path, onOpenPath, onSave, o
     if (!dirtyRef.current) return true;
     const choice = await ask();
     if (choice === "cancel") return false;
-    if (choice === "save") return saveRef.current();
+    if (choice === "save") {
+      // Kaydetme başarısızsa (ya da hata verirse) belge açık kalır; neden rozette görünür.
+      try {
+        return await saveRef.current();
+      } catch (err) {
+        logPageEvent({ level: "hata", message: `Kapatırken kaydetme: ${(err as Error)?.message ?? String(err)}`, stack: (err as Error)?.stack, kind: "confirm-save" });
+        return false;
+      }
+    }
     return true;
   }, [ask]);
 
@@ -86,9 +119,21 @@ export function useDocumentLifecycle({ title, dirty, path, onOpenPath, onSave, o
       }
       return ok;
     });
+    // Aynı dosya başka pencerede de açık: bu pencere otomatik kaydetmez ve kullanıcı uyarılır.
+    const offConflict =
+      native.onPathConflict?.((p) => {
+        disableAutoSave(p, PATH_CONFLICT_REASON);
+        saveStatus.pause(PATH_CONFLICT_REASON, "off");
+        saveStatus.alert({
+          title: "Dosya başka bir pencerede açık",
+          message:
+            "Bu dosya başka bir OfficeHere penceresinde de açık. Değişikliklerin birbirinin üzerine yazılmaması için bu pencerede otomatik kaydetme yapılmaz. Diğer pencereyi kullanın ya da bu kopyayı Farklı Kaydet ile yeni bir dosyaya kaydedin.",
+        });
+      }) ?? (() => {});
     return () => {
       offOpen();
       offClose();
+      offConflict();
     };
   }, [confirmDiscard]);
 

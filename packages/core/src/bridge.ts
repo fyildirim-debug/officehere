@@ -4,6 +4,8 @@
  * dosya işlemleri bu durumda Web API'lerine düşer.
  */
 
+import type { WriteOutcome } from "./saveErrors";
+
 export type AppKind = "belge" | "tablo" | "sunum";
 
 export interface FileFilter {
@@ -20,6 +22,45 @@ export interface NativeOpenResult {
 export interface NativeSaveResult {
   path: string;
   name: string;
+}
+
+/** Ana süreç dosyayı yazamadı: işletim sistemi hata kodu ve Türkçe nedeni. */
+export interface NativeWriteFailure {
+  error: { code: string; reason?: string; message?: string };
+}
+
+/** Güvenli yazma seçenekleri (otomatik kaydetme). */
+export interface NativeWriteOptions {
+  /** "<ad>.bak" yan yedeği yoksa önce o alınır; alınamazsa dosya yazılmaz (EBACKUP). */
+  sidecar?: boolean;
+  /** Üzerine yazılan içerik saklanır; yazılan dosya doğrulanamazsa revertFile ile geri gelir. */
+  keepPrevious?: boolean;
+}
+
+/** Dosyanın kullanıcı veri dizininde saklanan önceki bir sürümü. */
+export interface FileVersion {
+  id: string;
+  savedAt: number;
+  size: number;
+}
+
+/** Hata günlüğüne yazılacak kayıt (belge içeriği yazılmaz). */
+export interface NativeLogEntry {
+  level: "bilgi" | "uyari" | "hata";
+  message: string;
+  stack?: string;
+  /** Olay türü (ör. "window.error", "unhandledrejection"). */
+  kind?: string;
+}
+
+/** "Hata bildir" penceresinde gösterilen ortam bilgisi. */
+export interface AppInfo {
+  version: string;
+  platform: string;
+  arch: string;
+  osVersion: string;
+  electron?: string;
+  chrome?: string;
 }
 
 export interface RecentFile {
@@ -80,8 +121,24 @@ export interface OfficehereNative {
   platform: string;
   openFile(filters: FileFilter[]): Promise<NativeOpenResult | null>;
   readFile(path: string): Promise<NativeOpenResult | null>;
-  saveFileAs(suggestedName: string, filters: FileFilter[], data: ArrayBuffer): Promise<NativeSaveResult | null>;
+  /** Konum sorup yazar; iptalde null, yazılamazsa { error } (eski kabuklar hata fırlatır). */
+  saveFileAs(suggestedName: string, filters: FileFilter[], data: ArrayBuffer): Promise<NativeSaveResult | NativeWriteFailure | null>;
   writeFile(path: string, data: ArrayBuffer): Promise<boolean>;
+  /** Güvenli yazma (geçici dosya + fsync + taşıma, yol başına kuyruk); başarısızlıkta hata kodu ve Türkçe neden. */
+  writeFileSafe?(path: string, data: ArrayBuffer, options?: NativeWriteOptions): Promise<WriteOutcome>;
+  /** Otomatik kaydetmenin son yazmasından önceki içeriği geri yazar (keepPrevious ile yazılmışsa). */
+  revertFile?(path: string): Promise<WriteOutcome>;
+  /** Dosyanın önceki sürümleri (en yeni önce, en çok 3). */
+  listVersions?(path: string): Promise<FileVersion[]>;
+  /** Önceki bir sürümü dosyaya geri yazar (geçerli içerik de sürüm olarak saklanır). */
+  restoreVersion?(path: string, id: string): Promise<WriteOutcome>;
+  /** Yerel hata günlüğüne yazar. */
+  log?(entry: NativeLogEntry): void;
+  /** Günlüğün son satırları. */
+  getLogTail?(lines?: number): Promise<string[]>;
+  getAppInfo?(): Promise<AppInfo>;
+  /** Bu pencerede açılan dosya başka bir pencerede de açıksa (ana süreç bildirir). */
+  onPathConflict?(callback: (path: string) => void): () => void;
   getRecent(): Promise<RecentFile[]>;
   addRecent(file: RecentFile): Promise<void>;
   /** Son kullanılanlarda dosyayı sabitler ya da sabitlemeyi kaldırır. */

@@ -9,7 +9,8 @@ import path from "node:path";
 
 const root = path.resolve(__dirname, "..");
 const desktop = path.join(root, "apps/desktop");
-const appsDir = path.join(root, "dist-web");
+// Test için ayrı derleme dizini verilebilir (paralel derlemeler çakışmasın).
+const appsDir = process.env.OH_E2E_APPS_DIR ?? path.join(root, "dist-web");
 
 function electronPath(): string {
   // apps/desktop/node_modules/electron paketinin döndürdüğü ikili yol.

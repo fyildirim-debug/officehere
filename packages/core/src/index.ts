@@ -1,5 +1,6 @@
 export * from "./bridge";
 export * from "./fileio";
+export * from "./saveErrors";
 export * from "./recent";
 export * from "./units";
 export * from "./colors";

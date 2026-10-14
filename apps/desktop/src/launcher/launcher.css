@@ -58,3 +58,32 @@
   color: var(--oh-text-muted);
   line-height: 1.45;
 }
+
+/* Hata sınırı */
+.ohl-crash {
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  padding: 24px;
+  background: var(--oh-bg, #f3f3f3);
+}
+
+.ohl-crash-box {
+  max-width: 520px;
+  padding: 20px 24px;
+  border: 1px solid var(--oh-border);
+  border-radius: 8px;
+  background: var(--oh-surface);
+  line-height: 1.5;
+}
+
+.ohl-crash-detail {
+  color: var(--oh-text-muted);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.ohl-crash-actions {
+  display: flex;
+  gap: 8px;
+}

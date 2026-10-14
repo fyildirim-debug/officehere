@@ -7,7 +7,8 @@ import path from "node:path";
 // Son kullanılanlar yönetimi, pencere durumu ve oturum geri yükleme (masaüstü).
 const root = path.resolve(__dirname, "..");
 const desktop = path.join(root, "apps/desktop");
-const appsDir = path.join(root, "dist-web");
+// Test için ayrı derleme dizini verilebilir (paralel derlemeler çakışmasın).
+const appsDir = process.env.OH_E2E_APPS_DIR ?? path.join(root, "dist-web");
 
 function electronPath(): string {
   return require(path.join(desktop, "node_modules/electron")) as unknown as string;

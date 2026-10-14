@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { getNative, type AppKind } from "@officehere/core";
 import { TooltipLayer, tipProps } from "./Tooltip";
 import { UpdatePill } from "./Updates";
-import { SaveBadge } from "./SaveBadge";
+import { SaveAlertDialog, SaveBadge } from "./SaveBadge";
 import { useUiTheme } from "../hooks/useUiTheme";
 import { resolveSaveState, useSaveStatus, type SaveState } from "../hooks/saveStatus";
 
@@ -120,7 +120,7 @@ export function TitleBar({ app, title, dirty, saveState, savedAt, quickAccess, o
           {title}
           <span className="oh-titlebar-app"> - {APP_NAMES[app]}</span>
         </span>
-        {badge && <SaveBadge state={badge} savedAt={savedAt ?? status.savedAt} />}
+        {badge && <SaveBadge state={badge} savedAt={savedAt ?? status.savedAt} error={status.error} errorDetail={status.errorDetail} pausedReason={status.paused} pausedKind={status.pausedKind} />}
       </div>
       <div className="oh-titlebar-search">
         {onSearch && (
@@ -150,6 +150,7 @@ export function TitleBar({ app, title, dirty, saveState, savedAt, quickAccess, o
         {right}
       </div>
       <div className="oh-titlebar-controls-space" />
+      <SaveAlertDialog />
     </header>
   );
 }

@@ -565,3 +565,23 @@
     outline: 2px solid Highlight;
   }
 }
+
+/* "Hata bildir" penceresi */
+.oh-bugreport .oh-field input[type="text"] {
+  width: 100%;
+}
+
+.oh-bugreport-body {
+  width: 100%;
+  min-height: 220px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 11.5px !important;
+  line-height: 1.45;
+  white-space: pre;
+}
+
+.oh-bugreport-note {
+  margin: 6px 0 0;
+  color: var(--oh-text-muted);
+  font-size: 12px;
+}

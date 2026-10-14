@@ -73,14 +73,29 @@ function db(): Promise<IDBDatabase | null> {
   return dbp;
 }
 
+/** Son yazmanın kota nedeniyle reddedilip reddedilmediği (kullanıcı uyarısı için). */
+export let lastWriteQuota = false;
+
+/**
+ * İşlem tamamlanınca (veri gerçekten yazılınca) çözülür. Kota aşımı isteğin
+ * başarısından SONRA işlemi iptal ettirebilir; bu yüzden istek değil işlem beklenir.
+ */
 function run<T>(d: IDBDatabase, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T | null> {
   return new Promise((resolve) => {
     try {
       const t = d.transaction(STORE, mode);
       const req = fn(t.objectStore(STORE));
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-    } catch {
+      let value: T | null = null;
+      req.onsuccess = () => {
+        value = req.result;
+      };
+      t.oncomplete = () => resolve(value ?? (mode === "readwrite" ? (true as T) : null));
+      t.onabort = () => {
+        if (mode === "readwrite") lastWriteQuota = t.error?.name === "QuotaExceededError";
+        resolve(null);
+      };
+    } catch (e) {
+      if (mode === "readwrite") lastWriteQuota = (e as Error)?.name === "QuotaExceededError";
       resolve(null);
     }
   });
@@ -103,6 +118,7 @@ export async function writeDraft(rec: DraftRecord): Promise<boolean> {
   if (closing) return false;
   const d = await db();
   if (!d || closing) return false;
+  lastWriteQuota = false;
   const ok = (await run(d, "readwrite", (s) => s.put(rec))) !== null;
   if (ok) {
     const metas = await listDraftMeta();
