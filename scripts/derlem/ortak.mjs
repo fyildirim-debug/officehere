@@ -50,10 +50,13 @@ export const FIKSTUR_DIZINLERI = [
 /** Platformdan bağımsız göreli yol (anahtar olarak kullanılır). */
 export const posix = (p) => p.split(sep).join("/");
 
+/** Derlem dizinlerindeki açıklama ve lisans dosyaları (README.md, NOTICE, LICENSE) derlem dosyası değildir. */
+const ACIKLAMA_DOSYASI = /^(README|NOTICE|LICENSE)(\.(md|txt))?$/i;
+
 function dosyalar(dizin) {
   if (!existsSync(dizin)) return [];
   return readdirSync(dizin)
-    .filter((f) => statSync(join(dizin, f)).isFile())
+    .filter((f) => !ACIKLAMA_DOSYASI.test(f) && statSync(join(dizin, f)).isFile())
     .sort();
 }
 
