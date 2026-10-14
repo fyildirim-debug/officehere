@@ -38,9 +38,9 @@ jobs:
             hedef: --mac
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -70,7 +70,7 @@ jobs:
             if [[ "$SURUM" == *-* ]]; then mv -- "$f" "beta${f#latest}"; else cp -- "$f" "beta${f#latest}"; fi
           done
           ls -l -- *.yml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: officehere-${{ matrix.os }}
           # latest*.yml, beta*.yml ve .blockmap dosyaları uygulama içi güncelleyici (electron-updater) içindir.
@@ -92,7 +92,7 @@ jobs:
       contents: write # sürümü oluşturup dosyaları yüklemek için
       id-token: write # cosign anahtarsız imza: GitHub OIDC kimliği → Sigstore (Fulcio sertifikası + Rekor kaydı)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Sürüm notları docs/surumler/<etiket>.md dosyasından; yoksa GitHub otomatik üretir.
       - id: notlar
         shell: bash
@@ -100,7 +100,7 @@ jobs:
           SURUM: ${{ inputs.surum || github.ref_name }}
         run: |
           if [ -f "docs/surumler/${SURUM}.md" ]; then echo "yol=docs/surumler/${SURUM}.md" >> "$GITHUB_OUTPUT"; fi
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: paketler
           merge-multiple: true
@@ -137,7 +137,7 @@ jobs:
           cosign verify-blob --new-bundle-format --bundle SHA256SUMS.txt.sigstore.json \
             --certificate-identity-regexp "$KIMLIK" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS.txt
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.surum || github.ref_name }}
           target_commitish: ${{ github.sha }}

@@ -40,9 +40,9 @@ jobs:
       LC_ALL: C.UTF-8
       LANG: C.UTF-8
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -62,7 +62,7 @@ jobs:
       - name: Derlemi üret (pnpm derlem:uret)
         run: pnpm derlem:uret
       # Bulanık örnekler deterministiktir; tohumlar ve üretici değişmedikçe önbellekten gelir.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .derlem/bulanik
           key: bulanik-${{ hashFiles('scripts/bulanik/uret.mjs', 'test-derlem/**', 'apps/belge/src/io/__fixtures__/bicimler/ornek.md', 'apps/tablo/test/fixtures/openpyxl/karmasik.xlsx', 'pnpm-lock.yaml') }}
@@ -84,7 +84,7 @@ jobs:
             if [ -f ".derlem/rapor/$f.md" ]; then head -c 300000 ".derlem/rapor/$f.md" >> "$GITHUB_STEP_SUMMARY"; echo >> "$GITHUB_STEP_SUMMARY"; fi
           done
           node scripts/derlem/temel.mjs --aday .derlem/rapor/temel-aday.json || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: saglamlik-rapor
