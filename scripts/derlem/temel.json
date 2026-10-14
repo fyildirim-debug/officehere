@@ -3,8 +3,8 @@
  "kip": "baslangic",
  "guncelleme": "2026-10-14",
  "derlemBilgi": {
-  "tarih": "2026-10-14T20:51:08.540Z",
-  "commit": "0030964",
+  "tarih": "2026-10-14T21:46:11.997Z",
+  "commit": "dca8f7c",
   "dosya": 125
  },
  "poi": {
@@ -37,7 +37,7 @@
   }
  },
  "bulanik": {
-  "hizMs": 137.9,
+  "hizMs": 146.8,
   "sinirMs": 5000,
   "ornekler": {
    "belge/bos_zip.docx": "anlaşılır hata",
@@ -553,6 +553,7 @@
    "tablo/karmasik_baslik.xlsx": "anlaşılır hata",
    "tablo/karmasik_birlesik_tum.xlsx": "açıldı",
    "tablo/karmasik_bomba.xlsx": "açıldı",
+   "tablo/karmasik_cok_birlesik.xlsx": "açıldı",
    "tablo/karmasik_derin.xlsx": "açıldı",
    "tablo/karmasik_flip1_0.xlsx": "anlaşılır hata",
    "tablo/karmasik_flip1_1.xlsx": "açıldı",
@@ -605,6 +606,7 @@
    "tablo/lo-butce_birlesik_tum.xlsx": "açıldı",
    "tablo/lo-butce_bomba.ods": "açıldı",
    "tablo/lo-butce_bomba.xlsx": "açıldı",
+   "tablo/lo-butce_cok_birlesik.xlsx": "açıldı",
    "tablo/lo-butce_derin.ods": "açıldı",
    "tablo/lo-butce_derin.xlsx": "açıldı",
    "tablo/lo-butce_dizin_yok.xls": "anlaşılır hata",
@@ -740,6 +742,7 @@
    "tablo/py-tablo_baslik.xlsx": "anlaşılır hata",
    "tablo/py-tablo_birlesik_tum.xlsx": "açıldı",
    "tablo/py-tablo_bomba.xlsx": "açıldı",
+   "tablo/py-tablo_cok_birlesik.xlsx": "açıldı",
    "tablo/py-tablo_derin.xlsx": "açıldı",
    "tablo/py-tablo_flip1_0.xlsx": "uyarılı",
    "tablo/py-tablo_flip1_1.xlsx": "uyarılı",
@@ -1718,7 +1721,6 @@
   "apps/tablo/test/fixtures/lo-stil.ods": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 2,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -1761,7 +1763,6 @@
   "apps/tablo/test/fixtures/lo-tablo.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 2,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -2380,7 +2381,6 @@
   "test-derlem/poi/comments.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {}
    }
@@ -2388,7 +2388,6 @@
   "test-derlem/poi/CustomXMLMappings.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -2403,7 +2402,6 @@
   "test-derlem/poi/DataValidationEvaluations.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 39,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -2467,7 +2465,6 @@
   "test-derlem/poi/ExcelPivotTableSample.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -2489,7 +2486,6 @@
   "test-derlem/poi/ExcelTables.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -2504,7 +2500,6 @@
   "test-derlem/poi/ExcelWithAttachments.xlsm": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -2631,7 +2626,6 @@
   "test-derlem/poi/hello-world-signed.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -2671,7 +2665,6 @@
   "test-derlem/poi/NewStyleConditionalFormattings.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -2764,7 +2757,6 @@
   "test-derlem/poi/right-to-left.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -2860,7 +2852,6 @@
   "test-derlem/poi/SimpleMacro.xlsm": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -2873,7 +2864,6 @@
   "test-derlem/poi/SimpleScatterChart.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -3237,7 +3227,6 @@
   "test-derlem/poi/StructuredReferences.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 9,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -3306,7 +3295,6 @@
   "test-derlem/poi/WithEmbeded.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -3349,7 +3337,6 @@
   "test-derlem/poi/WithTextBox.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -3362,7 +3349,6 @@
   "test-derlem/poi/WithThreeCharts.xlsx": {
    "durum": "tamam",
    "acildi": true,
-   "loFormulFarkli": 0,
    "turlar": {
     "xlsx": {
      "kayip": {
@@ -3469,11 +3455,7 @@
    "acildi": true,
    "loFormulFarkli": 0,
    "turlar": {
-    "xlsx": {
-     "kayip": {
-      "stil.font": 3037
-     }
-    },
+    "xlsx": {},
     "csv": {
      "kayip": {
       "yapı.ad#0": 1

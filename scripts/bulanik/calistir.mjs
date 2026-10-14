@@ -1,4 +1,4 @@
-// Bulanık test (pnpm bulanik): 756 bozuk örneği uygulama okuyucularıyla açar.
+// Bulanık test (pnpm bulanik): 759 bozuk örneği uygulama okuyucularıyla açar.
 //
 // Her örnek ayrı işçide, süre sınırıyla (5 sn × makine hızı oranı) açılır; açılırsa kaydedilebiliyor mu
 // denenir. Sınıflar:
