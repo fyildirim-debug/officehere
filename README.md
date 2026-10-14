@@ -35,7 +35,7 @@ Belgeleriniz bilgisayarınızda kalır; uygulamanın ağa ne zaman çıktığı 
 
 | | Uygulama | Karşılığı | Dosyalar |
 | --- | --- | --- | --- |
-| <img src="apps/desktop/build/filetypes/belge.png" width="28" /> | **OfficeHere Belge** | Kelime işlemci | `.docx` `.odt` `.rtf` `.md` `.html` `.txt` · açar: `.doc` `.dotx` `.dotm` `.ott` → PDF |
+| <img src="apps/desktop/build/filetypes/belge.png" width="28" /> | **OfficeHere Belge** | Kelime işlemci | `.docx` `.docm` `.odt` `.rtf` `.md` `.html` `.txt` · açar: `.doc` `.dotx` `.dotm` `.ott` → PDF |
 | <img src="apps/desktop/build/filetypes/tablo.png" width="28" /> | **OfficeHere Tablo** | Hesap tablosu | `.xlsx` `.ods` `.csv` `.tsv` · açar: `.xls` `.xlsm` `.xltx` `.xltm` `.ots` `.html` → PDF, HTML |
 | <img src="apps/desktop/build/filetypes/sunum.png" width="28" /> | **OfficeHere Sunum** | Sunu | `.pptx` `.odp` `.ppsx` `.potx` · açar: `.ppt` `.pptm` `.potm` `.ppsm` `.otp` → PDF, PNG |
 
@@ -120,6 +120,13 @@ inmiş sözlükler yerinde kullanılmaya devam eder, yeniden indirilmez.
 `.docx`/`.xlsx`/`.pptx` olur (özgün dosya değişmez). `.odt`, `.ods`, `.odp`, `.rtf`,
 `.md` ve `.csv` dosyaları aynı biçimde kaydedilebilir; ilk kayıtta bazı özelliklerin
 kaybolabileceği sorulur.
+
+**Okunamayan içerik, makrolar ve imzalar (Belge):** Açılan `.docx`/`.docm` dosyasında Belge'nin
+tanımadığı parçalar (tema, gömülü yazı tipleri, yapı taşları, özel XML, uyumluluk ayarları, kullanıcı
+özellikleri) aynı biçimde kaydederken korunur. `.docm` dosyaları `.docm` olarak kaydedilir: makrolar
+olduğu gibi korunur ama OfficeHere makro **çalıştırmaz**; `.docx` olarak kaydedilirse makrolar kaldırılır
+ve bu bildirilir. Dijital imzalı bir belgeyi kaydetmek imzayı geçersiz kılacağından kaydedilen dosyada
+imza bulunmaz; bu açılışta bildirilir ve otomatik kaydetme ilk elle kayda kadar bekler.
 
 **Güncelleştirmeler:** Uygulama GitHub Sürümleri'ni açılışta ve altı saatte bir
 denetler (Seçenekler'den kapatılabilir). Windows kurulumu ve AppImage yeni sürümü

@@ -30,6 +30,10 @@ sınırlar içinde geliştirildiğini ve katkıcıların uyması gereken kuralla
   yazılımlara karşı bu belirtimlerden doğan patent iddialarında bulunmayacağını
   taahhüt eder. Uzantı öğeleri (ör. `x14:dataBar`, `p14:sectionLst`) yalnız bu
   yayımlanmış belirtimlere göre yazılır.
+- **Makrolar ve dijital imzalar:** OfficeHere makro çalıştırmaz ve makro kodunu yorumlamaz. Belge,
+  `.docm` dosyasının makro projesini (`vbaProject.bin`) kaydederken açmadan, bayt bayt kopyalar; `.docx`
+  olarak kaydedilirse proje dosyaya yazılmaz. Dijital imza imzalanan baytlara bağlıdır: kaydedilen dosyada
+  geçerliliğini yitireceği için kaldırılır (yeni imza üretilmez); kullanıcı belgeyi açarken uyarılır.
 - Eski ikili biçimler (`.doc`, `.xls`, `.ppt`) yalnız **okunur**. Okuyucular
   Microsoft'un yayımladığı açık belirtimlere ([MS-CFB], [MS-DOC], [MS-XLS],
   [MS-PPT], [MS-ODRAW]) göre sıfırdan yazılmıştır; bu belirtimler de *Open
