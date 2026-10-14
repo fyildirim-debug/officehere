@@ -170,6 +170,13 @@ export interface DocSettings {
   mailMerge?: MailMergeData | null;
   /** Açılan belgenin varsayılan dil ve yazı tipi ayrıntıları (yeni belgede yok); kaydederken korunur. */
   docDefaults?: DocDefaults | null;
+  /**
+   * Açılan .docx/.docm'nin özgün paketinin kaynak kimliği (özgün baytların SHA-256'sı; `@officehere/core`
+   * kaynak kaydı ve IndexedDB "kaynaklar" deposu anahtarı). Model yalnız kimliği taşır, bayt taşımaz.
+   * Kaydederken modelin tanımadığı parçalar (tema, yazı tipleri, makrolar…) ve opak öğelerin ilişkileri
+   * buradan taşınır. Yeni ya da başka biçimden açılan belgede yok.
+   */
+  kaynak?: string | null;
 }
 
 /**
