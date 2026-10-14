@@ -1,7 +1,7 @@
 // Yedekler: "<ad>.bak" yalnız yoksa oluşturulur (oturumlar arası ezilmez), önceki
 // sürümler en çok 3 tane döner, doğrulama başarısızsa son yazmadan önceki içerik geri gelir.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { BackupStore, sidecarPathFor } from "../src/main/backups";
@@ -113,7 +113,7 @@ describe("önceki sürümler", () => {
 
   it("geçersiz sürüm kimliğiyle dizin dışına çıkılamaz", async () => {
     const store = new BackupStore(root);
-    expect(store.versionPath("/a.docx", "../../etc/passwd")).toBeNull();
+    expect(await store.versionPath("/a.docx", "../../etc/passwd")).toBeNull();
     expect(await store.readVersion("/a.docx", "surum-0000000000001-abcdef.docx")).toBeNull();
     const s = new SaveService(store);
     await expect(s.restoreVersion(path.join(dir, "a.docx"), "../x")).rejects.toMatchObject({ code: "ENOENT" });
@@ -130,13 +130,34 @@ describe("önceki sürümler", () => {
     expect(text(sidecarPathFor(f))).toBe("İYİ-1");
   });
 
+  // macOS'ta /var → /private/var, Windows'ta kısa adlar (RUNNER~1) ve bağlantılı klasörler: kaydetme gerçek
+  // yolu kullanır; liste, okuma ve geri yükleme dosyanın açıldığı yolla da aynı sürümleri bulmalı.
+  it.skipIf(process.platform === "win32")("sembolik bağlantılı klasör yoluyla açılan dosyanın sürümleri bulunur", async () => {
+    const real = path.join(dir, "gercek");
+    mkdirSync(real);
+    const link = path.join(dir, "bag");
+    symlinkSync(real, link, "dir");
+    const viaLink = path.join(link, "rapor.docx");
+    writeFileSync(viaLink, "BİR");
+    const store = new BackupStore(root);
+    const s = new SaveService(store);
+    await s.write(viaLink, B("İKİ"), { session: 1, keepPrevious: true });
+    for (const p of [viaLink, path.join(real, "rapor.docx")]) {
+      const list = await store.list(p);
+      expect(list).toHaveLength(1);
+      expect((await store.readVersion(p, list[0].id))!.toString()).toBe("BİR");
+    }
+    await s.revertPrevious(viaLink);
+    expect(text(viaLink)).toBe("BİR");
+  });
+
   it("uzun süredir dokunulmayan dosyaların yedek dizinleri temizlenir", async () => {
     const f = path.join(dir, "eski.docx");
     writeFileSync(f, "x");
     const store = new BackupStore(root);
     await store.snapshot(f);
     const old = new Date(Date.now() - 200 * 24 * 3600_000);
-    utimesSync(path.join(store.dirFor(f), "kaynak.json"), old, old);
+    utimesSync(path.join(store.dirFor(realpathSync(f)), "kaynak.json"), old, old);
     expect(await store.prune()).toBe(1);
     expect(await store.list(f)).toEqual([]);
   });

@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdtempSync, promises as fsp, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { vi } from "vitest";
 import { enqueue, isTempName, pendingWrites, queueKey, safeWriteFile, SafeWriteError, tempPathFor, writeAtomicUnqueued, type SafeFs } from "../src/main/safeWrite";
 
 let dir: string;
@@ -50,12 +51,15 @@ function diskFullFs(limit: number): SafeFs {
   } as SafeFs;
 }
 
+// Eşzamanlı yazma ve gerçek süreç öldürme denemeleri Windows/macOS CI'ında yavaş: 5 sn varsayılan yetmez.
+vi.setConfig({ testTimeout: 60_000 });
+
 describe("güvenli yazma", () => {
   it("geçici ad benzersiz ve hedefle aynı dizinde", () => {
     const a = tempPathFor("/ev/rapor.docx");
     const b = tempPathFor("/ev/rapor.docx");
     expect(a).not.toBe(b);
-    expect(path.dirname(a)).toBe("/ev");
+    expect(path.dirname(a)).toBe(path.join("/ev"));
     expect(isTempName(path.basename(a), "rapor.docx")).toBe(true);
     expect(isTempName("rapor.docx.oh-12022.tmp")).toBe(false);
   });

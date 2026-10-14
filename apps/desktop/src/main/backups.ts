@@ -48,13 +48,26 @@ export class BackupStore {
   }
   private readonly maxVersions: number;
 
-  /** Dosyaya özgü yedek dizini (yolun özeti; dosya adları ve yollar dizin adına yazılmaz). */
+  /**
+   * Yolun gerçek (sembolik bağlantıları, Windows kısa adlarını çözülmüş) biçimi. Kaydetme gerçek yolu
+   * kullanır; liste ve geri yükleme de aynısını kullanmazsa /var ↔ /private/var (macOS) ya da
+   * RUNNER~1 ↔ runneradmin (Windows) gibi farklarda sürümler bulunamaz. Dosya yoksa mutlak yol.
+   */
+  private async canonical(target: string): Promise<string> {
+    try {
+      return await this.fs.realpath(target);
+    } catch {
+      return path.resolve(target);
+    }
+  }
+
+  /** Dosyaya özgü yedek dizini (yolun özeti; dosya adları ve yollar dizin adına yazılmaz). Gerçek yol verilmeli. */
   dirFor(target: string): string {
     return path.join(this.root, createHash("sha256").update(queueKey(target)).digest("hex").slice(0, 20));
   }
 
   private async prepareDir(target: string): Promise<string> {
-    const dir = this.dirFor(target);
+    const dir = this.dirFor(await this.canonical(target));
     await this.fs.mkdir(dir, { recursive: true });
     // Hangi dosyanın yedekleri olduğu (temizlik ve tanılama için).
     await this.fs.writeFile(path.join(dir, "kaynak.json"), JSON.stringify({ yol: target, guncellendi: Date.now() })).catch(() => undefined);
@@ -80,7 +93,7 @@ export class BackupStore {
 
   /** Önceki sürümler, en yeni önce. */
   async list(target: string): Promise<VersionInfo[]> {
-    const dir = this.dirFor(target);
+    const dir = this.dirFor(await this.canonical(target));
     let names: string[];
     try {
       names = await this.fs.readdir(dir);
@@ -102,13 +115,13 @@ export class BackupStore {
   }
 
   /** Bir sürümün yolu (kimlik doğrulanır; dizin dışına çıkılamaz). */
-  versionPath(target: string, id: string): string | null {
+  async versionPath(target: string, id: string): Promise<string | null> {
     if (typeof id !== "string" || !VERSION_RE.test(id)) return null;
-    return path.join(this.dirFor(target), id);
+    return path.join(this.dirFor(await this.canonical(target)), id);
   }
 
   async readVersion(target: string, id: string): Promise<Buffer | null> {
-    const p = this.versionPath(target, id);
+    const p = await this.versionPath(target, id);
     if (!p) return null;
     try {
       return await this.fs.readFile(p);
@@ -117,19 +130,19 @@ export class BackupStore {
     }
   }
 
-  private previousPath(target: string): string {
-    return path.join(this.dirFor(target), `onceki${path.extname(target).toLowerCase().replace(/[^.a-z0-9]/g, "")}`); // yerel-ayar: ascii
+  private async previousPath(target: string): Promise<string> {
+    return path.join(this.dirFor(await this.canonical(target)), `onceki${path.extname(target).toLowerCase().replace(/[^.a-z0-9]/g, "")}`); // yerel-ayar: ascii
   }
 
   /** Otomatik kaydetmenin üzerine yazacağı içeriği "onceki" yuvasına kopyalar. */
   async keepPrevious(target: string): Promise<void> {
     await this.prepareDir(target);
-    await copyFileAtomic(target, this.previousPath(target), { fs: this.fs });
+    await copyFileAtomic(target, await this.previousPath(target), { fs: this.fs });
   }
 
   async readPrevious(target: string): Promise<Buffer | null> {
     try {
-      return await this.fs.readFile(this.previousPath(target));
+      return await this.fs.readFile(await this.previousPath(target));
     } catch {
       return null;
     }
