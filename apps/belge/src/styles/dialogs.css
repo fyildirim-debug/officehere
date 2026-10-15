@@ -388,6 +388,17 @@
   page-break-after: auto;
 }
 
+/* Yazdırma kopyası ekran düzeniyle zaten sayfalanmıştır: öğelerin kendi kırılma kuralları ("önceki sayfa
+   sonu" paragrafı, bölünmeyen satır) tarayıcıyı sayfa kutusunun içinde yeniden böldürüp içeriği kırpmasın. */
+.bl-print-page * {
+  break-before: auto !important;
+  break-after: auto !important;
+  break-inside: auto !important;
+  page-break-before: auto !important;
+  page-break-after: auto !important;
+  page-break-inside: auto !important;
+}
+
 .bl-print-page .bl-page {
   left: 0;
 }
