@@ -149,6 +149,19 @@ export function topElements(xml: string): { prefix: string; local: string; xml: 
   return out;
 }
 
+/** Ek özelliklerin üst düzey öğeleri ve kapsayıcı mc:Ignorable'ı (aynı dize çok koşuda yinelenir: önbellekli). */
+const extraCache = new Map<string, { items: ReturnType<typeof topElements>; ignorable: string }>();
+function extraInfo(extra: string) {
+  let hit = extraCache.get(extra);
+  if (!hit) {
+    if (extraCache.size >= 2000) extraCache.clear();
+    hit = { items: topElements(extra), ignorable: ignorableScan(extra) };
+    extraCache.set(extra, hit);
+  }
+  return hit;
+}
+const extraElements = (extra: string) => extraInfo(extra).items;
+
 /**
  * Yazıcının öğeleri (şema sırasında) ile ek özellik öğelerini şema sırasıyla birleştirir. Yazıcının da yazdığı
  * bir öğe ekte de varsa yazıcınınki geçerlidir. Ek iyi biçimli değilse yok sayılır.
@@ -156,7 +169,7 @@ export function topElements(xml: string): { prefix: string; local: string; xml: 
 function mergeOrdered(parts: [string, string][], extra: unknown, rank: ReadonlyMap<string, number>, other: number): string {
   const own = parts.map(([, x]) => x).join("");
   if (typeof extra !== "string" || !extra) return own;
-  const items = topElements(extra);
+  const items = extraElements(extra);
   if (!items?.length) return own;
   const have = new Set(parts.map(([n]) => n));
   const add = items.filter((e) => !(e.prefix === "w" && have.has(e.local)));
@@ -174,7 +187,10 @@ function mergeOrdered(parts: [string, string][], extra: unknown, rank: ReadonlyM
  * bilgi ve not parçalarının kökünde bildirim yok; bu öğeleri anlamayan okuyucu da yok sayabilsin.
  */
 function ignorableOf(extra: unknown): string {
-  if (typeof extra !== "string" || !extra.includes(":")) return "";
+  return typeof extra === "string" && extra ? extraInfo(extra).ignorable : "";
+}
+
+function ignorableScan(extra: string): string {
   const prefixes = new Set<string>();
   for (const m of extra.matchAll(/<([\w.-]+):|\s([\w.-]+):[\w.-]+\s*=/g)) {
     const p = (m[1] ?? m[2])!;
