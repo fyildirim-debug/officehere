@@ -10,10 +10,12 @@ import {
   canAutoSavePath,
   createIdleScheduler,
   disableAutoSave,
+  isAutoSaveReadOnly,
   readAutoSavePref,
   resetAutoSaveForTest,
   runAutoSave,
   runAutoSaveTurn,
+  setAutoSaveReadOnly,
   type AutoSaveIo,
   type AutoSaveTurn,
 } from "../autoSaveCore";
@@ -230,6 +232,27 @@ describe("otomatik kaydetme turu", () => {
     expect(m.writes).toEqual([]);
     expect(m.files["/belgeler/rapor.docx"]).toBe("ÖZGÜN");
     expect(r.events).toEqual(["paused:Dosya açılırken bazı öğeler okunamadı"]);
+  });
+
+  it("salt okunur açılan dosya (görüntüleyici kipi) etkinleştirilene dek yazılmaz, sonra normal kaydedilir", async () => {
+    const m = memoryIo({ "/İndirilenler/rapor.docx": "ÖZGÜN" });
+    const r = reporter();
+    const path = "/İndirilenler/rapor.docx";
+    setAutoSaveReadOnly(path, true);
+    expect(isAutoSaveReadOnly(path)).toBe(true);
+    expect(isAutoSaveReadOnly("/belgeler/rapor.docx")).toBe(false);
+    const t = turn({ path });
+    expect(await runAutoSave(t, m.io, r.report)).toBe("read-only");
+    expect(m.reads).toEqual([]);
+    expect(m.writes).toEqual([]);
+    expect(m.files).toEqual({ [path]: "ÖZGÜN" });
+    expect(r.events).toEqual([]);
+    expect(t.cleaned).toBe(0);
+    // "Düzenlemeyi etkinleştir"
+    setAutoSaveReadOnly(path, false);
+    expect(await runAutoSave(t, m.io, r.report)).toBe("saved");
+    expect(m.files[`${path}.bak`]).toBe("ÖZGÜN");
+    expect(m.files[path]).toBe("YENİ");
   });
 
   it("yazarken belge değiştiyse yazılır ama kirli kalır", async () => {

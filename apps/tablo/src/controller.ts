@@ -430,7 +430,8 @@ export class Controller {
 
   /** Hücre düzenlemeyi başlatır. text verilirse "Gir" kipinde yazılanla başlar. */
   startEdit(text?: string, inBar = false): void {
-    if (this.edit) return;
+    // Salt okunur açılan dosya (görüntüleyici kipi): sarı şerit "Düzenlemeyi etkinleştir"i söyler.
+    if (this.edit || this.ops.readOnly) return;
     const { row, col } = this.sel.active;
     if (isPivotCell(this.sheet, row, col)) {
       this.alert(PIVOT_EDIT_MESSAGE);

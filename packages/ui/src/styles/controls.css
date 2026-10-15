@@ -481,6 +481,13 @@
   background: color-mix(in srgb, var(--oh-text) 10%, transparent);
 }
 
+/* Görüntüleyici kipi: salt okunur açılan dosyanın şeridi */
+
+.oh-readonly-banner-icon {
+  flex: none;
+  color: color-mix(in srgb, var(--oh-text) 75%, #b07a00);
+}
+
 /* Klavye odağı (menüler, renk paleti) */
 
 :root {

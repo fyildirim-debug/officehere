@@ -84,6 +84,16 @@ export interface DocumentState {
 export interface DesktopSettings {
   /** Uygulama dosyasız açılınca son oturumdaki belgeler yeniden açılsın. */
   oturumuGeriYukle?: boolean;
+  /** İndirilenler ve e-posta eklerinden (internetten) gelen dosyalar salt okunur açılsın (varsayılan kapalı). */
+  indirilenleriSaltOkunurAc?: boolean;
+}
+
+/** Görüntüleyici kipi: internetten gelen dosyanın salt okunur açılması (kaynak tespiti ana süreçte). */
+export interface ViewerApi {
+  /** Dosya salt okunur açılmalı mı: seçenek açık, kaynağı internet ve bu oturumda düzenlemeye açılmamış. */
+  check(path: string): Promise<boolean>;
+  /** "Düzenlemeyi etkinleştir": dosya bu oturum boyunca düzenlenebilir açılır. */
+  allowEditing(path: string): Promise<void>;
 }
 
 /** Güncelleştirme durumu (masaüstü). */
@@ -223,6 +233,8 @@ export interface OfficehereNative {
   updates?: UpdatesApi;
   /** Yazım denetimi sözlüklerinin indirme onayı ve durumu. */
   spellcheck?: SpellcheckApi;
+  /** İnternetten gelen dosyaları salt okunur açma (görüntüleyici kipi). */
+  viewer?: ViewerApi;
 }
 
 declare global {

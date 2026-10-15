@@ -89,6 +89,10 @@ contextBridge.exposeInMainWorld("officehereNative", {
       return () => updateListeners.delete(cb);
     },
   },
+  viewer: {
+    check: (path: string) => ipcRenderer.invoke("oh:viewer-check", path),
+    allowEditing: (path: string) => ipcRenderer.invoke("oh:viewer-allow", path),
+  },
   spellcheck: {
     getState: () => ipcRenderer.invoke("oh:spellcheck-get"),
     setDownload: (on: boolean) => ipcRenderer.invoke("oh:spellcheck-set", on === true),

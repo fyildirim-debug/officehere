@@ -6,6 +6,7 @@
 // - İlk otomatik yazmadan önce özgün dosya "<ad>.bak" olarak yedeklenir; .bak yalnız
 //   yoksa oluşturulur, oturumlar arasında ezilmez (ana süreç yapar). Yedek alınamazsa yazılmaz.
 // - Dosya uyarıyla/eksik açıldıysa ilk ELLE kayda kadar otomatik kaydetme yapılmaz.
+// - Dosya salt okunur açıldıysa (görüntüleyici kipi) "Düzenlemeyi etkinleştir"e kadar yazılmaz.
 // - Yazılan dosya uygulamanın kendi okuyucusuyla yeniden açılabiliyor mu denetlenir; açılamazsa
 //   önceki içerik geri yazılır, otomatik kaydetme o dosyada kapanır ve kullanıcı uyarılır.
 import { extensionOf, saveErrorReason, type NativeWriteOptions, type WriteOutcome } from "@officehere/core";
@@ -85,9 +86,23 @@ export function disableAutoSave(path: string, reason: string): void {
   disabled.set(path, reason);
 }
 
+/** Salt okunur açılan dosyalar (görüntüleyici kipi): düzenleme etkinleştirilene dek hiç yazılmaz. */
+const readOnly = new Set<string>();
+
+/** Dosyayı bu pencerede salt okunur işaretler ya da işareti kaldırır ("Düzenlemeyi etkinleştir"). */
+export function setAutoSaveReadOnly(path: string, on: boolean): void {
+  if (on) readOnly.add(path);
+  else readOnly.delete(path);
+}
+
+export function isAutoSaveReadOnly(path: string | undefined | null): boolean {
+  return !!path && readOnly.has(path);
+}
+
 /** Yalnız testler için: oturum kayıtlarını sıfırlar. */
 export function resetAutoSaveForTest(): void {
   disabled.clear();
+  readOnly.clear();
 }
 
 export interface IdleScheduler {
@@ -176,7 +191,7 @@ export interface AutoSaveReport {
   alert?(title: string, message: string): void;
 }
 
-export type AutoSaveResult = "skipped" | "held" | "disabled" | "no-backup" | "saved" | "changed" | "failed" | "verify-failed";
+export type AutoSaveResult = "skipped" | "read-only" | "held" | "disabled" | "no-backup" | "saved" | "changed" | "failed" | "verify-failed";
 
 function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
   if (data instanceof ArrayBuffer) return data;
@@ -202,6 +217,8 @@ export async function runAutoSaveTurn(turn: AutoSaveTurn, io: AutoSaveIo, report
   const done = (result: AutoSaveResult): AutoSaveRun => ({ result, costMs: now() - t0 });
   const { path } = turn;
   if (!turn.enabled || !turn.isDirty() || !canAutoSavePath(path, turn.formats)) return done("skipped");
+  // Görüntüleyici kipi: kullanıcı düzenlemeyi etkinleştirmedikçe özgün dosyaya dokunulmaz.
+  if (readOnly.has(path)) return done("read-only");
   const off = disabled.get(path);
   if (off) {
     report.paused?.(off, "off");

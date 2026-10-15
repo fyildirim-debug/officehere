@@ -11,6 +11,8 @@ export class OpsCore {
   readonly history = new UndoManager();
   /** Değişiklik sonrası çağrılır (yeniden çizim, kirli işareti). */
   onChange: (label: string) => void = () => {};
+  /** Salt okunur açılan dosya (görüntüleyici kipi): hiçbir değişiklik uygulanmaz ve kaydedilmez. */
+  readOnly = false;
   /**
    * Hücre içeriği/stili değişince otomatik satır yüksekliklerini ayarlar
    * (arayüz katmanı ölçüm yapar). [satır, eski, yeni] listesi döndürür.
@@ -45,6 +47,7 @@ export class OpsCore {
 
   /** Hücre düzeyinde değişiklik: aralıklardaki hücrelerin öncesi/sonrası saklanır. */
   cellsOp(sheet: SheetModel, rects: Rect[], label: string, mutate: () => void, extraKeys?: () => Iterable<number>): void {
+    if (this.readOnly) return;
     const wb = this.wb;
     const collect = () => {
       const keys = new Set<number>();
@@ -94,6 +97,7 @@ export class OpsCore {
 
   /** Sayfa verisinin belirli parçalarında değişiklik (birleştirme, nesneler…). */
   sheetOp(sheet: SheetModel, label: string, mutate: () => void, withCells?: Rect[]): void {
+    if (this.readOnly) return;
     const wb = this.wb;
     const before = sheet.cloneData();
     const cellsBefore = withCells ? this.captureCells(sheet, withCells) : null;
@@ -118,6 +122,7 @@ export class OpsCore {
    * Formül kaydırması #BAŞV! üretecekse false döner (çağıran genel yola düşer).
    */
   permuteRowsOp(sheet: SheetModel, r: Rect, order: number[], label: string): boolean {
+    if (this.readOnly) return true;
     const wb = this.wb;
     const inv: number[] = new Array(order.length);
     order.forEach((src, i) => (inv[src] = i));
@@ -157,6 +162,7 @@ export class OpsCore {
 
   /** Tanımlı ad değişiklikleri (Ad Yöneticisi). */
   namesOp(label: string, mutate: () => void): void {
+    if (this.readOnly) return;
     const eng = this.wb.engine;
     const before = eng.getNames();
     mutate();
@@ -171,6 +177,7 @@ export class OpsCore {
 
   /** Tüm kitabın anlık görüntüsüyle (yapısal işlemler). */
   snapshotOp(label: string, mutate: () => void): void {
+    if (this.readOnly) return;
     const wb = this.wb;
     const before = wb.snapshot();
     mutate();

@@ -1,7 +1,7 @@
 /** OfficeHere Sunum — uygulama kökü. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRedo20Regular, ArrowUndo20Regular, Save20Regular, SlidePlay20Regular } from "@fluentui/react-icons";
-import { AppShell, CommandSearch, MessageBar, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, type OfficeBackstagePage } from "@officehere/ui";
+import { AppShell, CommandSearch, MessageBar, QatButton, ReadOnlyBanner, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, useReadOnlyView, type OfficeBackstagePage } from "@officehere/ui";
 import { downloadBlob } from "@officehere/core";
 import { blankPresentation } from "./model/presentation";
 import { Canvas } from "./editor/Canvas";
@@ -84,6 +84,7 @@ export function App() {
   const recovery = useMemo(() => recoveryHandlers(), []);
   const autoRecover = useAutoRecover(a);
   useFileAutoSave(a, state.fileRef?.path);
+  store.readOnly = useReadOnlyView(state.fileRef?.path);
 
   const lifecycle = useDocumentLifecycle({
     title: state.fileName,
@@ -384,8 +385,9 @@ export function App() {
           () => a.store.set({ ribbonTab: "home" }),
         )}
         belowRibbon={
-          autoRecover.bar || state.message ? (
+          autoRecover.bar || state.message || store.readOnly ? (
             <>
+              <ReadOnlyBanner />
               {autoRecover.bar}
               {state.message && (
                 <MessageBar

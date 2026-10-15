@@ -6,6 +6,7 @@ import path from "node:path";
 import { APP_COLORS, APP_TITLES, DEV_PORTS, appForPath, isSupportedFile, type AppKind, type WindowKind } from "./apps";
 import { BackupStore } from "./backups";
 import { saveErrorMessage, saveErrorReason } from "./errors";
+import { internetSource, nodeOriginDeps } from "./fileOrigin";
 import { describePath, LocalLog, type LogLevel } from "./log";
 import { addRecent, pinRecent, readRecent, recentStatus, removeRecent, type RecentFile } from "./recent";
 import { errorCode, pendingWrites, queueKey, hasPendingWrites } from "./safeWrite";
@@ -68,6 +69,8 @@ const states = new Map<number, WindowState>();
 const pendingPaths: string[] = [];
 /** Uygulama kapanıyor: pencereler tek tek kapanırken oturum kaydı değişmesin. */
 let quitting = false;
+/** Görüntüleyici kipi: bu oturumda "Düzenlemeyi etkinleştir" denen ya da Farklı Kaydet ile yazılan dosyalar. */
+const editingAllowed = new Set<string>();
 
 /* ------------------------------------------------------------------ */
 /* Ana süreç hataları                                                   */
@@ -542,6 +545,7 @@ function registerIpc() {
       if (!bytes) throw Object.assign(new Error("geçersiz veri"), { code: "EINVAL" });
       // Var olan dosyanın üzerine yazma da atomiktir; üzerine yazılan içerik önceki sürüm olarak saklanır.
       await saver.write(r.filePath, bytes, { session: writeSessionOf(e) });
+      editingAllowed.add(queueKey(r.filePath));
       return { path: r.filePath, name: path.basename(r.filePath) };
     } catch (err) {
       const f = failure(err, r.filePath, "Farklı Kaydet");
@@ -600,6 +604,17 @@ function registerIpc() {
 
   ipcMain.handle("oh:new-window", (_e, kind: AppKind, filePath?: string) => {
     createWindow(kind, filePath);
+  });
+
+  // Görüntüleyici kipi: seçenek açıksa internetten gelen dosya (kaynak: fileOrigin.ts) salt okunur açılır.
+  ipcMain.handle("oh:viewer-check", async (_e, filePath: unknown) => {
+    if (!validPath(filePath) || !desktopSettings().indirilenleriSaltOkunurAc || editingAllowed.has(queueKey(filePath))) return false;
+    const source = await internetSource(filePath, nodeOriginDeps());
+    if (source) log.write("bilgi", "goruntuleyici", `Salt okunur açıldı (${source}): ${describePath(filePath)}`);
+    return source !== null;
+  });
+  ipcMain.handle("oh:viewer-allow", (_e, filePath: unknown) => {
+    if (validPath(filePath)) editingAllowed.add(queueKey(filePath));
   });
 
   ipcMain.on("oh:set-document-state", (e, s: { title: string; dirty: boolean; path?: string }) => {

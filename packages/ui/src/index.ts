@@ -29,3 +29,4 @@ export * from "./components/BugReport";
 export * from "./components/PreviousVersions";
 export * from "./hooks/errorReporting";
 export * from "./components/PdfExport";
+export * from "./components/ReadOnlyBanner";

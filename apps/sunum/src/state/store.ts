@@ -135,6 +135,8 @@ export class Store {
   clipboard: ClipboardData | null = null;
   /** Her değişiklikten sonra sunuya uygulanır (asıl görünümde asıl slaytı eşitler). */
   normalize: ((p: Presentation) => Presentation) | null = null;
+  /** Salt okunur açılan dosya (görüntüleyici kipi): sunu değiştirilmez; seçim ve gezinme serbest. */
+  readOnly = false;
 
   constructor(initial: AppState) {
     this.state = initial;
@@ -162,6 +164,7 @@ export class Store {
   commit(fn: (p: Presentation, s: AppState) => Presentation, opts: CommitOptions = {}) {
     const s = this.state;
     let next = fn(s.pres, s);
+    if (next !== s.pres && this.readOnly) return;
     if (next !== s.pres && this.normalize) next = this.normalize(next);
     if (next === s.pres && opts.sel === undefined && opts.slideIdx === undefined) return;
     if (!opts.silent && next !== s.pres) {

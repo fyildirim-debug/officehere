@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useEditor, useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
-import { AppShell, MessageBar, Ribbon, getUserName, useContextMenu, useDocumentLifecycle, useHotkeys, type OfficeBackstagePage } from "@officehere/ui";
-import { defaultSettings, emptyDoc, type DocSettings } from "./model/document";
+import { AppShell, MessageBar, ReadOnlyBanner, Ribbon, getUserName, useContextMenu, useDocumentLifecycle, useHotkeys, useReadOnlyView, type OfficeBackstagePage } from "@officehere/ui";
+import { defaultSettings, emptyDoc, type DocProtection, type DocSettings } from "./model/document";
 import { getActiveNoteEditor, setActiveNoteEditor, useActiveNoteEditor } from "./state/activeNote";
 import { setTrackAuthorSource } from "./editor/trackChanges";
 import { renderNoteHtml } from "./views/noteHtml";
@@ -78,6 +78,8 @@ type Note = { text: string; kind: "info" | "warning" | "error" | "success"; id: 
 
 // Değişiklik izleme ve açıklamalar Seçenekler'deki kullanıcı adını kullanır.
 setTrackAuthorSource(getUserName);
+// Salt okunur açılan dosya (görüntüleyici kipi): Düzenlemeyi Kısıtla'nın salt okunur kilidi, belgeye yazılmaz.
+const VIEW_ONLY: DocProtection = { mode: "readOnly", enforced: true };
 
 export function App() {
   const controller = useMemo(() => new PaginationController(), []);
@@ -125,7 +127,9 @@ export function App() {
   }, [note]);
 
   // Düzenlemeyi Kısıtla zorlanıyorsa izin verilmeyen ayar değişiklikleri yok sayılır.
+  const viewOnly = useRef(false);
   const updateSettings = useCallback((fn: (s: DocSettings) => DocSettings) => {
+    if (viewOnly.current) return;
     setSettingsState((s) => guardSettings(s, fn(s)));
     setDirty(true);
   }, []);
@@ -252,9 +256,10 @@ export function App() {
     onClose: forgetOwnDraft,
   });
   confirmRef.current = confirmDiscard;
+  viewOnly.current = useReadOnlyView(files.fileRef?.path);
 
   // Hata sınırları için güncel belge anlık görüntüsü ve kaydetme işlevi.
-  useProtection([editor, hfEditor], settings);
+  useProtection([editor, hfEditor], viewOnly.current ? { ...settings, protection: VIEW_ONLY } : settings);
   recovery.snapshot = () => (editor.isDestroyed ? null : { content: editor.getJSON(), settings, fileName: files.fileName, savedAt: Date.now() });
   recovery.save = files.save;
   // Açılışta: aktarılan belge (birleştirme sonucu / kurtarılan taslak), çökme kurtarması ve sahipsiz taslaklar.
@@ -541,6 +546,7 @@ export function App() {
 
   const belowRibbon = (
     <>
+      <ReadOnlyBanner />
       <DraftBar drafts={recoveryUi.drafts} onRestore={recoveryUi.restore} onDiscard={recoveryUi.discard} onClose={recoveryUi.close} />
       {readAloud && (
         <ErrorBoundary name="readAloud" label="Sesli Oku" onReset={() => setReadAloud(false)}>

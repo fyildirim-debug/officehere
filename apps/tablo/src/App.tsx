@@ -1,7 +1,7 @@
 /** OfficeHere Tablo uygulama kökü: kabuk, şerit, formül çubuğu, ızgara, durum çubuğu. */
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ArrowRedo20Regular, ArrowUndo20Regular, Save20Regular } from "@fluentui/react-icons";
-import { AppShell, MessageBar, QatButton, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, useHotkeys, type RibbonTabDef } from "@officehere/ui";
+import { AppShell, MessageBar, QatButton, ReadOnlyBanner, Ribbon, TitleBar, useContextMenu, useDocumentLifecycle, useHotkeys, useReadOnlyView, type RibbonTabDef } from "@officehere/ui";
 import { baseName } from "@officehere/core";
 import { Controller } from "./controller";
 import { Grid } from "./grid/Grid";
@@ -112,6 +112,7 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
   files.confirmDiscard = lifecycle.confirmDiscard;
   ctl.saveHook = () => files.save();
   useFileAutoSave(ctl, files);
+  ctl.ops.readOnly = useReadOnlyView(ctl.fileRef?.path);
 
   useEffect(() => {
     ctl.openDialog = (id, arg) => {
@@ -265,6 +266,7 @@ export function App({ ctl: given }: { ctl?: Controller } = {}) {
       }
       belowRibbon={
         <>
+          <ReadOnlyBanner />
           {ctl.infoBar && (
             <MessageBar
               kind={ctl.infoBar.kind}

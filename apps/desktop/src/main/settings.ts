@@ -31,13 +31,22 @@ export function writeSettings(patch: Record<string, unknown>) {
 /** Sayfaların köprü üzerinden okuyup yazabildiği ayarlar (güncelleştirme ve yazım sözlüğünün kendi IPC'si var). */
 export interface DesktopSettings {
   oturumuGeriYukle: boolean;
+  /**
+   * Görüntüleyici kipi: İndirilenler ve e-posta eklerinden gelen dosyalar salt okunur açılır. Varsayılan
+   * kapalı: OfficeHere makro çalıştırmaz, otomatik kaydetme .bak yedeği ve doğrulamayla korunur; Linux'ta
+   * tespit yalnız dizine dayandığından varsayılan açık olsa İndirilenler'deki her dosya kilitli açılırdı.
+   */
+  indirilenleriSaltOkunurAc: boolean;
 }
 
+const KEYS = ["oturumuGeriYukle", "indirilenleriSaltOkunurAc"] as const;
+
 export function desktopSettings(): DesktopSettings {
-  return { oturumuGeriYukle: readSettings().oturumuGeriYukle === true };
+  const s = readSettings();
+  return { oturumuGeriYukle: s.oturumuGeriYukle === true, indirilenleriSaltOkunurAc: s.indirilenleriSaltOkunurAc === true };
 }
 
 export function setDesktopSetting(key: unknown, value: unknown): DesktopSettings {
-  if (key === "oturumuGeriYukle" && typeof value === "boolean") writeSettings({ oturumuGeriYukle: value });
+  if (KEYS.includes(key as (typeof KEYS)[number]) && typeof value === "boolean") writeSettings({ [key as string]: value });
   return desktopSettings();
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bug20Regular, Bug24Regular, FolderOpen24Regular, Home20Regular, DocumentAdd20Regular, FolderOpen20Regular, Settings20Regular } from "@fluentui/react-icons";
-import { getNative, getRecentFiles, openFile, type AppKind, type RecentFile } from "@officehere/core";
+import { getNative, getRecentFiles, openFile, type AppKind, type DesktopSettings, type RecentFile } from "@officehere/core";
 import { ALL_EXTENSIONS, FORMAT_GROUPS, appForFileName } from "../shared/formats";
 import {
   AppLogo,
@@ -78,16 +78,16 @@ function Preview({ app }: { app: AppKind }) {
   );
 }
 
-/** Seçenekler: açılışta son oturumu geri yükleme (yalnız masaüstü; ayar ana süreçte saklanır). */
-function SessionOption() {
+/** Seçenekler'deki masaüstü ayarı (yalnız masaüstü; ayar ana süreçte saklanır). */
+function DesktopOption({ name, label, note }: { name: keyof DesktopSettings; label: string; note: string }) {
   const native = getNative();
   const [on, setOn] = useState<boolean | null>(null);
   useEffect(() => {
     native
       ?.getSettings?.()
-      .then((s) => setOn(s.oturumuGeriYukle === true))
+      .then((s) => setOn(s[name] === true))
       .catch(() => setOn(false));
-  }, [native]);
+  }, [native, name]);
   if (!native?.getSettings || !native.setSetting) return null;
   return (
     <div className="ohl-option">
@@ -99,12 +99,12 @@ function SessionOption() {
           onChange={(e) => {
             const value = e.target.checked;
             setOn(value);
-            void native.setSetting?.("oturumuGeriYukle", value).then((s) => setOn(s.oturumuGeriYukle === true));
+            void native.setSetting?.(name, value).then((s) => setOn(s[name] === true));
           }}
         />
-        <span>Açılışta son oturumu geri yükle</span>
+        <span>{label}</span>
       </label>
-      <p className="ohl-option-note">OfficeHere dosya seçilmeden başlatıldığında, son kapatılışta açık olan belgeler kendi pencerelerinde yeniden açılır.</p>
+      <p className="ohl-option-note">{note}</p>
     </div>
   );
 }
@@ -199,7 +199,16 @@ export function Launcher() {
             ))}
           </select>
         </label>
-        <SessionOption />
+        <DesktopOption
+          name="oturumuGeriYukle"
+          label="Açılışta son oturumu geri yükle"
+          note="OfficeHere dosya seçilmeden başlatıldığında, son kapatılışta açık olan belgeler kendi pencerelerinde yeniden açılır."
+        />
+        <DesktopOption
+          name="indirilenleriSaltOkunurAc"
+          label="İndirilenler ve e-posta eklerinden gelen dosyaları salt okunur aç"
+          note="İnternetten indirilen ya da e-posta ekinden açılan belgeler düzenlemeye ve otomatik kaydetmeye kapalı açılır; belgenin üstündeki sarı şeritteki “Düzenlemeyi etkinleştir” ile düzenlemeye geçilir. Windows ve macOS'ta dosyanın indirme işaretine, Linux'ta İndirilenler klasörüne bakılır."
+        />
         <UpdateSection />
         <SpellcheckSection />
         <BackstageSubheading>Sorun bildirme</BackstageSubheading>
