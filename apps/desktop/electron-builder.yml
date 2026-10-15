@@ -125,6 +125,11 @@ win:
       arch: [x64, arm64]
     - target: portable
       arch: [x64]
+  # Atlama listesi görevlerinin simgeleri (src/main/tasks.ts): resources/filetypes/<uygulama>.ico
+  extraResources:
+    - from: build/filetypes
+      to: filetypes
+      filter: ["*.ico"]
 
 nsis:
   oneClick: false
@@ -152,6 +157,20 @@ linux:
 
 deb:
   depends: ["libnss3", "libgtk-3-0", "libxss1", "libasound2t64 | libasound2"]
+  # Masaüstü girdisinin sağ tık eylemleri (Windows atlama listesinin karşılığı; src/main/tasks.ts).
+  desktop:
+    entry:
+      Actions: yeni-belge;yeni-tablo;yeni-sunu;
+    desktopActions:
+      yeni-belge:
+        Name: Yeni Belge
+        Exec: /opt/OfficeHere/officehere --yeni=belge
+      yeni-tablo:
+        Name: Yeni Tablo
+        Exec: /opt/OfficeHere/officehere --yeni=tablo
+      yeni-sunu:
+        Name: Yeni Sunu
+        Exec: /opt/OfficeHere/officehere --yeni=sunum
 
 mac:
   icon: icon.icns
