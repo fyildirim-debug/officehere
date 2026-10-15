@@ -83,7 +83,8 @@ tr.bl-pg-rhead {
   background-repeat: no-repeat;
 }
 
-.bl-tab {
+/* Yalnız Tümünü Göster açıkken (sekme durağı düzeninin .bl-tab sınıfından ayrı). */
+.bl-tab-mark {
   background-image: linear-gradient(#6b8fd6, #6b8fd6);
   background-size: 70% 1px;
   background-position: center;

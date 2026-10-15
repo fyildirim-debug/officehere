@@ -39,7 +39,7 @@ function build(doc: PMNode): DecorationSet {
         if (ch === " ") decos.push(Decoration.inline(pos + i, pos + i + 1, { class: "bl-ws" }));
         // Bölünmez boşluk küçük bir halkayla (°) gösterilir.
         else if (ch === "\u00a0") decos.push(Decoration.inline(pos + i, pos + i + 1, { class: "bl-ws is-nbsp" }));
-        else if (ch === "\t") decos.push(Decoration.inline(pos + i, pos + i + 1, { class: "bl-tab" }));
+        else if (ch === "\t") decos.push(Decoration.inline(pos + i, pos + i + 1, { class: "bl-tab-mark" }));
       }
       return false;
     }
