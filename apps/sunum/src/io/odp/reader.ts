@@ -20,6 +20,10 @@ import { readOdpSettings } from "./showSettings";
 import { listLevel, paragraphsText, paraPropsOf, readParagraphs, runPropsOf } from "./text";
 import { LoadWarnings } from "../loadWarnings";
 import { formatMB, openZip, PackageError, PartError, xmlHealth, ZIP_LIMITS, type SafeZip } from "../zipSafe";
+import { OpcPackage } from "@officehere/core/opc";
+import { objectPreviews, odfInfo } from "@officehere/core/odf";
+import { kaynakBirak, kaynakKaydet } from "../rawPassthrough";
+import { objectShape } from "./objects";
 
 const MAX_SLIDES = 2000;
 const MAX_IMAGE = 40 * 1024 * 1024;
@@ -91,6 +95,11 @@ function pruneInheritedLevels(pres: Presentation) {
 export interface OdpReadOptions {
   /** Açılış uyarıları (eksik/bozuk parçalar); verilmezse yok sayılır. */
   warnings?: LoadWarnings;
+  /**
+   * Özgün paket geçiş katmanı için kaydedilsin mi (varsayılan evet; tek kullanımlık doğrulama okumalarında hayır).
+   * Kayıtlıysa gömülü nesneler özgün çerçeveleriyle taşınır, .odp'ye kaydederken ayarlar ve RDF üst verisi korunur.
+   */
+  kaynak?: boolean;
 }
 
 /** Ana sayfa stilinden düzey stili. */
@@ -114,6 +123,21 @@ export async function readOdp(data: ArrayBuffer | Uint8Array, opts: OdpReadOptio
     if (e instanceof PackageError) throw new OdpError(e.message, e.detail);
     throw e;
   }
+  // Özgün paket (geçiş katmanı): açılamazsa ya da ODF değilse taşıma olmadan okunur.
+  const opc = opts.kaynak === false ? undefined : await OpcPackage.open(data).catch(() => undefined);
+  const info = opc ? await odfInfo(opc).catch(() => null) : null;
+  const kayit = opc && info ? await kaynakKaydet(opc) : undefined;
+  try {
+    const pres = await readOdpPackage(pkg, W, kayit?.id, kayit ? await objectPreviews(opc!).catch(() => new Map<string, string>()) : new Map<string, string>());
+    if (kayit) pres.kaynak = kayit.id;
+    return pres;
+  } catch (e) {
+    if (kayit?.yeni) kaynakBirak(kayit.id);
+    throw e;
+  }
+}
+
+async function readOdpPackage(pkg: SafeZip, W: LoadWarnings, src: string | undefined, previews: Map<string, string>): Promise<Presentation> {
   /** Metin parçası; bozuk ya da sınırı aşan parça atlanır (verilirse uyarı yazılır). */
   const text = async (p: string, label?: string) => {
     try {
@@ -197,6 +221,10 @@ export async function readOdp(data: ArrayBuffer | Uint8Array, opts: OdpReadOptio
   const fontsC = kid(content, "font-face-decls");
   const masterSheet = new StyleSheet([stylesAuto, stylesCommon], [fontsS, fontsC], stylesCommon);
   const contentSheet = new StyleSheet([kid(content, "automatic-styles"), stylesCommon], [fontsC, fontsS], stylesCommon);
+  // Gömülü nesneler (kaynak kayıtlıysa): özgün çerçeve ve bölümünün otomatik stilleriyle
+  const objectHook = (auto: Element | undefined): ShapeReadCtx["object"] => (src ? (el, base) => objectShape(el, base, src, auto, previews) : undefined);
+  const masterObjects = objectHook(stylesAuto);
+  const contentObjects = objectHook(kid(content, "automatic-styles"));
 
   const body = kid(kid(content, "body"), "presentation");
   if (!body) throw new OdpError("Dosyada sunu gövdesi yok.");
@@ -261,7 +289,7 @@ export async function readOdp(data: ArrayBuffer | Uint8Array, opts: OdpReadOptio
     const name = attr(mp, "name") ?? "";
     const bgStyle = masterSheet.resolve("drawing-page", attr(mp, "style-name"));
     const bg = pageFill(bgStyle, masterSheet) ?? { type: "solid", color: { rgb: "#FFFFFF" } };
-    const shapes = readShapes(mp, { sheet: masterSheet, image, link, count: { n: 0 }, placeholderLevels: placeholderLevels(name) });
+    const shapes = readShapes(mp, { sheet: masterSheet, image, link, count: { n: 0 }, placeholderLevels: placeholderLevels(name), object: masterObjects });
     masters.set(name, {
       key: name,
       display: attr(mp, "display-name") ?? name,
@@ -308,7 +336,7 @@ export async function readOdp(data: ArrayBuffer | Uint8Array, opts: OdpReadOptio
   function readPage(page: Element, i: number): Slide {
     const masterName = attr(page, "master-page-name");
     const ps = contentSheet.resolve("drawing-page", attr(page, "style-name"));
-    const shapes = readShapes(page, { sheet: contentSheet, image, link, count: { n: 0 }, placeholderLevels: placeholderLevels(masterName ?? primaryName) });
+    const shapes = readShapes(page, { sheet: contentSheet, image, link, count: { n: 0 }, placeholderLevels: placeholderLevels(masterName ?? primaryName), object: contentObjects });
     const layout = layoutFor(masterName, chooseLayout(shapes));
     const notesEl = kid(page, "notes");
     let notes = "";

@@ -9,7 +9,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./opc": "./src/opc/index.ts",
-    "./opc/*": "./src/opc/*.ts"
+    "./opc/*": "./src/opc/*.ts",
+    "./odf": "./src/odf/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

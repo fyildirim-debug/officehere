@@ -24,6 +24,8 @@ export interface ShapeReadCtx {
   /** Yer tutucunun ana slayttaki stil düzeyleri (sınıf → düzeyler). */
   placeholderLevels?: (cls: string, own: Resolved) => TextBody["levels"];
   count: { n: number };
+  /** Gömülü nesne çerçevesi (draw:object/draw:object-ole) → özgün XML'i taşıyan şekil (geçiş katmanı; odp/reader.ts). */
+  object?: (el: Element, base: ShapeBaseProps) => Shape | undefined;
 }
 
 /** ODF şekil türü → model hazır şekil adı. */
@@ -361,6 +363,10 @@ function readFrame(el: Element, ctx: ShapeReadCtx): Shape | undefined {
   const table = kids(el, "table")[0];
   const base = baseShape(el, box);
   if (table) return readTable(table, base, ctx);
+  if (ctx.object && (kids(el, "object")[0] || kids(el, "object-ole")[0])) {
+    const o = ctx.object(el, base);
+    if (o) return o;
+  }
   if (images.length && !tb) {
     for (const im of images) {
       const src = ctx.image(attr(im, "href"), attr(im, "mime-type"), kids(im, "binary-data")[0]?.textContent ?? undefined);

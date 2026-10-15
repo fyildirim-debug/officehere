@@ -3,8 +3,11 @@
  * hücre stilleri ve sayı biçimleri, birleştirmeler, sütun/satır boyutları,
  * gizli satır/sütun/sayfalar, notlar, köprüler, adlar ve otomatik filtre.
  * Paket: "mimetype" ilk ve sıkıştırılmamış, ardından manifest ve XML parçaları.
+ * Geçiş katmanı (@officehere/core/odf): .ods'den açılan kitapta (wb.kaynak) settings.xml birleştirilir,
+ * manifest.rdf taşınır, sayfaların gömülü grafikleri (passthrough.odf) alt belgeleriyle yazılır.
  */
 import JSZip from "jszip";
+import { OdfCarry } from "@officehere/core/odf";
 import { cellKey, colToName, isDateFormat, isError, isTimeOnlyFormat, keyCol, keyRow, MAX_COLS, serialToDate, serialToTime, type Scalar } from "@officehere/formula";
 import { DEFAULT_FONT, DEFAULT_SIZE } from "../../model/styles";
 import type { Rect } from "../../model/types";
@@ -183,7 +186,36 @@ function rangeAddress(sheet: string, r: Rect): string {
   return `${s}.$${colToName(r.c1)}$${r.r1 + 1}:.$${colToName(r.c2)}$${r.r2 + 1}`;
 }
 
-function sheetXml(wb: WorkbookModel, sheet: SheetModel, reg: StyleRegistry, warn: Set<string>): string {
+/** Taşınan gömülü nesnelerin yazım bağlamı: taşıyıcı ve nesnelerin otomatik stilleri. */
+interface ObjectCtx {
+  carry: OdfCarry;
+  styles: string[];
+}
+
+/**
+ * Sayfanın .ods'den gelen gömülü nesneleri (özgün çerçeveler; alt belgeler kaynak paketten kopyalanır). Veri aralığının
+ * sayfası silindiyse, adı ya da yapısı değiştiyse grafik yanlış veri gösterir: yazılmaz ve uyarılır.
+ */
+function objectsXml(wb: WorkbookModel, sheet: SheetModel, ctx: ObjectCtx, warn: Set<string>): string {
+  let out = "";
+  for (const o of sheet.passthrough?.odf ?? []) {
+    const what = `gömülü ${o.label.toLocaleLowerCase("tr-TR")}`;
+    if (o.deps.some(([name, v]) => wb.sheets.find((s) => s.name === name)?.structVersion !== v)) {
+      warn.add(`${what} (veri aldığı sayfa değiştirildi)`);
+      continue;
+    }
+    const r = ctx.carry.object(o);
+    if (!r) {
+      warn.add(`${what} (özgün dosya bulunamadı)`);
+      continue;
+    }
+    ctx.styles.push(...r.styles);
+    out += r.xml;
+  }
+  return out;
+}
+
+function sheetXml(wb: WorkbookModel, sheet: SheetModel, reg: StyleRegistry, warn: Set<string>, objects: ObjectCtx): string {
   // Satır başına hücre sütunları
   const rowsMap = new Map<number, Set<number>>();
   const add = (r: number, c: number) => {
@@ -236,6 +268,9 @@ function sheetXml(wb: WorkbookModel, sheet: SheetModel, reg: StyleRegistry, warn
 
   const out: string[] = [];
   out.push(`<table:table table:name="${esc(sheet.name)}" table:style-name="${reg.table(sheet.hidden, sheet.tabColor)}">`);
+  // Gömülü nesneler (.ods'den gelen grafikler): sütunlardan önce table:shapes
+  const shapes = objectsXml(wb, sheet, objects, warn);
+  if (shapes) out.push(`<table:shapes>${shapes}</table:shapes>`);
   // Sütunlar
   const colKey = (c: number) => `${reg.column(sheet.cols.rawSize(c))}|${sheet.cols.isHidden(c)}|${reg.cell(sheet.colStyles.get(c) ?? 0) ?? ""}`;
   let c = 0;
@@ -385,7 +420,9 @@ export async function writeOds(wb: WorkbookModel, opts: { template?: boolean; wa
   // Varsayılan yazı tipi kitabın temasından (modül düzeyindeki değer başka kitaptan kalmış olabilir)
   const defaultFont = wb.theme.minorFont || DEFAULT_FONT;
   reg.fontName(defaultFont);
-  const tables = wb.sheets.map((s) => sheetXml(wb, s, reg, warn)).join("");
+  // ODF geçiş katmanı: .ods'den açılan kitabın ayarları, RDF üst verisi ve gömülü nesneleri (wb.kaynak)
+  const objects: ObjectCtx = { carry: new OdfCarry({ family: "spreadsheet", source: wb.kaynak }), styles: [] };
+  const tables = wb.sheets.map((s) => sheetXml(wb, s, reg, warn, objects)).join("");
   const globals = wb.engine.getNames().filter((n) => n.sheet === undefined);
   const named = globals.length ? `<table:named-expressions>${globals.map((n) => namedXml(n.name, n.formula, wb.sheets[0]?.name ?? "Sayfa1")).join("")}</table:named-expressions>` : "";
   const filters = wb.sheets
@@ -398,6 +435,7 @@ export async function writeOds(wb: WorkbookModel, opts: { template?: boolean; wa
     reg.sizeXml.join("") +
     reg.dataXml.join("") +
     reg.xml.join("") +
+    objects.styles.join("") +
     `</office:automatic-styles><office:body><office:spreadsheet>${tables}${named}${filters ? `<table:database-ranges>${filters}</table:database-ranges>` : ""}</office:spreadsheet></office:body></office:document-content>`;
   const mime = opts.template ? `${ODS_MIME}-template` : ODS_MIME;
   const zip = new JSZip();
@@ -417,6 +455,8 @@ export async function writeOds(wb: WorkbookModel, opts: { template?: boolean; wa
   zip.file("meta.xml", metaXml(wb));
   zip.file("settings.xml", settingsXml(wb));
   if (opts.warnings) opts.warnings.push(...warn);
-  const bytes = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 }, mimeType: mime });
+  let bytes = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 }, mimeType: mime });
+  // settings.xml birleştirilir (yazıcının görünüm ayarları + kaynağın diğer ayarları), manifest.rdf ve alt belgeler eklenir
+  if (objects.carry.active) bytes = await objects.carry.finish(bytes);
   return new Uint8Array(bytes);
 }

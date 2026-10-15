@@ -12,6 +12,7 @@
  * olduğunu gösterir: sayfanınkiyle aynı değilse konuma bağlı öğeler güvenle yazılamaz.
  */
 import type { RawRef } from "@officehere/core/opc";
+import type { OdfObject } from "@officehere/core/odf";
 import { adjustFormula, colToName, parseRangeAddress, removeSheetFromFormula, renameSheetInFormula, type StructuralChange } from "@officehere/formula";
 import { MAX_COLS, MAX_ROWS, shiftIndex, shiftRect } from "./rect";
 import type { Rect } from "./types";
@@ -82,6 +83,18 @@ export interface SheetPassthrough extends PtNamespaces {
   charts: Record<string, string>;
   /** Yapısal değişiklikte düşürülen öğelerin etiketleri. */
   dropped: string[];
+  /** .ods'den gelen gömülü nesneler (sayfanın table:shapes'indeki grafik/formül alt belgeleri); yalnız .ods'ye yazılır. */
+  odf?: PtOdfObject[];
+}
+
+/**
+ * .ods'nin gömülü nesnesi: özgün draw:frame ve andığı otomatik stiller (alt belge kaydederken kaynak paketten
+ * kopyalanır, kaynak: çalışma kitabının `kaynak`ı). `deps`: veri aralıklarının sayfaları ve okunduğundaki yapı
+ * sürümleri; sayfa silinir, yeniden adlandırılır ya da yapısı değişirse nesne yazılmaz (uyarılır).
+ */
+export interface PtOdfObject extends OdfObject {
+  label: string;
+  deps: [string, number][];
 }
 
 export function emptyPassthrough(structVersion = 0): SheetPassthrough {

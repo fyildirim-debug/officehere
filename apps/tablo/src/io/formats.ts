@@ -119,7 +119,7 @@ async function openBookRaw(name: string, data: ArrayBuffer, opts?: XlsxReadOptio
     case "ots":
     {
       const report: { notice?: string } = {};
-      const wb = await readOds(data, report);
+      const wb = await readOds(data, report, { kaynak: opts?.kaynak });
       return { wb, format, template: format === "ots", notice: report.notice };
     }
     case "csv":
@@ -162,11 +162,17 @@ export function saveFormatOf(name: string): SaveFormat | null {
 /**
  * Çalışma kitabını istenen biçimde baytlara/metne çevirir. `report.warnings`: .xlsx/.xlsm'de
  * kaydedilemeyen öğeler (yapısal değişiklikte kaydırılamayan, kaynağı bulunamayan, makrolar…).
- * Biçim değişince (.ods/.csv) özgün paketten taşıma yapılmaz.
+ * Biçim değişince (.ods/.csv) özgün paketten taşıma yapılmaz; .ods'den açılan kitap .ods'ye yazılınca ayarlar ve
+ * gömülü nesneler özgün paketten taşınır (ods/writer.ts).
  */
 export async function writeBook(wb: WorkbookModel, sheet: SheetModel, format: SaveFormat, delimiter?: string, report?: XlsxWriteReport): Promise<Uint8Array<ArrayBuffer> | string> {
   if (format === "csv") return writeCsv(wb, sheet, { delimiter: delimiter ?? ";" });
   if (format === "tsv") return writeCsv(wb, sheet, { delimiter: delimiter ?? "\t" });
-  if (format === "ods") return writeOds(wb);
-  return writeXlsx(wb, { macro: format === "xlsm", report });
+  if (format === "ods") return writeOds(wb, { warnings: report?.warnings });
+  const out = await writeXlsx(wb, { macro: format === "xlsm", report });
+  if (report && wb.sheets.some((s) => s.passthrough?.odf?.length)) report.warnings.push(ODF_OBJECTS_XLSX);
+  return out;
 }
+
+/** .ods'den gelen gömülü nesneler .xlsx'te saklanamaz. */
+export const ODF_OBJECTS_XLSX = "gömülü grafikler ve nesneler (.ods'ye özgü; korumak için .ods olarak kaydedin)";

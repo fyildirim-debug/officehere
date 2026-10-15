@@ -8,9 +8,9 @@ import { addRecentFile, baseName, extensionOf, getNative, getSource, isAbortErro
 import { getUserName, isDirectSave, saveStatus, trackSave, useAutoSave } from "@officehere/ui";
 import { defaultSettings, normalizeDoc, type BelgeDocument, type DocSettings } from "../model/document";
 import { FORMATS, OPEN_FILTERS, docToText, finishOpen, formatOfExt, htmlDocument, isWritable, openDocument, saveFilters, type FormatId, type OpenResult } from "../io";
-import { encodeInWorker, readInWorker, releaseInWorker, verifyInWorker, writeDocxInWorker } from "../io/client";
-import { LoadWarnings, OPAQUE_PLACEHOLDERS, lossMessage } from "../io/warnings";
-import { hasOpaque } from "../editor/opaque";
+import { encodeInWorker, readInWorker, releaseInWorker, verifyInWorker, writeDocxInWorker, writeOdtInWorker } from "../io/client";
+import { LoadWarnings, ODF_OBJECTS_FALLBACK, OPAQUE_PLACEHOLDERS, lossMessage } from "../io/warnings";
+import { hasOdfObjects, hasOpaque } from "../editor/opaque";
 import { protectionSource } from "../editor/protection";
 import type { PaginationController } from "../editor/pagination";
 import { TEMPLATES } from "../templates/templates";
@@ -352,15 +352,17 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
    * parçacığından ya da kurtarma deposundan gönderilir. Makrolu hedefte makrolar korunur (çalıştırılmaz).
    * `notes`: kaydetmede bildirilecekler (ör. makrolu belge .docx'e kaydedilince makroların kaldırılması).
    */
-  const docxData = useCallback(async (doc: BelgeDocument, macro = false, notes?: string[]): Promise<Uint8Array> => {
-    const r = await writeDocxInWorker(doc, macro, async (ids) => {
+  const docxData = useCallback(async (doc: BelgeDocument, macro = false, notes?: string[], format: "docx" | "odt" = "docx"): Promise<Uint8Array> => {
+    const provide = async (ids: string[]) => {
       const out: Record<string, Uint8Array | null> = {};
       for (const id of ids) {
         await ensureSource(id);
         out[id] = getSource(id)?.bytes ?? null;
       }
       return out;
-    });
+    };
+    // .odt de aynı yoldan: açılan .odt'nin ayarları ve gömülü nesneleri kaynak paketten taşınır.
+    const r = format === "odt" ? await writeOdtInWorker(doc, provide) : await writeDocxInWorker(doc, macro, provide);
     notes?.push(...r.notes);
     return r.bytes;
   }, []);
@@ -368,10 +370,13 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
   /** Belgeyi istenen biçimde kodlar (`macro`: .docx biçimi makrolu .docm olarak). */
   const encode = useCallback(
     async (f: FormatId, doc = currentDoc(), macro = false, notes?: string[]): Promise<SaveData> => {
-      // .docx'e özgü (opak) öğeler bu biçimlerde yer tutucu metin olarak yazılır.
-      if ((f === "odt" || f === "rtf" || f === "md" || f === "html") && hasOpaque(doc)) notes?.push(OPAQUE_PLACEHOLDERS);
+      // .docx'e özgü (opak) öğeler bu biçimlerde yer tutucu metin olarak yazılır; .odt'den gelen gömülü nesneler
+      // .odt'de özgün hâliyle, diğer metin biçimlerinde yedek görünümleriyle.
+      if ((f === "odt" || f === "rtf" || f === "md" || f === "html") && hasOpaque(doc, true)) notes?.push(OPAQUE_PLACEHOLDERS);
+      if ((f === "rtf" || f === "md" || f === "html") && hasOdfObjects(doc)) notes?.push(ODF_OBJECTS_FALLBACK);
       switch (f) {
         case "odt":
+          return docxData(doc, false, notes, "odt");
         case "rtf":
         case "md":
           return encodeInWorker(f, doc);

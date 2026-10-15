@@ -69,6 +69,26 @@
    "ileti": "No matching global element declaration",
    "gerekce": "PowerPoint 2007, slayttaki OLE nesnesini ve ActiveX denetimini grafik çerçevesinde <a:graphicData uri=\".../drawingml/2006/compatibility\"><com:legacyDrawing spid=\"…\"/> ile slaydın VML çizimine bağlar; sonraki sürümler de bunu okur. Transitional XSD kümesinde bu ad alanının genel öğe bildirimi yok, katı joker bu yüzden reddeder. Geçiş katmanı özgün XML'i olduğu gibi taşır.",
    "kaynak": "PowerPoint'in kaydettiği özgünde de var: test-derlem/poi/PPTWithAttachments.pptm (ppt/slides/slide1.xml)."
+  },
+  {
+   "kimlik": "odf-grafik-yerel-tablo-bos",
+   "dogrulayici": "rng",
+   "uzanti": ["odt", "ott", "ods", "ots", "odp", "otp"],
+   "parca": "^[^/]+/content\\.xml$",
+   "oge": ["table:table-columns", "table:table-rows"],
+   "ileti": "incomplete; missing required element \"table:table-(column|row)\"",
+   "gerekce": "LibreOffice, gömülü grafik alt belgesinin (Object N/content.xml) iç veri tablosu (local-table) boşken ya da yalnız başlık satırı/sütunu varken boş <table:table-columns/> ve <table:table-rows/> yazar; ODF 1.3 şeması en az bir sütun/satır ister. LibreOffice bu alt belgeyi sorunsuz okur. ODF geçiş katmanı alt belgeyi değiştirmeden (ham kopya) taşıdığı için çıktıda da görülür; yalnız alt belge parçalarını kapsar, ana content.xml'i kapsamaz.",
+   "kaynak": "LibreOffice'in kaydettiği özgünlerde de var: test-derlem/lo/lo-sunu.odp, lo-sunu24.odp ve apps/belge/src/io/__fixtures__/bicimler/lo-nesne.odt (Object 1/content.xml)."
+  },
+  {
+   "kimlik": "odf-grafik-sembol-resmi",
+   "dogrulayici": "rng",
+   "uzanti": ["odt", "ott", "ods", "ots", "odp", "otp"],
+   "parca": "^[^/]+/content\\.xml$",
+   "oge": "chart:symbol-image",
+   "ileti": "not allowed here|missing required attribute \"xlink:href\"",
+   "gerekce": "LibreOffice, grafik dizisi stilinin style:chart-properties öğesine boş <chart:symbol-image/> yazar; şemada bu öğe xlink:href ister ve style:chart-properties içinde yer almaz. LibreOffice okur ve yok sayar. ODF geçiş katmanı grafik alt belgesini olduğu gibi taşıdığı için çıktıda da görülür; yalnız alt belge parçalarını kapsar.",
+   "kaynak": "LibreOffice'in kaydettiği özgünlerde de var: test-derlem/lo/lo-sunu.odp, lo-sunu24.odp (Object 1/content.xml)."
   }
  ]
 }

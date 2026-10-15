@@ -1,5 +1,5 @@
 // Belge dosya G/Ç işleyicileri: Worker'da (io.worker.ts) ya da Worker olmayan ortamda (testler, Node betikleri)
-// süreç içinde aynı RPC ile çalışır. Açılan .docx'in özgün paketi (geçiş katmanı) bu iş parçacığının kaynak
+// süreç içinde aynı RPC ile çalışır. Açılan .docx/.odt'nin özgün paketi (geçiş katmanı) bu iş parçacığının kaynak
 // kaydına girer; yazma da burada yapıldığından taşınacak parçalar oradan okunur. Kayıt yoksa (Worker yeniden
 // kuruldu, kurtarılan taslak) yazma, eksik kaynakları ister; ana iş parçacığı baytları gönderir.
 import { withTransfer, type IoContext } from "@officehere/core";
@@ -11,7 +11,8 @@ import { writeDocx } from "./docx/writer";
 import { writeOdt } from "./odt/writer";
 import { writeRtf } from "./rtf/writer";
 import { writeMarkdown } from "./markdown/writer";
-import { LoadWarnings, saveNotes, type PlainWarnings } from "./warnings";
+import { LoadWarnings, ODF_OBJECTS_FALLBACK, odtSaveNotes, saveNotes, type PlainWarnings } from "./warnings";
+import { hasOdfObjects } from "../editor/opaque";
 
 /** Açma sonucu: okunan belge ya da "ana iş parçacığında aç" (HTML, Markdown, .docx yedek dönüştürücüsü). */
 export type OpenReply = { main: true } | { main?: false; doc: BelgeDocument; format: FormatId; notes: string[]; warnings: PlainWarnings };
@@ -63,10 +64,11 @@ export const handlers = {
   },
 
   /**
-   * Belge modeli → .docx baytları. `sources`: ana iş parçacığının gönderdiği kaynak paketler (null: onda da yok,
-   * geçiş katmanı olmadan yazılır). Bu iş parçacığında olmayan ve gönderilmeyen kaynak varsa `{ missing }`.
+   * Belge modeli → .docx (ya da `format: "odt"` ile .odt) baytları. `sources`: ana iş parçacığının gönderdiği kaynak
+   * paketler (null: onda da yok, geçiş katmanı olmadan yazılır). Bu iş parçacığında olmayan ve gönderilmeyen kaynak
+   * varsa `{ missing }`.
    */
-  async write({ doc, macro, sources }: { doc: BelgeDocument; macro?: boolean; sources?: Record<string, Uint8Array | null> }) {
+  async write({ doc, macro, sources, format }: { doc: BelgeDocument; macro?: boolean; sources?: Record<string, Uint8Array | null>; format?: "docx" | "odt" }) {
     const absent = new Set<string>();
     for (const [id, bytes] of Object.entries(sources ?? {})) {
       if (getSource(id)) continue;
@@ -76,16 +78,18 @@ export const handlers = {
     const missing = [...sourceIds(doc)].filter((id) => !getSource(id) && !absent.has(id));
     if (missing.length) return { missing } as WriteReply;
     const notes: string[] = [];
-    const bytes = await writeDocx(doc, { macro, onReport: (r) => notes.push(...saveNotes(r)) });
+    let bytes: Uint8Array;
+    if (format === "odt") bytes = await writeOdt(doc, { onReport: (r) => notes.push(...odtSaveNotes(r)) });
+    else {
+      bytes = await writeDocx(doc, { macro, onReport: (r) => notes.push(...saveNotes(r)) });
+      // .odt'den gelen gömülü nesneler .docx'te yalnız yedek görünümleriyle yazılır.
+      if (hasOdfObjects(doc.content) || hasOdfObjects(doc.settings)) notes.push(ODF_OBJECTS_FALLBACK);
+    }
     return withTransfer<WriteReply>({ bytes, notes }, [bytes.buffer]);
   },
 
-  /** .odt, .rtf ve .md (DOM gerektirmeyen yazıcılar). */
-  async encode({ format, doc }: { format: "odt" | "rtf" | "md"; doc: BelgeDocument }) {
-    if (format === "odt") {
-      const bytes = await writeOdt(doc);
-      return withTransfer<Uint8Array | string>(bytes, [bytes.buffer]);
-    }
+  /** .rtf ve .md (DOM gerektirmeyen metin yazıcıları; .odt `write` ile, kaynak paketlerle yazılır). */
+  async encode({ format, doc }: { format: "rtf" | "md"; doc: BelgeDocument }) {
     return format === "rtf" ? writeRtf(doc) : writeMarkdown(doc);
   },
 

@@ -3,6 +3,8 @@
 // köprüler, dipnotlar, metin kutuları, İçindekiler, sayfa sonları, üst/alt bilgi ve sayfa yapısı.
 import JSZip from "jszip";
 import type { JSONContent } from "@tiptap/core";
+import { OpcPackage, registerSource, sha256Hex } from "@officehere/core/opc";
+import { objectLabel, objectPreviews, odfInfo, odfObjectFromElement, replacementHref, type OdfInfo, type OdfObject } from "@officehere/core/odf";
 import { defaultSettings, normalizeDoc, samePage, type BelgeDocument, type CommentData, type DocSettings, type PageSetup } from "../../model/document";
 import { fieldPicture, type TocEntry } from "../../editor/nodes";
 import { noteText } from "../../editor/notes";
@@ -95,6 +97,68 @@ export class OdtReader {
   warnings = new LoadWarnings();
   /** Belgenin stil tablosu (kaynağın varsayılanları Normal stile taşındıktan sonra). */
   private styles: Record<string, StyleDef> = stylesOf();
+  /** Özgün paket kaynak kaydına eklensin mi (`settings.kaynak`; gömülü nesneler ve ayarlar kaydederken taşınır). */
+  register = true;
+  /** Kaynak kaydındaki kimlik (özgün baytların SHA-256'sı). */
+  kaynak: string | null = null;
+  private source: OpcPackage | null = null;
+  private info: OdfInfo | null = null;
+  /** Tarayıcıda çizilebilen nesne yedek görüntüleri (yol → data: adresi). */
+  private previews = new Map<string, string>();
+  /** Çerçevelerin andığı otomatik stiller: içerik ve stiller (üst/alt bilgi) bölümleri. */
+  private autoStyles: { content: Element | null; styles: Element | null } = { content: null, styles: null };
+  /** Okunan gömülü nesne çerçeveleri ve opak öğe olarak taşınanlar. */
+  private objectCount = { seen: 0, kept: 0 };
+
+  /**
+   * Özgün paket kaynak kaydına eklenir (kimlik: özgün baytların SHA-256'sı → `settings.kaynak`); aynı biçimde
+   * kaydederken ayarlar (settings.xml), RDF üst verisi ve gömülü nesnelerin alt belgeleri buradan taşınır.
+   */
+  private async openSource(data: ArrayBuffer | Uint8Array) {
+    if (!this.register) return;
+    try {
+      this.source = await OpcPackage.open(data);
+      this.info = await odfInfo(this.source);
+      if (!this.info) {
+        this.source = null;
+        return;
+      }
+      this.previews = await objectPreviews(this.source);
+    } catch {
+      this.source = null;
+      return; // ZIP merkez dizini okunamadı: geçiş katmanı olmadan sürer
+    }
+    this.kaynak = registerSource(this.source, { id: await sha256Hex(this.source.bytes) });
+  }
+
+  /** Gömülü nesne çerçevesi (draw:object/draw:object-ole) → opak satır içi öğe; kaynak yoksa false. */
+  private objectNode(e: Element, w: number | null, h: number | null, out: JSONContent[]): boolean {
+    if (!this.kaynak) return false;
+    let odf: OdfObject;
+    try {
+      odf = odfObjectFromElement(e, this.scope === "styles" ? this.autoStyles.styles : this.autoStyles.content, this.kaynak);
+    } catch {
+      return false;
+    }
+    const kind = objectLabel(this.info, odf.xml);
+    const rep = replacementHref(odf.xml);
+    out.push({
+      type: "opaqueInline",
+      attrs: {
+        xml: "",
+        refs: [],
+        src: this.kaynak,
+        kind: "ole",
+        label: kind === "Gömülü nesne" ? kind : `Gömülü nesne (${kind.toLocaleLowerCase("tr-TR")})`,
+        level: "run",
+        preview: (rep && this.previews.get(rep)) ?? null,
+        width: w,
+        height: h,
+        odf,
+      },
+    });
+    return true;
+  }
 
   async read(data: ArrayBuffer | Uint8Array): Promise<BelgeDocument> {
     let zip: JSZip;
@@ -107,10 +171,12 @@ export class OdtReader {
     if (!contentFile) throw new Error("Geçerli bir ODT dosyası değil (content.xml yok).");
     const mime = await zip.file("mimetype")?.async("string");
     if (mime && !/opendocument\.text/.test(mime)) throw new Error(notTextMessage(mime));
+    await this.openSource(data);
     for (const name of Object.keys(zip.files)) {
       const f = zip.files[name];
       if (f.dir || /\.xml$/i.test(name) || name === "mimetype" || this.media.size > 500) continue;
-      if (/^(\.\/)?(Object |ObjectReplacements\/)/.test(name)) this.warnings.add("objects", name);
+      // Gömülü nesneler kaynak paketle taşınır (opak öğe); kaynak yoksa kaydedince kaybolur.
+      if (!this.kaynak && /^(\.\/)?(Object |ObjectReplacements\/)/.test(name)) this.warnings.add("objects", name);
       if (/^(\.\/)?Basic\/|^(\.\/)?Scripts\//.test(name)) this.warnings.add("macros");
       if (oversizedEntry(f)) {
         this.warnings.add("images", `olağandışı büyük: ${name}`);
@@ -123,6 +189,7 @@ export class OdtReader {
     const contentXml = parseXml(await zipText(contentFile));
     if (stylesXml) this.st.load(stylesXml.documentElement, "styles");
     this.st.load(contentXml.documentElement, "content");
+    this.autoStyles = { content: kid(contentXml.documentElement, "automatic-styles"), styles: stylesXml ? kid(stylesXml.documentElement, "automatic-styles") : null };
     let meta: Element | null = null;
     const metaFile = zip.file("meta.xml");
     if (metaFile) {
@@ -155,6 +222,7 @@ export class OdtReader {
 
   private readParsed(contentRoot: Element, meta: Element | null): BelgeDocument {
     const settings = defaultSettings();
+    if (this.kaynak) settings.kaynak = this.kaynak;
     this.adoptDefaults(settings);
     this.readTrackedChanges(contentRoot);
     const text = descendants(contentRoot, "text").find((e) => e.parentElement?.localName === "body");
@@ -189,6 +257,11 @@ export class OdtReader {
     this.readHeaders(firstMaster, settings);
     if (meta) this.readMeta(meta, settings);
     if (Object.keys(this.comments).length > Object.keys(settings.comments).length) this.warnings.add("comments", "bağlanamayan açıklama");
+    // Okunmayan yerdeki (sayfaya bağlı çerçeve…) ya da taşınamayan gömülü nesneler kaydedince kaybolur.
+    if (this.kaynak) {
+      const inBody = descendants(contentRoot, "object").length + descendants(contentRoot, "object-ole").length;
+      if (this.objectCount.seen > this.objectCount.kept || inBody > this.objectCount.seen) this.warnings.add("objects", "taşınamayan gömülü nesne");
+    }
     return { content: normalizeDoc({ type: "doc", content: sections }), settings };
   }
 
@@ -647,6 +720,14 @@ export class OdtReader {
       this.extra.push({ type: "textBox", attrs: { x: lengthPx(attr(e, "x")) ?? 0, y: lengthPx(attr(e, "y")) ?? 0, w: w ?? 240, h: h ?? 120 }, content: content.length ? content : [{ type: "paragraph" }] });
       return;
     }
+    // Gömülü nesne (grafik/formül alt belgesi, OLE): özgün çerçevesiyle opak öğe; kaynak yoksa yalnız yedek görüntüsü.
+    if (kid(e, "object") || kid(e, "object-ole")) {
+      this.objectCount.seen++;
+      if (this.objectNode(e, w, h, out)) {
+        this.objectCount.kept++;
+        return;
+      }
+    }
     // Resim: paketteki dosya ya da gömülü base64 veri; nesne yedek resimleri de denenir.
     for (const im of img ? [img, ...kids(e, "image").slice(1)] : []) {
       const href = (attr(im, "href") ?? "").replace(/^\.\//, "");
@@ -870,10 +951,14 @@ function notTextMessage(mime: string): string {
   return "Bu OpenDocument dosyası bir metin belgesi değil.";
 }
 
-/** ODT baytları → belge. */
-export async function readOdt(data: ArrayBuffer | Uint8Array, warnings?: LoadWarnings): Promise<BelgeDocument> {
+/**
+ * ODT baytları → belge. `kaynak: false`: özgün paket kaynak kaydına eklenmez (gömülü nesneler yalnız yedek
+ * görüntüleriyle açılır, kaydederken ayarlar taşınmaz).
+ */
+export async function readOdt(data: ArrayBuffer | Uint8Array, warnings?: LoadWarnings, opts: { kaynak?: boolean } = {}): Promise<BelgeDocument> {
   const r = new OdtReader();
   if (warnings) r.warnings = warnings;
+  if (opts.kaynak === false) r.register = false;
   return r.read(data);
 }
 

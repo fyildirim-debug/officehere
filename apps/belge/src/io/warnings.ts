@@ -120,6 +120,17 @@ export function saveNotes(report: { dropped: readonly { reason: string }[] } | n
   return report?.dropped.some((d) => d.reason === "macro") ? [MACROS_REMOVED] : [];
 }
 
+/** .odt'den gelen gömülü nesneler başka biçimde yalnız yedek görünümleriyle yazıldı. */
+export const ODF_OBJECTS_FALLBACK = "Belgedeki gömülü nesneler (grafik, formül) bu biçimde saklanamadığı için yalnız görüntüleri ya da yer tutucu metin yazıldı. Korumak için belgeyi .odt olarak kaydedin.";
+
+/** Gömülü nesnelerin özgün dosyası bulunamadı (.odt'ye kaydederken). */
+export const ODF_OBJECTS_LOST = "Belgedeki bazı gömülü nesnelerin özgün dosyası bulunamadığı için yalnız görüntüleri ya da yer tutucu metin yazıldı.";
+
+/** .odt yazımının geçiş katmanı özetinden kaydederken bildirilecekler. */
+export function odtSaveNotes(report: { objectsLost: boolean } | null | undefined): string[] {
+  return report?.objectsLost ? [ODF_OBJECTS_LOST] : [];
+}
+
 /* ------------------------------------------------------------------ */
 /* Hata sınıflandırması                                                 */
 /* ------------------------------------------------------------------ */

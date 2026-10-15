@@ -10,6 +10,8 @@ import { esc } from "../xml";
 import { cm, odfAttrs } from "./common";
 import { fillAttrs, strokeAttrs, textProps, type Attrs, type AutoStyles, type Shared } from "./writeStyles";
 import { ownRun, textBodyXml } from "./writeText";
+import { setRootAttrs, type OdfCarry } from "@officehere/core/odf";
+import { ODF_OBJECTS_EDITED, ODF_OBJECTS_SOURCE, odfSigMatches } from "./objects";
 
 export interface ShapeWriteCtx {
   sh: Shared;
@@ -26,6 +28,8 @@ export interface ShapeWriteCtx {
    * düzeyleri) devralacağı çalıştırma biçimi; okuyucu bu stilleri düzey olarak okur.
    */
   phInherited?: (cls: "title" | "subtitle" | "outline", level: number) => RunProps;
+  /** Geçiş katmanı: .odp'den gelen gömülü nesnelerin taşıyıcısı ve kaydetme uyarıları. */
+  objects?: { carry: OdfCarry; warnings: Set<string> };
 }
 
 let tableDefaults: RunProps | undefined;
@@ -268,29 +272,51 @@ function tableXml(t: TableShape, ctx: ShapeWriteCtx): string {
   return `<draw:frame${odfAttrs({ "draw:name": t.name || undefined, "draw:style-name": st, "draw:layer": "layout", ...boxAttrs(t) })}><table:table>${cols}${rows}</table:table></draw:frame>`;
 }
 
+/**
+ * .odp'den gelen gömülü nesnenin özgün çerçevesi (konum, boyut ve döndürme güncel; alt belgesi kaynak paketten
+ * kopyalanır). Görünümü düzenlendiyse ya da kaynak yoksa null ve uyarı: yedek görünümü (resim) yazılır.
+ */
+function odfObjectXml(s: Shape, ctx: ShapeWriteCtx): string | null {
+  const w = ctx.objects;
+  if (!s.odf || !w) return null;
+  if (!odfSigMatches(s)) {
+    w.warnings.add(ODF_OBJECTS_EDITED);
+    return null;
+  }
+  const r = w.carry.object(s.odf, ctx.inMaster ? "styles" : "content");
+  if (!r) {
+    w.warnings.add(ODF_OBJECTS_SOURCE);
+    return null;
+  }
+  for (const st of r.styles) ctx.auto.raw(st);
+  const box = Object.fromEntries(Object.entries(boxAttrs(s)).map(([k, v]) => [k, v === undefined || v === null || v === false ? undefined : String(v)]));
+  return setRootAttrs(r.xml, box, ["svg:x", "svg:y", "svg:width", "svg:height", "draw:transform"]);
+}
+
+/** Tek şeklin ODF XML'i (desteklenmeyen grafik nesnesinde boş). */
+function shapeXml(s: Shape, ctx: ShapeWriteCtx): string {
+  switch (s.kind) {
+    case "sp":
+      return spXml(s, ctx);
+    case "pic":
+      return picXml(s, ctx);
+    case "table":
+      return tableXml(s, ctx);
+    case "group": {
+      const inner = shapesXml(s.children, ctx);
+      return inner ? `<draw:g${odfAttrs({ "draw:name": s.name || undefined })}>${inner}</draw:g>` : "";
+    }
+    case "chart":
+      return "";
+  }
+}
+
 /** Şekil listesini yazar (desteklenmeyen grafik nesneleri atlanır). */
 export function shapesXml(shapes: Shape[], ctx: ShapeWriteCtx): string {
   let out = "";
   for (const s of shapes) {
     const before = out.length;
-    switch (s.kind) {
-      case "sp":
-        out += spXml(s, ctx);
-        break;
-      case "pic":
-        out += picXml(s, ctx);
-        break;
-      case "table":
-        out += tableXml(s, ctx);
-        break;
-      case "group": {
-        const inner = shapesXml(s.children, ctx);
-        if (inner) out += `<draw:g${odfAttrs({ "draw:name": s.name || undefined })}>${inner}</draw:g>`;
-        break;
-      }
-      case "chart":
-        break;
-    }
+    out += (s.odf ? odfObjectXml(s, ctx) : null) ?? shapeXml(s, ctx);
     // Gizli şekil: LibreOffice uzantı özniteliğiyle saklanır (görünmez ama korunur).
     if (s.hidden && out.length > before) out = out.slice(0, before) + out.slice(before).replace(/^<([\w:-]+)/, '<$1 drawooo:display="none"');
   }

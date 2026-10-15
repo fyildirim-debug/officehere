@@ -9,6 +9,7 @@ import { FormatError, toFormatError, type SaveFormat, type SunuFormat } from "./
 import { LoadWarnings } from "./loadWarnings";
 import { readOdp } from "./odp/reader";
 import { writeOdp } from "./odp/writer";
+import { hasOdfShapes, ODF_OBJECTS_FALLBACK } from "./odp/objects";
 import { readPpt } from "./ppt/reader";
 import { readPptx } from "./pptxReader";
 import { writePptx } from "./pptxWriter";
@@ -106,7 +107,7 @@ export async function readPresentationFile(data: ArrayBuffer | Uint8Array, name:
     const format = await sniffFormat(data, name);
     let pres: Presentation;
     if (format === "ppt") pres = await readPpt(data, { warnings });
-    else if (format === "odp" || format === "otp") pres = await readOdp(data, { warnings });
+    else if (format === "odp" || format === "otp") pres = await readOdp(data, { warnings, kaynak: opts.kaynak });
     else pres = await readPptx(data, { warnings, notices, kaynak: opts.kaynak });
     return { pres, format, warnings: warnings.list(), details: warnings.details, notices };
   } catch (e) {
@@ -117,11 +118,15 @@ export async function readPresentationFile(data: ArrayBuffer | Uint8Array, name:
 /** Sunuyu seçilen biçimde yazar. */
 export function writePresentationFormat(pres: Presentation, format: SaveFormat, opts: WriteOptions = {}): Promise<Uint8Array> {
   const { warnings } = opts;
+  if (format === "odp") {
+    // .pptx'in ham öğeleri ODF'de yedek görünümleriyle (şekil grubu/resim) yazılır; .odp'den gelen gömülü
+    // nesneler özgün çerçeveleriyle (ODF geçiş katmanı, odp/writer.ts).
+    if (warnings && hasRawShapes([...pres.slides, ...pres.layouts, pres.master])) warnings.push(RAW_WARN.odp);
+    return writeOdp(pres, { warnings });
+  }
+  // .odp'ye özgü gömülü nesneler .pptx'te yedek görünümleriyle (resim) yazılır.
+  if (warnings && hasOdfShapes([...pres.slides, ...pres.layouts, pres.master])) warnings.push(ODF_OBJECTS_FALLBACK);
   switch (format) {
-    case "odp":
-      // ODF'de geçiş katmanı yok: ham öğelerin yedek görünümü (şekil grubu/resim) yazılır.
-      if (warnings && hasRawShapes([...pres.slides, ...pres.layouts, pres.master])) warnings.push(RAW_WARN.odp);
-      return writeOdp(pres);
     case "ppsx":
       return writePptx(pres, { kind: "slideshow", warnings });
     case "potx":

@@ -6,6 +6,7 @@
  */
 
 import type { ShowSettings } from "../show/settings";
+import type { OdfObject } from "@officehere/core/odf";
 
 export type SchemeColorName =
   | "dk1"
@@ -210,6 +211,18 @@ export interface ShapeBase {
    * görünümüyle (grup/resim) gösterilir; kaydederken görünüm değişmemişse özgün XML yazılır.
    */
   raw?: RawXml;
+  /**
+   * .odp'den gelen gömülü nesne (draw:object ile grafik/formül alt belgesi, OLE): özgün çerçeve ve
+   * andığı stiller. Şekil yedek görünümüyle (resim) gösterilir; .odp'ye kaydederken görünüm
+   * değişmemişse özgün çerçeve (konum ve boyut güncel) ve alt belgesi yazılır.
+   */
+  odf?: OdfRaw;
+}
+
+/** Geçiş katmanı (ODF): gömülü nesnenin özgün çerçevesi; `sig` okunduğu andaki görünüm imzası. */
+export interface OdfRaw extends OdfObject {
+  src: string;
+  sig: string;
 }
 
 /** Ham öğenin başvurduğu ilişki (okurken kaynak parçanın .rels'inden). */
@@ -639,8 +652,9 @@ export interface Presentation {
   /** Not sayfaları ve dinleyici notları üst/alt bilgisi; yoksa yalnız sayfa numarası. */
   notesHeaderFooter?: NotesHeaderFooter;
   /**
-   * Açılan özgün paketin kayıt kimliği (yalnız kimlik; bayt taşımaz). Kaydederken modelin
-   * tanımadığı parçalar (makro, özel XML, gömülü yazı tipleri…) buradan taşınır.
+   * Açılan özgün paketin (.pptx ya da .odp) kayıt kimliği (yalnız kimlik; bayt taşımaz). Kaydederken
+   * modelin tanımadığı parçalar (makro, özel XML, gömülü yazı tipleri…; .odp'de ayarlar ve RDF üst
+   * verisi) aynı biçimde buradan taşınır.
    */
   kaynak?: string;
 }

@@ -1,8 +1,12 @@
 // ODT yazıcı: belge → OpenDocument Metin 1.3 paketi (mimetype sıkıştırmasız ve ilk, manifest,
 // content.xml, styles.xml, meta.xml, Pictures/). Paragraf/başlık biçimleri, listeler, tablolar
 // (birleştirilmiş hücreler), resimler, köprüler, dipnotlar, metin kutuları, İçindekiler, üst/alt bilgi.
+// Geçiş katmanı (@officehere/core/odf): .odt'den açılan belgede (settings.kaynak) settings.xml ve manifest.rdf
+// özgün paketten taşınır, gömülü nesneler (opak öğenin `odf`'u) özgün çerçeve ve alt belgeleriyle yazılır;
+// manifest taşınanlarla yeniden kurulur.
 import JSZip from "jszip";
 import type { JSONContent } from "@tiptap/core";
+import { OdfCarry, type OdfCarryReport, type OdfObject } from "@officehere/core/odf";
 import type { BelgeDocument, CommentData, PageSetup } from "../../model/document";
 import { samePage } from "../../model/document";
 import type { StyleDef } from "../../model/styles";
@@ -59,11 +63,18 @@ class OdtWriter {
   private changes: { id: string; kind: "insertion" | "deletion"; author: string; date: string; text: string }[] = [];
   private openIns: { key: string; id: string } | null = null;
   private lastDel: { key: string; region: { text: string } } | null = null;
+  /** ODF geçiş katmanı: açılan .odt'nin ayarları, RDF üst verisi ve gömülü nesneleri (settings.kaynak). */
+  readonly carry: OdfCarry;
+  /** Taşınan nesnelerin otomatik stilleri (içerik ve üst/alt bilgi bölümleri). */
+  private carriedStyles = { content: [] as string[], styles: [] as string[] };
+  /** Kaynağı bulunamadığı için yedek görünümüyle yazılan gömülü nesne var. */
+  objectsLost = false;
 
   constructor(readonly doc: BelgeDocument) {
     this.body = new StyleBook("", this.fonts);
     this.hfBook = new StyleBook("M", this.fonts);
     this.styles = stylesOf(doc.settings);
+    this.carry = new OdfCarry({ family: "text", source: doc.settings.kaynak });
   }
 
   /* -------------------------- satır içi -------------------------- */
@@ -227,9 +238,25 @@ class OdtWriter {
         const name = String(n.attrs?.name ?? "");
         return name ? `<text:bookmark text:name="${esc(name)}"/>` : "";
       }
-      case "opaqueInline":
+      case "opaqueInline": {
+        // .odt'den gelen gömülü nesne: özgün çerçevesi (alt belgesi kaynak paketten kopyalanır).
+        const odf = n.attrs?.odf as OdfObject | null | undefined;
+        if (odf) {
+          const r = this.carry.object({ ...odf, src: odf.src ?? (typeof n.attrs?.src === "string" ? n.attrs.src : undefined) }, book === this.body ? "content" : "styles");
+          if (r) {
+            (book === this.body ? this.carriedStyles.content : this.carriedStyles.styles).push(...r.styles);
+            return r.xml;
+          }
+          this.objectsLost = true;
+          const preview = typeof n.attrs?.preview === "string" ? n.attrs.preview : null;
+          if (preview) {
+            const img = this.image({ type: "image", attrs: { src: preview, width: n.attrs?.width ?? 200, height: n.attrs?.height ?? 150 } }, book);
+            if (img) return img;
+          }
+        }
         // .docx'e özgü öğe ODF'de yazılamaz: yer tutucu metin (kaydederken uyarılır).
         return this.span(odtText(opaquePlaceholder(n.attrs)), p, book);
+      }
       default: {
         const t = atomText(n);
         return t ? this.span(odtText(t), p, book) : "";
@@ -496,8 +523,8 @@ class OdtWriter {
     const layouts = pageLayout("pm1", s.page, hasHeader, hasFooter, s.pageColor) + this.masters.map((m) => pageLayout(m.layout, m.page, hasHeader, hasFooter, s.pageColor)).join("");
     const masters = `<style:master-page style:name="Standard" style:page-layout-name="pm1">${hfXml}</style:master-page>` + this.masters.map((m) => `<style:master-page style:name="${m.name}" style:page-layout-name="${m.layout}">${hfXml}</style:master-page>`).join("");
     const fonts = fontDecls(this.fonts);
-    const content = `${XML_DECL}<office:document-content ${ODF_NS} office:version="1.3">${fonts}<office:automatic-styles>${this.body.toXml()}</office:automatic-styles><office:body><office:text>${this.trackedChangesXml()}${text || '<text:p text:style-name="Standard"/>'}</office:text></office:body></office:document-content>`;
-    const styles = `${XML_DECL}<office:document-styles ${ODF_NS} office:version="1.3">${fonts}${named}<office:automatic-styles>${layouts}${this.hfBook.toXml()}</office:automatic-styles><office:master-styles>${masters}</office:master-styles></office:document-styles>`;
+    const content = `${XML_DECL}<office:document-content ${ODF_NS} office:version="1.3">${fonts}<office:automatic-styles>${this.body.toXml()}${this.carriedStyles.content.join("")}</office:automatic-styles><office:body><office:text>${this.trackedChangesXml()}${text || '<text:p text:style-name="Standard"/>'}</office:text></office:body></office:document-content>`;
+    const styles = `${XML_DECL}<office:document-styles ${ODF_NS} office:version="1.3">${fonts}${named}<office:automatic-styles>${layouts}${this.hfBook.toXml()}${this.carriedStyles.styles.join("")}</office:automatic-styles><office:master-styles>${masters}</office:master-styles></office:document-styles>`;
     const zip = new JSZip();
     zip.file("mimetype", MIME_ODT, { compression: "STORE" });
     zip.file("content.xml", content);
@@ -511,8 +538,17 @@ class OdtWriter {
       this.media.map((m) => `<manifest:file-entry manifest:full-path="${m.path}" manifest:media-type="${m.mime}"/>`).join("") +
       "</manifest:manifest>";
     zip.file("META-INF/manifest.xml", manifest);
-    return zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 } });
+    const bytes = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 } });
+    // Aynı biçimde kaydederken ayarlar ve RDF üst verisi, gömülü nesnelerin alt belgeleri; manifest yeniden kurulur.
+    return this.carry.active ? this.carry.finish(bytes) : bytes;
   }
+}
+
+/** .odt yazımının geçiş katmanı özeti. */
+export interface OdtWriteReport {
+  carry: OdfCarryReport;
+  /** Kaynağı bulunamadığı için yedek görünümüyle (önizleme ya da yer tutucu metin) yazılan gömülü nesne var. */
+  objectsLost: boolean;
 }
 
 /** Liste içindeki tablo: satırlar sekmeyle ayrılmış paragraflara düşer (ODF liste öğesi tablo içeremez). */
@@ -520,7 +556,10 @@ function textRows(n: JSONContent): JSONContent[] {
   return (n.content ?? []).map((r) => ({ type: "paragraph", content: [{ type: "text", text: (r.content ?? []).map((c) => textOf(c)).join("\t") }].filter((t) => t.text) }));
 }
 
-/** Belge → ODT baytları. */
-export function writeOdt(doc: BelgeDocument): Promise<Uint8Array> {
-  return new OdtWriter(doc).write();
+/** Belge → ODT baytları. `onReport`: geçiş katmanı özeti (taşınan ve taşınamayanlar). */
+export async function writeOdt(doc: BelgeDocument, opts: { onReport?: (r: OdtWriteReport) => void } = {}): Promise<Uint8Array> {
+  const w = new OdtWriter(doc);
+  const bytes = await w.write();
+  opts.onReport?.({ carry: w.carry.report, objectsLost: w.objectsLost });
+  return bytes;
 }

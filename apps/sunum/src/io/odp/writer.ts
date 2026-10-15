@@ -4,6 +4,8 @@
  * Kullanılan her slayt düzeni bir ana sayfa olur (arka plan + süsler).
  */
 import JSZip from "jszip";
+import { OdfCarry } from "@officehere/core/odf";
+import { kaynakPaket } from "../rawPassthrough";
 import { findPlaceholder, levelResolver } from "../../model/textStyle";
 import type { Layout, LevelStyle, Presentation, Shape, SpShape } from "../../model/types";
 import { esc, XML_HEAD } from "../xml";
@@ -94,11 +96,16 @@ function masterPresStyles(name: string, pres: Presentation, layout: Layout, sh: 
   return out;
 }
 
-/** Sunuyu ODP bayt dizisine yazar. */
-export async function writeOdp(pres: Presentation): Promise<Uint8Array> {
+/**
+ * Sunuyu ODP bayt dizisine yazar. Sunu .odp'den açıldıysa (`pres.kaynak`) ayarlar (settings.xml) ve RDF üst verisi
+ * özgün paketten taşınır, gömülü nesneler özgün çerçeveleri ve alt belgeleriyle yazılır (geçiş katmanı).
+ * `warnings`: yedek görünümüyle yazılan gömülü nesneler.
+ */
+export async function writeOdp(pres: Presentation, opts: { warnings?: string[] } = {}): Promise<Uint8Array> {
   const sh = new Shared(pres.theme);
   const auto = new AutoStyles("");
   const mauto = new AutoStyles("M");
+  const objects = { carry: new OdfCarry({ family: "presentation", source: kaynakPaket(pres.kaynak) }), warnings: new Set<string>() };
 
   // Kullanılan düzenler → ana sayfalar.
   const used: Layout[] = [];
@@ -142,7 +149,7 @@ export async function writeOdp(pres: Presentation): Promise<Uint8Array> {
     const r = masterResolvers(pres, layout);
     // Yer tutucu metni ana sayfa sunu stillerinden devralır (masterPresStyles ile aynı çözücüler).
     const phInherited: ShapeWriteCtx["phInherited"] = (cls, level) => (cls === "title" ? r.tl(0).run : cls === "subtitle" ? r.sl(0).run : r.bl(level).run);
-    const ctx: ShapeWriteCtx = { sh, auto, pres, layout, master: mname, link, phInherited };
+    const ctx: ShapeWriteCtx = { sh, auto, pres, layout, master: mname, link, phInherited, objects };
     let notes = "";
     if (slide.notes.trim()) {
       const body = { paragraphs: slide.notes.split("\n").map((t) => ({ runs: t ? [{ text: t, props: {} }] : [], level: 0, props: {} })) };
@@ -163,7 +170,7 @@ export async function writeOdp(pres: Presentation): Promise<Uint8Array> {
     const bg = layout.background ?? pres.master.background;
     const mdp = mauto.style("drawing-page", "dp", `<style:drawing-page-properties${odfAttrs({ "draw:background-size": "full", ...fillAttrs(bg, sh) })}/>`);
     const deco: Shape[] = [...(layout.showMasterShapes ? pres.master.shapes.filter((s) => !(s.kind === "sp" && s.ph)) : []), ...layout.shapes.filter((s) => !(s.kind === "sp" && s.ph))];
-    const ctx: ShapeWriteCtx = { sh, auto: mauto, pres, layout, master: name, link, inMaster: true };
+    const ctx: ShapeWriteCtx = { sh, auto: mauto, pres, layout, master: name, link, inMaster: true, objects };
     const title = findPlaceholder(layout.shapes, { type: "title" }) ?? findPlaceholder(pres.master.shapes, { type: "title" });
     const body = layout.shapes.find((s): s is SpShape => s.kind === "sp" && (s.ph?.type === "obj" || s.ph?.type === "body")) ?? findPlaceholder(pres.master.shapes, { type: "body" });
     const phs = [title, body].filter((s): s is SpShape => !!s).map((s) => ({ ...s, text: undefined, ph: { type: s.ph!.type === "ctrTitle" ? ("title" as const) : s.ph!.type === "obj" ? ("body" as const) : s.ph!.type } }));
@@ -211,5 +218,8 @@ export async function writeOdp(pres: Presentation): Promise<Uint8Array> {
   zip.file("styles.xml", styles);
   zip.file("meta.xml", meta);
   for (const f of sh.files) zip.file(f.path, f.bytes, { compression: "STORE" });
-  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 }, mimeType: ODP_MIME });
+  const bytes = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 }, mimeType: ODP_MIME });
+  opts.warnings?.push(...objects.warnings);
+  // Ayarlar ve RDF üst verisi (aynı biçimden açıldıysa), gömülü nesnelerin alt belgeleri; manifest yeniden kurulur.
+  return objects.carry.active ? objects.carry.finish(bytes) : bytes;
 }

@@ -2,6 +2,9 @@
 // denetimler, anlaşılmayan çizimler, alt belge, içe aktarılan içerik, bilinmeyen öğeler) özgün XML'leri ve
 // ilişkileriyle düğüm özniteliklerinde taşınır. Belgede yer tutucu kart olarak görünür; .docx'e kaydederken
 // özgün XML yazılır (ilişkiler ve benzersiz kimlikler yeniden kurulur, io/docx/partWriter.ts).
+// .odt'den gelen gömülü nesneler (draw:object ile grafik/formül alt belgeleri, OLE) `odf` özniteliğinde özgün
+// draw:frame'leriyle taşınır (`xml` boştur): .odt'ye kaydederken özgün çerçeve ve alt belge yazılır
+// (io/odt/writer.ts, @officehere/core/odf), diğer biçimlerde yedek görünüm (önizleme ya da yer tutucu metin).
 //
 // Paragraf ve koşu özelliklerinin modelde karşılığı olmayan çocukları (dil, karakter ölçeği, w14 efektleri…)
 // paragraf/başlık düğümünde ve textStyle işaretinde `ooxmlExtra` (XML dizesi) olarak taşınır.
@@ -9,6 +12,7 @@
 // Pano: XML özniteliklere HTML'de yazılmaz; yalnız bu penceredeki kayıt defterinin anahtarı yazılır. Böylece
 // kopyala/yapıştır/çoğalt öğeyi XML'iyle çoğaltır, dışarıdan yapıştırılan HTML ise belgeye XML sokamaz.
 import { Extension, Node, mergeAttributes } from "@tiptap/core";
+import type { OdfObject } from "@officehere/core/odf";
 
 /** Opak öğenin okurken toplanan ilişkisi (@officehere/core/opc RawRef ile aynı biçim). */
 export interface OpaqueRef {
@@ -37,6 +41,8 @@ export interface OpaqueAttrs {
   /** Görünür boyut (px; bilinmiyorsa null). */
   width: number | null;
   height: number | null;
+  /** .odt'den gelen gömülü nesne (özgün draw:frame ve andığı stiller); .docx öğesinde yok. */
+  odf?: OdfObject | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -100,9 +106,32 @@ export function opaquePlaceholder(attrs: Record<string, unknown> | undefined): s
   return `[Desteklenmeyen öğe: ${String(attrs?.label || "bilinmeyen öğe")}]`;
 }
 
-/** Belgede (gövde, üst/alt bilgi, notlar) opak öğe var mı? */
-export function hasOpaque(json: unknown): boolean {
-  return /"type":"opaque(?:Block|Inline)"/.test(JSON.stringify(json ?? null));
+/** Opak öğelerin `odf` öznitelikleri (gövde, üst/alt bilgi, notlar). */
+function opaqueOdf(json: unknown): (OdfObject | null)[] {
+  const out: (OdfObject | null)[] = [];
+  const walk = (v: unknown): void => {
+    if (!v || typeof v !== "object") return;
+    if (Array.isArray(v)) return v.forEach(walk);
+    const n = v as { type?: unknown; attrs?: { odf?: OdfObject | null } };
+    if (n.type === "opaqueBlock" || n.type === "opaqueInline") out.push(n.attrs?.odf ?? null);
+    else for (const x of Object.values(v)) walk(x);
+  };
+  walk(json);
+  return out;
+}
+
+/**
+ * Belgede (gövde, üst/alt bilgi, notlar) opak öğe var mı? `ooxmlOnly`: yalnız .docx'ten gelenler (.odt'den gelen
+ * gömülü nesneler ayrıca bildirilir: `hasOdfObjects`).
+ */
+export function hasOpaque(json: unknown, ooxmlOnly = false): boolean {
+  if (!/"type":"opaque(?:Block|Inline)"/.test(JSON.stringify(json ?? null))) return false;
+  return !ooxmlOnly || opaqueOdf(json).some((o) => !o);
+}
+
+/** Belgede .odt'den gelen (yalnız .odt'de korunabilen) gömülü nesne var mı? */
+export function hasOdfObjects(json: unknown): boolean {
+  return /"type":"opaque(?:Block|Inline)"/.test(JSON.stringify(json ?? null)) && opaqueOdf(json).some((o) => !!o);
 }
 
 /* ------------------------------------------------------------------ */
@@ -135,6 +164,7 @@ function opaqueAttributes(inline: boolean) {
     preview: fromToken("preview", null),
     width: fromToken("width", null),
     height: fromToken("height", null),
+    odf: fromToken("odf", null),
   };
 }
 

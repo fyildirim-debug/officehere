@@ -49,21 +49,33 @@ export function readInWorker(name: string, data: ArrayBuffer, opts: Pick<IoCallO
   return retried(() => io.call("open", { bytes: data, name }, opts), false);
 }
 
-/**
- * Belgeyi .docx olarak yazar. Worker'da olmayan kaynak paketler `provide` ile istenir (kimlik → baytlar; yoksa
- * null: geçiş katmanı olmadan yazılır ve bildirim döner).
- */
-export async function writeDocxInWorker(doc: BelgeDocument, macro: boolean, provide: (ids: string[]) => Promise<Record<string, Uint8Array | null>>): Promise<{ bytes: Uint8Array; notes: string[] }> {
+type Provide = (ids: string[]) => Promise<Record<string, Uint8Array | null>>;
+
+/** Kaynak paketli yazma: Worker'da olmayanlar `provide` ile istenip bir kez yinelenir. */
+function writeWithSources(format: "docx" | "odt", doc: BelgeDocument, macro: boolean, provide: Provide): Promise<{ bytes: Uint8Array; notes: string[] }> {
   return retried(async () => {
-    let r = await io.call("write", { doc, macro });
-    if (r.missing) r = await io.call("write", { doc, macro, sources: await provide(r.missing) });
+    let r = await io.call("write", { doc, macro, format });
+    if (r.missing) r = await io.call("write", { doc, macro, format, sources: await provide(r.missing) });
     if (r.missing) throw new Error(`Kaynak paket bulunamadı: ${r.missing.join(", ")}`);
     return r;
   });
 }
 
-/** .odt, .rtf ve .md yazıcıları. */
-export function encodeInWorker(format: "odt" | "rtf" | "md", doc: BelgeDocument): Promise<Uint8Array | string> {
+/**
+ * Belgeyi .docx olarak yazar. Worker'da olmayan kaynak paketler `provide` ile istenir (kimlik → baytlar; yoksa
+ * null: geçiş katmanı olmadan yazılır ve bildirim döner).
+ */
+export function writeDocxInWorker(doc: BelgeDocument, macro: boolean, provide: Provide): Promise<{ bytes: Uint8Array; notes: string[] }> {
+  return writeWithSources("docx", doc, macro, provide);
+}
+
+/** Belgeyi .odt olarak yazar; açılan .odt'nin ayarları ve gömülü nesneleri kaynak paketten taşınır (bkz. .docx). */
+export function writeOdtInWorker(doc: BelgeDocument, provide: Provide): Promise<{ bytes: Uint8Array; notes: string[] }> {
+  return writeWithSources("odt", doc, false, provide);
+}
+
+/** .rtf ve .md yazıcıları. */
+export function encodeInWorker(format: "rtf" | "md", doc: BelgeDocument): Promise<Uint8Array | string> {
   return retried(() => io.call("encode", { format, doc }));
 }
 

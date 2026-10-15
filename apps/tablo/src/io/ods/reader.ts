@@ -6,16 +6,37 @@
  */
 import JSZip from "jszip";
 import { cellKey, dateToSerial, errorFromCode, MAX_COLS, MAX_ROWS, type Scalar } from "@officehere/formula";
+import { OpcPackage, registerSource, releaseSource } from "@officehere/core/opc";
+import { objectLabel, odfInfo, styleRefs, withNamespaces, type OdfInfo } from "@officehere/core/odf";
 import { activateTheme } from "../../model/themeRuntime";
 import { DEFAULT_SIZE, type CellStyle } from "../../model/styles";
+import { emptyPassthrough } from "../../model/passthrough";
 import { WorkbookModel, type CellInput, type SheetModel } from "../../model/workbook";
 import { BIG_MERGE_CELLS, CELL_BUDGET, clampMerge, FormatError, safeSheetName } from "../bookUtil";
 import { checkPackageLimits, readCollapsed } from "../xlsxGuard";
 import { odfFormulaToA1, ofRefToA1 } from "./formula";
 import { lengthToPx, OdsStyleSheet } from "./styles";
-import { child, parseXml, scanXml, TreeBuilder } from "./xml";
+import { child, esc, find, kids, parseXml, scanXml, TreeBuilder, type XmlEl } from "./xml";
 
 export const ODS_MIME = "application/vnd.oasis.opendocument.spreadsheet";
+
+/** Ağacın XML'i (ön ekler olduğu gibi; değerler kaçışlanır). */
+function xmlOf(el: XmlEl): string {
+  let s = `<${el.name}`;
+  for (const [k, v] of Object.entries(el.attrs)) s += ` ${k}="${esc(v)}"`;
+  if (!el.children.length) return `${s}/>`;
+  return `${s}>${el.children.map((c) => (typeof c === "string" ? esc(c) : xmlOf(c))).join("")}</${el.name}>`;
+}
+
+/** Aralık listesindeki sayfa adları ("Sayfa1.A1:Sayfa1.B3 'Satış 2'.C1:C9" → Sayfa1, Satış 2). */
+function rangeSheets(v: string): string[] {
+  const out = new Set<string>();
+  for (const m of v.matchAll(/(?:^|[\s:])\$?(?:'((?:[^']|'')+)'|([^\s.':$][^\s.':]*))\.\$?[A-Za-z]{1,3}\$?\d+/g)) out.add(m[1] !== undefined ? m[1].replace(/''/g, "'") : m[2]);
+  return [...out];
+}
+
+/** Kitap çöpe gidince kaynak paket kaydı da bırakılır (bellek dosya boyutu kadar tutulmasın). */
+const sourceFinalizer = typeof FinalizationRegistry === "function" ? new FinalizationRegistry<string>((id) => releaseSource(id)) : null;
 
 /** "2024-03-15T10:30:00" → seri numarası (1900 sistemi). */
 export function isoToSerial(v: string): number | null {
@@ -58,8 +79,12 @@ interface ColRun {
 const STYLED_ROW_CAP = 1000;
 const STYLED_RUN_CAP = 1024;
 
-/** ODS/OTS paketini çalışma kitabına çevirir. Yapısal sorunda report.notice doldurulur. */
-export async function readOds(data: ArrayBuffer | Uint8Array, report?: { notice?: string }): Promise<WorkbookModel> {
+/**
+ * ODS/OTS paketini çalışma kitabına çevirir. Yapısal sorunda report.notice doldurulur. Özgün paket kaynak kaydına
+ * eklenir (`wb.kaynak`; `kaynak: false` ile eklenmez): .ods'ye kaydederken ayarlar, RDF üst verisi ve gömülü
+ * nesneler (sayfaların `passthrough.odf`'u) buradan taşınır.
+ */
+export async function readOds(data: ArrayBuffer | Uint8Array, report?: { notice?: string }, opts: { kaynak?: boolean } = {}): Promise<WorkbookModel> {
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(data);
@@ -85,10 +110,23 @@ export async function readOds(data: ArrayBuffer | Uint8Array, report?: { notice?
       /* stiller okunamazsa değerler yine gelir */
     }
   }
+  // Özgün paket (geçiş katmanı): açılamazsa ya da ODF değilse taşıma olmadan sürer
+  let src: OpcPackage | undefined;
+  let info: OdfInfo | null = null;
+  if (opts.kaynak !== false) {
+    try {
+      src = await OpcPackage.open(data);
+      info = await odfInfo(src);
+      if (!info) src = undefined;
+    } catch {
+      src = undefined;
+    }
+  }
   const wb = new WorkbookModel(true);
   const warnings = new Set<string>();
   // Varsayılan hücre yazı tipi tema gövde yazı tipi olur (boş hücreler de aynı görünsün)
   const reader = new ContentReader(wb, sheetStyles, warnings);
+  reader.keepObjects = !!src;
   try {
     scanXml(content, reader);
   } catch (e) {
@@ -99,6 +137,15 @@ export async function readOds(data: ArrayBuffer | Uint8Array, report?: { notice?
     if (report) report.notice = "Dosya bozuk ya da yarıda kesilmiş: okunabilen bölüm açıldı. Kaydetmeden önce içeriği denetleyin; okunamayan kısım kaydedince kaybolur.";
   }
   reader.finish();
+  const objects = reader.storeObjects(info);
+  if (src) {
+    wb.kaynak = registerSource(src);
+    sourceFinalizer?.register(wb, wb.kaynak);
+  }
+  if (objects && report) {
+    const note = `Bu dosyadaki ${objects} gömülü grafik ya da nesne gösterilemiyor; .ods olarak kaydedince korunur, başka biçimde kaydedince kaybolur.`;
+    report.notice = report.notice ? `${report.notice} ${note}` : note;
+  }
   try {
     const meta = await zip.file("meta.xml")?.async("string");
     if (meta) readMeta(wb, meta);
@@ -166,6 +213,56 @@ class ContentReader {
   private filterRanges: string[] = [];
   private baseReady = false;
   private matrices: { r1: number; c1: number; r2: number; c2: number }[] = [];
+  /** Gömülü nesneler taşınsın mı (özgün paket kaynak kaydında). */
+  keepObjects = false;
+  /** Kökteki ad alanı bildirimleri ve otomatik stiller (taşınan çerçevelerin bildirimleri ve stilleri için). */
+  private rootNs: Record<string, string> = {};
+  private autoStyles: XmlEl | null = null;
+  private inShapes = false;
+  /** Okunmakta olan sayfa çerçevesi ve okunan gömülü nesne çerçeveleri. */
+  private frame: { b: TreeBuilder; sheet: SheetModel } | null = null;
+  private objectFrames: { sheet: SheetModel; el: XmlEl }[] = [];
+
+  /** Çerçeve kapandı: gömülü nesne (draw:object/draw:object-ole) değilse kaydedince kaybolur. */
+  private endFrame(): void {
+    const { b, sheet } = this.frame!;
+    this.frame = null;
+    if (find(b.root, "draw:object") || find(b.root, "draw:object-ole")) this.objectFrames.push({ sheet, el: b.root });
+    else this.warnings.add("grafikler, resimler ve şekiller");
+  }
+
+  /**
+   * Gömülü nesneleri sayfaların geçiş verisine yazar (`passthrough.odf`): özgün çerçeve, andığı otomatik stiller ve
+   * veri aralığının sayfaları (okunduğu andaki yapı sürümleriyle). Taşınan nesne sayısını döner.
+   */
+  storeObjects(info: OdfInfo | null): number {
+    let n = 0;
+    for (const { sheet, el } of this.objectFrames) {
+      const xml = withNamespaces(xmlOf(el), this.rootNs);
+      const names = styleRefs(xml);
+      const styles = kids(this.autoStyles ?? undefined, "style:style")
+        .filter((s) => names.has(s.attrs["style:name"]))
+        .map((s) => withNamespaces(xmlOf(s), this.rootNs));
+      const obj = find(el, "draw:object");
+      const deps: [string, number][] = [];
+      let ok = true;
+      for (const raw of rangeSheets(obj?.attrs["draw:notify-on-update-of-ranges"] ?? "")) {
+        const name = this.nameMap.get(raw);
+        const dep = name === raw ? this.wb.sheets.find((s) => s.name === name) : undefined;
+        if (!dep) ok = false;
+        else deps.push([dep.name, dep.structVersion]);
+      }
+      // Sayfa adı değiştirilerek açılan (geçersiz ad) sayfaya bağlı nesne doğru yazılamaz: kaydedince kaybolur.
+      if (!ok) {
+        this.warnings.add("grafikler, resimler ve şekiller");
+        continue;
+      }
+      sheet.passthrough ??= emptyPassthrough(sheet.structVersion);
+      (sheet.passthrough.odf ??= []).push({ xml, styles, label: objectLabel(info, xml), deps });
+      n++;
+    }
+    return n;
+  }
 
   constructor(
     private wb: WorkbookModel,
@@ -196,6 +293,10 @@ class ContentReader {
   }
 
   open = (name: string, attrs: Record<string, string>, self: boolean): void => {
+    if (this.frame) {
+      this.frame.b.open(name, attrs);
+      return;
+    }
     if (this.capture) {
       this.capture.open(name, attrs);
       return;
@@ -210,12 +311,18 @@ class ContentReader {
       return;
     }
     switch (name) {
+      case "office:document-content":
+        for (const [k, v] of Object.entries(attrs)) if (k.startsWith("xmlns:")) this.rootNs[k.slice(6)] = v;
+        return;
       case "office:automatic-styles":
       case "office:font-face-decls":
         if (!self) this.capture = new TreeBuilder(name, attrs);
         return;
       case "table:table":
         this.startSheet(attrs);
+        return;
+      case "table:shapes":
+        this.inShapes = !self;
         return;
       case "table:table-column":
         if (this.sheet) this.addColumn(attrs);
@@ -245,17 +352,31 @@ class ContentReader {
         this.warnings.add("koşullu biçimlendirme");
         return;
       case "draw:frame":
+        // Sayfaya bağlı çerçeve (table:shapes): gömülü nesneyse özgün XML'iyle taşınır (kapanınca karar verilir).
+        if (this.inShapes && this.sheet && this.keepObjects) {
+          this.frame = { b: new TreeBuilder(name, attrs), sheet: this.sheet };
+          return;
+        }
         this.warnings.add("grafikler, resimler ve şekiller");
         return;
     }
   };
 
   close = (name: string): void => {
+    if (this.frame) {
+      if (this.frame.b.close()) this.endFrame();
+      return;
+    }
     if (this.capture) {
       if (this.capture.close()) {
         this.styles.add(this.capture.root);
+        if (this.capture.root.name === "office:automatic-styles") this.autoStyles = this.capture.root;
         this.capture = null;
       }
+      return;
+    }
+    if (name === "table:shapes") {
+      this.inShapes = false;
       return;
     }
     if (this.subTable) {
@@ -274,6 +395,10 @@ class ContentReader {
   };
 
   text = (t: string): void => {
+    if (this.frame) {
+      this.frame.b.text(t);
+      return;
+    }
     if (this.capture) {
       this.capture.text(t);
       return;

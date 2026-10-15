@@ -6,7 +6,7 @@ import { join } from "node:path";
 import JSZip from "jszip";
 import { getSource, openSource, releaseSource } from "@officehere/core/opc";
 import { defaultSettings, type BelgeDocument } from "../../model/document";
-import { encodeInWorker, readInWorker, verifyInWorker, writeDocxInWorker } from "../client";
+import { encodeInWorker, readInWorker, verifyInWorker, writeDocxInWorker, writeOdtInWorker } from "../client";
 import { sourceIds } from "../ioHandlers";
 import { writeDocx } from "../index";
 import { LoadWarnings, lossMessage } from "../warnings";
@@ -81,6 +81,33 @@ describe("Belge G/Ç Worker'ı", () => {
     expect((await JSZip.loadAsync(yok.bytes)).file("word/theme/theme1.xml")).toBeNull();
   });
 
+  it(".odt: kaynak paket kaydedilir; yazarken eksikse istenir, ayarlar ve RDF üst verisi taşınır", async () => {
+    const bytes = new Uint8Array(readFileSync(join(FIX, "bicimler/lo-ornek.odt")));
+    const r = await readInWorker("lo-ornek.odt", buf(bytes));
+    if (r.main) throw new Error("Worker'da açılmalıydı");
+    const id = r.doc.settings.kaynak!;
+    expect(id).toMatch(/^[0-9a-f]{64}$/);
+    releaseSource(id);
+    const istenen: string[][] = [];
+    const out = await writeOdtInWorker(r.doc, async (ids) => {
+      istenen.push(ids);
+      await openSource(bytes, { id });
+      return { [id]: getSource(id)!.bytes };
+    });
+    expect(istenen).toEqual([[id]]);
+    const zip = await JSZip.loadAsync(out.bytes);
+    expect(zip.file("settings.xml")).not.toBeNull();
+    expect(zip.file("manifest.rdf")).not.toBeNull();
+    expect(zip.file("Thumbnails/thumbnail.png")).toBeNull();
+    const manifest = await zip.file("META-INF/manifest.xml")!.async("string");
+    expect(manifest).toContain('full-path="settings.xml"');
+    expect(manifest).toContain('full-path="manifest.rdf"');
+    // Kaynak hiçbir yerde yoksa geçiş katmanı olmadan yazılır.
+    releaseSource(id);
+    const yok = await writeOdtInWorker(r.doc, async (ids) => Object.fromEntries(ids.map((x) => [x, null])));
+    expect((await JSZip.loadAsync(yok.bytes)).file("settings.xml")).toBeNull();
+  });
+
   it("opak öğelerin kaynakları da toplanır", () => {
     const doc = simpleDoc();
     doc.settings.kaynak = "a".repeat(64);
@@ -120,7 +147,7 @@ describe("Belge G/Ç Worker'ı", () => {
   });
 
   it(".odt, .rtf, .md Worker'da yazılır; doğrulama ayrı Worker'da", async () => {
-    const odt = await encodeInWorker("odt", simpleDoc());
+    const odt = (await writeOdtInWorker(simpleDoc(), async () => ({}))).bytes;
     expect(ArrayBuffer.isView(odt) && odt[0] === 0x50 && odt[1] === 0x4b).toBe(true);
     expect(await encodeInWorker("rtf", simpleDoc())).toMatch(/^\{\\rtf1/);
     expect(await encodeInWorker("md", simpleDoc("Merhaba"))).toContain("Merhaba");
