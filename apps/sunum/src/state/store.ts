@@ -87,6 +87,8 @@ export interface AppState {
    * Yeni dosya açılınca sıfırlanır.
    */
   loadWarnings?: string[];
+  /** Açılış bildirimleri (dosya hasarlı değil; ör. dijital imza): ilk elle kayda kadar otomatik kaydetme bekler. */
+  loadNotices?: string[];
   /** Açılan dosyanın biçimi (uzantı; yolu olmayan dosyalarda kaydetme biçimi buradan). */
   fileFormat?: string;
   /** Biçim kaybı sorusu bu belge için soruldu mu (ODP ilk kayıt). */

@@ -13,6 +13,7 @@
  */
 import { OpcPackage } from "@officehere/core/opc";
 import type { Presentation } from "../../model/types";
+import { SIGNED_NOTICE } from "../formatInfo";
 import { readEffects, type ReadCtx } from "../readDrawing";
 import { LoadWarnings } from "../loadWarnings";
 import { kaynakBirak, kaynakKaydet, themeSig } from "../rawPassthrough";
@@ -29,6 +30,7 @@ import { linkSlides, readSlides, resolveSlides } from "./slide";
 import { readTheme, resolveTheme } from "./theme";
 
 export { PptxError } from "./package";
+export { SIGNED_NOTICE };
 
 export interface PptxReadOptions {
   /** Açılış uyarıları (eksik/bozuk parçalar); verilmezse yok sayılır. */
@@ -38,8 +40,6 @@ export interface PptxReadOptions {
   /** Özgün paket geçiş katmanı için kaydedilsin mi (varsayılan evet; tek kullanımlık doğrulama okumalarında hayır). */
   kaynak?: boolean;
 }
-
-export const SIGNED_NOTICE = "Bu sunu dijital olarak imzalı; kaydederseniz imza kaldırılır.";
 
 /** PPTX baytlarını sunu modeline okur. Eksik/bozuk parçalar `opts.warnings`'e yazılır. */
 export async function readPptx(data: ArrayBuffer | Uint8Array, opts: PptxReadOptions = {}): Promise<Presentation> {

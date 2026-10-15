@@ -19,6 +19,7 @@ interface Zip {
 }
 const JSZip = createRequire(resolve(__dirname, "..", "apps/sunum/package.json"))("jszip") as { loadAsync(data: Buffer): Promise<Zip> };
 const fixture = (n: string) => readFileSync(resolve(__dirname, "..", "apps/sunum/src/io/__fixtures__", n));
+const poi = (n: string) => readFileSync(resolve(__dirname, "..", "test-derlem/poi", n));
 const thumbs = (page: Page) => page.locator(".thumb-pane .thumb-item");
 const stage = (page: Page) => page.locator(".stage .sv");
 const bar = (page: Page) => page.locator(".oh-messagebar");
@@ -127,6 +128,27 @@ test.describe("OfficeHere Sunum dosya G/Ç sağlamlığı", () => {
     await expect(bar(page)).toContainText("2. slayt olağandışı büyük olduğu için okunmadı", { timeout: 15_000 });
     expect(Date.now() - t0).toBeLessThan(15_000);
     await expect(thumbs(page)).toHaveCount(7);
+  });
+
+  test("makrolu sunu .pptm olarak kaydedilir: makro projesi korunur, ileti çalıştırılmadığını söyler", async ({ page }) => {
+    await openFile(page, "SimpleMacro.pptm", poi("SimpleMacro.pptm"));
+    await expect(bar(page)).toContainText("makrolar kaydederken korunur, ancak OfficeHere'da çalıştırılmaz");
+    const [download] = await Promise.all([page.waitForEvent("download"), page.keyboard.press("Control+s")]);
+    expect(download.suggestedFilename()).toBe("SimpleMacro.pptm");
+    const z = await JSZip.loadAsync(readFileSync((await download.path())!));
+    expect(z.file("ppt/vbaProject.bin")).not.toBeNull();
+    expect(await z.file("[Content_Types].xml")!.async("string")).toContain("application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml");
+  });
+
+  test("dijital imzalı sunu: açılışta bildirilir, kaydedince imzanın kaldırıldığı söylenir", async ({ page }) => {
+    await openFile(page, "hello-world-signed.pptx", poi("hello-world-signed.pptx"));
+    await expect(bar(page)).toContainText("dijital olarak imzalı");
+    const [download] = await Promise.all([page.waitForEvent("download"), page.keyboard.press("Control+s")]);
+    expect(download.suggestedFilename()).toBe("hello-world-signed.pptx");
+    await expect(bar(page)).toContainText("Sunu kaydedildi.");
+    await expect(bar(page)).toContainText(/imza/);
+    const z = await JSZip.loadAsync(readFileSync((await download.path())!));
+    expect(z.file("_xmlsignatures/origin.sigs")).toBeNull();
   });
 
   test("kod bölme: okuyucu/yazıcı parçası ayrı yüklenir, açma ve kaydetme çalışır", async ({ page }) => {

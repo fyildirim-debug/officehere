@@ -23,7 +23,7 @@ export function nextUntitled(): string {
  * Sunuyu düzenleyiciye yükler. `loadWarnings`: açılışta okunamayan bölümler
  * (AppState.loadWarnings; boş değilse dosya tam açılmamıştır).
  */
-export function loadPresentation(a: Actions, pres: Presentation, fileName: string, fileRef: FileRef | null, format: string = "pptx", loadWarnings: string[] = []) {
+export function loadPresentation(a: Actions, pres: Presentation, fileName: string, fileRef: FileRef | null, format: string = "pptx", loadWarnings: string[] = [], loadNotices: string[] = []) {
   abortMasterView(a);
   a.store.set({
     pres,
@@ -48,6 +48,7 @@ export function loadPresentation(a: Actions, pres: Presentation, fileName: strin
     fileFormat: format,
     formatAsked: false,
     loadWarnings,
+    loadNotices,
   });
   a.store.resetHistory();
   saveStatus.reset();
@@ -64,12 +65,18 @@ export function currentFormat(s: Pick<AppState, "fileRef" | "fileFormat">): stri
   return (p ? extensionOf(p) : "") || s.fileFormat || "pptx";
 }
 
-/** Açılış iletisi (eski biçim, makrolar, gösteri dosyası). */
-function openNotice(a: Actions, format: SunuFormat) {
+/** Açılış iletisi (eski biçim, makrolar, gösteri dosyası); `notices` (ör. dijital imza) iletiye eklenir. */
+function openNotice(a: Actions, format: SunuFormat, notices: string[] = []) {
   const info = FORMATS[format];
+  const action = info.show ? "startShow" : undefined;
+  const extra = notices.join(" ");
+  const kind = extra ? "warning" : "info";
+  const withExtra = (t: string) => (extra ? `${t} ${extra}` : t);
   if (info.legacy) a.message("Bu sunu 97-2003 biçiminde (uyumluluk modu). Bazı öğeler gösterilemeyebilir; kaydedince .pptx olur.", "warning");
-  else if (info.macro) a.message("Bu dosyadaki makrolar yok sayıldı. Kaydedince makrosuz .pptx olur.", "info", info.show ? "startShow" : undefined);
-  else if (info.show) a.message("Bu dosya bir slayt gösterisi. Düzenleyebilir ya da gösteriyi başlatabilirsiniz.", "info", "startShow");
+  else if (info.macro && info.writable === format) a.message(withExtra("Bu sunudaki makrolar kaydederken korunur, ancak OfficeHere'da çalıştırılmaz."), kind, action);
+  else if (info.macro) a.message(withExtra("Bu dosyadaki makrolar yok sayıldı. Kaydedince makrosuz .pptx olur."), kind, action);
+  else if (info.show) a.message(withExtra("Bu dosya bir slayt gösterisi. Düzenleyebilir ya da gösteriyi başlatabilirsiniz."), kind, "startShow");
+  else if (extra) a.message(extra, "warning");
 }
 
 /** Açılış uyarıları iletisi: ilk sorun metinde, tümü ve teknik ayrıntılar "Ayrıntılar"da. */
@@ -83,14 +90,14 @@ export function loadWarningMessage(warnings: string[], details: string[] = []): 
 
 export async function openBytes(a: Actions, data: ArrayBuffer, name: string, ref: FileRef | null): Promise<boolean> {
   try {
-    const { pres, format, warnings, details } = await readPresentationFile(data, name);
+    const { pres, format, warnings, details, notices } = await readPresentationFile(data, name);
     if (FORMATS[format].template) {
       // Şablon: adsız yeni sunu olarak açılır (özgün dosyanın üzerine yazılmaz).
       loadPresentation(a, pres, nextUntitled(), null, "pptx", warnings);
       a.message(`“${name}” şablonundan yeni sunu oluşturuldu.`, "info");
     } else {
-      loadPresentation(a, pres, baseName(name), ref, format, warnings);
-      openNotice(a, format);
+      loadPresentation(a, pres, baseName(name), ref, format, warnings, notices);
+      openNotice(a, format, notices);
     }
     if (warnings.length) {
       const m = loadWarningMessage(warnings, details);
@@ -132,22 +139,23 @@ export async function openRecent(a: Actions, file: RecentFile): Promise<void> {
   await openDialog(a);
 }
 
-/** Sunuyu verilen biçimde baytlara yazar (asıl görünümdeyken de belgenin kendisi). */
-export async function presentationBytes(a: Actions, format: SaveFormat = "pptx"): Promise<Uint8Array> {
+/** Sunuyu verilen biçimde baytlara yazar (asıl görünümdeyken de belgenin kendisi); kaydetme uyarıları `warnings`'e. */
+export async function presentationBytes(a: Actions, format: SaveFormat = "pptx", warnings?: string[]): Promise<Uint8Array> {
   const doc = documentPres(a);
-  return writePresentationFormat({ ...doc, props: { ...doc.props, title: doc.props.title || a.s.fileName } }, format);
+  return writePresentationFormat({ ...doc, props: { ...doc.props, title: doc.props.title || a.s.fileName } }, format, { warnings });
 }
 
 /**
  * Farklı Kaydet: biçim listesi sunulur; kullanıcı süzgeçten başka bir biçim
  * seçtiyse dosya o biçimin yazıcısıyla yeniden yazılır.
  */
-async function saveAsFormat(a: Actions, name: string, format: SaveFormat, bytes: Uint8Array): Promise<FileRef | null> {
+async function saveAsFormat(a: Actions, name: string, format: SaveFormat, bytes: Uint8Array, warnings: string[]): Promise<FileRef | null> {
   const ref = await saveFileAs(name, saveFilters(format), bytes);
   if (!ref) return null;
   const ext = extensionOf(ref.path ?? ref.name);
   if (isSaveFormat(ext) && ext !== format) {
-    const other = await presentationBytes(a, ext);
+    warnings.length = 0;
+    const other = await presentationBytes(a, ext, warnings);
     const buf = other.buffer.slice(other.byteOffset, other.byteOffset + other.byteLength) as ArrayBuffer;
     const native = getNative();
     if (ref.path && native) {
@@ -186,14 +194,20 @@ export async function save(a: Actions, forceAs = false, as?: SaveFormat): Promis
   try {
     const name = `${s.fileName}.${format}`;
     const target = inPlace ? s.fileRef : null;
+    const warnings: string[] = [];
     const ref = await trackSave(isDirectSave(target), async () => {
-      const bytes = await presentationBytes(a, format);
-      return target ? saveFile(target, name, saveFilters(format), bytes) : saveAsFormat(a, name, format, bytes);
+      const bytes = await presentationBytes(a, format, warnings);
+      return target ? saveFile(target, name, saveFilters(format), bytes) : saveAsFormat(a, name, format, bytes, warnings);
     });
     if (!ref) return false;
     const ext = extensionOf(ref.path ?? ref.name);
     a.store.set({ fileRef: ref.path || ref.handle ? ref : null, fileName: baseName(ref.name), dirty: false, fileFormat: isSaveFormat(ext) ? ext : format, formatAsked: asked || !inPlace });
     void addRecentFile({ path: ref.path ?? ref.name, name: ref.name, app: "sunum", openedAt: Date.now() });
+    if (warnings.length) {
+      // Kaydetme uyarıları (makro, imza, yedek görünüm) iletide kalır
+      a.message(`Sunu kaydedildi. ${[...new Set(warnings)].join(" ")}`, "warning");
+      return true;
+    }
     a.message("Sunu kaydedildi.", "success");
     window.setTimeout(() => {
       if (a.s.message?.kind === "success") a.store.set({ message: null });

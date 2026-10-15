@@ -99,3 +99,6 @@ export function toFormatError(e: unknown): FormatError {
 
 /** Uygulama parçası (ör. dosya okuyucu/yazıcı) yüklenemedi. */
 export const LOAD_FAILED = "Uygulamanın dosya bileşeni yüklenemedi. Bağlantınızı denetleyip yeniden deneyin ya da sayfayı yenileyin.";
+
+/** Dijital imzalı .pptx açılış bildirimi (ReadResult.notices). */
+export const SIGNED_NOTICE = "Bu sunu dijital olarak imzalı; kaydederseniz imza kaldırılır.";

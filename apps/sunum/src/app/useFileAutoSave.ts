@@ -3,33 +3,36 @@
  * sonra aynı dosyaya yazılır. Kirli bayrak temizlenince Otomatik Kurtarma
  * taslağı da silinir (useAutoRecover).
  *
- * Dosya açılırken okunamayan bölümler olduysa (loadWarnings) ilk elle kayda kadar
- * otomatik kaydetme yapılmaz; yazılan dosya kendi okuyucumuzla yeniden açılarak
+ * Dosya açılırken okunamayan bölümler olduysa (loadWarnings) ya da dosya dijital
+ * imzalıysa (loadNotices) ilk elle kayda kadar otomatik kaydetme yapılmaz; yazılan dosya kendi okuyucumuzla yeniden açılarak
  * doğrulanır (açılamazsa önceki içerik geri yüklenir).
  */
 import { useRef } from "react";
 import { useAutoSave } from "@officehere/ui";
-import { readPresentationFile } from "../io/formats";
+import { readPresentationFile, SIGNED_NOTICE } from "../io/formats";
 import type { Actions } from "../state/actions";
 import { documentPres } from "../state/masterActions";
 import { presentationBytes, save } from "./fileOps";
 
 /** Rozette gösterilen bekletme nedeni. */
 export const LOAD_WARNING_HOLD = "Bu dosyada desteklenmeyen öğeler var; ilk kaydı siz onaylayın";
+export const SIGNATURE_HOLD = "Dijital imzalı sunu; kaydederseniz imza kaldırılır. İlk kaydı siz onaylayın";
 
 /** Yazılan .pptx kendi okuyucumuzla açılabiliyor mu ve yazılan slaytların hiçbiri kaybolmamış mı. */
 export async function canReopenPptx(data: ArrayBuffer, expectedSlides = 0): Promise<boolean> {
-  const { pres } = await readPresentationFile(data, "dogrulama.pptx");
+  // Doğrulama okuması kaynak paket olarak kaydedilmez
+  const { pres } = await readPresentationFile(data, "dogrulama.pptx", { kaynak: false });
   return Array.isArray(pres?.slides) && pres.slides.length >= expectedSlides;
 }
 
 export function useFileAutoSave(a: Actions, path: string | undefined): void {
-  const warnings = (a.s as { loadWarnings?: string[] }).loadWarnings;
+  const warnings = a.s.loadWarnings;
+  const signed = a.s.loadNotices?.includes(SIGNED_NOTICE);
   const expected = useRef(0);
   useAutoSave({
     path,
     formats: ["pptx"],
-    holdReason: warnings?.length ? LOAD_WARNING_HOLD : null,
+    holdReason: warnings?.length ? LOAD_WARNING_HOLD : signed ? SIGNATURE_HOLD : null,
     verify: (data) => canReopenPptx(data, expected.current),
     isDirty: () => a.s.dirty,
     // Yalnız sunu içeriği değişince (seçim, görünüm vb. değil).
