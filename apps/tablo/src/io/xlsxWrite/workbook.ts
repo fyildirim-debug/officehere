@@ -9,9 +9,9 @@
  *  4) Paket kurulur; kaynak paket ya da makro varsa geçiş katmanı (carryParts) ham kopyayla ekler.
  */
 import JSZip from "jszip";
-import { Carry, ZipWriter, carryParts, getSource } from "@officehere/core/opc";
+import { Carry, ZipWriter, carryParts } from "@officehere/core/opc";
 import type { WorkbookModel } from "../../model/workbook";
-import { PackageParts, postProcessParts, type PassthroughContext } from "../xlsxPost";
+import { PackageParts, postProcessParts, xlsxSource, type PassthroughContext } from "../xlsxPost";
 import { CT, addOverride, contentTypesXml } from "./contentTypes";
 import { printNames } from "./pageSetup";
 import { REL, Rels, appendRel, relsXml } from "./rels";
@@ -168,7 +168,7 @@ export async function writeXlsxPackage(wb: WorkbookModel, opts: XlsxWriterOption
   evre("plan");
 
   // 2) Sonradan işlem (sayfa verisine dokunmadan)
-  const src = getSource(wb.kaynak);
+  const src = xlsxSource(wb);
   const pctx: PassthroughContext = { src, carry: new Carry(), partMap: [], warnings: [] };
   await postProcessParts(zip, wb, paths, parts, pctx, { ownSheetData: true });
   parts.flush((p) => own.has(p));

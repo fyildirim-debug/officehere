@@ -23,7 +23,7 @@ import { writeSlicersInto } from "./xlsxSlicers";
 import { writeDynamicArrayMeta } from "./xlsxDynamic";
 import { writeCheckboxesInto } from "./xlsxCheckbox";
 import { patchThemeXml } from "../model/theme";
-import { ContentTypes, RelsBuilder, parseRels, reattach, relsPathOf, type Carry, type CarryInstance, type OpcPackage } from "@officehere/core/opc";
+import { ContentTypes, RelsBuilder, getSource, parseRels, reattach, relsPathOf, type Carry, type CarryInstance, type OpcPackage } from "@officehere/core/opc";
 import { decodeXString } from "./xlsxTables";
 import { EXT_URI, condSig, tableFileName } from "./xlsxPackage";
 import { parseSqref, sqrefText, type PtChild, type PtItem, type PtNamespaces, type SheetPassthrough } from "../model/passthrough";
@@ -152,6 +152,12 @@ export function fixDataBars(part: XmlPart): void {
 }
 
 /* ============================== Geçiş katmanı: geri koyma ============================== */
+
+/** Kitabın .xlsx geçiş kaynağı: yalnız OPC paketi (.ods'den açılan kitabın kaynağı ODF'dir; taşınacak bir şey yok). */
+export function xlsxSource(wb: WorkbookModel): OpcPackage | undefined {
+  const src = getSource(wb.kaynak);
+  return src?.isOpc ? src : undefined;
+}
 
 /** Yazma turunun geçiş bağlamı: kaynak paket, öğe düzeyi taşıma planı, sayfa/parça eşlemesi ve uyarılar. */
 export interface PassthroughContext {

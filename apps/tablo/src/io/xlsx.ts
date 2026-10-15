@@ -14,7 +14,7 @@ import type { Rect, ValidationRule } from "../model/types";
 import { WorkbookModel, type SheetModel } from "../model/workbook";
 import { ColorResolver, fromXStyle, rawNumberFormats, toXStyle } from "./xlsxStyles";
 import { readCharts } from "./xlsxCharts";
-import { passthroughCfRules, postProcess, type PassthroughContext } from "./xlsxPost";
+import { passthroughCfRules, postProcess, xlsxSource, type PassthroughContext } from "./xlsxPost";
 import { compressCells, readCondRule, readValidation, writeCondRule } from "./xlsxRules";
 
 import { usesDynamicFunctions } from "./xlsxDynamic";
@@ -24,7 +24,7 @@ import { addXlfnPrefixes, normalizeFileFormula, utcSerial } from "./xlsxFormula"
 export { compressCells, addXlfnPrefixes, normalizeFileFormula };
 import { readPivotsFromData } from "./xlsxPivot";
 import { OPTIONAL_PARTS, readCommentsFromData, readDefinedNamesFromData, readSheetPassthrough, readWorkbookPassthrough, sheetSkeleton, stripOptionalParts, tableFileName, type PtSource } from "./xlsxPackage";
-import { Carry, OpcPackage, carryParts, getSource, registerSource, releaseSource, relsPathOf, rootNamespace } from "@officehere/core/opc";
+import { Carry, OpcPackage, carryParts, registerSource, releaseSource, relsPathOf, rootNamespace } from "@officehere/core/opc";
 import { prepareXlsx } from "./xlsxGuard";
 import { BIG_MERGE_CELLS, CELL_BUDGET, clampMerge, disjointMerges, MergeLookup, usedExtent } from "./bookUtil";
 import { readTablesFromData } from "./xlsxTables";
@@ -741,7 +741,7 @@ async function writeXlsxLegacy(wb: WorkbookModel, opts: XlsxWriteOptions = {}): 
   const buf = await x.xlsx.writeBuffer({ zip: { compression: "STORE" } });
   let bytes: Uint8Array = new Uint8Array(buf as ArrayBuffer);
   // Geçiş katmanı: özgün paketin modelin tanımadığı öğeleri (postProcess) ve parçaları (carryParts)
-  const src = getSource(wb.kaynak);
+  const src = xlsxSource(wb);
   const ctx: PassthroughContext = { src, carry: new Carry(), partMap: [], warnings: [] };
   bytes = await postProcess(bytes, wb, ctx);
   if (src || opts.macro) {

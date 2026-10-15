@@ -4,11 +4,14 @@
  * bozuk ürettiği durumların düzeltilmesi. Ayrıntılı fark testi: scripts/derlem/xlsx_fark.mjs.
  */
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import JSZip from "jszip";
 import { cellKey, isError } from "@officehere/formula";
-import { OpcPackage } from "@officehere/core/opc";
+import { OpcPackage, getSource } from "@officehere/core/opc";
 import { WorkbookModel } from "../src/model/workbook";
-import { readXlsx, writeXlsx, xlsxWriterChoice } from "../src/io/xlsx";
+import { readXlsx, writeXlsx, xlsxWriterChoice, type XlsxWriteReport } from "../src/io/xlsx";
+import { ODF_OBJECTS_XLSX, writeBook } from "../src/io/formats";
+import { readOds } from "../src/io/ods/reader";
 import { crc32Update } from "../src/io/xlsxWrite/zip";
 
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mP8z8Dwn4GBgYGJAQoAAAD//wMAAP//AwDsAD8AAAAASUVORK5CYII=";
@@ -222,5 +225,20 @@ describe("Kendi .xlsx yazıcısı", { timeout: 60_000 }, () => {
     delete process.env.OH_XLSX_YAZICI;
     const yeni = await JSZip.loadAsync(await writeXlsx(wb));
     expect(Object.keys(yeni.files)).not.toContain("xl/");
+  });
+
+  it(".ods'den açılan kitabın ODF kaynağından .xlsx'e bir şey taşınmaz; gömülü nesneler için uyarılır", async () => {
+    const b = readFileSync(new URL("./fixtures/lo-stil.ods", import.meta.url));
+    const wb = await readOds(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer);
+    expect(getSource(wb.kaynak)?.isOpc).toBe(false);
+    for (const yazici of ["eski", "yeni"] as const) {
+      process.env.OH_XLSX_YAZICI = yazici;
+      const report: XlsxWriteReport = { warnings: [] };
+      const out = (await writeBook(wb, wb.sheets[0], "xlsx", undefined, report)) as Uint8Array;
+      const names = Object.keys((await JSZip.loadAsync(out)).files);
+      expect(names.filter((n) => !n.startsWith("xl/") && !n.startsWith("docProps/") && !n.startsWith("_rels/") && n !== "[Content_Types].xml"), yazici).toEqual([]);
+      expect(report.warnings, yazici).toEqual([ODF_OBJECTS_XLSX]);
+      expect((await readXlsx(ab(out))).sheets.map((s) => s.name)).toEqual(wb.sheets.map((s) => s.name));
+    }
   });
 });
