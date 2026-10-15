@@ -2,7 +2,7 @@
  * Pano: iç pano verisi (formüller, stiller, birleştirmeler) ve sistem panosu
  * için TSV/HTML üretimi; dışarıdan TSV/HTML ayrıştırma.
  */
-import { fontStack } from "@officehere/core";
+import { fontStack, parseHtml } from "@officehere/core";
 import { addr, cellKey, keyCol, keyRow, parseCellInput, quoteSheetName, shiftFormula, type Scalar } from "@officehere/formula";
 import { displayText } from "./display";
 import type { Ops } from "./ops";
@@ -209,7 +209,7 @@ export function parseTsv(text: string): string[][] {
 /** HTML tablosunu hücre metni + temel stillere ayrıştırır. */
 export function parseHtmlTable(html: string): { text: string; style: CellStyle }[][] | null {
   if (typeof DOMParser === "undefined") return null;
-  const doc = new DOMParser().parseFromString(html, "text/html");
+  const doc = parseHtml(html);
   const table = doc.querySelector("table");
   if (!table) return null;
   const out: { text: string; style: CellStyle }[][] = [];

@@ -1,6 +1,6 @@
 // Düz metin (.txt) ve HTML içe/dışa aktarma.
 import type { JSONContent } from "@tiptap/core";
-import { fontStack } from "@officehere/core";
+import { fontStack, parseHtml } from "@officehere/core";
 import { pageMetrics, type DocSettings } from "../model/document";
 import { resolveStyles, styleSheetCss } from "../model/styles";
 import { fieldNowText } from "../editor/nodes";
@@ -138,7 +138,7 @@ ${bodyHtml}
 
 /** HTML belgesinden gövde içeriğini çıkarır (stil ve betik etiketleri atılır). */
 export function extractHtmlBody(html: string): string {
-  const doc = new DOMParser().parseFromString(html, "text/html");
+  const doc = parseHtml(html);
   doc.querySelectorAll("script, style, meta, link, title").forEach((e) => e.remove());
   const root = doc.querySelector(".bl-doc") ?? doc.body;
   return root.innerHTML;

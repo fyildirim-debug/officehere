@@ -10,3 +10,4 @@ export * from "./history";
 export * from "./cfb";
 export * from "./worker";
 export * from "./opc";
+export * from "./html";

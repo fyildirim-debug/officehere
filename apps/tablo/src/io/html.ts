@@ -2,6 +2,7 @@
  * HTML tabloları: web sayfasından içe aktarma (her <table> bir sayfa) ve
  * etkin sayfa / tüm sayfalar için biçimli HTML dışa aktarma.
  */
+import { parseHtml } from "@officehere/core";
 import { MAX_COLS, MAX_ROWS, parseCellInput, cellKey, type Scalar } from "@officehere/formula";
 import type { CellStyle } from "../model/styles";
 import { WorkbookModel, type SheetModel } from "../model/workbook";
@@ -47,7 +48,7 @@ function cellText(el: HTMLElement): string {
 /** HTML belgesindeki tabloları çalışma kitabına aktarır. */
 export function readHtml(data: ArrayBuffer | Uint8Array, baseName = "Sayfa1"): WorkbookModel {
   if (typeof DOMParser === "undefined") throw new FormatError("HTML okuyucusu bu ortamda kullanılamıyor.");
-  const doc = new DOMParser().parseFromString(decodeText(data), "text/html");
+  const doc = parseHtml(decodeText(data));
   const tables = Array.from(doc.querySelectorAll("table")).filter((t) => !t.parentElement?.closest("table")).slice(0, 200);
   if (!tables.length) throw new FormatError("Web sayfasında tablo bulunamadı.");
   const wb = new WorkbookModel(true);

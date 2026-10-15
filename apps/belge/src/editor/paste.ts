@@ -3,6 +3,7 @@ import { Extension } from "@tiptap/core";
 import { Fragment, Slice, type Node as PMNode, type ResolvedPos, type Schema } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
+import { parseHtml } from "@officehere/core";
 import { syncDomSelection } from "./pagination";
 
 interface ListPara {
@@ -57,7 +58,7 @@ function unsafeUrl(name: string, value: string, tag: string): boolean {
  * atılır; metin ve biçim korunur.
  */
 export function sanitizePastedHtml(html: string): string {
-  const doc = new DOMParser().parseFromString(html, "text/html");
+  const doc = parseHtml(html);
   const root = doc.documentElement;
   root.querySelectorAll(ACTIVE_TAGS).forEach((e) => e.remove());
   for (const el of Array.from(root.querySelectorAll("*"))) {
@@ -85,7 +86,7 @@ export function cleanOfficeHtml(html: string): string {
   let src = html.replace(/<!\[if !supportLists\]>([\s\S]*?)<!\[endif\]>/gi, "$1");
   src = src.replace(/<!--\[if [^\]]*\]>[\s\S]*?<!\[endif\]-->/gi, "");
   src = src.replace(/<!\[if [^\]]*\]>|<!\[endif\]>/gi, "");
-  const doc = new DOMParser().parseFromString(src, "text/html");
+  const doc = parseHtml(src);
   const body = doc.body;
   body.querySelectorAll("style, meta, link, title, xml").forEach((e) => e.remove());
   // <o:p>&nbsp;</o:p> boş paragraf işaretidir.
