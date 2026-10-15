@@ -27,6 +27,8 @@ export interface ReadCtx {
   phClr?: Color;
   /** Grafik parçaları (paket yolu → veri). */
   charts?: Map<string, ChartData>;
+  /** Çizim alanı olmayan (boş) grafik parçaları: modelde karşılığı yok, şemaya da uymaz; taşınmaz. */
+  emptyCharts?: Set<string>;
   /** Tema efekt stilleri (effectStyleLst; effectRef idx-1). */
   effectStyles?: (Effects | undefined)[];
   /** Başvurulan ama pakette bulunamayan ortam parçaları (açılış uyarısı için). */

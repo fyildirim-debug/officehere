@@ -62,7 +62,7 @@ export async function readDiagrams(pk: PptxPackage, contentTypes: Map<string, st
 }
 
 /** Grafik parçaları (yol → veri); okunamayanlar yedek resimleriyle (varsa) gösterilir. */
-export async function readCharts(pk: PptxPackage, media: Map<string, string>, clrMap: Record<string, SchemeColorName>, lnWidths: number[]): Promise<Map<string, ChartData>> {
+export async function readCharts(pk: PptxPackage, media: Map<string, string>, clrMap: Record<string, SchemeColorName>, lnWidths: number[], empty?: Set<string>): Promise<Map<string, ChartData>> {
   const { zip, W } = pk;
   const charts = new Map<string, ChartData>();
   let badCharts = 0;
@@ -75,6 +75,7 @@ export async function readCharts(pk: PptxPackage, media: Map<string, string>, cl
     try {
       const data = readChartXml(cx, { rels: new Map(), media, clrMap, idMap: new Map(), lnWidths });
       if (data) charts.set(cp, data);
+      else if (!/<(?:\w+:)?plotArea[\s/>]/.test(cx)) empty?.add(cp);
     } catch (e) {
       // Okunamayan grafik yedek resmiyle (varsa) gösterilir.
       badCharts++;

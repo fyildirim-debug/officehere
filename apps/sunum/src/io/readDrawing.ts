@@ -458,6 +458,8 @@ function readShapeEl(el: Element, ctx: ReadCtx): Shape | undefined {
         const srcPart = ctx.rawSrc ? { srcPart: { src: ctx.rawSrc, part: chartRel!.target } } : {};
         return { kind: "chart", id: info.id, name: info.name || "Grafik", descr: info.descr, hidden: info.hidden, link: info.link, x: xf?.x ?? 0, y: xf?.y ?? 0, w: xf?.w ?? 0, h: xf?.h ?? 0, rot: xf?.rot ?? 0, chart: structuredClone(chart), ...srcPart } satisfies ChartShape;
       }
+      // Çizim alanı olmayan boş grafik (LibreOffice yazabiliyor): gösterilecek bir şey yok, taşınmaz.
+      if (chartRel && !chartRel.external && ctx.emptyCharts?.has(chartRel.target)) return undefined;
       // SmartArt, OLE ve tanınmayan çerçeveler: yedek görünüm + özgün XML (geçiş katmanı).
       if (ctx.rawSrc) return readOpaque(el, ctx);
       // Grafik/diyagram: yedek resim varsa onu kullan.

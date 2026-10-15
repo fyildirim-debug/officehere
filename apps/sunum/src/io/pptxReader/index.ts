@@ -75,8 +75,9 @@ async function readParts(pk: ReturnType<typeof pptxPackage>, W: LoadWarnings, ra
   if (rawSrc && themeRef.path && themeRef.part.root && !theme.id) theme.src = { src: rawSrc, part: themeRef.path, sig: themeSig(theme) };
   const clrMap = readClrMap(kid(main.doc, "clrMap"));
   const effectStyles = effectEls.map((e) => readEffects(e, { rels: new Map(), media: new Map(), clrMap, idMap: new Map(), lnWidths }));
-  const charts = await readCharts(pk, media, clrMap, lnWidths);
-  const mkCtx: MkCtx = (rels: Map<string, Rel>, map = clrMap, inherit?: ReadCtx["inherit"]): ReadCtx => ({ rels, media, clrMap: map, idMap: new Map(), inherit, lnWidths, charts, effectStyles, missingMedia, rawSrc, diagrams, diagramRels });
+  const emptyCharts = new Set<string>();
+  const charts = await readCharts(pk, media, clrMap, lnWidths, emptyCharts);
+  const mkCtx: MkCtx = (rels: Map<string, Rel>, map = clrMap, inherit?: ReadCtx["inherit"]): ReadCtx => ({ rels, media, clrMap: map, idMap: new Map(), inherit, lnWidths, charts, emptyCharts, effectStyles, missingMedia, rawSrc, diagrams, diagramRels });
   const authors = commentAuthors(pres);
 
   const { master, set } = await readMasters({ pres, main, mkCtx, clrMap, theme, themePath: themeRef.path, rawSrc });

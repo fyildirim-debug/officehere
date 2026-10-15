@@ -344,6 +344,15 @@ describe("tema, asıl slayt, grafik ve metin geçişi", () => {
     expect(await opcErrors(bytes)).toEqual([]);
   });
 
+  it("çizim alanı olmayan boş grafik (LibreOffice) ham olarak taşınmaz", async () => {
+    const bytes = new Uint8Array(readFileSync(`${process.cwd()}/../../test-derlem/lo/lo-sunu.pptx`));
+    const { pres } = await open("lo-sunu.pptx", bytes);
+    expect(rawShapes(pres).filter((s) => /chart/.test(s.raw?.xml ?? ""))).toEqual([]);
+    const { bytes: out, zip } = await save(pres);
+    for (const c of parts(zip, /^ppt\/charts\/[^/]+\.xml$/)) expect(await text(zip, c), c).toMatch(/<c:plotArea\b/);
+    expect(await opcErrors(out)).toEqual([]);
+  });
+
   it("resimli madde işareti ve resim dolgulu metin korunur", async () => {
     const z = await JSZip.loadAsync(poi("shapes.pptx"));
     const slide = await z.file("ppt/slides/slide1.xml")!.async("string");
