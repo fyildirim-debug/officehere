@@ -12,6 +12,8 @@ files:
   - dist-electron/**/*
   - "!dist-electron/launcher/**"
   - package.json
+  # pdf-lib: ana süreç CommonJS derlenir ve yalnız cjs/ kullanılır (es, dist, src, ts3.4 ~26 MB)
+  - "!**/node_modules/@cantoo/pdf-lib/{es,dist,src,ts3.4}/**"
 
 asar: true
 
