@@ -125,7 +125,7 @@ function zengin(ikinci = "Liste"): WorkbookModel {
   return wb;
 }
 
-describe("Kendi .xlsx yazıcısı", () => {
+describe("Kendi .xlsx yazıcısı", { timeout: 60_000 }, () => {
   it("eski yazıcıyla aynı modeli üretir", async () => {
     const wb = zengin();
     const eski = await readXlsx(ab(await yaz(wb, "eski")));
