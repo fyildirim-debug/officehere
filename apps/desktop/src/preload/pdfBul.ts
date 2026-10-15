@@ -23,8 +23,9 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("onceki")?.addEventListener("click", () => find(false, false));
   document.getElementById("sonraki")?.addEventListener("click", () => find(true, false));
   document.getElementById("kapat")?.addEventListener("click", close);
-  ipcRenderer.on("oh:pdf-bul-sonuc", (_e, r: { active: number; matches: number } | null) => {
-    out.textContent = !input.value || !r ? "" : r.matches ? `${r.active}/${r.matches}` : "Bulunamadı";
+  // Belge henüz yükleniyorsa arama bekler: belge hazır olunca ana süreç aramayı başlatır.
+  ipcRenderer.on("oh:pdf-bul-sonuc", (_e, r: { active: number; matches: number; loading?: boolean } | null) => {
+    out.textContent = !input.value || !r ? "" : r.matches ? `${r.active}/${r.matches}` : r.loading ? "Yükleniyor…" : "Bulunamadı";
   });
   ipcRenderer.on("oh:pdf-bul-odak", () => {
     input.focus();

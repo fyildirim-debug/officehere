@@ -188,6 +188,8 @@ test.describe("görüntüleyici kipi", () => {
     await win.keyboard.type("AYAR-KAPALI ");
     await expect.poll(() => zipPart(file, "word/document.xml"), { timeout: 20_000 }).toContain("AYAR-KAPALI");
     await expect(banner(win)).toHaveCount(0);
+    // Kayıt doğrulanıp belge temizlenmeden kapatılırsa pencere kaydetme sorusunda bekler.
+    await expect(badge(win)).toHaveText(SAVED);
     await app.close();
   });
 
@@ -201,6 +203,8 @@ test.describe("görüntüleyici kipi", () => {
     await win.keyboard.type("YEREL-DOSYA ");
     await expect.poll(() => zipPart(file, "word/document.xml"), { timeout: 20_000 }).toContain("YEREL-DOSYA");
     await expect(banner(win)).toHaveCount(0);
+    // Kayıt doğrulanıp belge temizlenmeden kapatılırsa pencere kaydetme sorusunda bekler.
+    await expect(badge(win)).toHaveText(SAVED);
     await app.close();
   });
 
@@ -233,9 +237,15 @@ function pdfWindowInfo(app: ElectronApplication) {
   );
 }
 
-/** Görüntüleyici yüklendi: PDF eklentisinin iç çerçevesi (yerleşik uzantı) var. */
-async function waitForViewer(win: Page) {
-  await expect.poll(() => win.frames().some((f) => f.url().startsWith("chrome-extension://")), { timeout: 20_000 }).toBe(true);
+/** Görüntüleyici yüklendi: PDF penceresinin çerçeve ağacında yerleşik uzantının çerçevesi var (ana süreçteki gerçek ağaç). */
+async function waitForViewer(app: ElectronApplication) {
+  const frames = () =>
+    app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .filter((w) => /\.pdf$/i.test(w.webContents.getURL()))
+        .flatMap((w) => w.webContents.mainFrame.framesInSubtree.map((f) => f.url)),
+    );
+  await expect.poll(frames, { timeout: 20_000 }).toContainEqual(expect.stringMatching(/^chrome-extension:\/\//));
 }
 
 /** PDF penceresine yerel tuş girdisi (gerçek klavyeyle aynı yol; ana süreç kısayolları bunu görür). */
@@ -290,7 +300,7 @@ test.describe("PDF görüntüleme", () => {
     const pdf = samplePdf();
     const app = await launch([pdf], o);
     const win = await app.firstWindow();
-    await waitForViewer(win);
+    await waitForViewer(app);
     const [info] = await pdfWindowInfo(app);
     expect(info.url).toMatch(/^file:\/\/.*\.pdf$/);
     expect(info.title).toContain("örnek belge.pdf");
@@ -325,7 +335,8 @@ test.describe("PDF görüntüleme", () => {
     const input = find.getByRole("searchbox", { name: "PDF'te bul" });
     await expect(input).toBeFocused();
     await input.fill("ARANACAK");
-    await expect(find.locator("output")).toHaveText("1/3");
+    // Belge yüklenirken "Yükleniyor…"; belge hazır olunca arama kendiliğinden yinelenir.
+    await expect(find.locator("output")).toHaveText("1/3", { timeout: 20_000 });
     await input.press("Enter");
     await expect(find.locator("output")).toHaveText("2/3");
     await input.press("Shift+Enter");
@@ -374,7 +385,7 @@ test.describe("PDF görüntüleme", () => {
     const viewer = () => app.windows().find((p) => /\.pdf$/i.test(p.url()));
     await expect.poll(() => !!viewer(), { timeout: 15_000 }).toBe(true);
     expect(await pdfWindowInfo(app)).toHaveLength(1);
-    await waitForViewer(viewer()!);
+    await waitForViewer(app);
     await app.close();
   });
 
@@ -387,12 +398,12 @@ test.describe("PDF görüntüleme", () => {
       args: [desktop, "--no-sandbox", `--log-net-log=${netLog}`, "--net-log-capture-mode=Default", pdf],
       env: { ...process.env, OH_APPS_DIR: appsDir, OH_USER_DATA: o.userData, ELECTRON_DISABLE_SECURITY_WARNINGS: "1", ...o.env },
     });
-    const win = await app.firstWindow();
-    await waitForViewer(win);
+    await app.firstWindow();
+    await waitForViewer(app);
     await pdfKey(app, "F", ["control"]);
     const find = await findBar(app);
     await find.getByRole("searchbox", { name: "PDF'te bul" }).fill("ARANACAK");
-    await expect(find.locator("output")).toHaveText("1/3");
+    await expect(find.locator("output")).toHaveText("1/3", { timeout: 20_000 });
     // Ağ günlüğü süreç çıkarken tamamlanır.
     const exited = new Promise((r) => app.process().once("exit", r));
     await app.evaluate(({ app: electronApp, BrowserWindow }) => {

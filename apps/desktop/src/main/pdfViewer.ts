@@ -55,8 +55,30 @@ let options: PdfViewerOptions = {};
 let configured: Session | null = null;
 const windows = new Map<string, BrowserWindow>();
 
+/**
+ * Görüntüleyicideki belge. Pencere ve görüntüleyici çerçeveleri yüklendikten sonra da PDF bir süre
+ * okunur: bu arada başlayan arama 0 sonuçla biter, belge yüklenirken başlayan arama da sonraki
+ * aramayla karışıp eşleşmeleri iki kez sayar (ölçüldü). Belge yüklenince görüntüleyici sekme başlığını
+ * belgenin adına çevirir; bu an "hazır" sayılır ve arama ancak o zaman gönderilir.
+ */
+interface PdfDoc {
+  ready: boolean;
+  /** Belge hazır olunca bir kez (arama çubuğu bekleyen aramayı başlatır). */
+  onReady: (() => void) | null;
+}
+
+interface Finder {
+  pdf: WebContents;
+  query: string;
+  /** Son arama isteğinin kimliği (eski isteklerin sonuçları yok sayılır). */
+  request: number;
+  /** newSession: yeni arama (metin değişti ya da belge şimdi hazır); değilse sonraki/önceki eşleşme. */
+  find: (forward: boolean, newSession: boolean) => void;
+  hide: () => void;
+}
+
 /** Arama çubuğu görünümü (webContents kimliğiyle) → PDF sayfası. */
-const finders = new Map<number, { pdf: WebContents; hide: () => void; query: string }>();
+const finders = new Map<number, Finder>();
 
 const FIND_HTML = `<!doctype html>
 <html lang="tr"><head><meta charset="utf-8">
@@ -120,7 +142,7 @@ function lockNavigation(wc: WebContents, allowed: string) {
 }
 
 /** Arama çubuğu (ilk Ctrl+F'de oluşturulur). */
-function createFinder(win: BrowserWindow, pdf: WebContents) {
+function createFinder(win: BrowserWindow, pdf: WebContents, doc: PdfDoc) {
   const view = new WebContentsView({
     webPreferences: { preload: path.join(__dirname, "..", "preload", "pdfBul.js"), sandbox: true, contextIsolation: true, nodeIntegration: false, partition: PARTITION, spellcheck: false },
   });
@@ -138,9 +160,16 @@ function createFinder(win: BrowserWindow, pdf: WebContents) {
   layout();
   win.on("resize", layout);
   const id = view.webContents.id;
-  const entry = {
+  const entry: Finder = {
     pdf,
     query: "",
+    request: 0,
+    find: (forward, newSession) => {
+      if (!entry.query || pdf.isDestroyed()) return;
+      // Belge hazır değilse sorgu bekler (hazır olunca tek oturum başlar); sayaç "Yükleniyor…" der.
+      if (!doc.ready) return view.webContents.send("oh:pdf-bul-sonuc", { active: 0, matches: 0, loading: true });
+      entry.request = pdf.findInPage(entry.query, { forward, findNext: newSession });
+    },
     hide: () => {
       view.setVisible(false);
       if (!pdf.isDestroyed()) {
@@ -150,8 +179,10 @@ function createFinder(win: BrowserWindow, pdf: WebContents) {
     },
   };
   finders.set(id, entry);
+  doc.onReady = () => entry.find(true, true);
   const onResult = (_e: unknown, r: Electron.Result) => {
-    if (!view.webContents.isDestroyed()) view.webContents.send("oh:pdf-bul-sonuc", { active: r.activeMatchOrdinal, matches: r.matches });
+    if (r.requestId < entry.request || view.webContents.isDestroyed()) return;
+    view.webContents.send("oh:pdf-bul-sonuc", { active: r.activeMatchOrdinal, matches: r.matches });
   };
   pdf.on("found-in-page", onResult);
   win.once("closed", () => {
@@ -167,17 +198,17 @@ function createFinder(win: BrowserWindow, pdf: WebContents) {
   };
   const again = (forward: boolean) => {
     if (!entry.query) return show();
-    pdf.findInPage(entry.query, { forward, findNext: false });
+    entry.find(forward, false);
   };
   return { show, again, hide: entry.hide, visible: () => view.getVisible(), keys: view.webContents };
 }
 
 /** PDF penceresinin kısayolları: Ctrl+F ara, F3/Shift+F3 sonraki/önceki, Ctrl+P yazdır, Ctrl+W kapat. */
-function handleKeys(win: BrowserWindow, pdf: WebContents) {
+function handleKeys(win: BrowserWindow, pdf: WebContents, doc: PdfDoc) {
   let finder: ReturnType<typeof createFinder> | null = null;
   const getFinder = () => {
     if (!finder) {
-      finder = createFinder(win, pdf);
+      finder = createFinder(win, pdf, doc);
       finder.keys.on("before-input-event", (e, input) => onKey(e, input));
     }
     return finder;
@@ -247,12 +278,18 @@ export async function openPdfWindow(filePath: string): Promise<BrowserWindow | n
   win.on("closed", () => {
     if (windows.get(key) === win) windows.delete(key);
   });
-  // Başlık dosya adıyla kalır (PDF'in kendi başlık bilgisi yanıltıcı olabilir).
-  win.on("page-title-updated", (e) => e.preventDefault());
+  const doc: PdfDoc = { ready: false, onReady: null };
+  // Başlık dosya adıyla kalır (PDF'in kendi başlık bilgisi yanıltıcı olabilir); ilk güncelleme belgenin hazır olduğunu söyler.
+  win.on("page-title-updated", (e) => {
+    e.preventDefault();
+    if (doc.ready) return;
+    doc.ready = true;
+    doc.onReady?.();
+  });
   win.once("ready-to-show", () => win.show());
   const url = pathToFileURL(file).href;
   lockNavigation(win.webContents, url);
-  handleKeys(win, win.webContents);
+  handleKeys(win, win.webContents, doc);
   void win.loadURL(url).catch((err: Error) => options.warn?.(`PDF yüklenemedi: ${err.message}`));
   return win;
 }
@@ -277,7 +314,7 @@ export function initPdfViewer(o: PdfViewerOptions) {
       e.sender.send("oh:pdf-bul-sonuc", null);
       return;
     }
-    f.pdf.findInPage(f.query, { forward: q.forward !== false, findNext: q.findNext === true });
+    f.find(q.forward !== false, q.findNext === true);
   });
   ipcMain.on("oh:pdf-bul-kapat", (e) => finders.get(e.sender.id)?.hide());
 }
