@@ -3,9 +3,9 @@
  "kip": "baslangic",
  "guncelleme": "2026-10-15",
  "derlemBilgi": {
-  "tarih": "2026-10-15T01:46:50.987Z",
-  "commit": "d16a309",
-  "dosya": 125
+  "tarih": "2026-10-15T07:00:34.435Z",
+  "commit": "1a0d9d6",
+  "dosya": 127
  },
  "poi": {
   "belge": {
@@ -530,7 +530,7 @@
    "tablo/cfb_cop.ods": "anlaşılır hata",
    "tablo/cfb_cop.xls": "anlaşılır hata",
    "tablo/cfb_cop.xlsx": "anlaşılır hata",
-   "tablo/cok_satir.csv": "zaman aşımı",
+   "tablo/cok_satir.csv": "açıldı",
    "tablo/cop.csv": "açıldı",
    "tablo/cop.ods": "anlaşılır hata",
    "tablo/cop.xls": "anlaşılır hata",
@@ -604,19 +604,19 @@
    "tablo/lo-butce_baslik.xls": "anlaşılır hata",
    "tablo/lo-butce_baslik.xlsx": "anlaşılır hata",
    "tablo/lo-butce_birlesik_tum.xlsx": "açıldı",
-   "tablo/lo-butce_bomba.ods": "açıldı",
+   "tablo/lo-butce_bomba.ods": "uyarılı",
    "tablo/lo-butce_bomba.xlsx": "açıldı",
    "tablo/lo-butce_cok_birlesik.xlsx": "açıldı",
-   "tablo/lo-butce_derin.ods": "açıldı",
+   "tablo/lo-butce_derin.ods": "uyarılı",
    "tablo/lo-butce_derin.xlsx": "açıldı",
    "tablo/lo-butce_dizin_yok.xls": "anlaşılır hata",
    "tablo/lo-butce_fat_dongu.xls": "anlaşılır hata",
    "tablo/lo-butce_fat_halka.xls": "anlaşılır hata",
    "tablo/lo-butce_fat_sayisi.xls": "uyarılı",
-   "tablo/lo-butce_flip1_0.ods": "açıldı",
+   "tablo/lo-butce_flip1_0.ods": "uyarılı",
    "tablo/lo-butce_flip1_0.xls": "uyarılı",
    "tablo/lo-butce_flip1_0.xlsx": "uyarılı",
-   "tablo/lo-butce_flip1_1.ods": "açıldı",
+   "tablo/lo-butce_flip1_1.ods": "uyarılı",
    "tablo/lo-butce_flip1_1.xls": "uyarılı",
    "tablo/lo-butce_flip1_1.xlsx": "uyarılı",
    "tablo/lo-butce_flip4096_0.ods": "anlaşılır hata",
@@ -659,13 +659,13 @@
    "tablo/lo-butce_kesik99.ods": "anlaşılır hata",
    "tablo/lo-butce_kesik99.xls": "uyarılı",
    "tablo/lo-butce_kesik99.xlsx": "anlaşılır hata",
-   "tablo/lo-butce_oznitelik_dev.ods": "açıldı",
+   "tablo/lo-butce_oznitelik_dev.ods": "uyarılı",
    "tablo/lo-butce_oznitelik_dev.xlsx": "açıldı",
-   "tablo/lo-butce_oznitelik_eksi.ods": "açıldı",
+   "tablo/lo-butce_oznitelik_eksi.ods": "uyarılı",
    "tablo/lo-butce_oznitelik_eksi.xlsx": "açıldı",
-   "tablo/lo-butce_oznitelik_nan.ods": "açıldı",
+   "tablo/lo-butce_oznitelik_nan.ods": "uyarılı",
    "tablo/lo-butce_oznitelik_nan.xlsx": "açıldı",
-   "tablo/lo-butce_oznitelik_sifir.ods": "açıldı",
+   "tablo/lo-butce_oznitelik_sifir.ods": "uyarılı",
    "tablo/lo-butce_oznitelik_sifir.xlsx": "açıldı",
    "tablo/lo-butce_rels_dongu.xlsx": "uyarılı",
    "tablo/lo-butce_rels_yok.xlsx": "uyarılı",
@@ -673,17 +673,17 @@
    "tablo/lo-butce_sektor_dev.xls": "anlaşılır hata",
    "tablo/lo-butce_sil__Content_Types_.xml.xlsx": "açıldı",
    "tablo/lo-butce_sil__rels_.rels.xlsx": "açıldı",
-   "tablo/lo-butce_sil_Cizgi_content.xml.ods": "açıldı",
-   "tablo/lo-butce_sil_Cizgi_styles.xml.ods": "açıldı",
+   "tablo/lo-butce_sil_Cizgi_content.xml.ods": "uyarılı",
+   "tablo/lo-butce_sil_Cizgi_styles.xml.ods": "uyarılı",
    "tablo/lo-butce_sil_content.xml.ods": "anlaşılır hata",
-   "tablo/lo-butce_sil_Grafik1_content.xml.ods": "açıldı",
-   "tablo/lo-butce_sil_Grafik1_styles.xml.ods": "açıldı",
-   "tablo/lo-butce_sil_manifest.rdf.ods": "açıldı",
-   "tablo/lo-butce_sil_META-INF_manifest.xml.ods": "açıldı",
-   "tablo/lo-butce_sil_mimetype.ods": "açıldı",
-   "tablo/lo-butce_sil_Pasta_content.xml.ods": "açıldı",
-   "tablo/lo-butce_sil_Pasta_styles.xml.ods": "açıldı",
-   "tablo/lo-butce_sil_styles.xml.ods": "açıldı",
+   "tablo/lo-butce_sil_Grafik1_content.xml.ods": "uyarılı",
+   "tablo/lo-butce_sil_Grafik1_styles.xml.ods": "uyarılı",
+   "tablo/lo-butce_sil_manifest.rdf.ods": "uyarılı",
+   "tablo/lo-butce_sil_META-INF_manifest.xml.ods": "uyarılı",
+   "tablo/lo-butce_sil_mimetype.ods": "uyarılı",
+   "tablo/lo-butce_sil_Pasta_content.xml.ods": "uyarılı",
+   "tablo/lo-butce_sil_Pasta_styles.xml.ods": "uyarılı",
+   "tablo/lo-butce_sil_styles.xml.ods": "uyarılı",
    "tablo/lo-butce_sil_xl__rels_workbook.xml.rels.xlsx": "uyarılı",
    "tablo/lo-butce_sil_xl_charts_chart1.xml.xlsx": "açıldı",
    "tablo/lo-butce_sil_xl_comments1.xml.xlsx": "açıldı",
@@ -698,7 +698,7 @@
    "tablo/lo-butce_sil_xl_worksheets__rels_sheet1.xml.rels.xlsx": "açıldı",
    "tablo/lo-butce_sil_xl_worksheets__rels_sheet2.xml.rels.xlsx": "açıldı",
    "tablo/lo-butce_sil_xl_worksheets_sheet1.xml.xlsx": "uyarılı",
-   "tablo/lo-butce_varlik.ods": "açıldı",
+   "tablo/lo-butce_varlik.ods": "uyarılı",
    "tablo/lo-butce_varlik.xlsx": "açıldı",
    "tablo/lo-butce_xfd.xlsx": "açıldı",
    "tablo/lo-butce_xmlbos.ods": "anlaşılır hata",
@@ -712,9 +712,9 @@
    "tablo/odp-icerik.ods": "anlaşılır hata",
    "tablo/odp-icerik.xls": "anlaşılır hata",
    "tablo/odp-icerik.xlsx": "anlaşılır hata",
-   "tablo/ods-icerik.csv": "açıldı",
-   "tablo/ods-icerik.xls": "açıldı",
-   "tablo/ods-icerik.xlsx": "açıldı",
+   "tablo/ods-icerik.csv": "uyarılı",
+   "tablo/ods-icerik.xls": "uyarılı",
+   "tablo/ods-icerik.xlsx": "uyarılı",
    "tablo/odt-icerik.csv": "anlaşılır hata",
    "tablo/odt-icerik.ods": "anlaşılır hata",
    "tablo/odt-icerik.xls": "anlaşılır hata",
@@ -826,6 +826,12 @@
   "apps/belge/src/io/__fixtures__/bicimler/kaynak.fodt→docx": {
    "pdf": true
   },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-nesne.odt→docx": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-nesne.odt→odt": {
+   "pdf": true
+  },
   "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.doc→docx": {
    "pdf": true
   },
@@ -842,6 +848,9 @@
    "pdf": true
   },
   "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.rtf→rtf": {
+   "pdf": true
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/nesne.fodt→docx": {
    "pdf": true
   },
   "apps/belge/src/io/__fixtures__/bicimler/ornek.md→docx": {
@@ -1285,8 +1294,6 @@
     },
     "odt": {
      "kayip": {
-      "parça:manifest.rdf": 1,
-      "parça:settings.xml": 1,
       "parça:medya": 1,
       "ns:loext:theme": 1,
       "ns:loext:theme-colors": 1,
@@ -1308,6 +1315,25 @@
    "acildi": true,
    "turlar": {
     "docx": {}
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/lo-nesne.odt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {
+     "kayip": {
+      "düğüm.opaqueInline": 1
+     }
+    },
+    "odt": {
+     "kayip": {
+      "parça:medya": 1,
+      "ns:loext:theme": 1,
+      "ns:loext:theme-colors": 1,
+      "ns:loext:color": 12
+     }
+    }
    }
   },
   "apps/belge/src/io/__fixtures__/bicimler/lo-ornek.doc": {
@@ -1338,8 +1364,6 @@
     "docx": {},
     "odt": {
      "kayip": {
-      "parça:manifest.rdf": 1,
-      "parça:settings.xml": 1,
       "parça:medya": 1,
       "ns:loext:theme": 1,
       "ns:loext:theme-colors": 1,
@@ -1356,6 +1380,13 @@
    "turlar": {
     "docx": {},
     "rtf": {}
+   }
+  },
+  "apps/belge/src/io/__fixtures__/bicimler/nesne.fodt": {
+   "durum": "tamam",
+   "acildi": true,
+   "turlar": {
+    "docx": {}
    }
   },
   "apps/belge/src/io/__fixtures__/bicimler/ornek.md": {
@@ -1415,7 +1446,6 @@
     "pptx": {},
     "odp": {
      "kayip": {
-      "parça:settings.xml": 1,
       "ns:loext:gradient-stop": 12,
       "ns:loext:graphic-properties": 6,
       "ns:loext:theme": 1,
@@ -1465,7 +1495,6 @@
     "odp": {
      "kayip": {
       "parça:medya": 1,
-      "parça:settings.xml": 1,
       "ns:loext:fill-complex-color": 21,
       "ns:loext:graphic-properties": 19,
       "ns:loext:transformation": 9,
@@ -1544,7 +1573,6 @@
     "xlsx": {},
     "ods": {
      "kayip": {
-      "parça:manifest.rdf": 1,
       "parça:medya": 1,
       "ns:loext:char-complex-color": 1,
       "ns:loext:theme": 1,
@@ -1631,7 +1659,6 @@
     "xlsx": {},
     "ods": {
      "kayip": {
-      "parça:manifest.rdf": 1,
       "parça:medya": 1,
       "ns:loext:char-complex-color": 1,
       "ns:loext:theme": 1,
@@ -1684,31 +1711,15 @@
     },
     "ods": {
      "kayip": {
-      "parça:ObjectReplacements/Cizgi": 1,
-      "parça:ObjectReplacements/Pasta": 1,
-      "parça:ObjectReplacements/Grafik#": 1,
-      "parça:Cizgi/meta.xml": 1,
-      "parça:Cizgi/styles.xml": 1,
-      "parça:Cizgi/content.xml": 1,
-      "parça:Pasta/meta.xml": 1,
-      "parça:Pasta/styles.xml": 1,
-      "parça:Pasta/content.xml": 1,
-      "parça:Grafik#/meta.xml": 1,
-      "parça:Grafik#/styles.xml": 1,
-      "parça:Grafik#/content.xml": 1,
-      "parça:manifest.rdf": 1,
       "parça:medya": 1,
       "ns:loext:theme": 1,
       "ns:loext:theme-colors": 1,
       "ns:loext:color": 12,
-      "ns:loext:graphic-properties": 1,
-      "ns:loext:p": 3,
       "ns:calcext:conditional-formats": 1,
       "ns:calcext:conditional-format": 1,
       "ns:calcext:condition": 1,
       "öğe:doğrulama": 1,
-      "öğe:koşullu": 1,
-      "öğe:grafik": 3
+      "öğe:koşullu": 1
      }
     }
    }
@@ -1896,31 +1907,15 @@
     },
     "ods": {
      "kayip": {
-      "parça:ObjectReplacements/Cizgi": 1,
-      "parça:ObjectReplacements/Pasta": 1,
-      "parça:ObjectReplacements/Grafik#": 1,
-      "parça:Cizgi/meta.xml": 1,
-      "parça:Cizgi/styles.xml": 1,
-      "parça:Cizgi/content.xml": 1,
-      "parça:Pasta/meta.xml": 1,
-      "parça:Pasta/styles.xml": 1,
-      "parça:Pasta/content.xml": 1,
-      "parça:Grafik#/meta.xml": 1,
-      "parça:Grafik#/styles.xml": 1,
-      "parça:Grafik#/content.xml": 1,
-      "parça:manifest.rdf": 1,
       "parça:medya": 1,
       "ns:loext:theme": 1,
       "ns:loext:theme-colors": 1,
       "ns:loext:color": 12,
-      "ns:loext:graphic-properties": 1,
-      "ns:loext:p": 3,
       "ns:calcext:conditional-formats": 1,
       "ns:calcext:conditional-format": 1,
       "ns:calcext:condition": 1,
       "öğe:doğrulama": 1,
-      "öğe:koşullu": 1,
-      "öğe:grafik": 3
+      "öğe:koşullu": 1
      }
     }
    }
@@ -1959,31 +1954,15 @@
     },
     "ods": {
      "kayip": {
-      "parça:ObjectReplacements/Cizgi": 1,
-      "parça:ObjectReplacements/Pasta": 1,
-      "parça:ObjectReplacements/Grafik#": 1,
-      "parça:Cizgi/meta.xml": 1,
-      "parça:Cizgi/styles.xml": 1,
-      "parça:Cizgi/content.xml": 1,
-      "parça:Pasta/meta.xml": 1,
-      "parça:Pasta/styles.xml": 1,
-      "parça:Pasta/content.xml": 1,
-      "parça:Grafik#/meta.xml": 1,
-      "parça:Grafik#/styles.xml": 1,
-      "parça:Grafik#/content.xml": 1,
-      "parça:manifest.rdf": 1,
       "parça:medya": 1,
       "ns:loext:theme": 1,
       "ns:loext:theme-colors": 1,
       "ns:loext:color": 12,
-      "ns:loext:graphic-properties": 1,
-      "ns:loext:p": 3,
       "ns:calcext:conditional-formats": 1,
       "ns:calcext:conditional-format": 1,
       "ns:calcext:condition": 1,
       "öğe:doğrulama": 1,
-      "öğe:koşullu": 1,
-      "öğe:grafik": 3
+      "öğe:koşullu": 1
      }
     }
    }
@@ -2036,8 +2015,6 @@
     },
     "odt": {
      "kayip": {
-      "parça:manifest.rdf": 1,
-      "parça:settings.xml": 1,
       "ns:loext:theme": 1,
       "ns:loext:theme-colors": 1,
       "ns:loext:color": 12,
@@ -2101,8 +2078,6 @@
     },
     "odt": {
      "kayip": {
-      "parça:manifest.rdf": 1,
-      "parça:settings.xml": 1,
       "ns:loext:theme": 1,
       "ns:loext:theme-colors": 1,
       "ns:loext:color": 12,
@@ -2126,26 +2101,18 @@
    "turlar": {
     "pptx": {
      "kayip": {
-      "öğe:resim": 1,
       "öğe:grafik": 1
      }
     },
     "odp": {
      "kayip": {
-      "parça:ObjectReplacements/Object #": 1,
-      "parça:nesne/meta.xml": 1,
-      "parça:nesne/styles.xml": 1,
-      "parça:nesne/content.xml": 1,
       "parça:medya": 2,
-      "parça:settings.xml": 1,
       "ns:loext:gradient-stop": 12,
       "ns:loext:graphic-properties": 8,
       "ns:loext:theme": 1,
       "ns:loext:theme-colors": 1,
       "ns:loext:color": 12,
-      "ns:loext:p": 1,
-      "öğe:resim": 1,
-      "öğe:grafik": 1
+      "öğe:resim": 1
      }
     }
    }
@@ -2180,26 +2147,18 @@
    "turlar": {
     "pptx": {
      "kayip": {
-      "öğe:resim": 3,
       "öğe:grafik": 3
      }
     },
     "odp": {
      "kayip": {
-      "parça:ObjectReplacements/Object #": 3,
-      "parça:nesne/meta.xml": 3,
-      "parça:nesne/styles.xml": 3,
-      "parça:nesne/content.xml": 3,
       "parça:medya": 4,
-      "parça:settings.xml": 1,
       "ns:loext:gradient-stop": 12,
       "ns:loext:graphic-properties": 8,
       "ns:loext:theme": 1,
       "ns:loext:theme-colors": 1,
       "ns:loext:color": 12,
-      "ns:loext:p": 3,
-      "öğe:resim": 3,
-      "öğe:grafik": 3
+      "öğe:resim": 3
      }
     }
    }
@@ -2919,8 +2878,6 @@
     },
     "odt": {
      "kayip": {
-      "parça:manifest.rdf": 1,
-      "parça:settings.xml": 1,
       "ns:loext:theme": 1,
       "ns:loext:theme-colors": 1,
       "ns:loext:color": 12,
