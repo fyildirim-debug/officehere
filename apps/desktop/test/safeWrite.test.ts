@@ -73,6 +73,7 @@ describe("güvenli yazma", () => {
     expect(temps()).toEqual([]);
   });
 
+  // 200 sıralı atomik yazma (fsync + rename): Windows koşucusunda 60 sn'yi aşabiliyor (yandaki yarış testi gibi 120 sn)
   it("aynı dosyaya eşzamanlı 200 yazma: hiçbiri bozulmaz, sıra korunur, hepsi başarılı", async () => {
     const f = path.join(dir, "yaris.xlsx");
     writeFileSync(f, bytes(1000, 5));
@@ -82,7 +83,7 @@ describe("güvenli yazma", () => {
     // Kuyruk sırası korunur: son istenen yazma kazanır ve dosya bütündür.
     expect(hash(readFileSync(f))).toBe(hash(datas[199]));
     expect(temps()).toEqual([]);
-  });
+  }, 120_000);
 
   it("otomatik kaydetme + Kaydet yarışı (kaydet_sim senaryosu, 200 deneme): dosya hep A ya da B, asla karışık", async () => {
     const f = path.join(dir, "yaris2.xlsx");
