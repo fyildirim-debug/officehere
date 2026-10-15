@@ -102,7 +102,253 @@ export function limitDepth(text: string, max = MAX_XML_DEPTH): { text: string; f
   return { text: out.join(""), flattened: true };
 }
 
+/* ------------------------------------------------------------------ */
+/* Yerleşik ayrıştırıcı (Worker)                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * DOMParser olmayan ortamda (Worker) düğümlerin kurulacağı boş belgeyi üreten işlev (io/xmlDom.ts kurar).
+ * `force`: DOMParser olsa da yerleşik ayrıştırıcı kullanılır (Worker ile süreç içi okuyucuyu karşılaştıran testler).
+ */
+let builtinDom: { create: () => Document; force: boolean } | null = null;
+
+export function setBuiltinXml(create: (() => Document) | null, opts: { force?: boolean } = {}): void {
+  builtinDom = create ? { create, force: !!opts.force } : null;
+}
+
+const XML_NS = "http://www.w3.org/XML/1998/namespace";
+const XMLNS_NS = "http://www.w3.org/2000/xmlns/";
+
+class XmlSyntaxError extends Error {}
+
+// XML 1.0 (5. baskı) ad karakterleri.
+const NAME_START = ":A-Z_a-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u02FF\\u0370-\\u037D\\u037F-\\u1FFF\\u200C\\u200D\\u2070-\\u218F\\u2C00-\\u2FEF\\u3001-\\uD7FF\\uF900-\\uFDCF\\uFDF0-\\uFFFD\\u{10000}-\\u{EFFFF}";
+const NAME_RE = new RegExp(`[${NAME_START}][${NAME_START}\\-.0-9\\u00B7\\u0300-\\u036F\\u203F\\u2040]*`, "uy");
+const INVALID_CHAR = new RegExp("[^\\t\\n\\u0020-\\uD7FF\\uE000-\\uFFFD\\u{10000}-\\u{10FFFF}]", "u");
+const REF_RE = /&(?:#x([0-9A-Fa-f]+)|#([0-9]+)|([^\s&;<]+))?(;?)/g;
+const PREDEFINED: Record<string, string> = { lt: "<", gt: ">", amp: "&", quot: '"', apos: "'" };
+const XML_DECL = /<\?xml[ \t\n]+version[ \t\n]*=[ \t\n]*(?:"1\.[0-9]+"|'1\.[0-9]+')(?:[ \t\n]+encoding[ \t\n]*=[ \t\n]*(?:"[A-Za-z][\w.-]*"|'[A-Za-z][\w.-]*'))?(?:[ \t\n]+standalone[ \t\n]*=[ \t\n]*(?:"(?:yes|no)"|'(?:yes|no)'))?[ \t\n]*\?>/y;
+
+const isWs = (c: number) => c === 0x20 || c === 0x0a || c === 0x09 || c === 0x0d;
+const validChar = (cp: number) => cp === 0x09 || cp === 0x0a || cp === 0x0d || (cp >= 0x20 && cp <= 0xd7ff) || (cp >= 0xe000 && cp <= 0xfffd) || (cp >= 0x10000 && cp <= 0x10ffff);
+
+/** Ad alanı kapsamı: ön ek → ad alanı ("" varsayılan); üst kapsamdan kalıtılır. */
+type Scope = Record<string, string>;
+const ROOT_SCOPE: Scope = Object.assign(Object.create(null) as Scope, { xml: XML_NS, xmlns: XMLNS_NS });
+
+/**
+ * Tarayıcının XML ayrıştırıcısıyla aynı katılıkta (iyi biçimlilik ve ad alanı kuralları) ayrıştırır; düğümler
+ * verilen belgede kurulur. Bozuk girdide XmlSyntaxError (tarayıcıdaki parsererror karşılığı). Tanımsız varlıklar
+ * (DTD iç kümesi) desteklenmez: OOXML/ODF parçalarında DTD bulunmaz.
+ */
+function buildXml(source: string, doc: Document): Document {
+  const s = source.includes("\r") ? source.replace(/\r\n?/g, "\n") : source;
+  const fail = (msg: string, at: number): never => {
+    const line = s.slice(0, at).split("\n").length;
+    throw new XmlSyntaxError(`${msg} (satır ${line})`);
+  };
+  const bad = INVALID_CHAR.exec(s);
+  if (bad) fail(`geçersiz karakter U+${bad[0].codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`, bad.index); // yerel-ayar: ascii
+  const decode = (raw: string, at: number) =>
+    raw.replace(REF_RE, (m: string, hex?: string, dec?: string, name?: string, semi?: string) => {
+      if (!semi || (!hex && !dec && !name)) return fail("çıplak & ya da eksik ';'", at);
+      if (name) return PREDEFINED[name] ?? fail(`tanımsız varlık &${name};`, at);
+      const cp = parseInt(hex ?? dec!, hex ? 16 : 10);
+      return validChar(cp) ? String.fromCodePoint(cp) : fail(`geçersiz karakter başvurusu ${m}`, at);
+    });
+  const skipWs = (j: number) => {
+    while (j < s.length && isWs(s.charCodeAt(j))) j++;
+    return j;
+  };
+  const nameAt = (j: number): string | null => {
+    NAME_RE.lastIndex = j;
+    const m = NAME_RE.exec(s);
+    return m ? m[0] : null;
+  };
+  /** QName'in ön eki ("" yok); ad alanı kurallarına uymayan ad (iki iki nokta, boş parça) hata. */
+  const prefixOf = (qname: string, at: number): string => {
+    const c = qname.indexOf(":");
+    if (c < 0) return "";
+    if (c === 0 || c === qname.length - 1 || qname.indexOf(":", c + 1) >= 0) fail(`geçersiz nitelikli ad "${qname}"`, at);
+    return qname.slice(0, c);
+  };
+
+  let i = s.charCodeAt(0) === 0xfeff ? 1 : 0;
+  if (s.startsWith("<?xml", i) && isWs(s.charCodeAt(i + 5))) {
+    XML_DECL.lastIndex = i;
+    if (!XML_DECL.test(s)) fail("geçersiz XML bildirimi", i);
+    i = XML_DECL.lastIndex;
+  }
+  const stack: { qname: string; parent: Node; scope: Scope }[] = [];
+  let parent: Node = doc;
+  let scope = ROOT_SCOPE;
+  let root: Element | null = null;
+  let doctype = false;
+  while (i < s.length) {
+    const lt = s.indexOf("<", i);
+    const end = lt < 0 ? s.length : lt;
+    if (end > i) {
+      const raw = s.slice(i, end);
+      if (!stack.length) {
+        for (let j = 0; j < raw.length; j++) if (!isWs(raw.charCodeAt(j))) fail("kök öğenin dışında metin", i + j);
+      } else {
+        if (raw.includes("]]>")) fail("metinde ']]>'", i);
+        parent.appendChild(doc.createTextNode(raw.includes("&") ? decode(raw, i) : raw));
+      }
+      i = end;
+      if (lt < 0) break;
+    }
+    const c = s.charCodeAt(i + 1);
+    if (c === 0x21) {
+      // <!-- … -->, <![CDATA[ … ]]>, <!DOCTYPE … >
+      if (s.startsWith("<!--", i)) {
+        const e = s.indexOf("-->", i + 4);
+        if (e < 0) fail("açıklama kapanmamış", i);
+        const body = s.slice(i + 4, e);
+        if (body.includes("--") || body.endsWith("-")) fail("açıklamada '--'", i);
+        parent.appendChild(doc.createComment(body));
+        i = e + 3;
+      } else if (s.startsWith("<![CDATA[", i)) {
+        if (!stack.length) fail("kök öğenin dışında CDATA", i);
+        const e = s.indexOf("]]>", i + 9);
+        if (e < 0) fail("CDATA kapanmamış", i);
+        parent.appendChild(doc.createCDATASection(s.slice(i + 9, e)));
+        i = e + 3;
+      } else if (s.startsWith("<!DOCTYPE", i) && !doctype && !root) {
+        doctype = true;
+        let j = i + 9;
+        let depth = 0;
+        for (; j < s.length; j++) {
+          const ch = s[j];
+          if (ch === '"' || ch === "'") {
+            j = s.indexOf(ch, j + 1);
+            if (j < 0) break;
+          } else if (ch === "[") depth++;
+          else if (ch === "]") depth--;
+          else if (ch === ">" && depth <= 0) break;
+        }
+        if (j < 0 || j >= s.length) fail("DOCTYPE kapanmamış", i);
+        i = j + 1;
+      } else fail("geçersiz biçimlendirme", i);
+      continue;
+    }
+    if (c === 0x3f) {
+      // İşleme yönergesi
+      const target = nameAt(i + 2);
+      if (!target || target.includes(":") || target.toLowerCase() === "xml") fail("geçersiz işleme yönergesi", i); // yerel-ayar: ascii
+      const j = i + 2 + target!.length;
+      const e = s.indexOf("?>", j);
+      if (e < 0) fail("işleme yönergesi kapanmamış", i);
+      if (e > j && !isWs(s.charCodeAt(j))) fail("geçersiz işleme yönergesi", i);
+      parent.appendChild(doc.createProcessingInstruction(target!, s.slice(skipWs(j), e)));
+      i = e + 2;
+      continue;
+    }
+    if (c === 0x2f) {
+      // Kapanış etiketi
+      const name = nameAt(i + 2);
+      const j = name ? skipWs(i + 2 + name.length) : -1;
+      const top = stack.pop();
+      if (!name || s.charCodeAt(j) !== 0x3e || !top || top.qname !== name) fail(`kapanış etiketi eşleşmiyor: ${name ?? "?"}`, i);
+      parent = top!.parent;
+      scope = top!.scope;
+      i = j + 1;
+      continue;
+    }
+    // Açılış etiketi
+    const qname = nameAt(i + 1);
+    if (!qname) fail("geçersiz etiket", i);
+    let j = i + 1 + qname!.length;
+    const attrs: string[] = [];
+    let selfClose = false;
+    for (;;) {
+      const k = skipWs(j);
+      const ch = s.charCodeAt(k);
+      if (ch === 0x3e) {
+        j = k + 1;
+        break;
+      }
+      if (ch === 0x2f && s.charCodeAt(k + 1) === 0x3e) {
+        j = k + 2;
+        selfClose = true;
+        break;
+      }
+      const an = k > j ? nameAt(k) : null;
+      if (!an) fail(k >= s.length ? "etiket kapanmamış" : "geçersiz öznitelik", k);
+      let v = skipWs(k + an!.length);
+      if (s.charCodeAt(v) !== 0x3d) fail(`öznitelikte '=' yok: ${an}`, v);
+      v = skipWs(v + 1);
+      const q = s[v];
+      if (q !== '"' && q !== "'") fail(`öznitelik değeri tırnaksız: ${an}`, v);
+      const e = s.indexOf(q, v + 1);
+      if (e < 0) fail("öznitelik değeri kapanmamış", v);
+      let raw = s.slice(v + 1, e);
+      if (raw.includes("<")) fail("öznitelik değerinde '<'", v);
+      // Değerdeki satır sonu ve sekme boşluğa döner; karakter başvuruları (&#10;) korunur.
+      if (/[\t\n]/.test(raw)) raw = raw.replace(/[\t\n]/g, " ");
+      attrs.push(an!, raw.includes("&") ? decode(raw, v) : raw);
+      j = e + 1;
+    }
+    // Ad alanları
+    let inner = scope;
+    for (let k = 0; k < attrs.length; k += 2) {
+      const an = attrs[k]!;
+      if (an !== "xmlns" && !an.startsWith("xmlns:")) continue;
+      const p = an === "xmlns" ? "" : an.slice(6);
+      const uri = attrs[k + 1]!;
+      if (p) {
+        prefixOf(an, i);
+        if (!uri || p === "xmlns" || (p === "xml") !== (uri === XML_NS) || uri === XMLNS_NS) fail(`geçersiz ad alanı bildirimi ${an}`, i);
+      } else if (uri === XML_NS || uri === XMLNS_NS) fail("geçersiz varsayılan ad alanı", i);
+      if (inner === scope) inner = Object.create(scope) as Scope;
+      inner[p] = uri;
+    }
+    const ep = prefixOf(qname!, i);
+    if (ep === "xmlns") fail("öğe adında xmlns ön eki", i);
+    const ens = inner[ep] || null;
+    if (ep && !ens) fail(`bildirilmemiş ad alanı ön eki: ${ep}`, i);
+    const el = doc.createElementNS(ens, qname!);
+    const seen = new Set<string>();
+    for (let k = 0; k < attrs.length; k += 2) {
+      const an = attrs[k]!;
+      const p = an === "xmlns" ? "xmlns" : prefixOf(an, i);
+      const ans = p ? (inner[p] ?? fail(`bildirilmemiş ad alanı ön eki: ${p}`, i)) : null;
+      const key = `${ans ?? ""} ${p ? an.slice(an.indexOf(":") + 1) : an}`;
+      if (seen.has(key)) fail(`yinelenen öznitelik: ${an}`, i);
+      seen.add(key);
+      el.setAttributeNS(ans, an, attrs[k + 1]!);
+    }
+    if (!stack.length) {
+      if (root) fail("birden çok kök öğe", i);
+      root = el;
+    }
+    parent.appendChild(el);
+    if (!selfClose) {
+      stack.push({ qname: qname!, parent, scope });
+      parent = el;
+      scope = inner;
+    }
+    i = j;
+  }
+  if (stack.length) fail(`kapanmamış öğe: ${stack[stack.length - 1]!.qname}`, s.length);
+  if (!root) fail("kök öğe yok", s.length);
+  return doc;
+}
+
+/** Yerleşik ayrıştırıcıyla (verilen DOM'da); `parseXml` ile aynı uyarlama ve hatalar. */
+function builtinActive(): boolean {
+  return !!builtinDom && (builtinDom.force || typeof DOMParser === "undefined");
+}
+
 function tryParse(text: string): { doc: Document; error: string | null } {
+  if (builtinActive()) {
+    try {
+      return { doc: buildXml(text, builtinDom!.create()), error: null };
+    } catch (err) {
+      if (err instanceof XmlSyntaxError) return { doc: null as unknown as Document, error: err.message.slice(0, 160) };
+      throw err;
+    }
+  }
   const doc = new DOMParser().parseFromString(text, "application/xml");
   const err = doc.getElementsByTagName("parsererror")[0];
   return { doc, error: err ? (err.textContent ?? "").slice(0, 160) : null };

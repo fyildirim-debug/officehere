@@ -95,6 +95,9 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.31.4
         version: 3.31.4
+      '@xmldom/xmldom':
+        specifier: ^0.8.15
+        version: 0.8.15
       jszip:
         specifier: ^3.10.2
         version: 3.10.2

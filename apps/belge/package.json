@@ -28,6 +28,7 @@
     "@tiptap/pm": "^3.31.4",
     "@tiptap/react": "^3.31.4",
     "@tiptap/starter-kit": "^3.31.4",
+    "@xmldom/xmldom": "^0.8.15",
     "jszip": "^3.10.2",
     "mammoth": "^1.13.0",
     "react": "^19.3.0",
