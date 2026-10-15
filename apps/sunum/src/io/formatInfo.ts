@@ -7,7 +7,7 @@ import type { FileFilter } from "@officehere/core";
 import { describeZipError, PackageError } from "./errors";
 
 export type SunuFormat = "pptx" | "pptm" | "potx" | "potm" | "ppsx" | "ppsm" | "ppt" | "odp" | "otp";
-export type SaveFormat = "pptx" | "ppsx" | "potx" | "odp";
+export type SaveFormat = "pptx" | "pptm" | "ppsx" | "potx" | "odp";
 
 export interface FormatInfo {
   label: string;
@@ -15,7 +15,7 @@ export interface FormatInfo {
   template?: boolean;
   /** Slayt gösterisi dosyası. */
   show?: boolean;
-  /** Makro içerir (makrolar yok sayılır). */
+  /** Makro içerir (makrolar çalıştırılmaz; .pptm kaydederken korunur). */
   macro?: boolean;
   /** Eski ikili biçim (uyumluluk modu). */
   legacy?: boolean;
@@ -25,7 +25,7 @@ export interface FormatInfo {
 
 export const FORMATS: Record<SunuFormat, FormatInfo> = {
   pptx: { label: "Sunu", writable: "pptx" },
-  pptm: { label: "Makro İçeren Sunu", macro: true },
+  pptm: { label: "Makro İçeren Sunu", macro: true, writable: "pptm" },
   potx: { label: "Şablon", template: true, writable: "potx" },
   potm: { label: "Makro İçeren Şablon", template: true, macro: true },
   ppsx: { label: "Slayt Gösterisi", show: true, writable: "ppsx" },
@@ -49,6 +49,7 @@ export const OPEN_FILTERS: FileFilter[] = [
 
 const SAVE_FILTER: Record<SaveFormat, FileFilter> = {
   pptx: { name: "Sunu", extensions: ["pptx"] },
+  pptm: { name: "Makro İçeren Sunu", extensions: ["pptm"] },
   odp: { name: "OpenDocument Sunu", extensions: ["odp"] },
   ppsx: { name: "Slayt Gösterisi", extensions: ["ppsx"] },
   potx: { name: "Şablon", extensions: ["potx"] },
@@ -56,13 +57,16 @@ const SAVE_FILTER: Record<SaveFormat, FileFilter> = {
 
 export const SAVE_ORDER: SaveFormat[] = ["pptx", "odp", "ppsx", "potx"];
 
+/** Farklı Kaydet listesinde olmayan ama yerinde yazılabilen biçimler (makrolu sunu yalnız kendi dosyasına). */
+const IN_PLACE_ONLY: SaveFormat[] = ["pptm"];
+
 /** Farklı Kaydet süzgeçleri: istenen biçim başta. */
 export function saveFilters(first: SaveFormat): FileFilter[] {
   return [SAVE_FILTER[first], ...SAVE_ORDER.filter((f) => f !== first).map((f) => SAVE_FILTER[f])];
 }
 
 export function isSaveFormat(ext: string | undefined): ext is SaveFormat {
-  return !!ext && (SAVE_ORDER as string[]).includes(ext);
+  return !!ext && ((SAVE_ORDER as string[]).includes(ext) || (IN_PLACE_ONLY as string[]).includes(ext));
 }
 
 export function isSunuFormat(ext: string | undefined): ext is SunuFormat {

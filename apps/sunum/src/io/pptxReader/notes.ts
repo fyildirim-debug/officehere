@@ -1,8 +1,8 @@
 /**
  * Konuşmacı notları (notesSlide) ve not asıl sayfasının üst/alt bilgisi
  * (notesMaster p:hf ve yer tutucu metinleri).
- * Geçiş kancası (dalga 3): not sayfasındaki gövde dışı şekiller ve not asıl
- * sayfasının görünümü okunmuyor; taşınacaksa bu modüle eklenecek.
+ * Geçiş katmanı: not sayfası olan slayt notsuz da not sayfasıyla yazılır (`SlideRaw.notesPage`);
+ * not sayfasındaki gövde dışı şekiller ve not asıl sayfasının görünümü okunmuyor.
  */
 import { DEFAULT_NOTES_HF } from "../../model/presentation";
 import type { NotesHeaderFooter } from "../../model/types";

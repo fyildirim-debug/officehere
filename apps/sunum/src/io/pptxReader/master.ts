@@ -3,12 +3,13 @@
  * olur; diğerlerinin arka planı, süs şekilleri, farklı metin stilleri ve
  * teması kendi düzenlerine aktarılır (tüm düzenler okunur). Asıl slayt ya da
  * ilişkileri bozuksa asıl slayt ve düzenler paket içinden kurtarılır.
- * Geçiş kancası (dalga 3): asıl slaydın extLst'i, p:hf ve tanınmayan öğeleri
- * burada (readMasterLook) toplanacak.
+ * Geçiş katmanı: ikincil asıl slaydın kaynak parçası (`MasterLook.key`) ve içe aktarılan
+ * teması (`Theme.src`) saklanır; asıl slaydın extLst'i ve p:hf öğeleri yeniden üretilir.
  */
 import { uid } from "../../model/factory";
 import type { LevelStyle, Master, SchemeColorName, TextStyles, Theme } from "../../model/types";
 import { buildTextStyles } from "../../themes/build";
+import { themeSig } from "../rawPassthrough";
 import { readLevels, readShapeList, type ReadCtx } from "../readDrawing";
 import { kid, kids, parseRels, parseXml, relId, relsPathFor, REL, type Rel } from "../xml";
 import { cleanPlaceholderText, readBg, readClrMap, type MkCtx } from "./common";
@@ -78,6 +79,8 @@ export interface MasterEnv {
   /** Sununun teması ve yolu (ikincil asıl slaydın teması bununla karşılaştırılır). */
   theme: Theme;
   themePath?: string;
+  /** Geçiş katmanı: kaynak paket kaydı kimliği (ikincil asıl slayt yapısı ve temaları korunur). */
+  rawSrc?: string;
 }
 
 /** Tüm asıl slaytları ve düzenlerini okur; ana asıl slayt okunamazsa PptxError. */
@@ -95,7 +98,7 @@ export async function readMasters(env: MasterEnv): Promise<{ master: Master; set
       badMasters++;
       continue;
     }
-    const look = await readMasterLook(env, opened, master?.textStyles);
+    const look = await readMasterLook(env, opened, master?.textStyles, mp);
     if (mi === 0) master = { background: look.background, shapes: look.shapes, textStyles: look.textStyles };
     for (const lp of layoutPathsOf(opened.doc, opened.rels, mi === 0 ? orphans : [])) await readLayout(pk, env.mkCtx, lp, look, set);
   }
@@ -135,7 +138,7 @@ async function openSecondaryMaster(pk: PptxPackage, mp: string): Promise<{ doc: 
 }
 
 /** Asıl slaydın görünümü; `mainStyles` verilirse (ikincil asıl slayt) farklı metin stilleri ve teması da. */
-async function readMasterLook(env: MasterEnv, m: { doc: Element; rels: Map<string, Rel> }, mainStyles: TextStyles | undefined): Promise<MasterLook & { textStyles: TextStyles }> {
+async function readMasterLook(env: MasterEnv, m: { doc: Element; rels: Map<string, Rel> }, mainStyles: TextStyles | undefined, path?: string): Promise<MasterLook & { textStyles: TextStyles }> {
   const secondary = !!mainStyles;
   const clrMap = secondary ? readClrMap(kid(m.doc, "clrMap")) : env.clrMap;
   const mctx = env.mkCtx(m.rels, clrMap);
@@ -148,7 +151,9 @@ async function readMasterLook(env: MasterEnv, m: { doc: Element; rels: Map<strin
   const ownStyles = secondary && JSON.stringify(textStyles) !== JSON.stringify(mainStyles) ? textStyles : undefined;
   const deco = shapes.filter((x) => !(x.kind === "sp" && x.ph));
   const designTheme = secondary ? await designThemeOf(env, m.rels) : undefined;
-  return { secondary, clrMap, shapes, background, deco, ownStyles, designTheme, textStyles };
+  // Geçiş katmanı: ikincil asıl slaydın düzenleri kaydederken yine ayrı asıl slayt altında yazılır.
+  const key = secondary && env.rawSrc && path ? path : undefined;
+  return { secondary, clrMap, shapes, background, deco, ownStyles, designTheme, textStyles, key };
 }
 
 function readTextStyles(presDoc: Element, tx: Element | undefined, mctx: ReadCtx): TextStyles {
@@ -166,7 +171,10 @@ function readTextStyles(presDoc: Element, tx: Element | undefined, mctx: ReadCtx
 async function designThemeOf(env: MasterEnv, mRels: Map<string, Rel>): Promise<Theme | undefined> {
   const tp = [...mRels.values()].find((r) => r.type === REL.theme)?.target;
   const t2 = tp && tp !== env.themePath ? readTheme(await env.pres.pk.text(tp)).theme : undefined;
-  if (t2 && (JSON.stringify(t2.colors) !== JSON.stringify(env.theme.colors) || JSON.stringify(t2.fonts) !== JSON.stringify(env.theme.fonts))) return t2;
+  if (t2 && (JSON.stringify(t2.colors) !== JSON.stringify(env.theme.colors) || JSON.stringify(t2.fonts) !== JSON.stringify(env.theme.fonts))) {
+    if (env.rawSrc && !t2.id) t2.src = { src: env.rawSrc, part: tp!, sig: themeSig(t2) };
+    return t2;
+  }
   return undefined;
 }
 

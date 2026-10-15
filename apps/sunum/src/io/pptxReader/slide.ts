@@ -6,10 +6,11 @@
 import { uid } from "../../model/factory";
 import { mapSlideLinks } from "../../model/links";
 import { findPlaceholder } from "../../model/textStyle";
-import type { Layout, Placeholder, SchemeColorName, Shape, Slide } from "../../model/types";
+import type { Layout, Placeholder, SchemeColorName, Shape, Slide, SlideRaw } from "../../model/types";
+import { rawOuterXml, rawRefs } from "../rawPassthrough";
 import { readShapeList } from "../readDrawing";
 import { readAnimations, readTransition } from "../readTiming";
-import { attr, kid, kidPath, kids, parseRels, relId, relsPathFor, REL, type Rel } from "../xml";
+import { attr, kid, kidPath, kids, OH_EXT_URI, parseRels, relId, relsPathFor, REL, type Rel } from "../xml";
 import { readSlideComments, type CommentAuthors } from "./comments";
 import { readBg, readClrMap, type MkCtx } from "./common";
 import type { LayoutSet } from "./layout";
@@ -87,6 +88,10 @@ export interface SlideEnv {
   /** Ana asıl slaydın şekilleri (düzenin asıl slaydı bilinmezse kalıtım için). */
   masterShapes: Shape[];
   authors: CommentAuthors;
+  /** Geçiş katmanı: kaynak paket kaydı kimliği (yoksa slayt düzeyi ham öğeler toplanmaz). */
+  rawSrc?: string;
+  /** Ortam dosyaları (OLE önizlemeleri VML çiziminden bulunurken). */
+  media?: Map<string, string>;
 }
 
 /**
@@ -128,8 +133,8 @@ async function readSlideAt(env: SlideEnv, list: SlideList, i: number, sp: string
 }
 
 /**
- * Tek slayt. Geçiş kancası (dalga 3): slaydın extLst'i, custDataLst ve
- * tanınmayan spTree öğeleri burada (readShapeList çevresinde) toplanacak.
+ * Tek slayt. Geçiş katmanı: tanınmayan spTree öğeleri `raw`'lı şekiller olarak
+ * (readShapeList), slaydın custDataLst/controls/extLst öğeleri `Slide.raw`'da okunur.
  */
 async function readSlide(env: SlideEnv, sp: string, doc: Element, n: number): Promise<Slide> {
   const { pk } = env;
@@ -138,6 +143,7 @@ async function readSlide(env: SlideEnv, sp: string, doc: Element, n: number): Pr
   const rels = parseRels(relsXml, sp);
   const layout = layoutOf(env, rels);
   const sctx = env.mkCtx(rels, readClrMap(kidPath(doc, "clrMapOvr", "overrideClrMapping"), env.clrMap), (ph: Placeholder) => findPlaceholder(layout.shapes, ph) ?? findPlaceholder(env.set.masterShapes.get(layout) ?? env.masterShapes, { type: ph.type }));
+  if (env.rawSrc && env.media) sctx.vmlImages = await vmlImages(pk, rels, env.media);
   const cSld = kid(doc, "cSld");
   const shapes = readShapeList(kid(cSld, "spTree"), sctx);
   const slide: Slide = {
@@ -155,7 +161,42 @@ async function readSlide(env: SlideEnv, sp: string, doc: Element, n: number): Pr
   const comments = await readSlideComments(pk, rels, n, env.authors);
   if (comments) slide.comments = comments;
   slide.notes = await readSlideNotes(pk, env.mkCtx, rels, n);
+  if (env.rawSrc) slide.raw = readSlideRaw(env.rawSrc, sp, doc, cSld, rels);
   return slide;
+}
+
+/** Slaydın kaynak parçası ve modelin tanımadığı slayt düzeyi öğeleri. */
+function readSlideRaw(src: string, part: string, doc: Element, cSld: Element | undefined, rels: Map<string, Rel>): SlideRaw {
+  const cs = kids(cSld)
+    .filter((k) => k.localName !== "bg" && k.localName !== "spTree")
+    .map(rawOuterXml);
+  const ext = kids(kid(doc, "extLst"), "ext")
+    .filter((e) => (attr(e, "uri") ?? "").toUpperCase() !== OH_EXT_URI.toUpperCase()) // yerel-ayar: ascii
+    .map(rawOuterXml);
+  const raw: SlideRaw = { src, part, refs: rawRefs([...cs, ...ext].join(""), rels) };
+  if (cs.length) raw.cSld = cs;
+  if (ext.length) raw.ext = ext;
+  if ([...rels.values()].some((r) => r.type === REL.notesSlide)) raw.notesPage = true;
+  return raw;
+}
+
+/** Slaydın VML çizimlerindeki şekil kimliği → önizleme resmi (eski tür OLE nesnelerinin görünümü). */
+async function vmlImages(pk: PptxPackage, rels: Map<string, Rel>, media: Map<string, string>): Promise<Map<string, string> | undefined> {
+  let out: Map<string, string> | undefined;
+  for (const r of rels.values()) {
+    if (r.external || !r.type.endsWith("/vmlDrawing")) continue;
+    const xml = await pk.text(r.target);
+    if (!xml) continue;
+    const vrels = parseRels(await pk.text(relsPathFor(r.target)), r.target);
+    for (const m of xml.matchAll(/<v:shape\b([^>]*)>([\s\S]*?)<\/v:shape>/g)) {
+      const id = /\bid="([^"]+)"/.exec(m[1])?.[1];
+      const rid = /<v:imagedata\b[^>]*\b(?:o:relid|r:id)="([^"]+)"/.exec(m[2])?.[1];
+      const t = rid ? vrels.get(rid) : undefined;
+      const src = t && !t.external ? media.get(t.target) : undefined;
+      if (id && src) (out ??= new Map()).set(id, src);
+    }
+  }
+  return out;
 }
 
 /** Slaydın düzeni (ilişkisi bozuksa ilk düzen). */

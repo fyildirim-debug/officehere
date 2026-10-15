@@ -2,8 +2,8 @@
  * Slayt düzenleri (slideLayout): yer tutucular, süs şekilleri, arka plan.
  * İkincil asıl slayda bağlı düzenlere o asıl slaydın görünümü (arka plan, süs
  * şekilleri, farklı metin stilleri ve teması) taşınır; model tek asıl slayt taşır.
- * Geçiş kancası (dalga 3): düzenin extLst'i ve tanınmayan spTree öğeleri burada
- * (readShapeList çevresinde) toplanacak.
+ * Geçiş katmanı: tanınmayan spTree öğeleri ham şekil olarak okunur (readShapeList); ikincil
+ * asıl slaydın düzenleri `Layout.master` ile yine ayrı asıl slayt altında yazılır.
  */
 import { uid } from "../../model/factory";
 import { findPlaceholder, placeholderKind } from "../../model/textStyle";
@@ -29,6 +29,8 @@ export interface MasterLook {
   ownStyles?: TextStyles;
   /** İkincil asıl slaydın ana temadan farklı teması. */
   designTheme?: Theme;
+  /** Geçiş katmanı: ikincil asıl slaydın kaynak parçası (düzenler yine ayrı asıl slayt altında yazılır). */
+  key?: string;
 }
 
 /** Okunan düzenler (tüm asıl slaytlarınki). */
@@ -71,6 +73,7 @@ export async function readLayout(pk: PptxPackage, mkCtx: MkCtx, lp: string, m: M
     background: look.background,
     showMasterShapes: look.showMasterShapes,
     ...(m.designTheme ? { theme: m.designTheme } : {}),
+    ...(m.key ? { master: m.key } : {}),
   };
   set.layouts.push(layout);
   set.byPath.set(lp, layout);

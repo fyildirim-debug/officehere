@@ -123,7 +123,8 @@ describe("pptxReader: tema", () => {
     );
     expect(details).toContain("tema ppt/theme/theme9.xml yerine ppt/theme/theme1.xml kullanıldı");
     expect(warnings).toContain("Sununun ilişki bölümü bozuk; asıl slayt ve tema paket içinden bulunarak kullanıldı.");
-    expect(pres.theme).toEqual(orig.pres.theme);
+    // Kaynak kayıt kimliği her okumada farklıdır (geçiş katmanı); tema parçası ve içerik aynı.
+    expect({ ...pres.theme, src: { ...pres.theme.src!, src: "" } }).toEqual({ ...orig.pres.theme, src: { ...orig.pres.theme.src!, src: "" } });
   });
 
   it("yalnız başka asıl sayfaların temaları kaldıysa varsayılan tema kullanılır", async () => {

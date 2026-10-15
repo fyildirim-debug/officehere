@@ -17,7 +17,7 @@ export function applySections(presDoc: Element, sldIds: Element[], slides: Slide
   });
   for (const ext of kids(kid(presDoc, "extLst"), "ext")) {
     const lst = kid(ext, "sectionLst");
-    // Geçiş kancası (dalga 3): bölüm dışı sunu uzantıları (p15:sldGuideLst…) burada atlanıyor.
+    // Bölüm dışı uzantılar (p15:sldGuideLst…) kaydederken kaynaktan yamalanır (rawPassthrough).
     if (!lst) continue;
     for (const sec of kids(lst, "section")) markSection(sec, sldIdNum, slides);
   }

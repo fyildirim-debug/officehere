@@ -1,7 +1,7 @@
 /**
  * Slayt açıklamaları (p:cmLst) ve açıklama yazarları (commentAuthors.xml).
- * Geçiş kancası (dalga 3): modern açıklamalar (p188:cmLst, authors.xml) ve
- * açıklama yanıtları burada okunmuyor; taşınacaksa bu modüle eklenecek.
+ * Geçiş katmanı: modern açıklamalar (p188:cmLst, authors.xml) ve açıklama yanıtları
+ * okunmuyor; kaydederken düşürülür ve uyarılır (core politika: "comments").
  */
 import { uid } from "../../model/factory";
 import type { Comment } from "../../model/types";

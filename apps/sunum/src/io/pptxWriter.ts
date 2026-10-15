@@ -1,16 +1,23 @@
 /**
  * PPTX yazıcı (ECMA-376 PresentationML, JSZip ile). Asıl slayt, düzenler,
  * tema, slaytlar, notlar, ortam dosyaları, geçişler ve animasyonlar yazılır.
+ *
+ * Geçiş katmanı: sunu açılan bir paketten geliyorsa (`pres.kaynak`) modelin tanımadığı
+ * öğeler özgün XML'leriyle (ham şekiller, slayt extLst/denetimleri, presentation.xml yaması)
+ * ve parçalar kaynak paketten taşınır (core `carryParts`; slaytlar kaynak parçalarına eşlenir,
+ * silinen slaytın parçaları taşınmaz).
  */
 import JSZip from "jszip";
+import { carryParts, type CarryReport } from "@officehere/core/opc";
 import { flatShapes } from "../model/ops";
 import type { ChartData, Layout, Master, Presentation, Shape, SpShape, Theme } from "../model/types";
+import { kaynakPaket, patchPresentationXml, RawWriter } from "./rawPassthrough";
 import { bgXml, spTreeXml, type ChartStore, type MediaStore, type WriteCtx } from "./writeDrawing";
 import { chartWorkbook, chartXml } from "./writeChart";
 import { appXml, CLR_MAP, coreXml, notesMasterXml, notesSlideXml, NS_DECL, presentationXml, samplePrompt, tableStylesXml, themeXml, txStylesXml, VIEW_PROPS } from "./writeParts";
 import { presPropsXml } from "./presProps";
 import { slideExtXml, timingXml, transitionXml } from "./writeTiming";
-import { attrs, esc, NS, REL, RelsBuilder, XML_HEAD } from "./xml";
+import { attrs, esc, NS, REL, RelsBuilder, relsPathFor, XML_HEAD } from "./xml";
 
 const CT = {
   presentation: "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml",
@@ -134,15 +141,19 @@ class Media implements MediaStore {
 
 class Charts implements ChartStore {
   list: ChartData[] = [];
-  add(chart: ChartData): string {
+  /** Kaynak grafik parçası → yazılan grafik (biçem/renk parçaları taşınsın). */
+  sources: { src: string; part: string; out: string }[] = [];
+  add(chart: ChartData, src?: { src: string; part: string }): string {
     this.list.push(chart);
-    return `ppt/charts/chart${this.list.length}.xml`;
+    const out = `ppt/charts/chart${this.list.length}.xml`;
+    if (src) this.sources.push({ ...src, out });
+    return out;
   }
 }
 
-function makeCtx(part: string, media: Media, slideContent: boolean, slideNumbers?: Map<string, number>, charts?: Charts): WriteCtx {
+function makeCtx(part: string, media: Media, slideContent: boolean, slideNumbers?: Map<string, number>, charts?: Charts, raw?: RawWriter): WriteCtx {
   let id = 1;
-  return { rels: new RelsBuilder(), media, part, nextId: () => ++id, idMap: new Map(), slideContent, slideNumbers, charts };
+  return { rels: new RelsBuilder(), media, part, nextId: () => ++id, idMap: new Map(), slideContent, slideNumbers, charts, raw };
 }
 
 function tableStyleIds(shapes: Shape[], out: Set<string>) {
@@ -164,9 +175,40 @@ const PACKAGE_MIME = {
 
 export type PptxKind = keyof typeof MAIN_CT;
 
+/** Makrolu ana bölüm içerik türleri (.pptm / .ppsm / .potm). */
+const MACRO_CT: Record<PptxKind, string> = {
+  presentation: "application/vnd.ms-powerpoint.presentation.macroEnabled.main+xml",
+  slideshow: "application/vnd.ms-powerpoint.slideshow.macroEnabled.main+xml",
+  template: "application/vnd.ms-powerpoint.template.macroEnabled.main+xml",
+};
+
+export interface PptxWriteOptions {
+  /** .pptx / .ppsx / .potx paketi. */
+  kind?: PptxKind;
+  /** Makrolu hedef (.pptm): kaynaktaki VBA projesi korunur, ana bölüm türü makrolu olur. */
+  macro?: boolean;
+  /** Kaydetme uyarıları (Türkçe): düz gruba çevrilen SmartArt, kaldırılan imza/makro… */
+  warnings?: string[];
+}
+
+/** Paket düzeyi taşıma raporundan kullanıcı uyarıları. */
+const DROP_WARN: Partial<Record<CarryReport["dropped"][number]["reason"], string>> = {
+  signature: "Dijital imza kaldırıldı; kaydedilen dosya imzasız.",
+  macro: "Makrolar bu biçimde saklanamadığı için kaldırıldı (.pptm olarak kaydedin).",
+  comments: "Yeni tür açıklamalar (yanıt zinciri) bu sürümde korunamadı ve kaldırıldı.",
+};
+
 /** Sunuyu PPTX bayt dizisine yazar (kind: .pptx / .ppsx / .potx paketi). */
-export async function writePptx(pres: Presentation, opts: { kind?: PptxKind } = {}): Promise<Uint8Array> {
+export async function writePptx(pres: Presentation, opts: PptxWriteOptions = {}): Promise<Uint8Array> {
   const kind = opts.kind ?? "presentation";
+  const raw = new RawWriter();
+  const source = kaynakPaket(pres.kaynak);
+  const sourceNotesMaster = source?.mainPart ? (await source.rels(source.mainPart)).some((r) => r.type.endsWith("/notesMaster")) : false;
+  // Ham XML'deki slayt başvuruları yeni slayt parçalarına bağlanır (silinen slayta başvuran ham öğe yedek görünümle yazılır).
+  pres.slides.forEach((s, i) => {
+    const key = s.raw ? `${s.raw.src}|${s.raw.part}` : "";
+    if (key && !raw.slideParts.has(key)) raw.slideParts.set(key, `ppt/slides/slide${i + 1}.xml`);
+  });
   const zip = new JSZip();
   // OPC okuyucularının çoğu içerik türleri parçasını ilk sırada bekler.
   zip.file("[Content_Types].xml", "");
@@ -178,29 +220,37 @@ export async function writePptx(pres: Presentation, opts: { kind?: PptxKind } = 
     if (ct) overrides.push([`/${path}`, ct]);
   };
 
-  // Tema
-  add("ppt/theme/theme1.xml", themeXml(pres.theme, pres.theme.name, !!pres.masterEdited), CT.theme);
+  // Tema: içe aktarılan tema değişmediyse özgün tema parçası (efekt/dolgu stilleri ve resimleriyle).
+  const writeTheme = async (path: string, t: Theme, generate: () => string) => {
+    const kept = await raw.theme(t, path);
+    add(path, kept ? kept.xml : generate(), CT.theme);
+    if (kept?.rels) zip.file(relsPathFor(path), kept.rels);
+  };
+  await writeTheme("ppt/theme/theme1.xml", pres.theme, () => themeXml(pres.theme, pres.theme.name, !!pres.masterEdited));
   add("ppt/theme/theme2.xml", themeXml(pres.theme, "Not Teması"), CT.theme);
 
   // Asıl slaytlar: sununun asıl slaydı ve seçili slaytlara uygulanmış her tema için ikincil asıl slayt
-  // (arka planı ve süsleri düzenlere taşınmış; kendi tema parçasıyla).
-  const designs: { theme: Theme; master: Master; layouts: Layout[] }[] = [{ theme: pres.theme, master: pres.master, layouts: pres.layouts.filter((l) => !l.theme) }];
+  // (arka planı ve süsleri düzenlere taşınmış; kendi tema parçasıyla). Kaynakta ayrı asıl slayda bağlı
+  // düzenler (Layout.master) yine ayrı asıl slayt altında yazılır.
+  const designs: { key: string; theme: Theme; master: Master; layouts: Layout[] }[] = [{ key: "", theme: pres.theme, master: pres.master, layouts: pres.layouts.filter((l) => !l.theme && !l.master) }];
   for (const l of pres.layouts) {
-    if (!l.theme) continue;
-    const d = designs.find((x, i) => i > 0 && x.theme.name === l.theme!.name && x.theme.id === l.theme!.id);
+    if (!l.theme && !l.master) continue;
+    const key = l.master ?? `${l.theme!.name}|${l.theme!.id ?? ""}`;
+    const d = designs.find((x, i) => i > 0 && x.key === key);
     if (d) d.layouts.push(l);
-    else designs.push({ theme: l.theme, master: { background: l.background ?? pres.master.background, shapes: [], textStyles: pres.master.textStyles }, layouts: [l] });
+    else designs.push({ key, theme: l.theme ?? pres.theme, master: { background: l.background ?? pres.master.background, shapes: [], textStyles: pres.master.textStyles }, layouts: [l] });
   }
+  const themeFileOf = (mi: number) => (mi === 0 ? "theme1.xml" : `theme${mi + 2}.xml`);
+  for (const [mi, d] of designs.entries()) if (mi > 0) await writeTheme(`ppt/theme/${themeFileOf(mi)}`, d.theme, () => themeXml(d.theme, d.theme.name));
   const layoutOrder: Layout[] = designs.flatMap((d) => d.layouts);
   const layoutFile = (l: Layout) => `slideLayout${layoutOrder.indexOf(l) + 1}.xml`;
   let sldId = 2147483648;
   const masterIds: number[] = [];
   designs.forEach((d, mi) => {
     const n = mi + 1;
-    const themeFile = mi === 0 ? "theme1.xml" : `theme${n + 1}.xml`;
-    if (mi > 0) add(`ppt/theme/${themeFile}`, themeXml(d.theme, d.theme.name), CT.theme);
+    const themeFile = themeFileOf(mi);
     const masterPath = `ppt/slideMasters/slideMaster${n}.xml`;
-    const mctx = makeCtx(masterPath, media, false, undefined, charts);
+    const mctx = makeCtx(masterPath, media, false, undefined, charts, raw);
     masterIds.push(sldId++);
     const layoutIdLst = d.layouts.map((l) => `<p:sldLayoutId id="${sldId++}" r:id="${mctx.rels.add(REL.slideLayout, `../slideLayouts/${layoutFile(l)}`)}"/>`).join("");
     const masterTree = spTreeXml(withFooterFields(d.master.shapes), mctx, { promptAsText: (s) => samplePrompt(s, true) });
@@ -213,7 +263,7 @@ export async function writePptx(pres: Presentation, opts: { kind?: PptxKind } = 
     for (const l of d.layouts) {
       const file = layoutFile(l);
       const path = `ppt/slideLayouts/${file}`;
-      const ctx = makeCtx(path, media, false, undefined, charts);
+      const ctx = makeCtx(path, media, false, undefined, charts, raw);
       ctx.rels.add(REL.slideMaster, `../slideMasters/slideMaster${n}.xml`);
       const tree = spTreeXml(withFooterFields(l.shapes), ctx, { promptAsText: (s) => samplePrompt(s, false) });
       const type = l.type === "cust" ? undefined : l.type;
@@ -228,7 +278,9 @@ export async function writePptx(pres: Presentation, opts: { kind?: PptxKind } = 
 
   // Not asıl sayfası
   // Not sayfası/dinleyici notu üst-alt bilgisi ayarlıysa not asıl sayfası notsuz sunuda da yazılır.
-  const hasNotes = pres.slides.some((s) => s.notes.trim()) || !!pres.notesHeaderFooter;
+  // Kaynakta not asıl sayfası / not sayfası olan slaytlar notsuz da yazılır (parçalar kaybolmasın).
+  const notesPage = (s: Presentation["slides"][number]) => !!s.notes.trim() || !!s.raw?.notesPage;
+  const hasNotes = pres.slides.some(notesPage) || !!pres.notesHeaderFooter || sourceNotesMaster;
   if (hasNotes) {
     add("ppt/notesMasters/notesMaster1.xml", notesMasterXml(pres.notesHeaderFooter), CT.notesMaster);
     const r = new RelsBuilder();
@@ -247,15 +299,16 @@ export async function writePptx(pres: Presentation, opts: { kind?: PptxKind } = 
   const slideNumbers = new Map(pres.slides.map((s, i) => [s.id, i + 1]));
   pres.slides.forEach((slide, i) => {
     const path = `ppt/slides/slide${i + 1}.xml`;
-    const ctx = makeCtx(path, media, true, slideNumbers, charts);
+    const ctx = makeCtx(path, media, true, slideNumbers, charts, raw);
     const sl = layoutOrder.find((l) => l.id === slide.layoutId) ?? layoutOrder[0];
     ctx.rels.add(REL.slideLayout, `../slideLayouts/${layoutFile(sl)}`);
     tableStyleIds(slide.shapes, tableStyles);
     const tree = spTreeXml(slide.shapes, ctx);
     const trans = transitionXml(slide.transition);
     const timing = timingXml(slide, ctx.idMap);
-    const ext = slideExtXml(slide, ctx.idMap);
-    if (slide.notes.trim()) {
+    const kept = raw.slide(slide, ctx);
+    const ext = mergeExtLst(kept.ext, slideExtXml(slide, ctx.idMap));
+    if (notesPage(slide)) {
       const np = `ppt/notesSlides/notesSlide${i + 1}.xml`;
       add(np, notesSlideXml(slide.notes), CT.notesSlide);
       const nr = new RelsBuilder();
@@ -279,7 +332,7 @@ export async function writePptx(pres: Presentation, opts: { kind?: PptxKind } = 
     }
     add(
       path,
-      `<p:sld ${NS_DECL}${attrs({ show: slide.hidden ? "0" : undefined, showMasterSp: slide.hideMasterShapes ? "0" : undefined })}><p:cSld${attrs({ name: slide.name })}>${bgXml(slide.background, ctx)}${tree}</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${trans}${timing}${ext}</p:sld>`,
+      `<p:sld ${NS_DECL}${attrs({ show: slide.hidden ? "0" : undefined, showMasterSp: slide.hideMasterShapes ? "0" : undefined })}><p:cSld${attrs({ name: slide.name })}>${bgXml(slide.background, ctx)}${tree}${kept.cSld}</p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${trans}${timing}${ext}</p:sld>`,
       CT.slide,
     );
     zip.file(`ppt/slides/_rels/slide${i + 1}.xml.rels`, ctx.rels.xml());
@@ -304,7 +357,9 @@ export async function writePptx(pres: Presentation, opts: { kind?: PptxKind } = 
       .join("");
     add("ppt/commentAuthors.xml", `<p:cmAuthorLst ${NS_DECL}>${list}</p:cmAuthorLst>`, CT.commentAuthors);
   }
-  add("ppt/presentation.xml", presentationXml(pres, masterRids.map((rid, i) => [masterIds[i], rid] as [number, string]), notesRid, slideRids, pctx), MAIN_CT[kind]);
+  // Kaynaktaki dinleyici notu asıl sayfası, gömülü yazı tipleri, kılavuzlar (p15:sldGuideLst)… eklenir.
+  const presXml = await patchPresentationXml(presentationXml(pres, masterRids.map((rid, i) => [masterIds[i], rid] as [number, string]), notesRid, slideRids, pctx), pres.kaynak, raw, pctx);
+  add("ppt/presentation.xml", presXml, opts.macro ? MACRO_CT[kind] : MAIN_CT[kind]);
   zip.file("ppt/_rels/presentation.xml.rels", pctx.rels.xml());
   add("ppt/presProps.xml", presPropsXml(pres), CT.presProps);
   add("ppt/viewProps.xml", VIEW_PROPS, CT.viewProps);
@@ -349,7 +404,40 @@ export async function writePptx(pres: Presentation, opts: { kind?: PptxKind } = 
   const ov = overrides.map(([p, c]) => `<Override PartName="${p}" ContentType="${c}"/>`).join("");
   zip.file("[Content_Types].xml", `${XML_HEAD}<Types xmlns="${NS.ct}">${defaults}${ov}</Types>`);
 
-  return zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 }, mimeType: PACKAGE_MIME[kind] });
+  const out = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 }, mimeType: PACKAGE_MIME[kind] });
+  const bytes = await carryFromSource(pres, out, raw, charts, !!opts.macro);
+  opts.warnings?.push(...raw.warnings);
+  return bytes;
+}
+
+/**
+ * Paket düzeyi taşıma: modelin tanımadığı parçalar (makro, özel XML, özel özellikler, yazıcı
+ * ayarları, VML çizimleri…) ve ham öğelerin kopyaları kaynak paketten eklenir. Slaytlar ve
+ * grafikler kaynak parçalarına eşlenir; eşlenmeyen (silinen) slaydın parçaları taşınmaz.
+ */
+async function carryFromSource(pres: Presentation, out: Uint8Array, raw: RawWriter, charts: Charts, macro: boolean): Promise<Uint8Array> {
+  const source = kaynakPaket(pres.kaynak);
+  if (pres.kaynak && !source) raw.warnings.add("Özgün dosya bellekte bulunamadığı için modelin tanımadığı bölümler (makrolar, özel veriler…) taşınamadı.");
+  if (!source && !raw.carry.size) return out;
+  const partMap: [string, string][] = [];
+  pres.slides.forEach((s, i) => {
+    if (s.raw && s.raw.src === pres.kaynak) partMap.push([s.raw.part, `ppt/slides/slide${i + 1}.xml`]);
+  });
+  for (const c of charts.sources) if (c.src === pres.kaynak) partMap.push([c.part, c.out]);
+  // Açıklama yazarları: yazıcı yazmadıysa (açıklamasız sunu) kaynaktaki liste korunur.
+  const { bytes, report } = await carryParts({ app: "sunum", source: source ?? null, output: out, macro, partMap, carry: raw.carry, overrides: { carry: ["commentAuthors"] } });
+  for (const d of report.dropped) {
+    const w = DROP_WARN[d.reason];
+    if (w) raw.warnings.add(w);
+  }
+  return bytes;
+}
+
+/** Slaydın p:extLst'i: kaynaktaki uzantılar + uygulamanınki. */
+function mergeExtLst(kept: string[], ours: string): string {
+  if (!kept.length) return ours;
+  const inner = ours.replace(/^<p:extLst>/, "").replace(/<\/p:extLst>$/, "");
+  return `<p:extLst>${kept.join("")}${inner}</p:extLst>`;
 }
 
 /** Asıl/düzen alt bilgi yer tutucularına alan (slayt numarası, tarih) ekler. */

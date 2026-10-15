@@ -96,6 +96,8 @@ export interface RunProps {
   baseline?: number;
   /** Metin anahattı (WordArt). */
   outline?: Color;
+  /** Resim (doku) dolgulu metin (WordArt); renk verilmediyse kaydederken yazılır, gösterimde metin rengi kullanılır. */
+  picFill?: { src: string; mode: "stretch" | "tile" };
   /** Metin parlaması (WordArt). */
   glow?: Color;
   /** Alan (slayt numarası, tarih). */
@@ -116,7 +118,8 @@ export type AutoNumScheme =
 
 export type BulletDef =
   | { type: "none" }
-  | { type: "char"; char: string; font?: string; color?: Color; size?: number }
+  /** `pic`: resimli madde işareti (a:buBlip, veri adresi); gösterimde `char` kullanılır. */
+  | { type: "char"; char: string; font?: string; color?: Color; size?: number; pic?: string }
   | { type: "auto"; scheme: AutoNumScheme; startAt?: number; color?: Color; size?: number };
 
 export type Align = "l" | "ctr" | "r" | "just";
@@ -202,6 +205,56 @@ export interface ShapeBase {
   link?: string;
   /** Fare üzerine gelince izlenecek köprü (Eylem Ayarları › Fare Üzerine Gelme). */
   hoverLink?: string;
+  /**
+   * Modelin tanımadığı öğenin (SmartArt, OLE, mürekkep…) özgün XML'i. Şekil yedek
+   * görünümüyle (grup/resim) gösterilir; kaydederken görünüm değişmemişse özgün XML yazılır.
+   */
+  raw?: RawXml;
+}
+
+/** Ham öğenin başvurduğu ilişki (okurken kaynak parçanın .rels'inden). */
+export interface RawRef {
+  id: string;
+  type: string;
+  /** İç hedefte kaynak paketteki mutlak parça adı, dış hedefte adres. */
+  target: string;
+  external: boolean;
+}
+
+/** Ham XML'de geçmeyen, kopyalanan bir parçada `relId` olarak anılan ilişki (SmartArt çizimi). */
+export interface RawExtra extends RawRef {
+  /** relId'nin geçtiği parça (kaynakta mutlak ad). */
+  patchIn: string;
+}
+
+export type RawKind = "smartart" | "ole" | "murekkep" | "bilinmeyen";
+
+/** Geçiş katmanı: şeklin özgün DrawingML/PresentationML XML'i ve ilişkileri (K§1.2.4). */
+export interface RawXml {
+  kind: RawKind;
+  /** Kaynak paket kaydı kimliği (bayt değil; paket bellekteki kayıttadır). */
+  src: string;
+  /** Özgün öğe XML'i (kapsamdaki ad alanı bildirimleriyle). */
+  xml: string;
+  refs: RawRef[];
+  extra: RawExtra[];
+  /** Okunduğu andaki görünüm imzası; değişmişse kaydederken yedek görünüm yazılır. */
+  sig: string;
+}
+
+/** Slaydın kaynak parçası ve modelin tanımadığı slayt düzeyi öğeleri. */
+export interface SlideRaw {
+  /** Kaynak paket kaydı kimliği. */
+  src: string;
+  /** Kaynaktaki slayt parçası (ör. "ppt/slides/slide3.xml"). */
+  part: string;
+  /** p:cSld içindeki tanınmayan öğeler (custDataLst, controls, extLst). */
+  cSld?: string[];
+  /** p:sld/p:extLst içindeki uygulama dışı ext öğeleri (p14:creationId…). */
+  ext?: string[];
+  refs: RawRef[];
+  /** Kaynakta not sayfası vardı: not boş olsa da yazılır. */
+  notesPage?: boolean;
 }
 
 export interface PathCmd {
@@ -370,6 +423,8 @@ export interface ChartData {
 export interface ChartShape extends ShapeBase {
   kind: "chart";
   chart: ChartData;
+  /** Grafiğin kaynak parçası (geçiş katmanı): biçem/renk parçaları (chartStyle, chartColorStyle) taşınır. */
+  srcPart?: { src: string; part: string };
 }
 
 export type Shape = SpShape | PicShape | TableShape | GroupShape | ChartShape;
@@ -450,6 +505,8 @@ export interface Slide {
   comments?: Comment[];
   /** Bu slayttan başlayan bölüm (PowerPoint 2010+ bölümleri). */
   section?: { id: string; name: string };
+  /** Kaynak slayt parçası ve tanınmayan slayt düzeyi öğeleri (geçiş katmanı). */
+  raw?: SlideRaw;
 }
 
 export type LayoutType =
@@ -475,6 +532,11 @@ export interface Layout {
   showMasterShapes: boolean;
   /** Seçili slaytlara uygulanan ayrı tema (ikincil asıl slayt); yoksa sununun teması. */
   theme?: Theme;
+  /**
+   * Kaynakta bağlı olduğu ikincil asıl slayt (geçiş katmanı): aynı anahtarlı düzenler kaydederken
+   * yine ayrı bir asıl slayt altında yazılır (asıl slayt yapısı korunur).
+   */
+  master?: string;
 }
 
 export interface TextStyles {
@@ -497,6 +559,11 @@ export interface Theme {
   variant?: number;
   colors: Record<SchemeColorName, string>;
   fonts: { major: string; minor: string };
+  /**
+   * İçe aktarılan temanın kaynak parçası ve okunduğu andaki imzası (geçiş katmanı): tema
+   * değişmemişse özgün tema parçası (efekt/dolgu stilleri ve resimleriyle) yazılır.
+   */
+  src?: { src: string; part: string; sig: string };
 }
 
 export interface HeaderFooter {
@@ -571,4 +638,9 @@ export interface Presentation {
   printSettings?: PrintSettings;
   /** Not sayfaları ve dinleyici notları üst/alt bilgisi; yoksa yalnız sayfa numarası. */
   notesHeaderFooter?: NotesHeaderFooter;
+  /**
+   * Açılan özgün paketin kayıt kimliği (yalnız kimlik; bayt taşımaz). Kaydederken modelin
+   * tanımadığı parçalar (makro, özel XML, gömülü yazı tipleri…) buradan taşınır.
+   */
+  kaynak?: string;
 }

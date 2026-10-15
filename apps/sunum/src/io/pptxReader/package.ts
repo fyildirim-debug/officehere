@@ -77,7 +77,7 @@ export function pptxPackage(zip: SafeZip, W: LoadWarnings): PptxPackage {
 
 /**
  * İçerik türleri (parça yolu → tür): bozuk ilişkilerde parçaların türünü doğrulamak için.
- * Geçiş kancası (dalga 3): tanınmayan parçaları taşırken türleri de buradan alınır.
+ * Tanınmayan parçaların taşınması kaydederken core `carryParts` ile yapılır (türler kaynak paketten).
  */
 export async function readContentTypes(pk: PptxPackage): Promise<Map<string, string>> {
   const contentTypes = new Map<string, string>();

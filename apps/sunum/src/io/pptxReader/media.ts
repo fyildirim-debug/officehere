@@ -5,6 +5,7 @@
 import type { ChartData, SchemeColorName } from "../../model/types";
 import { EXT_MIME, MEDIA_MIME } from "../pptxWriter";
 import { readChartXml } from "../readChart";
+import { parseRels, relsPathFor, type Rel } from "../xml";
 import { PartError } from "../zipSafe";
 import type { PptxPackage } from "./package";
 
@@ -39,6 +40,25 @@ export async function readMedia(pk: PptxPackage): Promise<{ media: Map<string, s
   );
   if (badMedia.size) W.add(`${badMedia.size} resim ya da ortam dosyası bozuk ya da çok büyük olduğu için yüklenemedi; yerlerinde boş çerçeve görünür.`);
   return { media, badMedia };
+}
+
+const DIAGRAM_CT = /drawingml\.diagram(Data|Drawing)\+xml$/i;
+
+/**
+ * SmartArt veri ve çizim parçaları (yol → XML) ve çizimlerin ilişkileri: SmartArt yedek
+ * görünümü (çizimdeki şekiller) ve dsp:dataModelExt başvurusu için.
+ */
+export async function readDiagrams(pk: PptxPackage, contentTypes: Map<string, string>): Promise<{ diagrams: Map<string, string>; diagramRels: Map<string, Map<string, Rel>> }> {
+  const diagrams = new Map<string, string>();
+  const diagramRels = new Map<string, Map<string, Rel>>();
+  const paths = pk.zip.paths.filter((p) => DIAGRAM_CT.test(contentTypes.get(p) ?? "") || /^ppt\/diagrams\/(data|drawing)[^/]*\.xml$/i.test(p));
+  for (const p of paths) {
+    const xml = await pk.text(p);
+    if (!xml) continue;
+    diagrams.set(p, xml);
+    diagramRels.set(p, parseRels(await pk.text(relsPathFor(p)), p));
+  }
+  return { diagrams, diagramRels };
 }
 
 /** Grafik parçaları (yol → veri); okunamayanlar yedek resimleriyle (varsa) gösterilir. */

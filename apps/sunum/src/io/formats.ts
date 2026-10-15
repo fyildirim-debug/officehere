@@ -11,10 +11,10 @@
  */
 import type { Presentation } from "../model/types";
 import { FormatError, LOAD_FAILED, type SaveFormat, type SunuFormat } from "./formatInfo";
-import type { ReadResult } from "./formatsImpl";
+import type { ReadOptions, ReadResult, WriteOptions } from "./formatsImpl";
 
 export * from "./formatInfo";
-export type { ReadResult } from "./formatsImpl";
+export type { ReadOptions, ReadResult, WriteOptions } from "./formatsImpl";
 
 type Impl = typeof import("./formatsImpl");
 let pending: Promise<Impl> | undefined;
@@ -41,11 +41,11 @@ export async function sniffFormat(data: ArrayBuffer | Uint8Array, name: string):
 }
 
 /** Biçimi tanıyıp uygun okuyucuyla açar. Hatalar Türkçe FormatError olarak atılır; uyarılar `warnings`'te. */
-export async function readPresentationFile(data: ArrayBuffer | Uint8Array, name: string): Promise<ReadResult> {
-  return (await loadIo()).readPresentationFile(data, name);
+export async function readPresentationFile(data: ArrayBuffer | Uint8Array, name: string, opts?: ReadOptions): Promise<ReadResult> {
+  return (await loadIo()).readPresentationFile(data, name, opts);
 }
 
-/** Sunuyu seçilen biçimde yazar. */
-export async function writePresentationFormat(pres: Presentation, format: SaveFormat): Promise<Uint8Array> {
-  return (await loadIo()).writePresentationFormat(pres, format);
+/** Sunuyu seçilen biçimde yazar; kaydetme uyarıları `opts.warnings`'e eklenir. */
+export async function writePresentationFormat(pres: Presentation, format: SaveFormat, opts?: WriteOptions): Promise<Uint8Array> {
+  return (await loadIo()).writePresentationFormat(pres, format, opts);
 }

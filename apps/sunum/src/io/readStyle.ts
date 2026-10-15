@@ -31,6 +31,13 @@ export interface ReadCtx {
   effectStyles?: (Effects | undefined)[];
   /** Başvurulan ama pakette bulunamayan ortam parçaları (açılış uyarısı için). */
   missingMedia?: Set<string>;
+  /** Geçiş katmanı: kaynak paket kaydı kimliği; yoksa tanınmayan öğeler bugünkü gibi atlanır. */
+  rawSrc?: string;
+  /** SmartArt veri ve çizim parçaları (yol → XML) ve çizimlerin ilişkileri. */
+  diagrams?: Map<string, string>;
+  diagramRels?: Map<string, Map<string, Rel>>;
+  /** Parçanın VML çizimindeki şekil kimliği (spid) → önizleme resmi (OLE yedek görünümü). */
+  vmlImages?: Map<string, string>;
 }
 
 export const DEFAULT_CLRMAP: Record<string, SchemeColorName> = {

@@ -12,6 +12,7 @@ import { writeOdp } from "./odp/writer";
 import { readPpt } from "./ppt/reader";
 import { readPptx } from "./pptxReader";
 import { writePptx } from "./pptxWriter";
+import { hasRawShapes, RAW_WARN } from "./rawPassthrough";
 import { openZip, PackageError, PartError, type SafeZip } from "./zipSafe";
 
 /** JSZip, bu tembel parçanın içinden dışa verilir (ör. çok slaytlı PNG dışa aktarma, anahat içe aktarma). */
@@ -80,33 +81,54 @@ export interface ReadResult {
   warnings: string[];
   /** Uyarıların teknik ayrıntıları (parça yolları, özgün hata iletileri). */
   details: string[];
+  /**
+   * Hasar olmayan bilgi iletileri (Türkçe): ör. dijital imza kaydedince kaldırılır. Otomatik
+   * kaydetme bunlar onaylanmadan dosyanın üzerine yazmamalıdır.
+   */
+  notices: string[];
+}
+
+export interface ReadOptions {
+  /** Özgün paket geçiş katmanı için kaydedilsin mi (varsayılan evet; tek kullanımlık doğrulama okumasında hayır). */
+  kaynak?: boolean;
+}
+
+export interface WriteOptions {
+  /** Kaydetme uyarıları (Türkçe): düz gruba çevrilen SmartArt, kaldırılan imza/makro, ODP yedek görünümü… */
+  warnings?: string[];
 }
 
 /** Biçimi tanıyıp uygun okuyucuyla açar. Hatalar Türkçe FormatError olarak atılır. */
-export async function readPresentationFile(data: ArrayBuffer | Uint8Array, name: string): Promise<ReadResult> {
+export async function readPresentationFile(data: ArrayBuffer | Uint8Array, name: string, opts: ReadOptions = {}): Promise<ReadResult> {
   const warnings = new LoadWarnings();
+  const notices: string[] = [];
   try {
     const format = await sniffFormat(data, name);
     let pres: Presentation;
     if (format === "ppt") pres = await readPpt(data, { warnings });
     else if (format === "odp" || format === "otp") pres = await readOdp(data, { warnings });
-    else pres = await readPptx(data, { warnings });
-    return { pres, format, warnings: warnings.list(), details: warnings.details };
+    else pres = await readPptx(data, { warnings, notices, kaynak: opts.kaynak });
+    return { pres, format, warnings: warnings.list(), details: warnings.details, notices };
   } catch (e) {
     throw toFormatError(e);
   }
 }
 
 /** Sunuyu seçilen biçimde yazar. */
-export function writePresentationFormat(pres: Presentation, format: SaveFormat): Promise<Uint8Array> {
+export function writePresentationFormat(pres: Presentation, format: SaveFormat, opts: WriteOptions = {}): Promise<Uint8Array> {
+  const { warnings } = opts;
   switch (format) {
     case "odp":
+      // ODF'de geçiş katmanı yok: ham öğelerin yedek görünümü (şekil grubu/resim) yazılır.
+      if (warnings && hasRawShapes([...pres.slides, ...pres.layouts, pres.master])) warnings.push(RAW_WARN.odp);
       return writeOdp(pres);
     case "ppsx":
-      return writePptx(pres, { kind: "slideshow" });
+      return writePptx(pres, { kind: "slideshow", warnings });
     case "potx":
-      return writePptx(pres, { kind: "template" });
+      return writePptx(pres, { kind: "template", warnings });
+    case "pptm":
+      return writePptx(pres, { macro: true, warnings });
     default:
-      return writePptx(pres);
+      return writePptx(pres, { warnings });
   }
 }

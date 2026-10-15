@@ -24,8 +24,8 @@ export interface PresPart {
 
 /**
  * Sunu bölümünü ve ilişkilerini açar; okunamazsa anlaşılır PptxError.
- * Geçiş kancası (dalga 3): tanınmayan sunu öğeleri (embeddedFontLst, custDataLst,
- * extLst'teki diğer uzantılar…) burada `doc`'tan toplanacak.
+ * Geçiş katmanı: tanınmayan sunu öğeleri (embeddedFontLst, custDataLst, extLst'teki diğer
+ * uzantılar…) kaydederken kaynak paketten yamalanır (rawPassthrough.patchPresentationXml).
  */
 export async function openPresentation(pk: PptxPackage): Promise<PresPart> {
   const { zip, W } = pk;

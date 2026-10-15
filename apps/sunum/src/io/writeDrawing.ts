@@ -32,8 +32,13 @@ export interface MediaStore {
 }
 
 export interface ChartStore {
-  /** Grafik parçasını kaydeder, paket yolunu döndürür ("ppt/charts/chart1.xml"). */
-  add(chart: ChartData): string;
+  /** Grafik parçasını kaydeder, paket yolunu döndürür ("ppt/charts/chart1.xml"). `src`: kaynak grafik parçası. */
+  add(chart: ChartData, src?: { src: string; part: string }): string;
+}
+
+/** Geçiş katmanı: ham şeklin özgün XML'i (rawPassthrough.RawWriter); yazılamazsa null → yedek görünüm. */
+export interface RawShapeWriter {
+  shape(s: Shape, ctx: WriteCtx): string | null;
 }
 
 export interface WriteCtx {
@@ -48,6 +53,8 @@ export interface WriteCtx {
   /** Slayt kimliği → slayt numarası (1 tabanlı), sunu içi köprüler için. */
   slideNumbers?: Map<string, number>;
   charts?: ChartStore;
+  /** Ham (modelin tanımadığı) şekillerin yazıcısı; yoksa yedek görünümleri yazılır. */
+  raw?: RawShapeWriter;
 }
 
 const JUMP_ACTIONS: Record<string, string> = {
@@ -204,6 +211,7 @@ export function rPrXml(tag: string, p: RunProps, ctx: WriteCtx, lang = true): st
   let inner = "";
   if (p.outline) inner += `<a:ln w="9525"><a:solidFill>${colorXml(p.outline, ctx)}</a:solidFill></a:ln>`;
   if (p.color) inner += `<a:solidFill>${colorXml(p.color, ctx)}</a:solidFill>`;
+  else if (p.picFill) inner += fillXml({ type: "image", ...p.picFill }, ctx);
   if (p.shadow || p.glow) {
     inner += "<a:effectLst>";
     if (p.glow) inner += `<a:glow rad="101600">${colorXml({ ...p.glow, alpha: p.glow.alpha ?? 0.6 }, ctx)}</a:glow>`;
@@ -221,7 +229,11 @@ function bulletXml(b: BulletDef | undefined, ctx: WriteCtx): string {
   if (b.type === "none") return "<a:buNone/>";
   const clr = b.color ? `<a:buClr>${colorXml(b.color, ctx)}</a:buClr>` : "";
   const sz = b.size ? `<a:buSzPct val="${Math.round(b.size * 1000)}"/>` : "";
-  if (b.type === "char") return `${clr}${sz}${b.font ? `<a:buFont typeface="${esc(b.font)}"/>` : ""}<a:buChar char="${esc(b.char)}"/>`;
+  if (b.type === "char") {
+    const rid = b.pic ? imageRel(ctx, b.pic) : null;
+    if (rid) return `${clr}${sz}<a:buBlip><a:blip r:embed="${rid}"/></a:buBlip>`;
+    return `${clr}${sz}${b.font ? `<a:buFont typeface="${esc(b.font)}"/>` : ""}<a:buChar char="${esc(b.char)}"/>`;
+  }
   return `${clr}${sz}<a:buFont typeface="+mj-lt"/><a:buAutoNum type="${b.scheme}"${b.startAt && b.startAt !== 1 ? ` startAt="${b.startAt}"` : ""}/>`;
 }
 
@@ -412,6 +424,9 @@ export function groupXml(g: GroupShape, ctx: WriteCtx): string {
 }
 
 export function shapeXml(s: Shape, ctx: WriteCtx, opts: { promptAsText?: (s: SpShape) => string | undefined } = {}): string {
+  // Görünümü değişmemiş ham şekil (SmartArt, OLE…): özgün XML.
+  const raw = s.raw && ctx.raw ? ctx.raw.shape(s, ctx) : null;
+  if (raw !== null) return raw;
   switch (s.kind) {
     case "sp":
       return spXml(s, ctx, { promptAsText: opts.promptAsText?.(s) });
@@ -429,7 +444,7 @@ export function shapeXml(s: Shape, ctx: WriteCtx, opts: { promptAsText?: (s: SpS
 /** Grafik çerçevesi (p:graphicFrame + c:chart başvurusu). */
 export function chartFrameXml(s: ChartShape, ctx: WriteCtx): string {
   if (!ctx.charts) return "";
-  const path = ctx.charts.add(s.chart);
+  const path = ctx.charts.add(s.chart, s.srcPart);
   const rid = ctx.rels.add(REL.chart, relativeTarget(ctx.part, path));
   return (
     `<p:graphicFrame><p:nvGraphicFramePr>${cNvPr(s, ctx)}<p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr>` +

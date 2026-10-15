@@ -12,7 +12,7 @@ import type {
 } from "../model/types";
 import { attr, fromEmu, kid, kidPath, kids, numAttr, relId } from "./xml";
 
-import { type ReadCtx, readColor, readFill } from "./readStyle";
+import { type ReadCtx, mediaFor, readColor, readFill } from "./readStyle";
 
 function fontName(tf: string | undefined): string | undefined {
   if (!tf) return undefined;
@@ -43,6 +43,7 @@ export function readRunProps(rPr: Element | undefined, ctx: ReadCtx): RunProps {
   const fill = readFill(rPr, ctx);
   if (fill?.type === "solid") p.color = fill.color;
   else if (fill?.type === "gradient") p.color = fill.stops[0].color;
+  else if (fill?.type === "image") p.picFill = { src: fill.src, mode: fill.mode };
   const ln = kid(rPr, "ln");
   if (ln) {
     const lf = readFill(ln, ctx);
@@ -120,6 +121,9 @@ export function readParaProps(pPr: Element | undefined, ctx: ReadCtx): { props: 
   if (kid(pPr, "buNone")) bullet = { type: "none" };
   const ch = kid(pPr, "buChar");
   if (ch) bullet = { type: "char", char: attr(ch, "char") ?? "•", font: buFont && !buFont.startsWith("+") ? buFont : undefined, color: buClr, size: buSz !== undefined ? buSz / 1000 : undefined };
+  // Resimli madde işareti: resim korunur (kaydederken yazılır), gösterimde yuvarlak imle çizilir.
+  const pic = mediaFor(attr(kid(kid(pPr, "buBlip"), "blip"), "embed"), ctx);
+  if (pic) bullet = { type: "char", char: "•", color: buClr, size: buSz !== undefined ? buSz / 1000 : undefined, pic };
   const an = kid(pPr, "buAutoNum");
   if (an) {
     const t = attr(an, "type") ?? "arabicPeriod";

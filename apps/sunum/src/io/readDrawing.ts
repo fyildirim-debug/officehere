@@ -12,6 +12,8 @@ import type {
   PathCmd,
   PicShape,
   Placeholder,
+  RawExtra,
+  RawKind,
   Shape,
   SpShape,
   TableCell,
@@ -19,7 +21,8 @@ import type {
 } from "../model/types";
 import { isLineGeom } from "../render/geometry";
 import { tableStyleByGuid, DEFAULT_TABLE_STYLE } from "../render/tableStyles";
-import { attr, boolAttr, descendants, fromEmu, kid, kidPath, kids, numAttr, relId } from "./xml";
+import { placeholderPic, rawOuterXml, rawRefs, rawSig } from "./rawPassthrough";
+import { attr, boolAttr, descendants, fromEmu, kid, kidPath, kids, numAttr, parseXml, relId } from "./xml";
 
 import { type ReadCtx, readColor, mediaFor, readFill, readLine, readEffects } from "./readStyle";
 import { readHlink, readTextBody } from "./readText";
@@ -265,7 +268,9 @@ function readPic(el: Element, ctx: ReadCtx): PicShape {
   const spPr = kid(el, "spPr");
   const xf = readXfrm(kid(spPr, "xfrm"));
   const inh = info.ph && ctx.inherit ? ctx.inherit(info.ph) : undefined;
-  const bf = kid(el, "blipFill");
+  // Resim dolgusu mc:AlternateContent içinde olabilir (ör. PDF resim + PNG yedeği): yedeği okunur.
+  const ac = kid(el, "AlternateContent");
+  const bf = kid(el, "blipFill") ?? kid(kid(ac, "Fallback"), "blipFill") ?? kid(kid(ac, "Choice"), "blipFill");
   const blip = kid(bf, "blip");
   const src = mediaFor(attr(blip, "embed"), ctx) ?? "";
   const sr = kid(bf, "srcRect");
@@ -434,8 +439,11 @@ function readShapeEl(el: Element, ctx: ReadCtx): Shape | undefined {
       return readSp(el, ctx, false);
     case "cxnSp":
       return readSp(el, ctx, true);
-    case "pic":
-      return readPic(el, ctx);
+    case "pic": {
+      const p = readPic(el, ctx);
+      // Resim dolgusu AlternateContent'li resim: özgün XML'iyle taşınır (iki seçenek de korunur).
+      return ctx.rawSrc && kid(el, "AlternateContent") ? attachRaw(p, el, ctx, "bilinmeyen") : p;
+    }
     case "grpSp":
       return readGroup(el, ctx);
     case "graphicFrame": {
@@ -447,8 +455,11 @@ function readShapeEl(el: Element, ctx: ReadCtx): Shape | undefined {
       if (chart) {
         const info = nvProps(kid(el, "nvGraphicFramePr"), ctx);
         const xf = readXfrm(kid(el, "xfrm"));
-        return { kind: "chart", id: info.id, name: info.name || "Grafik", descr: info.descr, hidden: info.hidden, link: info.link, x: xf?.x ?? 0, y: xf?.y ?? 0, w: xf?.w ?? 0, h: xf?.h ?? 0, rot: xf?.rot ?? 0, chart: structuredClone(chart) } satisfies ChartShape;
+        const srcPart = ctx.rawSrc ? { srcPart: { src: ctx.rawSrc, part: chartRel!.target } } : {};
+        return { kind: "chart", id: info.id, name: info.name || "Grafik", descr: info.descr, hidden: info.hidden, link: info.link, x: xf?.x ?? 0, y: xf?.y ?? 0, w: xf?.w ?? 0, h: xf?.h ?? 0, rot: xf?.rot ?? 0, chart: structuredClone(chart), ...srcPart } satisfies ChartShape;
       }
+      // SmartArt, OLE ve tanınmayan çerçeveler: yedek görünüm + özgün XML (geçiş katmanı).
+      if (ctx.rawSrc) return readOpaque(el, ctx);
       // Grafik/diyagram: yedek resim varsa onu kullan.
       const pic = descendants(el, "pic")[0];
       if (pic) {
@@ -460,14 +471,108 @@ function readShapeEl(el: Element, ctx: ReadCtx): Shape | undefined {
       return undefined;
     }
     case "AlternateContent": {
-      const fb = kid(el, "Fallback") ?? kid(el, "Choice");
+      const choice = kid(el, "Choice");
+      if (ctx.rawSrc && choice && choiceIsOpaque(choice)) return readOpaque(el, ctx, kid(el, "Fallback"));
+      const fb = kid(el, "Fallback") ?? choice;
       if (!fb) return undefined;
       const list = kids(fb).map((c) => readShapeEl(c, ctx)).filter((x): x is Shape => !!x);
       return list[0];
     }
-    default:
+    case "extLst":
+    case "nvGrpSpPr":
+    case "grpSpPr":
       return undefined;
+    default:
+      // Mürekkep (p:contentPart) ve tanınmayan öğeler: yer tutucu + özgün XML.
+      return ctx.rawSrc ? readOpaque(el, ctx) : undefined;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Geçiş katmanı: modelin tanımadığı öğeler (K§1.2.4)                   */
+/* ------------------------------------------------------------------ */
+
+/** Öğenin ham türü. */
+function opaqueKind(el: Element): RawKind {
+  if (el.localName === "contentPart" || descendants(el, "contentPart").length) return "murekkep";
+  if (descendants(el, "relIds").length) return "smartart";
+  if (descendants(el, "oleObj").length) return "ole";
+  return "bilinmeyen";
+}
+
+/** AlternateContent seçeneği modelin okuyamadığı bir öğe mi (mürekkep, OLE, SmartArt, yeni tür grafik…)? */
+function choiceIsOpaque(choice: Element): boolean {
+  return kids(choice).some((c) => c.localName === "contentPart" || (c.localName === "graphicFrame" && !/\/(table|chart)$/.test(attr(descendants(c, "graphicData")[0], "uri") ?? "")));
+}
+
+/** Görünüm şekline özgün XML'i, ilişkilerini ve görünüm imzasını ekler. */
+function attachRaw<T extends Shape>(view: T, el: Element, ctx: ReadCtx, kind: RawKind, extra: RawExtra[] = []): T {
+  const xml = rawOuterXml(el);
+  view.raw = { kind, src: ctx.rawSrc!, xml, refs: rawRefs(xml, ctx.rels), extra, sig: "" };
+  view.raw.sig = rawSig(view);
+  return view;
+}
+
+/**
+ * Ham öğe: görünüm (SmartArt → çizim parçasından grup; OLE → yedek resim ya da VML önizlemesi;
+ * diğerleri → AlternateContent yedeği ya da yer tutucu resim) + özgün XML. `fallback`:
+ * AlternateContent'in yedek seçeneği.
+ */
+function readOpaque(el: Element, ctx: ReadCtx, fallback?: Element): Shape {
+  const kind = opaqueKind(el);
+  const frame = el.localName === "AlternateContent" ? (kids(kid(el, "Choice"))[0] ?? el) : el;
+  const nv = kids(frame).find((k) => k.localName.startsWith("nv"));
+  const nid = numAttr(kid(nv, "cNvPr"), "id");
+  const info = nvProps(nv, ctx);
+  const xf = readXfrm(kid(frame, "xfrm")) ?? readXfrm(descendants(el, "xfrm")[0]);
+  const box = { x: xf?.x ?? 0, y: xf?.y ?? 0, w: xf?.w ?? 0, h: xf?.h ?? 0 };
+  const sub: ReadCtx = { ...ctx, rawSrc: undefined };
+  let extra: RawExtra[] = [];
+  let view: Shape | undefined;
+  if (kind === "smartart" && xf) {
+    const sa = readSmartArt(frame, ctx, xf);
+    if (sa) ({ group: view, extra } = sa);
+  }
+  if (!view && fallback) view = kids(fallback).map((c) => readShapeEl(c, sub)).find((x): x is Shape => !!x);
+  if (!view) {
+    const pic = descendants(frame, "pic")[0];
+    const p = pic ? readPic(pic, sub) : undefined;
+    if (p?.src) view = { ...p, ...box };
+  }
+  if (!view) {
+    // Eski tür OLE ya da uyumluluk çizimi: önizleme slaydın VML çiziminde (spid ile).
+    const spid = attr(descendants(frame, "oleObj")[0] ?? descendants(frame, "legacyDrawing")[0], "spid");
+    const src = spid ? ctx.vmlImages?.get(spid) : undefined;
+    if (src) view = { kind: "pic", id: info.id, name: info.name, ...box, rot: 0, src, line: { fill: { type: "none" }, width: 1, dash: "solid" } };
+  }
+  view ??= placeholderPic(kind, { id: info.id, name: info.name, ...box });
+  // Kimlik ve adlar çerçevenin (animasyonlar cNvPr kimliğiyle bağlanır).
+  view.id = info.id;
+  if (nid !== undefined) ctx.idMap.set(nid, info.id);
+  view.name = info.name || view.name;
+  if (info.descr) view.descr = info.descr;
+  if (info.hidden) view.hidden = true;
+  if (info.link) view.link = info.link;
+  return attachRaw(view, el, ctx, kind, extra);
+}
+
+/** SmartArt: önceden çizilmiş dsp:drawing parçasındaki şekiller grup olarak (çizim yoksa tanımsız). */
+function readSmartArt(el: Element, ctx: ReadCtx, xf: Xf): { group: GroupShape; extra: RawExtra[] } | undefined {
+  const relIds = descendants(el, "relIds")[0];
+  const dm = ctx.rels.get(attr(relIds, "dm") ?? "");
+  const dataXml = dm && !dm.external ? ctx.diagrams?.get(dm.target) : undefined;
+  if (!dm || !dataXml) return undefined;
+  // dsp:dataModelExt relId slaydın (veri parçasının değil) çizim ilişkisini anar.
+  const drawingId = /<(?:[\w.-]+:)?dataModelExt\b[^>]*\brelId="([^"]+)"/.exec(dataXml)?.[1];
+  const dRel = drawingId ? ctx.rels.get(drawingId) : undefined;
+  const dXml = dRel && !dRel.external ? ctx.diagrams?.get(dRel.target) : undefined;
+  if (!drawingId || !dRel || !dXml) return undefined;
+  const tree = descendants(parseXml(dXml).documentElement, "spTree")[0];
+  const dctx: ReadCtx = { ...ctx, rawSrc: undefined, inherit: undefined, vmlImages: undefined, rels: ctx.diagramRels?.get(dRel.target) ?? new Map(), idMap: new Map() };
+  const children = readShapeList(tree, dctx).map((c) => transformShape(c, (x, y) => [x + xf.x, y + xf.y], 1, 1));
+  if (!children.length) return undefined;
+  const group: GroupShape = { kind: "group", id: "", name: "SmartArt", x: xf.x, y: xf.y, w: xf.w, h: xf.h, rot: 0, children };
+  return { group, extra: [{ id: drawingId, type: dRel.type, target: dRel.target, external: false, patchIn: dm.target }] };
 }
 
 /** spTree / grpSp altındaki şekiller. */
