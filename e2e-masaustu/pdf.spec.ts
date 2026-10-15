@@ -94,6 +94,8 @@ test("Belge: PDF/A-2b — yer imleri başlık sayısı kadar, Türkçe metin ger
   const file = fixture("apps/belge/src/io/__fixtures__/libreoffice-resaved-report.docx");
   const out = path.join(path.dirname(file), "rapor.pdf");
   const { app, win } = await launch([file]);
+  // Dosya ?file= ile eşzamansız (Worker'da) yüklenir: düzenlemeden önce yüklendiği görülsün.
+  await win.locator(".oh-titlebar").filter({ hasText: "libreoffice-resaved-report" }).waitFor();
   await win.waitForSelector(".ProseMirror");
   await win.locator(".bl-body .ProseMirror").first().click();
   await win.keyboard.press("Control+End");

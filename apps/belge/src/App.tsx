@@ -628,6 +628,7 @@ export function App() {
                 onWordsClick={() => openDialog("wordCount")}
                 onZoomClick={() => openDialog("zoom")}
                 lang={lang}
+                progress={files.progress}
               />
               </ErrorBoundary>
             )

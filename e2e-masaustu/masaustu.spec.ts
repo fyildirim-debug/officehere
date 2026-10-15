@@ -144,6 +144,8 @@ test("belge düzenlenir, Ctrl+S ile aynı dosyaya yazılır ve son kullanılanla
   const before = statSync(file).mtimeMs;
   const { app, win } = await launch([file]);
   await win.waitForSelector(".ProseMirror");
+  // Dosya ?file= ile eşzamansız (Worker'da) yüklenir: düzenlemeden önce yüklendiği görülsün.
+  await expect(win.locator(".oh-titlebar-title")).toContainText("libreoffice-resaved-report");
   await win.locator(".ProseMirror").first().click();
   await win.keyboard.press("Control+Home");
   await win.keyboard.type("MASAUSTU-TESTI ");
@@ -164,6 +166,7 @@ test("kaydedilmemiş belge kapatılırken onay sorulur", async () => {
   const original = readFileSync(file);
   const { app, win } = await launch([file]);
   await win.waitForSelector(".ProseMirror");
+  await expect(win.locator(".oh-titlebar-title")).toContainText("libreoffice-html");
   // Otomatik kaydetme kapalı: belge kirli kalsın ve dosya değişmesin.
   await win.evaluate(() => localStorage.setItem("officehere.autoSave", "0"));
   await win.locator(".ProseMirror").first().click();

@@ -132,19 +132,56 @@ async function guarded<T>(format: string, fn: () => T | Promise<T>): Promise<T> 
   }
 }
 
+/** Açmanın DOM gerektiren adımı (HTML/Markdown okuma, .docx yedek dönüştürücüsü) Worker'da yapılamaz. */
+export class DomRequired extends Error {
+  constructor() {
+    super("Bu dosya ana iş parçacığında açılmalı.");
+    this.name = "DomRequired";
+  }
+}
+
+/** Açmanın ilk adımının (biçim tanıma ve okuma; Worker'da çalışabilir) sonucu. */
+export interface ReadResult {
+  doc: BelgeDocument;
+  format: FormatId;
+  /** İleti çubuğu notları (uyumluluk modu, düz XML). */
+  notes: string[];
+  warnings: LoadWarnings;
+}
+
+export interface ReadOptions extends Pick<OpenOptions, "resolveImage"> {
+  /** DOM yok (Worker): HTML, Markdown ve .docx yedek dönüştürücüsü yerine `DomRequired` fırlatılır. */
+  noDom?: boolean;
+}
+
 /**
  * Dosyayı biçimine göre açar (uzantı yanlışsa içerik imzası belirleyicidir). DOCX ayrıştırılamazsa mammoth ile
  * yedek dönüşüm yapılır. Okunamayan içerik `warnings` alanında bildirilir; açılamayan dosyada anlaşılır Türkçe
  * iletili `BelgeOpenError` fırlatılır (teknik ayrıntı `detail` alanında).
  */
 export async function openDocument(name: string, data: ArrayBuffer, opts: OpenOptions = {}): Promise<OpenResult> {
+  return finishOpen(await readDocument(name, data, opts), opts);
+}
+
+/** Açmanın son adımı (ana iş parçacığı): bağlı resimler gömülür, iletiler toplanır. */
+export async function finishOpen({ doc, format, notes, warnings }: ReadResult, opts: OpenOptions = {}): Promise<OpenResult> {
+  await embedImages(doc, opts, warnings);
+  const list = warnings.messages();
+  const shown = [...notes, ...list];
+  if (warnings.details.length && typeof console !== "undefined") console.warn("[belge] açılış ayrıntıları:", warnings.details.join("; "));
+  return { doc, format, warnings: list, ...(shown.length ? { warning: shown.join(" ") } : {}) };
+}
+
+/** Biçimi tanır ve okur (bağlı resimler ve iletiler `finishOpen`'da). */
+export async function readDocument(name: string, data: ArrayBuffer, opts: ReadOptions = {}): Promise<ReadResult> {
   const format = await detectFormat(name, data);
+  if (opts.noDom && (format === "md" || format === "html")) throw new DomRequired();
   const warnings = new LoadWarnings();
   const notes: string[] = [];
   let doc: BelgeDocument;
   switch (format) {
     case "docx":
-      doc = await openDocx(data, warnings);
+      doc = await openDocx(data, warnings, opts.noDom);
       break;
     case "doc":
       notes.push(COMPAT_NOTE);
@@ -176,15 +213,11 @@ export async function openDocument(name: string, data: ArrayBuffer, opts: OpenOp
     default:
       doc = { content: textToDoc(decodeText(data)), settings: defaultSettings() };
   }
-  await embedImages(doc, opts, warnings);
-  const list = warnings.messages();
-  const shown = [...notes, ...list];
-  if (warnings.details.length && typeof console !== "undefined") console.warn("[belge] açılış ayrıntıları:", warnings.details.join("; "));
-  return { doc, format, warnings: list, ...(shown.length ? { warning: shown.join(" ") } : {}) };
+  return { doc, format, notes, warnings };
 }
 
 /** DOCX: kendi okuyucumuz; olmazsa (bozuk yapı) mammoth ile basitleştirilmiş dönüşüm. */
-async function openDocx(data: ArrayBuffer, warnings: LoadWarnings): Promise<BelgeDocument> {
+async function openDocx(data: ArrayBuffer, warnings: LoadWarnings, noDom = false): Promise<BelgeDocument> {
   try {
     const doc = await readDocx(data, warnings);
     validateContent(doc.content);
@@ -193,6 +226,8 @@ async function openDocx(data: ArrayBuffer, warnings: LoadWarnings): Promise<Belg
     // Paket açılamıyorsa ya da dosya reddedildiyse yedek dönüşüm de başarısız olur: anlaşılır hata.
     const first = classifyOpenError(err, "docx");
     if (err instanceof BelgeOpenError || /ZIP/.test(first.message)) throw logged(first);
+    // Yedek dönüştürücünün HTML'i ancak DOM'da belge modeline çevrilir.
+    if (noDom) throw new DomRequired();
     try {
       const mammoth = await import("mammoth");
       const res = await mammoth.convertToHtml({ arrayBuffer: data });

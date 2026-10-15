@@ -71,6 +71,26 @@ export class LoadWarnings {
     const order = Object.keys(MESSAGES) as LossKind[];
     return [...order.filter((k) => this.kinds.has(k)).map((k) => MESSAGES[k]), ...this.extra];
   }
+
+  /** Worker sınırından geçirilebilen düz biçim. */
+  toPlain(): PlainWarnings {
+    return { kinds: [...this.kinds], extra: [...this.extra], details: [...this.details] };
+  }
+
+  static fromPlain(p: PlainWarnings): LoadWarnings {
+    const w = new LoadWarnings();
+    for (const k of p.kinds) w.kinds.add(k);
+    w.extra.push(...p.extra);
+    w.details.push(...p.details);
+    return w;
+  }
+}
+
+/** Uyarıların düz biçimi (Worker ile ana iş parçacığı arasında). */
+export interface PlainWarnings {
+  kinds: LossKind[];
+  extra: string[];
+  details: string[];
 }
 
 export function lossMessage(kind: LossKind): string {

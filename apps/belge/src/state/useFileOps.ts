@@ -1,13 +1,18 @@
 // Dosya işlemleri: yeni, aç, kaydet, farklı kaydet, dışa aktar, otomatik kurtarma ve otomatik kaydetme.
+// Ayrıştırma ve yazma Worker'da (io/client.ts); büyük belgede ilk ekran önce yüklenir, kalanı parça parça eklenir.
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Editor } from "@tiptap/core";
-import { EditorState, TextSelection } from "@tiptap/pm/state";
-import { addRecentFile, baseName, extensionOf, getNative, openFile, readPath, releaseSource, saveFile, saveFileAs, type FileFilter, type FileRef, type SaveData } from "@officehere/core";
+import type { Editor, JSONContent } from "@tiptap/core";
+import { Fragment } from "@tiptap/pm/model";
+import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
+import { addRecentFile, baseName, extensionOf, getNative, getSource, isAbortError, openFile, openSource, readPath, releaseSource, saveFile, saveFileAs, type FileFilter, type FileRef, type SaveData } from "@officehere/core";
 import { getUserName, isDirectSave, saveStatus, trackSave, useAutoSave } from "@officehere/ui";
 import { defaultSettings, normalizeDoc, type BelgeDocument, type DocSettings } from "../model/document";
-import { FORMATS, LoadWarnings, OPEN_FILTERS, docToText, formatOfExt, htmlDocument, isWritable, openDocument, readDocx, saveFilters, writeDocx, writeMarkdown, writeOdt, writeRtf, type FormatId } from "../io";
-import { OPAQUE_PLACEHOLDERS, lossMessage, saveNotes } from "../io/warnings";
+import { FORMATS, OPEN_FILTERS, docToText, finishOpen, formatOfExt, htmlDocument, isWritable, openDocument, saveFilters, type FormatId, type OpenResult } from "../io";
+import { encodeInWorker, readInWorker, releaseInWorker, verifyInWorker, writeDocxInWorker } from "../io/client";
+import { LoadWarnings, OPAQUE_PLACEHOLDERS, lossMessage } from "../io/warnings";
 import { hasOpaque } from "../editor/opaque";
+import { protectionSource } from "../editor/protection";
+import type { PaginationController } from "../editor/pagination";
 import { TEMPLATES } from "../templates/templates";
 import { annotateNotesHtml } from "../editor/notes";
 import { clearOwnDraft, ensureSource, writeDraft, type Draft } from "./drafts";
@@ -25,22 +30,268 @@ const DOCM_FILTER: FileFilter[] = [{ name: "Makro İçerebilen Belge (.docm)", e
 /**
  * Otomatik kaydedilen .docx kendi okuyucumuzla yeniden açılabiliyor mu: okuyucu hata vermemeli ve
  * paketin bir kısmını bozuk/eksik saymamalı (desteklenmeyen öğe uyarıları doğrulamayı bozmaz).
+ * Ayrı bir Worker'da çalışır (açmanın iptali doğrulamayı düşürmez; ana iş parçacığı donmaz).
  */
-export async function canReopenDocx(data: ArrayBuffer): Promise<boolean> {
-  const warnings = new LoadWarnings();
-  const doc = await readDocx(data, warnings, { kaynak: false });
-  if (!doc?.content || (["corrupt", "unclosed", "simplified", "flattened"] as const).some((k) => warnings.has(k))) return false;
-  return true;
+export function canReopenDocx(data: ArrayBuffer): Promise<boolean> {
+  return verifyInWorker(data);
 }
 import type { FormatChoice } from "./useFormatPrompt";
 
 export type { Draft } from "./drafts";
 
-/** Geçmişi sıfırlayarak belge içeriğini yükler. */
+/**
+ * Koruma (salt okunur) yüklemeyi süzmesin: yüklenen içerik düzenleme değildir; önceki belgenin koruması da yeni
+ * belgenin açılmasını engellememeli.
+ */
+function unprotected(fn: () => void) {
+  const get = protectionSource.get;
+  protectionSource.get = () => null;
+  try {
+    fn();
+  } finally {
+    protectionSource.get = get;
+  }
+}
+
+/** Geçmişi sıfırlayarak belge içeriğini yükler (önceki belgede değişiklik izleme açıksa yeni içerik izlenmez). */
 export function loadIntoEditor(editor: Editor, doc: BelgeDocument["content"]) {
-  editor.commands.setContent(normalizeDoc(doc), { emitUpdate: false });
+  unprotected(() => editor.chain().setMeta("belgeNoTrack", true).setContent(normalizeDoc(doc), { emitUpdate: false }).run());
   const state = EditorState.create({ doc: editor.state.doc, plugins: editor.state.plugins, selection: TextSelection.atStart(editor.state.doc) });
   editor.view.updateState(state);
+}
+
+/* ------------------------------------------------------------------ */
+/* Büyük belge: ilk ekran önce, kalanı parça parça                      */
+/* ------------------------------------------------------------------ */
+
+/** Bölümün son bloğu olabilenler (editor/sections.ts): parça sınırı yalnız bunlardan sonra (araya boş paragraf girmesin). */
+const SECTION_END_OK = new Set(["paragraph", "heading", "bulletList", "orderedList"]);
+/** Bu boyuttan (yaklaşık karakter) büyük belge parça parça yüklenir (~25 sayfa). */
+export const PROGRESSIVE_MIN = 80_000;
+/** İlk parça: ilk ekran ve birkaç sayfa. */
+const FIRST_PART = 24_000;
+/** Parça başına hedef en uzun görev (ms); uzun görev gözlemcisi yoksa parça başına geçen süre hedefi. */
+const PART_TASK_MS = 140;
+const PART_WALL_MS = 200;
+/** Parça, yüklenmiş boyutun bu oranından küçük olmaz. */
+const PART_MIN_SHARE = 0.04;
+/** Yükleme işlemlerinin işareti. */
+const LOADING_META = "belgeYukleme";
+/** Bundan kısa süren açmada ilerleme göstergesi çıkmaz. */
+const PROGRESS_DELAY_MS = 300;
+
+export interface ProgressiveLoad {
+  /** Kalan parçaları hemen ekler (kaydetme, klavye girdisi, şerit tıklaması). */
+  flush(): void;
+  /** Eklemeyi durdurur (eklenenler kalır). */
+  stop(): void;
+  /** Tamamlanınca true, durdurulunca false. */
+  readonly done: Promise<boolean>;
+}
+
+/** Bloğun yaklaşık boyutu (metin ve düğüm sayısı). */
+function sizeOf(n: JSONContent): number {
+  let s = 2 + (n.text?.length ?? 0);
+  if (n.content) for (const c of n.content) s += sizeOf(c);
+  return s;
+}
+
+/** Yükleme parçası: geri alınamaz, kirli saymaz, izlenmez, korumaya takılmaz. */
+function dispatchLoading(editor: Editor, tr: Transaction) {
+  unprotected(() => editor.view.dispatch(tr.setMeta("addToHistory", false).setMeta("preventUpdate", true).setMeta("belgeNoTrack", true).setMeta(LOADING_META, true)));
+}
+
+/** Bir sonraki çizimden sonra (sekme arka plandaysa zamanlayıcıyla) çalıştırır. */
+function afterFrame(fn: () => void): () => void {
+  let done = false;
+  const run = () => {
+    if (done) return;
+    done = true;
+    fn();
+  };
+  const t = window.setTimeout(run, 100);
+  const raf = requestAnimationFrame(() => window.setTimeout(run, 0));
+  return () => {
+    done = true;
+    clearTimeout(t);
+    cancelAnimationFrame(raf);
+  };
+}
+
+/**
+ * Büyük belgeyi parça parça yükler: ilk parça (ilk ekran) hemen ve geçmiş sıfırlanarak, kalanı her çizimden sonra
+ * belgenin sonuna eklenir (geri alınamaz, kirli saymaz, izlenmez). Parça boyutu, bir önceki parçanın süresine göre
+ * ayarlanır; artımlı sayfalama yalnız eklenen sayfaları ölçer. Kullanıcı yazarsa ya da arayüzde bir şeye basarsa
+ * kalan hemen eklenir. Küçük belgede null (çağıran tek seferde yükler).
+ */
+export function loadProgressive(editor: Editor, json: JSONContent, onProgress?: (ratio: number) => void): ProgressiveLoad | null {
+  const doc = normalizeDoc(json);
+  const sections = doc.content ?? [];
+  const units: { sec: number; block: JSONContent; size: number; cut: boolean }[] = [];
+  let total = 0;
+  sections.forEach((sec, si) => {
+    const blocks = sec.content ?? [];
+    blocks.forEach((block, bi) => {
+      const size = sizeOf(block);
+      total += size;
+      units.push({ sec: si, block, size, cut: bi === blocks.length - 1 || SECTION_END_OK.has(block.type ?? "") });
+    });
+  });
+  if (total < PROGRESSIVE_MIN) return null;
+
+  /** `from`dan başlayıp `budget` boyutuna ulaşan ve bir parça sınırında biten aralığın sonu. */
+  const take = (from: number, budget: number) => {
+    let to = from;
+    let size = 0;
+    while (to < units.length && (size < budget || !units[to - 1]!.cut)) size += units[to++]!.size;
+    return to;
+  };
+  /** [from, to) bloklarının bölümleri (bölüm öznitelikleriyle). */
+  const sectionsOf = (from: number, to: number): JSONContent[] => {
+    const out: JSONContent[] = [];
+    for (let i = from; i < to; i++) {
+      const u = units[i]!;
+      if (i === from || units[i - 1]!.sec !== u.sec) out.push({ ...sections[u.sec], content: [] });
+      out[out.length - 1]!.content!.push(u.block);
+    }
+    return out;
+  };
+
+  let next = take(0, FIRST_PART);
+  let loaded = units.slice(0, next).reduce((s, u) => s + u.size, 0);
+  loadIntoEditor(editor, { ...doc, content: sectionsOf(0, next) });
+  onProgress?.(loaded / total);
+
+  const append = (to: number) => {
+    const schema = editor.schema;
+    const tr = editor.state.tr;
+    let i = next;
+    // Son yüklenen bölümün kalan blokları o bölümün sonuna, sonraki bölümler belgenin sonuna.
+    const open: JSONContent[] = [];
+    while (i < to && units[i]!.sec === units[next - 1]!.sec) open.push(units[i++]!.block);
+    if (open.length) tr.insert(tr.doc.content.size - 1, Fragment.fromJSON(schema, open));
+    if (i < to) tr.insert(tr.doc.content.size, Fragment.fromJSON(schema, sectionsOf(i, to)));
+    for (let k = next; k < to; k++) loaded += units[k]!.size;
+    next = to;
+    dispatchLoading(editor, tr);
+  };
+
+  let resolve!: (v: boolean) => void;
+  const done = new Promise<boolean>((r) => (resolve = r));
+  let cancelFrame: (() => void) | null = null;
+  let finished = false;
+  let budget = FIRST_PART * 2;
+
+  // Sayfalama ölçümü (yavaşken gecikmeli çalışır) bir sonraki parçadan önce beklenir: her ölçüm yalnız bir parçayı
+  // kapsar, maliyeti doğru parçaya yazılır.
+  const pager = (editor.extensionManager.extensions.find((e) => e.name === "belgePagination")?.options as { controller?: PaginationController } | undefined)?.controller;
+  const afterLayout = (fn: () => void): (() => void) => {
+    const before = pager?.lastRun;
+    const t0 = performance.now();
+    let cancel = () => {};
+    const poll = () => {
+      cancel = !pager?.geometry.enabled || pager.lastRun !== before || performance.now() - t0 > 300 ? afterFrame(fn) : afterFrame(poll);
+    };
+    cancel = afterFrame(poll);
+    return () => cancel();
+  };
+  // Parçanın maliyeti: sürdüğü en uzun görev (gözlemci yoksa geçen süre).
+  let longest = 0;
+  let observer: PerformanceObserver | null = null;
+  try {
+    if (PerformanceObserver.supportedEntryTypes?.includes("longtask")) {
+      observer = new PerformanceObserver((l) => {
+        for (const e of l.getEntries()) longest = Math.max(longest, e.duration);
+      });
+      observer.observe({ type: "longtask" });
+    }
+  } catch {
+    observer = null;
+  }
+
+  const onKey = (e: KeyboardEvent) => {
+    if (!["Control", "Shift", "Alt", "Meta", "AltGraph", "CapsLock"].includes(e.key)) flush();
+  };
+  // Belge alanında tıklamak (imleç, kaydırma, okuma) ve ilerleme çubuğu yüklemeyi bitirmez; şerit, menüler,
+  // iletişim kutuları bitirir.
+  const onPointer = (e: Event) => {
+    const t = e.target as Element | null;
+    if (!t?.closest?.(".bl-scroll, .ProseMirror, .oh-progress")) flush();
+  };
+  const onInput = () => flush();
+  const onTransaction = ({ transaction }: { transaction: Transaction }) => {
+    if (transaction.docChanged && !transaction.getMeta(LOADING_META) && transaction.getMeta("addToHistory") !== false) queueMicrotask(flush);
+  };
+  const dom = editor.view.dom;
+  document.addEventListener("keydown", onKey, true);
+  document.addEventListener("pointerdown", onPointer, true);
+  for (const t of ["beforeinput", "paste", "drop"]) dom.addEventListener(t, onInput, true);
+  editor.on("transaction", onTransaction);
+
+  const finish = (complete: boolean) => {
+    if (finished) return;
+    finished = true;
+    cancelFrame?.();
+    observer?.disconnect();
+    document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("pointerdown", onPointer, true);
+    for (const t of ["beforeinput", "paste", "drop"]) dom.removeEventListener(t, onInput, true);
+    editor.off("transaction", onTransaction);
+    resolve(complete);
+  };
+
+  const step = () => {
+    cancelFrame = null;
+    if (finished || editor.isDestroyed) return finish(false);
+    const t0 = performance.now();
+    observer?.takeRecords();
+    longest = 0;
+    append(take(next, budget));
+    onProgress?.(loaded / total);
+    if (next >= units.length) return finish(true);
+    cancelFrame = afterLayout(() => {
+      // Ekleme, çizim ve sayfalama maliyetine göre sonraki parça büyütülür/küçültülür (sıçramasın diye sınırlı).
+      // Her parçanın belge boyutuyla büyüyen sabit bir maliyeti var (bölüm kutusunun yeniden yerleşimi, sayfa
+      // sayısının yeniden çizimi): parça, yüklenenin belli bir oranından küçülmez; yoksa parça sayısı patlar.
+      for (const e of observer?.takeRecords() ?? []) longest = Math.max(longest, e.duration);
+      const k = observer ? PART_TASK_MS / Math.max(1, longest) : PART_WALL_MS / Math.max(1, performance.now() - t0);
+      budget = Math.round(Math.min(FIRST_PART * 8, Math.max(FIRST_PART / 3, loaded * PART_MIN_SHARE, budget * Math.min(1.5, Math.max(0.5, k)))));
+      step();
+    });
+  };
+
+  function flush() {
+    if (finished || editor.isDestroyed) return;
+    if (next < units.length) append(units.length);
+    onProgress?.(1);
+    finish(true);
+  }
+
+  cancelFrame = afterFrame(step);
+  return { flush, stop: () => finish(false), done };
+}
+
+/** Durum çubuğundaki dosya işlemi ilerlemesi (yalnız ilerleme göstergesi yeniden çizilir). */
+export interface FileProgress {
+  label: string;
+  /** 0..1; null: belirsiz. */
+  value: number | null;
+  detail?: string;
+  onCancel?: () => void;
+}
+
+export class ProgressStore {
+  private value: FileProgress | null = null;
+  private listeners = new Set<() => void>();
+  readonly subscribe = (fn: () => void) => {
+    this.listeners.add(fn);
+    return () => void this.listeners.delete(fn);
+  };
+  readonly get = () => this.value;
+  set(v: FileProgress | null) {
+    this.value = v;
+    for (const fn of this.listeners) fn();
+  }
 }
 
 interface Options {
@@ -79,21 +330,39 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
   settingsRef.current = settings;
   const fileNameRef = useRef(fileName);
   fileNameRef.current = fileName;
+  const fileRefRef = useRef(fileRef);
+  fileRefRef.current = fileRef;
+  const formatRef = useRef({ format, fileExt, loadHold });
+  formatRef.current = { format, fileExt, loadHold };
+  /** Sürmekte olan parça parça yükleme (büyük belge). */
+  const loading = useRef<ProgressiveLoad | null>(null);
+  /** Sürmekte olan açma (yeni açma ya da İptal onu durdurur). */
+  const opening = useRef<AbortController | null>(null);
+  const [progress] = useState(() => new ProgressStore());
 
-  // Yazar boşsa Seçenekler'deki kullanıcı adı yazılır (Word'deki gibi).
-  const currentDoc = useCallback(
-    (): BelgeDocument => ({ content: editor.getJSON(), settings: { ...settingsRef.current, properties: { ...settingsRef.current.properties, author: settingsRef.current.properties.author || getUserName(), modified: new Date().toISOString() } } }),
-    [editor],
-  );
+  // Yazar boşsa Seçenekler'deki kullanıcı adı yazılır (Word'deki gibi). Parça parça yükleme sürüyorsa önce tamamlanır.
+  const currentDoc = useCallback((): BelgeDocument => {
+    loading.current?.flush();
+    return { content: editor.getJSON(), settings: { ...settingsRef.current, properties: { ...settingsRef.current.properties, author: settingsRef.current.properties.author || getUserName(), modified: new Date().toISOString() } } };
+  }, [editor]);
 
   /**
-   * .docx/.docm baytları: kaynak paket hazırlanır (kurtarılan taslakta kurtarma deposundan), yazıcı modelin
-   * tanımadığı parçaları ondan taşır; makrolu hedefte makrolar korunur (çalıştırılmaz). `notes`: kaydetmede
-   * bildirilecekler (ör. makrolu belge .docx'e kaydedilince makroların kaldırılması).
+   * .docx/.docm baytları Worker'da yazılır: açılan belgenin kaynak paketi oradadır, yazıcı modelin tanımadığı
+   * parçaları ondan taşır; Worker'da olmayan kaynak (Worker yeniden kuruldu, kurtarılan taslak) bu iş
+   * parçacığından ya da kurtarma deposundan gönderilir. Makrolu hedefte makrolar korunur (çalıştırılmaz).
+   * `notes`: kaydetmede bildirilecekler (ör. makrolu belge .docx'e kaydedilince makroların kaldırılması).
    */
   const docxData = useCallback(async (doc: BelgeDocument, macro = false, notes?: string[]): Promise<Uint8Array> => {
-    await ensureSource(doc.settings.kaynak);
-    return writeDocx(doc, { macro, onReport: (r) => notes?.push(...saveNotes(r)) });
+    const r = await writeDocxInWorker(doc, macro, async (ids) => {
+      const out: Record<string, Uint8Array | null> = {};
+      for (const id of ids) {
+        await ensureSource(id);
+        out[id] = getSource(id)?.bytes ?? null;
+      }
+      return out;
+    });
+    notes?.push(...r.notes);
+    return r.bytes;
   }, []);
 
   /** Belgeyi istenen biçimde kodlar (`macro`: .docx biçimi makrolu .docm olarak). */
@@ -103,11 +372,9 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       if ((f === "odt" || f === "rtf" || f === "md" || f === "html") && hasOpaque(doc)) notes?.push(OPAQUE_PLACEHOLDERS);
       switch (f) {
         case "odt":
-          return writeOdt(doc);
         case "rtf":
-          return writeRtf(doc);
         case "md":
-          return writeMarkdown(doc);
+          return encodeInWorker(f, doc);
         case "html":
           return htmlDocument(annotateNotesHtml(editor.getHTML()), doc.settings, doc.settings.properties.title || baseName(fileNameRef.current));
         case "txt":
@@ -119,13 +386,43 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
     [currentDoc, docxData, editor],
   );
 
-  const load = useCallback(
-    (doc: BelgeDocument, name: string, ref: FileRef | null, fmt: FormatId = "docx", ext = "docx") => {
-      // Önceki belgenin özgün paketi bellekten bırakılır (kurtarma deposundaki kopyası taslağıyla yaşar).
-      const prev = settingsRef.current.kaynak;
-      if (prev && prev !== doc.settings.kaynak) releaseSource(prev);
-      setSettings(doc.settings);
-      loadIntoEditor(editor, doc.content);
+  /** Dosya okunurken düzenleme kapalı (sahibi, kapatan açma işlemi). */
+  const editLock = useRef<{ owner: AbortController; focus: boolean } | null>(null);
+  const lockEditing = useCallback(
+    (owner: AbortController) => {
+      if (!editLock.current) {
+        editLock.current = { owner, focus: editor.view.hasFocus() };
+        if (editor.isEditable) editor.setEditable(false, false);
+      } else editLock.current.owner = owner;
+    },
+    [editor],
+  );
+  const unlockEditing = useCallback(
+    (owner?: AbortController) => {
+      const l = editLock.current;
+      if (!l || (owner && l.owner !== owner)) return;
+      editLock.current = null;
+      if (editor.isDestroyed) return;
+      editor.setEditable(true, false);
+      if (l.focus) editor.view.focus();
+    },
+    [editor],
+  );
+
+  /** Sürmekte olan açmayı ve parça parça yüklemeyi bırakır (yerine başka belge yükleniyor). */
+  const supersede = useCallback(() => {
+    const c = opening.current;
+    opening.current = null;
+    c?.abort();
+    unlockEditing();
+    loading.current?.stop();
+    loading.current = null;
+    progress.set(null);
+  }, [progress, unlockEditing]);
+
+  /** Yüklenen belgenin dosya, biçim ve kaydetme durumu. */
+  const fileState = useCallback(
+    (name: string, ref: FileRef | null, fmt: FormatId, ext: string) => {
       setFileName(name);
       setFileRef(ref);
       setFormat(fmt);
@@ -134,9 +431,28 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       setLoadHold(null);
       setDirty(false);
       saveStatus.reset();
+    },
+    [setDirty],
+  );
+
+  /** Belgenin özgün paketi bellekten ve Worker'dan bırakılır (kurtarma deposundaki kopyası taslağıyla yaşar). */
+  const release = useCallback((id: string | null | undefined, keep: string | null | undefined) => {
+    if (!id || id === keep) return;
+    releaseSource(id);
+    releaseInWorker(id);
+  }, []);
+
+  const load = useCallback(
+    (doc: BelgeDocument, name: string, ref: FileRef | null, fmt: FormatId = "docx", ext = "docx") => {
+      supersede();
+      release(settingsRef.current.kaynak, doc.settings.kaynak);
+      setSettings(doc.settings);
+      settingsRef.current = doc.settings;
+      loadIntoEditor(editor, doc.content);
+      fileState(name, ref, fmt, ext);
       onLoaded();
     },
-    [editor, setSettings, setDirty, onLoaded],
+    [editor, setSettings, onLoaded, supersede, release, fileState],
   );
 
   const newDocument = useCallback(
@@ -152,8 +468,35 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
     [confirmDiscard, load],
   );
 
+  /**
+   * Dosyayı açar: ayrıştırma Worker'da (HTML ve Markdown ana iş parçacığında), büyük belgede ilk ekran önce.
+   * Durum çubuğunda ilerleme ve İptal: okuma sürerken iptal açık belgeye dokunmaz; sayfalar yerleştirilirken
+   * iptal önceki belgeyi geri getirir.
+   */
   const openData = useCallback(
     async (name: string, data: ArrayBuffer, ref: FileRef | null) => {
+      // Önceki belge hâlâ parça parça yükleniyorsa tamamlanır: bu açma iptal edilirse eksiksiz geri gelmeli.
+      loading.current?.flush();
+      supersede();
+      const ctrl = new AbortController();
+      opening.current = ctrl;
+      const { signal } = ctrl;
+      let shown: FileProgress = { label: "Açılıyor…", value: null, detail: "Dosya okunuyor", onCancel: () => ctrl.abort() };
+      let visible = false;
+      const show = (p: Partial<FileProgress>) => {
+        shown = { ...shown, ...p };
+        if (visible && opening.current === ctrl) progress.set(shown);
+      };
+      // Kısa sürenler için gösterge çıkmaz.
+      const timer = window.setTimeout(() => {
+        visible = true;
+        show({});
+      }, PROGRESS_DELAY_MS);
+      /** Bu açmanın kaydettiği kaynak paket (iptalde bırakılır). */
+      let registered: string | null = null;
+      // Dosya okunurken görünen (yerini yeni belgeye bırakacak) belgeye yazılanlar kaybolmasın: düzenleme kapalı.
+      lockEditing(ctrl);
+      const unlock = () => unlockEditing(ctrl);
       try {
         const native = getNative();
         const path = ref?.path;
@@ -165,9 +508,60 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
                 return f ? new Uint8Array(f.data) : null;
               }
             : undefined;
-        const opened = await openDocument(name, data, { resolveImage });
+        const reply = await readInWorker(name, data, { signal, onProgress: ({ step }) => show(step ? { detail: step } : {}) });
+        let opened: OpenResult;
+        if (reply.main) opened = await openDocument(name, data, { resolveImage });
+        else {
+          // Ana iş parçacığı da özgün paketi tutar: taslakla kurtarma deposuna yazılır, Worker yeniden kurulursa oradan gönderilir.
+          const id = reply.doc.settings.kaynak;
+          if (id && !getSource(id)) {
+            await openSource(data, { id, name }).catch(() => undefined);
+            registered = id;
+          }
+          opened = await finishOpen({ doc: reply.doc, format: reply.format, notes: reply.notes, warnings: LoadWarnings.fromPlain(reply.warnings) }, { resolveImage });
+        }
+        if (signal.aborted) throw signal.reason;
         const { doc, warning, format: fmt } = opened;
-        load(doc, baseName(name), ref, fmt, extensionOf(name) || FORMATS[fmt].extensions[0]);
+        const ext = extensionOf(name) || FORMATS[fmt].extensions[0];
+        show({ detail: "Sayfalar yerleştiriliyor", value: 0 });
+
+        // Büyük belge parça parça yüklenir; iptal edilirse önceki belge geri gelir.
+        const prev = { state: editor.state, settings: settingsRef.current, fileName: fileNameRef.current, fileRef: fileRefRef.current, ...formatRef.current, keepAsked: keepAsked.current, dirty: dirtyRef.current };
+        unlock();
+        setSettings(doc.settings);
+        settingsRef.current = doc.settings;
+        const job = loadProgressive(editor, doc.content, (value) => show({ value }));
+        if (!job) loadIntoEditor(editor, doc.content);
+        fileState(baseName(name), ref, fmt, ext);
+        onLoaded();
+        if (job) {
+          loading.current = job;
+          const stop = () => job.stop();
+          signal.addEventListener("abort", stop);
+          const complete = await job.done;
+          signal.removeEventListener("abort", stop);
+          if (loading.current === job) loading.current = null;
+          if (!complete) {
+            // Başka bir belge yükleniyor: o devralır. İptal: önceki belge geri gelir.
+            if (opening.current !== ctrl || editor.isDestroyed) return;
+            editor.view.updateState(prev.state);
+            setSettings(prev.settings);
+            settingsRef.current = prev.settings;
+            setFileName(prev.fileName);
+            setFileRef(prev.fileRef);
+            setFormat(prev.format);
+            setFileExt(prev.fileExt);
+            keepAsked.current = prev.keepAsked;
+            setLoadHold(prev.loadHold);
+            setDirty(prev.dirty);
+            onLoaded();
+            throw signal.reason;
+          }
+          // Sayfalar tamam: gezinti, açıklamalar ve satır numaraları yenilenir.
+          onLoaded();
+        }
+        registered = null;
+        release(prev.settings.kaynak, doc.settings.kaynak);
         // Okunamayan (kaydedilince kaybolacak) içerik ya da dijital imza: özgün dosyanın üzerine sessizce yazılmaz.
         const lw = opened.warnings ?? [];
         if (lw.length > 0) setLoadHold(lw.includes(lossMessage("signature")) ? SIGNATURE_HOLD : LOAD_WARNING_HOLD);
@@ -176,10 +570,18 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
         if (warning) notify(warning, "warning");
         await addRecentFile({ path: ref?.path ?? name, name, app: "belge", openedAt: Date.now() });
       } catch (err) {
-        notify(`"${name}" açılamadı: ${(err as Error).message}`, "error");
+        if (registered) release(registered, settingsRef.current.kaynak);
+        if (!isAbortError(err)) notify(`"${name}" açılamadı: ${(err as Error).message}`, "error");
+      } finally {
+        unlock();
+        window.clearTimeout(timer);
+        if (opening.current === ctrl) {
+          opening.current = null;
+          progress.set(null);
+        }
       }
     },
-    [load, notify],
+    [editor, notify, setSettings, onLoaded, supersede, release, fileState, progress, lockEditing, unlockEditing],
   );
 
   const openDialog = useCallback(async () => {
@@ -342,6 +744,7 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
     let writing = false;
     const write = () => {
       if (!dirtyRef.current || editor.isDestroyed || writing) return;
+      loading.current?.flush();
       const d: Draft = { content: editor.getJSON(), settings: settingsRef.current, fileName: fileNameRef.current, savedAt: Date.now(), ...(pathRef.current ? { path: pathRef.current } : {}) };
       writing = true;
       void writeDraft(d)
@@ -408,5 +811,5 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
   /** Başlık çubuğu: yerel olmayan biçimde uzantı görünür; .doc uyumluluk modunda. */
   const title = format === "docx" ? fileName : format === "doc" ? `${fileName}.${fileExt} [Uyumluluk Modu]` : `${fileName}.${fileExt}`;
 
-  return { isPristine, fileName, setFileName, fileRef, format, title, newDocument, openDialog, openPath, openData, save, saveAs, exportAs, closeDocument, load, currentDoc };
+  return { isPristine, fileName, setFileName, fileRef, format, title, newDocument, openDialog, openPath, openData, save, saveAs, exportAs, closeDocument, load, currentDoc, progress };
 }

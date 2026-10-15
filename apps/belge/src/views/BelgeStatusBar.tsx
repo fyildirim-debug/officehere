@@ -1,6 +1,6 @@
 // Durum çubuğu: sayfa, sözcük sayısı, dil, izleme durumu, görünüm düğmeleri ve yakınlaştırma.
 import { DocumentOnePage20Regular, Globe20Regular, ReadingModeMobile20Regular, TextProofingTools20Regular, ScanText20Regular } from "@fluentui/react-icons";
-import { StatusBar, StatusItem, ViewSwitcher, ZoomSlider, tipProps } from "@officehere/ui";
+import { Progress, StatusBar, StatusItem, ViewSwitcher, ZoomSlider, tipProps } from "@officehere/ui";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { useEditorState } from "@tiptap/react";
@@ -8,6 +8,7 @@ import type { Editor } from "@tiptap/core";
 import type { ViewOptions } from "../state/context";
 import type { PaginationController } from "../editor/pagination";
 import { docStats } from "../editor/commands";
+import type { ProgressStore } from "../state/useFileOps";
 
 interface Props {
   editor: Editor;
@@ -21,6 +22,14 @@ interface Props {
   onWordsClick: () => void;
   onZoomClick: () => void;
   lang: string;
+  /** Dosya açma ilerlemesi (İptal düğmesiyle). */
+  progress?: ProgressStore;
+}
+
+/** Açma ilerlemesi: yalnız bu öğe yeniden çizilir. */
+function FileProgressItem({ store }: { store: ProgressStore }) {
+  const p = useSyncExternalStore(store.subscribe, store.get);
+  return p ? <Progress label={p.label} value={p.value} detail={p.detail} onCancel={p.onCancel} /> : null;
 }
 
 /** İşi tarayıcı boşaldığında çalıştırır (requestIdleCallback yoksa kısa bir zamanlayıcıyla); iptal işlevi döner. */
@@ -66,7 +75,7 @@ function useDocWords(editor: Editor): number {
 
 const LANG_NAMES: Record<string, string> = { tr: "Türkçe (Türkiye)", "en-US": "İngilizce (ABD)", de: "Almanca (Almanya)" };
 
-export function BelgeStatusBar({ editor, controller, paged, tracking, view, setView, onPageClick, onWordsClick, onZoomClick, lang }: Props) {
+export function BelgeStatusBar({ editor, controller, paged, tracking, view, setView, onPageClick, onWordsClick, onZoomClick, lang, progress }: Props) {
   const n = (x: number) => x.toLocaleString("tr-TR");
   const words = useDocWords(editor);
   // İmleç ve seçim burada izlenir; böylece her tuşta yalnız durum çubuğu yeniden çizilir.
@@ -92,6 +101,7 @@ export function BelgeStatusBar({ editor, controller, paged, tracking, view, setV
     <StatusBar
       left={
         <>
+          {progress && <FileProgressItem store={progress} />}
           <StatusItem onClick={onPageClick} tip="Sayfa numarası. Gezinti bölmesini açmak için tıklayın.">
             Sayfa {n(Math.min(page, pages))} / {n(pages)}
           </StatusItem>
