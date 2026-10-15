@@ -23,9 +23,9 @@ jobs:
     if: ${{ !inputs.gorsel_temel }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -41,13 +41,13 @@ jobs:
       - run: pnpm web
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
           path: playwright-report
           retention-days: 7
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: officehere-web
           path: dist-web
@@ -61,9 +61,9 @@ jobs:
     if: ${{ !inputs.gorsel_temel }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -71,7 +71,7 @@ jobs:
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: pnpm test:kapsam
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: kapsam-rapor
@@ -87,9 +87,9 @@ jobs:
     if: ${{ !inputs.gorsel_temel }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -117,7 +117,7 @@ jobs:
       ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       OH_GORSEL_KONTEYNER: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # e2e/gorsel/calistir.mjs'teki YAZI_TIPLERI ile aynı tutun (noble, Release cebi; sürüm sabit).
       - name: Yazı tipleri
         run: |
@@ -126,8 +126,8 @@ jobs:
             fonts-crosextra-carlito=20230309-2 fonts-crosextra-caladea=20200211-2 \
             fonts-liberation=1:2.1.5-3 fonts-dejavu-core=2.37-8
           fc-cache -f
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -151,14 +151,14 @@ jobs:
         run: pnpm -r --filter ./apps/belge --filter ./apps/tablo --filter ./apps/sunum run build
       - name: Görsel regresyon (${{ steps.kip.outputs.kip }})
         run: node e2e/gorsel/calistir.mjs ${{ steps.kip.outputs.arg }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() && steps.kip.outputs.kip == 'uret' }}
         with:
           name: gorsel-temel
           path: e2e/gorsel/__ekran__/linux/
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: gorsel-fark

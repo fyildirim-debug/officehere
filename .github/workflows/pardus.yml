@@ -44,11 +44,11 @@ jobs:
     env:
       ETIKET: ${{ inputs.surum }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: env.ETIKET == ''
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         if: env.ETIKET == ''
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: env.ETIKET == ''
         with:
           node-version: 22
@@ -65,7 +65,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "$ETIKET" --repo "$GITHUB_REPOSITORY" --pattern '*.deb' --dir apps/desktop/release
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: pardus-deb
           path: apps/desktop/release/*.deb
@@ -103,10 +103,10 @@ jobs:
           [ -f /etc/ssl/certs/ca-certificates.crt ] || ca="-o Acquire::https::CAInfo=/etc/oh-kosucu-sertifika/ca-certificates.crt"
           apt-get $ca update
           apt-get $ca install -y --no-install-recommends git ca-certificates reprepro gnupg gpgv python3
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           sparse-checkout: scripts/apt
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.artefakt || 'pardus-deb' }}
           path: paket
