@@ -1,0 +1,128 @@
+name: Pardus
+
+# Pardus 23 (Debian 12) ve Pardus 25 (Debian 13) kapsayıcılarında .deb paketi imzalı bir apt
+# deposundan kurulur ve ekransız (Xvfb) açılır. Depo geçici bir TEST anahtarıyla imzalanır
+# (scripts/apt/sina.sh); gerçek anahtar ve alan adı burada kullanılmaz.
+#
+# Paket: release.yml'den çağrılınca o çalıştırmanın Linux artefaktı; elle "surum" verilirse GitHub
+# Sürümü'ndeki .deb; aksi hâlde bu commit'ten derlenir.
+on:
+  workflow_call:
+    inputs:
+      artefakt:
+        description: "Aynı çalıştırmada yüklenmiş, .deb içeren iş artefaktının adı"
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      surum:
+        description: "Sınanacak sürüm etiketi (ör. v0.2.0); boşsa bu commit'ten derlenir"
+        required: false
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - apps/desktop/electron-builder.yml
+      - apps/desktop/package.json
+      - scripts/apt/**
+      - .github/workflows/pardus.yml
+  pull_request:
+    paths:
+      - apps/desktop/electron-builder.yml
+      - apps/desktop/package.json
+      - scripts/apt/**
+      - .github/workflows/pardus.yml
+
+permissions:
+  contents: read
+
+jobs:
+  deb:
+    name: .deb paketi
+    if: inputs.artefakt == ''
+    runs-on: ubuntu-latest
+    env:
+      ETIKET: ${{ inputs.surum }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.ETIKET == ''
+      - uses: pnpm/action-setup@v4
+        if: env.ETIKET == ''
+      - uses: actions/setup-node@v4
+        if: env.ETIKET == ''
+        with:
+          node-version: 22
+          cache: pnpm
+      - if: env.ETIKET == ''
+        run: pnpm install --frozen-lockfile
+      - name: Bu commit'ten derle
+        if: env.ETIKET == ''
+        run: pnpm --filter @officehere/desktop dist -- --linux deb --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Sürümden indir
+        if: env.ETIKET != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$ETIKET" --repo "$GITHUB_REPOSITORY" --pattern '*.deb' --dir apps/desktop/release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pardus-deb
+          path: apps/desktop/release/*.deb
+          if-no-files-found: error
+          retention-days: 7
+
+  sina:
+    name: ${{ matrix.ad }}
+    needs: deb
+    # Artefakt release.yml'den geldiyse "deb" işi atlanır; bu iş yine çalışır.
+    if: ${{ !cancelled() && (needs.deb.result == 'success' || needs.deb.result == 'skipped') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ad: Pardus 23 (Debian 12)
+            imaj: pardus/yirmiuc:latest
+          - ad: Pardus 25 (Debian 13)
+            imaj: pardus/yirmibes:latest
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.imaj }}
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      # Depo üretimi için araçlar. Xvfb ve grafik kitaplıkları sonra kurulur: önce kurulsalar paketin
+      # bildirmediği bir bağımlılığı (ör. libgbm1) gizlerlerdi.
+      - name: Araçlar
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates reprepro gnupg gpgv python3
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/apt
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artefakt || 'pardus-deb' }}
+          path: paket
+      - name: İmzalı apt deposundan kurulum (test anahtarı)
+        shell: bash
+        run: |
+          shopt -s nullglob
+          debs=(paket/*.deb)
+          if [[ ${#debs[@]} -ne 1 ]]; then echo "::error::Tek bir .deb bekleniyordu: ${debs[*]}"; exit 1; fi
+          scripts/apt/sina.sh "${debs[0]}"
+      - name: Bildirilmemiş kitaplık bağımlılığı yok
+        shell: bash
+        run: |
+          if ldd /opt/OfficeHere/officehere | grep "not found"; then
+            echo "::error::.deb paketinin Depends listesinde eksik kitaplık var (electron-builder.yml, deb.depends)"
+            exit 1
+          fi
+      - name: Xvfb
+        run: apt-get install -y --no-install-recommends xvfb xauth curl
+      # Kapsayıcı CAP_SYS_ADMIN ve kullanıcı ad alanı vermediği için Chromium korumalı alanı burada
+      # kapatılır; masaüstü Pardus'ta (ve yerel chroot denemesinde) SUID korumalı alanla açılır.
+      - name: Duman testi (Xvfb)
+        env:
+          OH_DUMAN_KORUMASIZ: "1"
+        run: scripts/apt/duman.sh
