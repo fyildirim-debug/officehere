@@ -6,7 +6,8 @@ import { addRecentFile, baseName, extensionOf, getNative, openFile, readPath, re
 import { getUserName, isDirectSave, saveStatus, trackSave, useAutoSave } from "@officehere/ui";
 import { defaultSettings, normalizeDoc, type BelgeDocument, type DocSettings } from "../model/document";
 import { FORMATS, LoadWarnings, OPEN_FILTERS, docToText, formatOfExt, htmlDocument, isWritable, openDocument, readDocx, saveFilters, writeDocx, writeMarkdown, writeOdt, writeRtf, type FormatId } from "../io";
-import { lossMessage, saveNotes } from "../io/warnings";
+import { OPAQUE_PLACEHOLDERS, lossMessage, saveNotes } from "../io/warnings";
+import { hasOpaque } from "../editor/opaque";
 import { TEMPLATES } from "../templates/templates";
 import { annotateNotesHtml } from "../editor/notes";
 import { clearOwnDraft, ensureSource, writeDraft, type Draft } from "./drafts";
@@ -98,6 +99,8 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
   /** Belgeyi istenen biçimde kodlar (`macro`: .docx biçimi makrolu .docm olarak). */
   const encode = useCallback(
     async (f: FormatId, doc = currentDoc(), macro = false, notes?: string[]): Promise<SaveData> => {
+      // .docx'e özgü (opak) öğeler bu biçimlerde yer tutucu metin olarak yazılır.
+      if ((f === "odt" || f === "rtf" || f === "md" || f === "html") && hasOpaque(doc)) notes?.push(OPAQUE_PLACEHOLDERS);
       switch (f) {
         case "odt":
           return writeOdt(doc);
@@ -268,10 +271,12 @@ export function useFileOps({ editor, settings, setSettings, dirty, setDirty, not
       }
       try {
         const target = fileRef && formatOfExt(extensionOf(fileRef.name)) === format ? fileRef : null;
-        const ref = await trackSave(isDirectSave(target), async () => saveFile(target, `${fileNameRef.current}.${fileExt}`, saveFilters(format), await encode(format)));
+        const notes: string[] = [];
+        const ref = await trackSave(isDirectSave(target), async () => saveFile(target, `${fileNameRef.current}.${fileExt}`, saveFilters(format), await encode(format, undefined, false, notes)));
         if (!ref) return false;
         await saved(ref, format);
-        notify(`"${ref.name}" kaydedildi.`, "success");
+        if (notes.length) notify(notes.join(" "), "warning");
+        else notify(`"${ref.name}" kaydedildi.`, "success");
         return true;
       } catch (err) {
         notify(`Kaydedilemedi: ${(err as Error).message}`, "error");
