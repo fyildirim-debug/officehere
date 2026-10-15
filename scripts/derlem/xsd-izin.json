@@ -59,6 +59,16 @@
    "ileti": "strict wildcard",
    "gerekce": "XML eşlemeleri (x:Schema) kullanıcının XML Şeması'nı gömülü taşır; x:Schema içeriği katı joker ve doğrulayıcı XML Şeması'nın kendi şemasını yüklemiyor. Excel'in yazdığı biçim; gömülü şemanın içeriği bu kapının kapsamı dışında.",
    "kaynak": "test-derlem/poi/CustomXMLMappings.xlsx (Microsoft Excel 12): xl/xmlMaps.xml."
+  },
+  {
+   "kimlik": "pml-com-legacyDrawing",
+   "dogrulayici": "xsd",
+   "uzanti": ["pptx", "pptm", "potx", "potm", "ppsx", "ppsm"],
+   "parca": "^ppt/slides/slide\\d+\\.xml$",
+   "oge": "com:legacyDrawing",
+   "ileti": "No matching global element declaration",
+   "gerekce": "PowerPoint 2007, slayttaki OLE nesnesini ve ActiveX denetimini grafik çerçevesinde <a:graphicData uri=\".../drawingml/2006/compatibility\"><com:legacyDrawing spid=\"…\"/> ile slaydın VML çizimine bağlar; sonraki sürümler de bunu okur. Transitional XSD kümesinde bu ad alanının genel öğe bildirimi yok, katı joker bu yüzden reddeder. Geçiş katmanı özgün XML'i olduğu gibi taşır.",
+   "kaynak": "PowerPoint'in kaydettiği özgünde de var: test-derlem/poi/PPTWithAttachments.pptm (ppt/slides/slide1.xml)."
   }
  ]
 }
