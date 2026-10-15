@@ -27,9 +27,9 @@ jobs:
     steps:
       # Örnek dosyalar (.md, .rtf, .csv…) bayt bayt aynı kalsın: Windows'ta CRLF dönüşümü kapalı.
       - run: git config --global core.autocrlf false
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -42,7 +42,7 @@ jobs:
       # Ağ isteği testi: onay verilmemiş temiz profilde dış istek yok (macOS'ta sistemin yazım denetleyicisi, Windows'ta sözlük onayı).
       - name: Electron duman testi (başlangıç ekranı + komut satırından .docx/.xlsx/.pptx açma + ağ isteği yok)
         run: pnpm exec playwright test -c playwright.masaustu.config.ts e2e-masaustu/masaustu.spec.ts e2e-masaustu/agistegi.spec.ts -g "başlangıç ekranı açılır|komut satırından açılan dosya|dış ağ isteği yok"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: capraz-${{ matrix.os }}-test-results
