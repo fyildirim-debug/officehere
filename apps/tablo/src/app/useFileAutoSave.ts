@@ -6,22 +6,22 @@
  *
  * Dosyadaki bazı öğeler okunamadıysa (loadWarnings) ilk elle kayda kadar
  * otomatik kaydetme yapılmaz; yazılan dosya kendi okuyucumuzla yeniden açılarak
- * doğrulanır (açılamazsa önceki içerik geri yüklenir).
+ * doğrulanır (açılamazsa önceki içerik geri yüklenir). Yazma ve doğrulama
+ * Worker'dadır (ayrı istemciler); ana iş parçacığı yalnız kitabın anlık
+ * görüntüsünü parça parça çıkarır, büyük kitapta arayüz donmaz.
  */
 import { useEffect, useRef } from "react";
 import { saveStatus, useAutoSave } from "@officehere/ui";
 import type { Controller } from "../controller";
 import type { FileActions } from "../FileView";
-import { openBook } from "../io/formats";
-import { writeXlsx } from "../io/xlsx";
+import { verifyXlsxIo, writeBookIo } from "../io/client";
 
 /** Rozette gösterilen bekletme nedeni. */
 export const LOAD_WARNING_HOLD = "Bu dosyada desteklenmeyen öğeler var; ilk kaydı siz onaylayın";
 
 /** Yazılan .xlsx kendi okuyucumuzla açılabiliyor mu ve yazılan sayfaların hiçbiri kaybolmamış mı. */
 export async function canReopenXlsx(data: ArrayBuffer, expectedSheets = 1): Promise<boolean> {
-  const opened = await openBook("dogrulama.xlsx", data);
-  return opened.wb.sheets.length >= Math.max(1, expectedSheets);
+  return verifyXlsxIo(data, expectedSheets);
 }
 
 export function useFileAutoSave(ctl: Controller, files: FileActions): void {
@@ -54,7 +54,8 @@ export function useFileAutoSave(ctl: Controller, files: FileActions): void {
       const v = ctl.dataVersion;
       const wb = ctl.wb;
       expected.current = wb.sheets.length;
-      return { data: await writeXlsx(wb), isCurrent: () => ctl.dataVersion === v && ctl.wb === wb };
+      const data = await writeBookIo(wb, wb.active, "xlsx", undefined, undefined, { version: () => ctl.dataVersion });
+      return { data: data as Uint8Array<ArrayBuffer>, isCurrent: () => ctl.dataVersion === v && ctl.wb === wb };
     },
     markClean: () => {
       ctl.dirty = false;

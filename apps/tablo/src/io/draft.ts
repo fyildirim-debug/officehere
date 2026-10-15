@@ -87,10 +87,10 @@ export function* serializeDraft(wb: WorkbookModel, chunk = 20000): Generator<voi
       strs.push(t);
       return strs.length - 1;
     };
-    const cells: [number, number, { value: unknown; formula?: { text: string } }][] = [];
-    wb.engine.forEachCell(s.id, (row, col, rec) => cells.push([row, col, rec]));
-    for (const [row, col, rec] of cells) {
-      keys[i] = row * 16384 + col;
+    // Hücreler doğrudan parça parça gezilir (önce hepsini diziye toplamak büyük kitapta uzun görevdi)
+    for (const [k, rec] of wb.engine.cellEntries(s.id)) {
+      if (i >= n) break;
+      keys[i] = k;
       const v = rec.value;
       if (rec.formula) {
         kinds[i] = K_FORMULA;

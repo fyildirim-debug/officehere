@@ -13,7 +13,7 @@ import { readHtml } from "./html";
 import { ODS_MIME, readOds } from "./ods/reader";
 import { writeOds } from "./ods/writer";
 import { readXls } from "./xls/reader";
-import { readXlsx, writeXlsx, type XlsxReadReport, type XlsxWriteReport } from "./xlsx";
+import { readXlsx, writeXlsx, type XlsxReadOptions, type XlsxReadReport, type XlsxWriteReport } from "./xlsx";
 
 export type BookFormat = "xlsx" | "xlsm" | "xltx" | "xltm" | "xls" | "ods" | "ots" | "csv" | "tsv" | "txt" | "html";
 /** Kaydedilebilen biçimler. */
@@ -101,15 +101,15 @@ export interface OpenedBook {
  * Dosyayı biçimine uygun okuyucuyla açar. Her hata anlaşılır bir FormatError
  * olarak döner (teknik ayrıntı .detail alanında).
  */
-export async function openBook(name: string, data: ArrayBuffer): Promise<OpenedBook> {
+export async function openBook(name: string, data: ArrayBuffer, opts?: XlsxReadOptions): Promise<OpenedBook> {
   try {
-    return await openBookRaw(name, data);
+    return await openBookRaw(name, data, opts);
   } catch (e) {
     throw toOpenError(e);
   }
 }
 
-async function openBookRaw(name: string, data: ArrayBuffer): Promise<OpenedBook> {
+async function openBookRaw(name: string, data: ArrayBuffer, opts?: XlsxReadOptions): Promise<OpenedBook> {
   const format = await sniffFormat(name, data);
   const sheetName = baseName(name);
   switch (format) {
@@ -132,7 +132,7 @@ async function openBookRaw(name: string, data: ArrayBuffer): Promise<OpenedBook>
       return { wb: readHtml(data, sheetName), format, template: false, notice: "Web sayfasındaki tablolar içe aktarıldı. Kaydedince .xlsx olarak kaydedilir." };
     default: {
       const report: XlsxReadReport = {};
-      const wb = await readXlsx(data, report);
+      const wb = await readXlsx(data, report, opts);
       const macro =
         format === "xlsm"
           ? "Bu çalışma kitabındaki makrolar kaydederken korunur, ancak OfficeHere'da çalıştırılmaz."

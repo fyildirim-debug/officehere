@@ -6,7 +6,7 @@
  */
 import JSZip from "jszip";
 import { readPageBreaksFromData } from "./xlsxBreaks";
-import { addr, cellKey, colToName, errorFromCode, formatRange, isError, nameToCol, parseRangeAddress, resolveFunctionName, stripFunctionPrefix, type Scalar } from "@officehere/formula";
+import { addr, cellKey, colToName, errorFromCode, formatRange, isError, nameToCol, parseRangeAddress, resolveFunctionName, stripFunctionPrefix, type BulkLoader, type Scalar } from "@officehere/formula";
 import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import { widthCharsToPx, widthPxToChars, ptToPx, pxToPt } from "../model/axis";
 import type { PageSetup, Rect, ValidationRule } from "../model/types";
@@ -90,27 +90,54 @@ export interface XlsxReadReport {
   signed?: boolean;
 }
 
+/** Okuma seçenekleri (Worker'da açma ve otomatik kayıt doğrulaması). */
+export interface XlsxReadOptions {
+  /** false: kaynak paket kaydedilmez (yalnız "açılıyor mu" doğrulaması; kaydetmede taşıma yapılmayacak). */
+  kaynak?: boolean;
+  /** Kaba ilerleme (0..1) ve adım adı. */
+  progress?: (ratio: number, step?: string) => void;
+}
+
 /** Kitap çöpe gidince kaynak paket kaydı da bırakılır (bellek dosya boyutu kadar tutulmasın). */
 const sourceFinalizer = typeof FinalizationRegistry === "function" ? new FinalizationRegistry<string>((id) => releaseSource(id)) : null;
 
-export async function readXlsx(input: ArrayBuffer, report?: XlsxReadReport): Promise<WorkbookModel> {
+/** Kitaba kaynak paketini bağlar (kaydederken modelin tanımadığı parçalar buradan taşınır). */
+function attachSource(wb: WorkbookModel, src: OpcPackage): void {
+  const id = registerSource(src);
+  wb.kaynak = id;
+  sourceFinalizer?.register(wb, id);
+}
+
+/**
+ * Worker'da okunan kitabın kaynak paketini (onarılmış özgün baytlar) bu iş parçacığında kaydeder:
+ * Worker'daki kayıt ona özeldir, kaydetme ise kaynağı kitabın kimliğiyle bu kayıttan bulur.
+ */
+export async function adoptSource(wb: WorkbookModel, bytes: Uint8Array): Promise<void> {
+  attachSource(wb, await OpcPackage.open(bytes));
+}
+
+export async function readXlsx(input: ArrayBuffer, report?: XlsxReadReport, opts: XlsxReadOptions = {}): Promise<WorkbookModel> {
   const ExcelJS = await loadExcelJS();
+  opts.progress?.(0.02, "Paket denetleniyor");
   // Paket denetimi ve onarımı (sınırlar, eksik yapı, sayfa XML'i); ölümcül sorunlarda anlaşılır hata
   const pkg = await prepareXlsx(input);
   const data = pkg.data;
   seedZip(data, pkg.zip);
   try {
-    return await readPrepared(ExcelJS, pkg, report);
+    return await readPrepared(ExcelJS, pkg, report, opts);
   } finally {
     releaseZip(data);
   }
 }
 
-async function readPrepared(ExcelJS: any, pkg: Awaited<ReturnType<typeof prepareXlsx>>, report?: XlsxReadReport): Promise<WorkbookModel> {
+async function readPrepared(ExcelJS: any, pkg: Awaited<ReturnType<typeof prepareXlsx>>, report: XlsxReadReport | undefined, opts: XlsxReadOptions): Promise<WorkbookModel> {
   const data = pkg.data;
   const warnings: string[] = [...pkg.warnings];
   const notices: string[] = pkg.notice ? [pkg.notice] : [];
+  const progress = opts.progress ?? (() => {});
+  progress(0.1, "Hücreler okunuyor");
   const x = await loadTolerant(ExcelJS, pkg.excel, warnings);
+  progress(0.6, "Sayfalar kuruluyor");
   const wb = new WorkbookModel(true);
   // Kaynak paket (onarılmış): kaydederken modelin tanımadığı parçalar ve öğeler buradan taşınır
   let src: OpcPackage | undefined;
@@ -156,7 +183,8 @@ async function readPrepared(ExcelJS: any, pkg: Awaited<ReturnType<typeof prepare
   } catch {
     /* özgün biçim kodları isteğe bağlı */
   }
-  for (const ws of worksheets) {
+  for (const [i, ws] of worksheets.entries()) {
+    progress(0.6 + (0.25 * i) / worksheets.length, "Sayfalar kuruluyor");
     const sheet = wb.addSheet(ws.name);
     // Birleştirmeler exceljs'e verilmez (xlsxGuard: kendi taramamız, geçerli ve çakışmasız)
     const merges = pkg.merges.get(ws.name) ?? [];
@@ -183,6 +211,7 @@ async function readPrepared(ExcelJS: any, pkg: Awaited<ReturnType<typeof prepare
       } else warnings.push("çok büyük birleştirilmiş alanlar");
     }
   }
+  progress(0.85, "Tablolar, adlar ve grafikler okunuyor");
   // exceljs'in sessizce atladığı sayfa kalmasın (ör. ayrıştırılamayan sayfa parçası)
   const loaded = new Set(worksheets.map((ws) => ws.name));
   for (const name of pkg.sheetNames) if (!loaded.has(name)) warnings.push(`"${name}" sayfası (okunamadı)`);
@@ -233,7 +262,9 @@ async function readPrepared(ExcelJS: any, pkg: Awaited<ReturnType<typeof prepare
     warnings.push("grafikler");
   }
   wb.syncTables();
+  progress(0.9, "Formüller hesaplanıyor");
   wb.engine.recalc(true);
+  progress(0.95, "Özet tablolar ve diğer öğeler okunuyor");
   // PivotTable tanımları (kaynak değerleri hesaplandıktan sonra)
   try {
     await readPivotsFromData(data, wb);
@@ -267,9 +298,7 @@ async function readPrepared(ExcelJS: any, pkg: Awaited<ReturnType<typeof prepare
     warnings.push("onay kutuları");
   }
   if (src) {
-    const id = registerSource(src);
-    wb.kaynak = id;
-    sourceFinalizer?.register(wb, id);
+    if (opts.kaynak !== false) attachSource(wb, src);
     if (src.signed) {
       warnings.push("dijital imza (kaydedince kaldırılır)");
       if (report) report.signed = true;
@@ -428,7 +457,14 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
       if (row) fn(row, row.number ?? Number(key) + 1);
     }
   };
-  eachRow((row: any, rn: number) => {
+  // Hücreler motora toplu yüklenir (hücre başına değişiklik bildirimi yok; formüller sonda tam hesapla)
+  const load = wb.engine.bulkLoad(sheet.id);
+  try {
+    eachRow((row: any, rn: number) => readRow(row, rn));
+  } finally {
+    load.finish();
+  }
+  function readRow(row: any, rn: number): void {
     const r = rn - 1;
     if (!(r >= 0) || r >= MAX_ROWS) return;
     if (row.height !== undefined && row.height !== null && (row.customHeight || Math.abs(row.height - 15) > 0.1)) sheet.rows.set(r, ptToPx(Math.min(409.5, Math.max(0, Number(row.height) || 0))), !!row.customHeight);
@@ -440,7 +476,7 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
       const cell = row.getCell(cn);
       const c = cn - 1;
       const hidden = hiddenInMerge(r, c);
-      readCell(wb, sheet, cell, r, c, cr, rawFormats, hidden);
+      readCell(wb, sheet, load, cell, r, c, cr, rawFormats, hidden);
       // Dizi formülünün (dinamik dizi) kapladığı alan: ana hücre dışındakiler yalnız önbellek değeridir
       const v = hidden ? null : cell.value;
       if (v && typeof v === "object" && v.shareType === "array" && typeof v.ref === "string") {
@@ -453,7 +489,7 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
         if (text) notesCells.push({ row: r, col: c, text: text.replace(/^[^:\n]{1,40}:\n/, "") });
       }
     }
-  });
+  }
   for (const n of notesCells) sheet.notes.set(cellKey(n.row, n.col), { text: n.text });
   // Taşma alanındaki önbellek değerleri sabit olarak kalırsa formülün taşmasını engeller (#TAŞMA!)
   for (const a of arrayAreas)
@@ -594,7 +630,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return typeof btoa === "function" ? btoa(s) : Buffer.from(bytes).toString("base64");
 }
 
-function readCell(wb: WorkbookModel, sheet: SheetModel, cell: any, r: number, c: number, cr: ColorResolver, rawFormats?: Map<string, string>, hiddenInMerge = false): void {
+function readCell(wb: WorkbookModel, sheet: SheetModel, load: BulkLoader, cell: any, r: number, c: number, cr: ColorResolver, rawFormats?: Map<string, string>, hiddenInMerge = false): void {
   const v = cell.value;
   const styleObj = cell.style;
   let input: Scalar | { formula: string } = null;
@@ -617,7 +653,8 @@ function readCell(wb: WorkbookModel, sheet: SheetModel, cell: any, r: number, c:
       } else if ("error" in v) input = errorFromCode(String(v.error)) ?? null;
     }
   }
-  if (input !== null) wb.setInputRaw(sheet, r, c, input);
+  if (input !== null && typeof input === "object" && "formula" in input) load.formula(r, c, input.formula.slice(1));
+  else if (input !== null) load.value(r, c, input);
   if (link) sheet.links.set(cellKey(r, c), link.startsWith("#") ? link : link);
   if (styleObj) {
     const st = Object.keys(styleObj).length ? fromXStyle(styleObj, cr, rawFormats) : {};

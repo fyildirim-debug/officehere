@@ -40,6 +40,22 @@ import {
 export { cellKey, keyCol, keyRow } from "./engine-types";
 export type { CellRecord, CellSnapshot, EngineOptions, EngineSnapshot, SpillInfo } from "./engine-types";
 
+/** `FormulaEngine.bulkLoad` yükleyicisi. */
+export interface BulkLoader {
+  /** Sabit değer; null atlanır. */
+  value(row: number, col: number, value: Scalar): void;
+  /**
+   * Formül ("=" olmadan, kanonik İngilizce sözdizimi). `cached` verilirse hücre bu değerle hesaplanmış
+   * sayılır; verilmezse kirlidir ve sonraki hesaplamada değerlendirilir. Taşan (dizi) formüller ve
+   * döngüsel başvurudaki hücreler önbelleksiz verilmelidir (taşma alanı ve döngü bilgisi hesapla kurulur).
+   */
+  formula(row: number, col: number, text: string, cached?: Scalar): void;
+  /** Yüklenen hücre sayısı. */
+  readonly count: number;
+  /** Yüklemeyi bitirir (girdi sürümü bir kez artar). */
+  finish(): void;
+}
+
 export class FormulaEngine implements EvalHost {
   locale: LocaleInfo;
   autoCalc = true;
@@ -365,6 +381,61 @@ export class FormulaEngine implements EvalHost {
     this.setValue(sheet, row, col, null);
   }
 
+  /**
+   * Toplu yükleme (dosya açılışı, Worker'dan gelen ara gösterim): hücreler doğrudan depoya yazılır.
+   * setValue/setFormula'dan farkı: hücre başına değişiklik bildirimi (noteChange) ve taşma araması
+   * yapılmaz; önbellek değeri verilen formül kirli sayılmaz, yani yeniden hesaplanmaz. Formül
+   * bağımlılıkları yüklenirken kaydedilir; bu yüzden sayfalar, adlar ve tablolar önceden
+   * tanımlanmış olmalıdır. Çağıran döngüyü parçalara bölebilir (ör. her 16 ms'de ana iş
+   * parçacığına dönerek); sonda `finish()` bir kez çağrılır. Yükleme sürerken motor başka işlem
+   * görmemelidir.
+   */
+  bulkLoad(sheet: number): BulkLoader {
+    const s = this.sheetOrThrow(sheet);
+    // Boş sayfaya yüklemede eski kayıt denetimi atlanır (açılışın olağan yolu)
+    const fresh = s.cells.size === 0;
+    const base = sheet * SHEET_STRIDE;
+    let count = 0;
+    let done = false;
+    const prepare = (k: number): void => {
+      if (done) throw new Error("Toplu yükleme bitti");
+      count++;
+      if (fresh) return;
+      // Dolu sayfada olağan yazmadaki gibi: eski formül kaydı silinir, bağımlılar bilgilendirilir
+      if (s.cells.get(k)?.formula) this.unregister(base + k);
+      this.noteChange(base + k);
+    };
+    return {
+      value: (row, col, value) => {
+        if (value === null) return;
+        const k = cellKey(row, col);
+        prepare(k);
+        s.cells.set(k, { value });
+        this.growExtent(s, row, col);
+      },
+      formula: (row, col, text, cached) => {
+        const k = cellKey(row, col);
+        prepare(k);
+        const ast = safeParse(text);
+        const info: FormulaInfo = { text, ast, volatile: false, usesNames: false, cellDeps: [], rangeDeps: [], spill: null, spillTarget: null };
+        s.cells.set(k, { value: cached !== undefined ? cached : ast ? 0 : Errors.NAME, formula: info });
+        this.growExtent(s, row, col);
+        this.register(base + k, info, sheet);
+        if (cached === undefined) this.dirty.add(base + k);
+      },
+      get count() {
+        return count;
+      },
+      finish: () => {
+        if (done) return;
+        done = true;
+        // Üzerine yazılan hücreler kullanılan alanı küçültmüş olabilir
+        if (!fresh) s.extentDirty = true;
+        this.inputVersion++;
+      },
+    };
+  }
+
   /** Hücre içeriğini (değer ya da "=formül") yazar. */
   setInput(sheet: number, row: number, col: number, input: Scalar | { formula: string }): void {
     if (input !== null && typeof input === "object" && !(input instanceof FormulaError)) this.setFormula(sheet, row, col, input.formula);
@@ -411,6 +482,15 @@ export class FormulaEngine implements EvalHost {
     const s = this.sheets.get(sheet);
     if (!s) return;
     for (const [k, rec] of s.cells) cb(keyRow(k), keyCol(k), rec);
+  }
+
+  /**
+   * Sayfadaki girdili hücrelerin yineleyicisi ([hücre anahtarı, kayıt]; satır/sütun keyRow/keyCol ile):
+   * forEachCell'den farkı parça parça gezilebilmesidir (ör. ana iş parçacığında arada dönerek).
+   * Gezinti sürerken yazılan hücreler görülebilir; tutarlı anlık görüntü gereken çağıran değişikliği denetler.
+   */
+  cellEntries(sheet: number): IterableIterator<[number, CellRecord]> {
+    return (this.sheets.get(sheet)?.cells ?? new Map<number, CellRecord>()).entries();
   }
 
   cellCount(sheet: number): number {
@@ -501,6 +581,9 @@ export class FormulaEngine implements EvalHost {
   /** Değişikliklerden etkilenen formülleri yeniden hesaplar. full: tümünü. */
   recalc(full = false): void {
     if (this.inRecalc) return;
+    // Yapılacak iş yoksa sürüm artmaz: değerler değişmedi, sürüme bağlı önbellekler (kullanılan alan,
+    // koşullu biçim) geçerli kalır. Ör. büyük kitap açıldıktan sonraki hesap tüm sayfayı yeniden taratmaz.
+    if (!full && !this.dirty.size && !this.changed.size && !this.subtotalsStale && !this.volatiles.size) return;
     this.inRecalc = true;
     try {
       if (full) this.markAllDirty();

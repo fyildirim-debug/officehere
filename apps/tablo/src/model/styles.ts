@@ -88,6 +88,16 @@ export class StyleTable {
   all(): CellStyle[] {
     return this.styles;
   }
+
+  /**
+   * Tabloyu verilen listeyle birebir değiştirir; numaralar korunur (ilk öğe varsayılan stildir).
+   * Başka iş parçacığından gelen kitap için: intern yeniden normalleştirir ve "font" alanı etkin
+   * temanın yazı tipine bağlı olduğundan numaraları kaydırabilirdi.
+   */
+  restore(list: readonly CellStyle[]): void {
+    this.styles = list.length ? list.slice() : [{}];
+    this.index = new Map(this.styles.map((s, i) => [styleKey(s), i]));
+  }
 }
 
 function normalize(s: CellStyle): CellStyle {

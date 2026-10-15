@@ -6,18 +6,18 @@
  */
 import { useMemo } from "react";
 import { isDirectSave, trackSave } from "@officehere/ui";
-import { addRecentFile, baseName, downloadBlob, getNative, openFile, readPath, saveFile, saveFileAs, type FileRef, type RecentFile } from "@officehere/core";
+import { addRecentFile, baseName, downloadBlob, getNative, isAbortError, openFile, readPath, saveFile, saveFileAs, type FileRef, type RecentFile } from "@officehere/core";
 import type { Controller } from "../controller";
-import { decodeText, detectDelimiter, writeCsv } from "../io/csv";
-import { FILTERS, OPEN_FILTERS, openBook, saveFormatOf, writableAs, writeBook, type SaveFormat } from "../io/formats";
+import { openBookIo, writeBookIo } from "../io/client";
+import { FILTERS, OPEN_FILTERS, saveFormatOf, writableAs, type SaveFormat } from "../io/formats";
 import { writeHtml } from "../io/html";
-import { writeOds } from "../io/ods/writer";
 import { exportPdf } from "../io/print";
 import { printWithOptions } from "../io/printPages";
-import { writeXlsx, type XlsxWriteReport } from "../io/xlsx";
+import type { XlsxWriteReport } from "../io/xlsx";
 import { buildTemplate, TEMPLATES } from "../templates";
 import type { FormatChoice } from "../dialogs/SaveFormatDialog";
 import { fileFormatOf, setFileFormat } from "./fileFormat";
+import { startFileTask } from "./fileProgress";
 
 export interface FileActions {
   save: () => Promise<boolean>;
@@ -58,11 +58,22 @@ let bookCounter = 1;
 
 export function useFileActions(ctl: Controller): FileActions {
   return useMemo(() => {
+    // Yazma Worker'da; büyük kitapta durum çubuğunda ilerleme (iptal yok: dosya yarım yazılmaz)
+    const write = async (format: SaveFormat, delimiter?: string, report?: XlsxWriteReport) => {
+      const task = startFileTask("Kaydediliyor…");
+      try {
+        return await writeBookIo(ctl.wb, ctl.sheet, format, delimiter, report, { version: () => ctl.dataVersion, onProgress: (p) => task.update(p) });
+      } finally {
+        task.end();
+      }
+    };
     // Dosyanın kendi ayırıcısı yalnız aynı biçimde kaydederken korunur
     const data = (format: SaveFormat, report?: XlsxWriteReport) => {
       const st = fileFormatOf(ctl.wb);
-      return writeBook(ctl.wb, ctl.sheet, format, writableAs(st.format) === format ? st.delimiter : undefined, report);
+      return write(format, writableAs(st.format) === format ? st.delimiter : undefined, report);
     };
+    /** Süren açma (yenisi başlarken iptal edilir: aynı Worker'da iki açma birbirini beklemesin). */
+    let opening: AbortController | null = null;
     const done = (ref: FileRef, format: SaveFormat, notice?: string) => {
       ctl.fileRef = ref;
       ctl.fileName = ref.name;
@@ -79,16 +90,23 @@ export function useFileActions(ctl: Controller): FileActions {
     const actions: FileActions = {
       confirmDiscard: async () => true,
       async loadData(name, buf, path) {
+        opening?.abort();
+        const ctrl = new AbortController();
+        opening = ctrl;
+        const task = startFileTask("Açılıyor…", () => ctrl.abort());
+        const version = ctl.dataVersion;
         try {
-          const opened = await openBook(name, buf);
+          const opened = await openBookIo(name, buf, { signal: ctrl.signal, onProgress: (p) => task.update(p) });
+          task.end();
+          // Açılış sürerken açık kitap düzenlendiyse değişiklikler sorulmadan atılmaz
+          if (ctl.dirty && ctl.dataVersion !== version && !(await actions.confirmDiscard())) return false;
           if (opened.template) {
             // Şablon: adsız yeni çalışma kitabı (Kaydet → Farklı Kaydet .xlsx)
             ctl.load(opened.wb, `${baseName(name)}1`, null);
             setFileFormat(opened.wb, { format: "xlsx" });
           } else {
             ctl.load(opened.wb, name, { name, path });
-            const delimiter = opened.format === "csv" || opened.format === "txt" ? detectDelimiter(decodeText(buf)) : opened.format === "tsv" ? "\t" : undefined;
-            setFileFormat(opened.wb, { format: opened.format, delimiter });
+            setFileFormat(opened.wb, { format: opened.format, delimiter: opened.delimiter });
           }
           openNotice = opened.notice;
           if (opened.notice) {
@@ -100,9 +118,12 @@ export function useFileActions(ctl: Controller): FileActions {
           void addRecentFile({ path: path ?? name, name, app: "tablo", openedAt: Date.now() });
           return true;
         } catch (e) {
-          // openBook her hatayı anlaşılır Türkçe iletiye çevirir; kitaplığın teknik iletisi ayrıntıdadır
+          task.end();
+          if (isAbortError(e)) return false;
+          // openBook her hatayı anlaşılır Türkçe iletiye çevirir; kitaplığın teknik iletisi ayrıntıdadır.
+          // Worker'ın kendi hataları (çöktü, kesildi) da Türkçe iletilidir.
           const err = e as Error & { detail?: string };
-          const known = err?.name === "FormatError";
+          const known = err?.name === "FormatError" || err?.name === "IoWorkerError";
           if (err?.detail) console.warn(`[tablo] "${name}" açılamadı: ${err.detail}`);
           ctl.alert(
             known ? `"${name}" dosyası açılamadı.\n\n${err.message}` : `"${name}" dosyası açılamadı. Dosya biçimi geçersiz ya da dosya bozuk olabilir.`,
@@ -110,6 +131,8 @@ export function useFileActions(ctl: Controller): FileActions {
             known ? err.detail : `${err?.name ?? "Error"}: ${err?.message ?? e}`,
           );
           return false;
+        } finally {
+          if (opening === ctrl) opening = null;
         }
       },
       async open() {
@@ -170,7 +193,7 @@ export function useFileActions(ctl: Controller): FileActions {
           if (chosen && chosen !== format && (r.path || r.handle)) {
             finalFormat = chosen;
             report.warnings = [];
-            return saveFile(r, r.name, [FILTERS[chosen]], await writeBook(ctl.wb, ctl.sheet, chosen, undefined, report));
+            return saveFile(r, r.name, [FILTERS[chosen]], await write(chosen, undefined, report));
           }
           return r;
         });
@@ -190,20 +213,20 @@ export function useFileActions(ctl: Controller): FileActions {
       async exportAs(kind) {
         const base = baseName(ctl.fileName);
         if (kind === "csv") {
-          await saveFileAs(`${base}.csv`, [FILTERS.csv], writeCsv(ctl.wb, ctl.sheet));
+          await saveFileAs(`${base}.csv`, [FILTERS.csv], await write("csv", ";"));
         } else if (kind === "csv-comma") {
-          await saveFileAs(`${base}.csv`, [{ name: "CSV (Virgülle ayrılmış)", extensions: ["csv"] }], writeCsv(ctl.wb, ctl.sheet, { delimiter: "," }));
+          await saveFileAs(`${base}.csv`, [{ name: "CSV (Virgülle ayrılmış)", extensions: ["csv"] }], await write("csv", ","));
         } else if (kind === "tsv") {
-          await saveFileAs(`${base}.tsv`, [FILTERS.tsv], writeCsv(ctl.wb, ctl.sheet, { delimiter: "\t" }));
+          await saveFileAs(`${base}.tsv`, [FILTERS.tsv], await write("tsv", "\t"));
         } else if (kind === "ods") {
-          await saveFileAs(`${base}.ods`, [FILTERS.ods], await writeOds(ctl.wb));
+          await saveFileAs(`${base}.ods`, [FILTERS.ods], await write("ods"));
         } else if (kind === "pdf") {
           await exportPdf(ctl.wb, ctl.sheet, `${base}.pdf`);
         } else if (kind === "html" || kind === "html-all") {
           const sheets = kind === "html" ? [ctl.sheet] : ctl.wb.sheets.filter((s) => !s.hidden);
           downloadBlob(new Blob([writeHtml(ctl.wb, sheets, base)], { type: "text/html" }), `${base}.html`);
         } else if (kind === "xlsx") {
-          const bytes = await writeXlsx(ctl.wb);
+          const bytes = await write("xlsx");
           downloadBlob(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${base}.xlsx`);
         }
       },

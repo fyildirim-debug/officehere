@@ -4,6 +4,7 @@ import { DocumentOnePage20Regular, Grid20Regular, ReadingModeMobile20Regular } f
 import { StatusBar, StatusItem, ViewSwitcher, ZoomSlider } from "@officehere/ui";
 import { addr, formatValue } from "@officehere/formula";
 import type { Controller } from "./controller";
+import { FileTaskProgress } from "./app/fileProgress";
 
 const MODE: Record<string, string> = { ready: "Hazır", enter: "Gir", edit: "Düzenle", point: "İşaret" };
 
@@ -70,6 +71,7 @@ export function StatusArea({ ctl }: { ctl: Controller }) {
       left={
         <>
           <StatusItem>{MODE[ctl.mode]}</StatusItem>
+          <FileTaskProgress />
           {ctl.status && <StatusItem>{ctl.status}</StatusItem>}
           {circ && <StatusItem tip="Döngüsel başvuru içeren hücre">Döngüsel Başvurular: {addr(circ.row, circ.col)}</StatusItem>}
           {calcPending && (
