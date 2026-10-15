@@ -33,7 +33,9 @@ kayit=$(mktemp)
 calistir=()
 if [[ $(id -u) -eq 0 ]]; then
   id duman >/dev/null 2>&1 || useradd -m duman
-  chown duman "$veri" "$kayit"
+  # Çıktı dosyası root'ta kalır: yönlendirmeyi root kabuğu açar, uygulama devralınan tanıtıcıya yazar
+  # (fs.protected_regular açık çekirdekte root, /tmp'deki başka kullanıcının dosyasını açamaz).
+  chown duman "$veri"
   calistir=(runuser -u duman --)
 fi
 bayraklar=(--remote-debugging-port="$port")

@@ -88,6 +88,10 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.imaj }}
+      # En küçük Pardus 25 imajında ca-certificates yok ve depo aynaları HTTPS: ilk apt kurulumunda
+      # koşucunun CA demeti salt okunur kullanılır (paket bütünlüğünü yine apt'nin GPG imzası sağlar).
+      volumes:
+        - /etc/ssl/certs:/etc/oh-kosucu-sertifika:ro
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
@@ -95,8 +99,10 @@ jobs:
       # bildirmediği bir bağımlılığı (ör. libgbm1) gizlerlerdi.
       - name: Araçlar
         run: |
-          apt-get update
-          apt-get install -y --no-install-recommends git ca-certificates reprepro gnupg gpgv python3
+          ca=""
+          [ -f /etc/ssl/certs/ca-certificates.crt ] || ca="-o Acquire::https::CAInfo=/etc/oh-kosucu-sertifika/ca-certificates.crt"
+          apt-get $ca update
+          apt-get $ca install -y --no-install-recommends git ca-certificates reprepro gnupg gpgv python3
       - uses: actions/checkout@v4
         with:
           sparse-checkout: scripts/apt
