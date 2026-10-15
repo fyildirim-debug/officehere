@@ -27,6 +27,8 @@ export default defineConfig({
     locale: "tr-TR",
     timezoneId: "Europe/Istanbul",
     acceptDownloads: true,
+    // OH_CHROMIUM: Playwright'ın kendi tarayıcısı kurulamayan ortamda (ör. bulut oturumu) yerel Chromium
+    ...(process.env.OH_CHROMIUM ? { launchOptions: { executablePath: process.env.OH_CHROMIUM } } : {}),
   },
   webServer: apps.map((a) => ({
     command: `pnpm --filter @officehere/${a.name} exec vite preview --port ${a.port} --strictPort`,

@@ -1,7 +1,7 @@
 // Görsel regresyon çalıştırıcısı (pnpm gorsel / pnpm gorsel:guncelle).
 //
 // Temel görüntüler (e2e/gorsel/__ekran__/linux/) yalnız CI ile birebir aynı ortamda üretilir ve karşılaştırılır:
-// Docker imajı mcr.microsoft.com/playwright:v1.56.1-noble + sürümü sabit Carlito/Caladea/Liberation/DejaVu.
+// Docker imajı mcr.microsoft.com/playwright:v1.64.0-noble + sürümü sabit Carlito/Caladea/Liberation/DejaVu.
 // Bu yüzden betik varsayılan olarak her şeyi o imajda çalıştırır (depo /src'ye bağlanır, /work'e kopyalanır,
 // bağımlılıklar kurulur, uygulamalar derlenir, sonuç ve güncellenen temeller geri kopyalanır).
 //
@@ -24,7 +24,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const KOK = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const IMAJ = "mcr.microsoft.com/playwright:v1.56.1-noble";
+const IMAJ = "mcr.microsoft.com/playwright:v1.64.0-noble";
 // .github/workflows/ci.yml "gorsel" işindeki yazı tipi satırıyla aynı tutun (noble, Release cebi).
 const YAZI_TIPLERI = "fonts-crosextra-carlito=20230309-2 fonts-crosextra-caladea=20200211-2 fonts-liberation=1:2.1.5-3 fonts-dejavu-core=2.37-8";
 const UYGULAMALAR = ["belge", "tablo", "sunum"];

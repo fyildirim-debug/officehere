@@ -20,7 +20,7 @@ aynı imajda bayt bayt belirlenimcidir. Belirlenimcilik için Chromium bayraklar
 ## Ortam: yalnız sabit Docker imajı
 
 Yazı tipi çizimi makineden makineye değiştiği için temeller **yalnız** CI ile aynı ortamda üretilir ve
-karşılaştırılır: `mcr.microsoft.com/playwright:v1.56.1-noble` + sürümü sabit `fonts-crosextra-carlito`,
+karşılaştırılır: `mcr.microsoft.com/playwright:v1.64.0-noble` + sürümü sabit `fonts-crosextra-carlito`,
 `fonts-crosextra-caladea`, `fonts-liberation`, `fonts-dejavu-core` (sürümler `e2e/gorsel/calistir.mjs` ve
 `.github/workflows/ci.yml` içinde, ikisi aynı tutulur). Bu dizine başka bir makinede üretilmiş görüntü koymayın.
 

@@ -111,7 +111,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
-      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      image: mcr.microsoft.com/playwright:v1.64.0-noble
       options: --ipc=host
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: "1"

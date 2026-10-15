@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // Görsel regresyon (e2e/gorsel): derlenmiş uygulamaların ekran görüntüleri temel görüntülerle karşılaştırılır.
-// Temeller yalnız Linux'ta, CI ile aynı imajda (mcr.microsoft.com/playwright:v1.56.1-noble + Carlito, Caladea,
+// Temeller yalnız Linux'ta, CI ile aynı imajda (mcr.microsoft.com/playwright:v1.64.0-noble + Carlito, Caladea,
 // Liberation, DejaVu) üretilir: e2e/gorsel/__ekran__/linux/. Doğrudan değil `pnpm gorsel` /
 // `pnpm gorsel:guncelle` ile çalıştırın (e2e/gorsel/calistir.mjs; ayrıntı: e2e/gorsel/__ekran__/README.md).
 // OH_GORSEL_EKRAN: temel dizinini değiştirir (yerel belirlenimcilik denemesi, depoya yazılmaz).
@@ -41,6 +41,8 @@ export default defineConfig({
     colorScheme: "light",
     contextOptions: { reducedMotion: "reduce" },
     launchOptions: {
+      // OH_CHROMIUM: yalnız yerel deneme (temel görüntüler sabit imajdaki tarayıcıyla üretilir)
+      ...(process.env.OH_CHROMIUM ? { executablePath: process.env.OH_CHROMIUM } : {}),
       args: [
         "--font-render-hinting=none",
         "--disable-lcd-text",
