@@ -34,6 +34,14 @@ import { Bibliography, Citation, CrossRef, FieldUpdater, MergeField, SeqField } 
 import { Outline } from "./outline";
 import { DropCapAttr, DropCapMeasure } from "./dropCap";
 import { ReadAloudHighlight } from "./readAloud";
+import { OoxmlExtra, OpaqueBlock, OpaqueInline } from "./opaque";
+
+/** Yalnız ek özellik (ooxmlExtra) taşıyan, stilsiz span da textStyle olarak yapıştırılır. */
+const BelgeTextStyle = TextStyle.extend({
+  parseHTML() {
+    return [...(this.parent?.() ?? []), { tag: "span[data-ooxml]", consuming: false, getAttrs: () => ({}) }];
+  },
+});
 
 /** Yazı tipi adı yedek zinciriyle (yüklü olmayan yazı tiplerinde ölçü uyumlu açık yazı tipine düşer). */
 const BelgeFontFamily = FontFamily.extend({
@@ -79,8 +87,9 @@ function contentExtensions(): AnyExtension[] {
       undoRedo: { depth: 300, newGroupDelay: 600 },
       dropcursor: { color: "#000000", width: 2 },
     }),
-    TextStyle,
+    BelgeTextStyle,
     TextStyleExtras,
+    OoxmlExtra,
     Color,
     BelgeFontFamily,
     FontSize,
@@ -120,6 +129,8 @@ function contentExtensions(): AnyExtension[] {
     Chart,
     IndexEntry,
     IndexBlock,
+    OpaqueBlock,
+    OpaqueInline,
   ];
 }
 

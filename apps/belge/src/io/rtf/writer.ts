@@ -5,6 +5,7 @@ import type { BelgeDocument, PageSetup } from "../../model/document";
 import type { StyleDef } from "../../model/styles";
 import { atomText, marksToProps, nodeStyleId, parseDataUrl, plainBlocks, sectionsOf, sniffImage, styleChar, stylesOf, type CharProps } from "../common";
 import { fieldNowText, fieldPicture } from "../../editor/nodes";
+import { opaquePlaceholder } from "../../editor/opaque";
 import { ansiByte } from "./codepage";
 import { LINK_COLOR, isoDttm } from "./state";
 
@@ -249,6 +250,9 @@ class RtfWriter {
         const name = rtfEscape(String(n.attrs?.name ?? ""));
         return name ? `{\\*\\bkmkstart ${name}}{\\*\\bkmkend ${name}}` : "";
       }
+      case "opaqueInline":
+        // .docx'e özgü öğe RTF'de yazılamaz: yer tutucu metin (kaydederken uyarılır).
+        return `{${this.runProps(p, base)} ${rtfEscape(opaquePlaceholder(n.attrs))}}`;
       default: {
         const t = atomText(n);
         return t ? `{${this.runProps(p, base)} ${rtfEscape(t)}}` : "";
@@ -372,6 +376,8 @@ class RtfWriter {
       case "bibliography":
       case "indexBlock":
         return this.blocks(plainBlocks(n), inTable);
+      case "opaqueBlock":
+        return this.paragraph({ type: "paragraph", content: [{ type: "text", text: opaquePlaceholder(n.attrs) }] }, { inTable });
       default:
         return n.content ? this.blocks(n.content, inTable) : "";
     }

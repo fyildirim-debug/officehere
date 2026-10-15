@@ -427,3 +427,117 @@
   font-size: 12px;
   margin: 6px 0 0;
 }
+
+/* Desteklenmeyen (opak) öğe: .docx'te korunan ama düzenlenemeyen öğenin yer tutucu kartı (editor/opaque.ts).
+   Renkler sayfa belirteçlerinden: Koyu Sayfa'da da okunur, yazdırmada kâğıt rengindedir. */
+.bl-opaque {
+  position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--bl-page-fg) 72%, var(--bl-page-bg));
+  background: color-mix(in srgb, var(--bl-page-fg) 5%, var(--bl-page-bg));
+  border: 1px dashed color-mix(in srgb, var(--bl-page-fg) 42%, var(--bl-page-bg));
+  border-radius: 3px;
+  font: normal 400 11px/1.25 "Segoe UI", "Carlito", "DejaVu Sans", sans-serif;
+  letter-spacing: 0;
+  text-decoration: none;
+  text-indent: 0;
+  text-transform: none;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.bl-opaque.is-inline {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-width: 24px;
+  min-height: 16px;
+  vertical-align: bottom;
+}
+
+/* Boyutu bilinmeyen satır içi öğe (bilinmeyen koşu öğesi…): satırı doldurmayan kısa kart. */
+.bl-opaque.is-unsized {
+  max-width: min(100%, 220px);
+}
+
+.bl-opaque.is-block {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  margin: 4px 0;
+  padding: 8px 10px;
+  white-space: normal;
+}
+
+/* Kart yazısı tek satır; sığmazsa üç noktayla kısalır (tam ad ipucunda ve erişilebilir adda). */
+.bl-opaque-card {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 4px;
+  overflow: hidden;
+  overflow-wrap: normal;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bl-opaque.is-block .bl-opaque-card {
+  white-space: normal;
+}
+
+.bl-opaque-icon {
+  margin-right: 4px;
+  font-size: 12px;
+}
+
+.bl-opaque-note {
+  opacity: 0.75;
+}
+
+.bl-opaque-note::before {
+  content: " — ";
+}
+
+/* Yedek görüntüsü olan öğe: görüntü çizilir, köşede küçük işaret (açıklama ipucunda ve erişilebilir adda). */
+.bl-opaque.has-preview {
+  border-style: solid;
+  background: var(--bl-page-bg);
+}
+
+.bl-opaque-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+.bl-opaque.has-preview .bl-opaque-card {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--bl-page-bg) 85%, transparent);
+}
+
+.bl-opaque.has-preview :is(.bl-opaque-text, .bl-opaque-note) {
+  display: none;
+}
+
+/* Yatay çizgi (VML o:hr): kart yerine çizgi. */
+.bl-opaque.is-hr {
+  display: inline-block;
+  width: 100%;
+  min-height: 2px;
+  border: 0;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--bl-page-fg) 45%, var(--bl-page-bg));
+  vertical-align: middle;
+}
+
+.bl-opaque.ProseMirror-selectednode {
+  outline: 2px solid #2b579a;
+  outline-offset: 1px;
+}

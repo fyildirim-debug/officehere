@@ -1,6 +1,14 @@
 // DOCX parça yazıcısı: ProseMirror JSON blokları → WordprocessingML (paragraflar, koşular, izlenen
 // değişiklikler, resimler, metin kutuları, tablolar, İçindekiler). İlişkiler (Rels) ve ortak sayaçlar (Ctx).
+//
+// Geçiş katmanı, öğe düzeyi: opak düğümlerin özgün XML'i yazılır. İlişkileri `reattach` ile yazma turunun
+// taşıma planına (ctx.carry; parçalar carryParts sırasında kaynak paketten kopyalanır) bağlanır; belge
+// genelinde benzersiz olması gereken kimlikler (wp:docPr/@id, w14:paraId, yer işareti ve düzeltme kimlikleri,
+// yinelenen VML şekil kimlikleri) yeniden numaralanır. Bağlanamayan öğenin yerine yedek görünümü (önizleme
+// resmi ya da yer tutucu metin) yazılır. Paragraf/koşu ek özellikleri (ooxmlExtra) şema sırasıyla katılır.
 import type { JSONContent } from "@tiptap/core";
+import { explicitRelIds, getSource, reattach, relativeTarget, type Carry } from "@officehere/core/opc";
+import { opaquePlaceholder, type OpaqueRef } from "../../editor/opaque";
 import type { DocSettings } from "../../model/document";
 import { LINE_FACTOR, type BorderSpec } from "../../model/styles";
 import type { ParaBorders } from "../../editor/paragraphFormat";
@@ -18,6 +26,15 @@ import { sigKey, type ListSig } from "./numbering";
 export type Mark = { type: string; attrs?: Record<string, unknown> };
 
 export const DOC_NS = `xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas" xmlns:mc="${NS.mc}" xmlns:o="${NS.o}" xmlns:r="${NS.r}" xmlns:v="${NS.v}" xmlns:w10="${NS.w10}" xmlns:wp="${NS.wp}" xmlns:a="${NS.a}" xmlns:pic="${NS.pic}" xmlns:w="${NS.w}" xmlns:w14="${NS.w14}" xmlns:wp14="${NS.wp14}" xmlns:wps="${NS.wps}" xmlns:m="${MATH_NS}"`;
+
+/** Parça köklerinde (DOC_NS) bildirilen ön ekler → ad alanları. Opak XML ve ek özellikler bunlara göre yazılır. */
+export const DOC_PREFIXES: ReadonlyMap<string, string> = new Map([...DOC_NS.matchAll(/xmlns:([\w.-]+)="([^"]+)"/g)].map((m) => [m[1]!, m[2]!]));
+
+/**
+ * Çıktı kökünün anladığı (şemadaki) ya da yok sayılabilir ilan ettiği (mc:Ignorable="w14 wp14") ad alanları.
+ * Kökü bunların dışında kalan opak öğe mc:AlternateContent ile sarılarak yazılır.
+ */
+export const OUTPUT_NAMESPACES: ReadonlySet<string> = new Set([NS.w, NS.r, NS.wp, NS.a, NS.pic, NS.v, NS.o, NS.w10, NS.mc, MATH_NS, NS.w14, NS.wp14]);
 
 const EMU_PER_PX = 9525;
 
@@ -68,6 +85,156 @@ function dataUrlToBytes(src: string): { data: Uint8Array; ext: string } | null {
 
 const ptTw = (pt: number) => Math.round(pt * 20);
 
+/* ------------------------------------------------------------------ */
+/* Opak XML ve ek özellikler                                             */
+/* ------------------------------------------------------------------ */
+
+/** CT_PPr alt öğe sırası (ECMA-376 Bölüm 1, §17.3.1.26). */
+const PPR_ORDER = [
+  "pStyle", "keepNext", "keepLines", "pageBreakBefore", "framePr", "widowControl", "numPr", "suppressLineNumbers", "pBdr", "shd", "tabs",
+  "suppressAutoHyphens", "kinsoku", "wordWrap", "overflowPunct", "topLinePunct", "autoSpaceDE", "autoSpaceDN", "bidi", "adjustRightInd",
+  "snapToGrid", "spacing", "ind", "contextualSpacing", "mirrorIndents", "suppressOverlap", "jc", "textDirection", "textAlignment",
+  "textboxTightWrap", "outlineLvl", "divId", "cnfStyle", "rPr", "sectPr", "pPrChange",
+];
+/** CT_RPr alt öğe sırası (§17.3.2.28). */
+const RPR_ORDER = [
+  "rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps", "strike", "dstrike", "outline", "shadow", "emboss", "imprint", "noProof",
+  "snapToGrid", "vanish", "webHidden", "color", "spacing", "w", "kern", "position", "sz", "szCs", "highlight", "u", "effect", "bdr", "shd",
+  "fitText", "vertAlign", "rtl", "cs", "em", "lang", "eastAsianLayout", "specVanish", "oMath", "rPrChange",
+];
+const rankOf = (order: string[]) => new Map(order.map((n, i) => [n, i]));
+const PPR_RANK = rankOf(PPR_ORDER);
+const RPR_RANK = rankOf(RPR_ORDER);
+/** Ana ad alanı dışındaki (w14…) ek özelliklerin yeri: pPr'de cnfStyle'dan, rPr'de oMath'tan sonra. */
+const PPR_OTHER = PPR_RANK.get("cnfStyle")! + 0.5;
+const RPR_OTHER = RPR_RANK.get("oMath")! + 0.5;
+
+const XML_TOKEN = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<\?[\s\S]*?\?>|<!|<(\/?)([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)((?:\s+[^\s=>/]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/g;
+
+/**
+ * XML parçacığının üst düzey öğeleri; iyi biçimli değilse (dengesiz etiket, üst düzeyde metin, DOCTYPE ya da
+ * çözülemeyen "<") null. Opak XML ve ek özellikler yazılmadan önce bununla denetlenir (belgenin yapısını bozamaz).
+ */
+export function topElements(xml: string): { prefix: string; local: string; xml: string }[] | null {
+  const out: { prefix: string; local: string; xml: string }[] = [];
+  const stack: string[] = [];
+  let start = 0;
+  let last = 0;
+  XML_TOKEN.lastIndex = 0;
+  for (let m = XML_TOKEN.exec(xml); m; m = XML_TOKEN.exec(xml)) {
+    const between = xml.slice(last, m.index);
+    if (between.includes("<") || (!stack.length && between.trim())) return null;
+    last = m.index + m[0].length;
+    const name = m[2];
+    if (!name) {
+      if (m[0] === "<!") return null;
+      if (!stack.length && !m[0].startsWith("<!--") && !m[0].startsWith("<?")) return null;
+      continue;
+    }
+    const top = (from: number) => {
+      const i = name.indexOf(":");
+      out.push({ prefix: i < 0 ? "" : name.slice(0, i), local: name.slice(i + 1), xml: xml.slice(from, last) });
+    };
+    if (m[1]) {
+      if (stack.pop() !== name) return null;
+      if (!stack.length) top(start);
+    } else if (m[4]) {
+      if (!stack.length) top(m.index);
+    } else {
+      if (!stack.length) start = m.index;
+      stack.push(name);
+    }
+  }
+  if (stack.length || xml.slice(last).includes("<") || xml.slice(last).trim()) return null;
+  return out;
+}
+
+/**
+ * Yazıcının öğeleri (şema sırasında) ile ek özellik öğelerini şema sırasıyla birleştirir. Yazıcının da yazdığı
+ * bir öğe ekte de varsa yazıcınınki geçerlidir. Ek iyi biçimli değilse yok sayılır.
+ */
+function mergeOrdered(parts: [string, string][], extra: unknown, rank: ReadonlyMap<string, number>, other: number): string {
+  const own = parts.map(([, x]) => x).join("");
+  if (typeof extra !== "string" || !extra) return own;
+  const items = topElements(extra);
+  if (!items?.length) return own;
+  const have = new Set(parts.map(([n]) => n));
+  const add = items.filter((e) => !(e.prefix === "w" && have.has(e.local)));
+  if (!add.length) return own;
+  const all = [
+    ...parts.map(([name, xml], i) => ({ k: rank.get(name) ?? other, i, xml })),
+    ...add.map((e, j) => ({ k: e.prefix === "w" ? (rank.get(e.local) ?? other) : other, i: parts.length + j, xml: e.xml })),
+  ];
+  all.sort((p, q) => p.k - q.k || p.i - q.i);
+  return all.map((x) => x.xml).join("");
+}
+
+/**
+ * Ek özellikte ana ad alanı dışında (w14…) öğe varsa kapsayıcıya (w:pPr/w:rPr) yazılacak mc:Ignorable: üst/alt
+ * bilgi ve not parçalarının kökünde bildirim yok; bu öğeleri anlamayan okuyucu da yok sayabilsin.
+ */
+function ignorableOf(extra: unknown): string {
+  if (typeof extra !== "string" || !extra.includes(":")) return "";
+  const prefixes = new Set<string>();
+  for (const m of extra.matchAll(/<([\w.-]+):|\s([\w.-]+):[\w.-]+\s*=/g)) {
+    const p = (m[1] ?? m[2])!;
+    if (p !== "xmlns" && IGNORABLE_PREFIXES.has(p)) prefixes.add(p);
+  }
+  return prefixes.size ? ` mc:Ignorable="${[...prefixes].join(" ")}"` : "";
+}
+
+/** Parça köklerinde bildirilen, şemada olmayan (yok sayılabilir) uzantı ad alanlarının önekleri. */
+const IGNORABLE_PREFIXES = new Set([...DOC_PREFIXES].filter(([, uri]) => uri === NS.w14 || uri === NS.wp14).map(([p]) => p));
+
+/** Düzeltme (izlenen değişiklik) öğeleri: w:id belge genelinde benzersiz. */
+const REVISION_TAG = /<(?:[\w.-]+:)?(?:ins|del|moveFrom|moveTo|rPrChange|pPrChange|sectPrChange|tblPrChange|trPrChange|tcPrChange|tblGridChange|tblPrExChange|numberingChange|cellIns|cellDel|cellMerge)\b[^>]*>/g;
+const ID_ATTR = /(\s(?:[\w.-]+:)?id\s*=\s*)("[^"]*"|'[^']*')/;
+/** Opak öğede belgenin açıklama ve not parçalarına başvurular (bu parçalar yeniden üretilir; başvuru kırık kalırdı). */
+const DANGLING_REF = /<(?:[\w.-]+:)?(?:commentRangeStart|commentRangeEnd|commentReference|footnoteReference|endnoteReference)\b[^>]*\/>/g;
+
+/**
+ * Opak XML'deki belge genelinde benzersiz kimlikler: wp:docPr/@id, w14:paraId, yer işareti (başlangıç ve bitiş
+ * birlikte) ve düzeltme kimlikleri her yazımda yeniden verilir; VML şekil kimlikleri (v:shape/@id ↔
+ * o:OLEObject/@ShapeID, o:spid) ve OLE nesne kimliği yalnız belgede yinelenirse yenilenir.
+ */
+function renumberIds(xml: string, ctx: Ctx): string {
+  let out = xml.replace(DANGLING_REF, "");
+  out = out.replace(/<(?:[\w.-]+:)?docPr\b[^>]*>/g, (tag) => tag.replace(/(\sid\s*=\s*)("[^"]*"|'[^']*')/, (_, h: string) => `${h}"${ctx.drawingId++}"`));
+  out = out.replace(/(\s[\w.-]+:paraId\s*=\s*)("[^"]*"|'[^']*')/g, (_, h: string) => `${h}"${(0x10000000 + ++ctx.paraIds).toString(16).toUpperCase()}"`); // yerel-ayar: ascii
+  const bookmarks = new Map<string, number>();
+  out = out.replace(/<(?:[\w.-]+:)?bookmark(?:Start|End)\b[^>]*>/g, (tag) =>
+    tag.replace(ID_ATTR, (_, h: string, v: string) => {
+      let n = bookmarks.get(v);
+      if (n === undefined) {
+        n = ctx.bookmarkId++;
+        bookmarks.set(v, n);
+      }
+      return `${h}"${n}"`;
+    }),
+  );
+  out = out.replace(REVISION_TAG, (tag) => tag.replace(ID_ATTR, (_, h: string) => `${h}"${ctx.revId++}"`));
+  return uniqueVmlIds(out, ctx);
+}
+
+function uniqueVmlIds(xml: string, ctx: Ctx): string {
+  const found = new Set<string>();
+  for (const m of xml.matchAll(/"(_x0000_[is]\d+)"/g)) found.add(m[1]!);
+  for (const m of xml.matchAll(/\sObjectID\s*=\s*"(_\d+)"/g)) found.add(m[1]!);
+  const map = new Map<string, string>();
+  for (const id of found) {
+    if (!ctx.vmlIds.has(id)) {
+      ctx.vmlIds.add(id);
+      continue;
+    }
+    let next: string;
+    do next = id.startsWith("_x0000_") ? `${id.slice(0, 8)}${4096 + ++ctx.vmlNext}` : `_${1900000000 + ++ctx.vmlNext}`;
+    while (ctx.vmlIds.has(next) || found.has(next));
+    ctx.vmlIds.add(next);
+    map.set(id, next);
+  }
+  return map.size ? xml.replace(/"(_x0000_[is]\d+|_\d+)"/g, (m, v: string) => (map.has(v) ? `"${map.get(v)}"` : m)) : xml;
+}
+
 /** Yazım bağlamı: belge genelinde sayaçlar. */
 export class Ctx {
   media: Media[] = [];
@@ -83,7 +250,16 @@ export class Ctx {
   endnotes: NoteData[] = [];
   /** Grafik parçaları (word/charts/chartN.xml). */
   charts: { name: string; xml: string }[] = [];
-  constructor(public settings: DocSettings) {}
+  /** Öğe düzeyi taşıma planı (writeDocx kurar; yoksa ilişkili opak öğeler yedek görünümle yazılır). */
+  carry?: Carry;
+  /** Opak öğelerde yeniden verilen w14:paraId sayacı. */
+  paraIds = 0;
+  /** Yazılan VML şekil / OLE nesne kimlikleri (filigran varsa onun şekil kimliği baştan ayrılır). */
+  vmlIds = new Set<string>();
+  vmlNext = 0;
+  constructor(public settings: DocSettings) {
+    if (settings.watermark) this.vmlIds.add("_x0000_s1025");
+  }
 
   commentNum(id: string): number {
     let n = this.commentIds.get(id);
@@ -153,6 +329,10 @@ export class PartWriter {
     const fill = hex6(a.fill as string | null | undefined);
     const bw = Number(a.borderWidth) || 0.75;
     const id = this.ctx.drawingId++;
+    // VML şekil kimliği belgede benzersiz (filigran ve opak öğelerin şekilleriyle çakışmaz).
+    let spid = 1024 + id;
+    while (this.ctx.vmlIds.has(`_x0000_s${spid}`)) spid++;
+    this.ctx.vmlIds.add(`_x0000_s${spid}`);
     const inner = new PartWriter(this.ctx, this.rels, Math.round((w - 19) * 15)).blocks(n.content) || "<w:p/>";
     const ln = border ? `<a:ln w="${Math.round(bw * 12700)}"><a:solidFill><a:srgbClr val="${border}"/></a:solidFill></a:ln>` : "<a:ln><a:noFill/></a:ln>";
     const fl = fill ? `<a:solidFill><a:srgbClr val="${fill}"/></a:solidFill>` : "<a:noFill/>";
@@ -165,7 +345,7 @@ export class PartWriter {
     const style = `position:absolute;margin-left:${pt(x)}pt;margin-top:${pt(y)}pt;width:${pt(w)}pt;height:${pt(h)}pt;z-index:${id};mso-position-horizontal-relative:text;mso-position-vertical-relative:text`;
     const vml =
       `<w:pict><v:shapetype id="_x0000_t202" coordsize="21600,21600" o:spt="202" path="m,l,21600r21600,l21600,xe"><v:stroke joinstyle="miter"/><v:path gradientshapeok="t" o:connecttype="rect"/></v:shapetype>` +
-      `<v:shape id="Metin Kutusu ${id}" o:spid="_x0000_s${1024 + id}" type="#_x0000_t202" style="${style}"${fill ? ` fillcolor="#${fill}"` : ' filled="f"'}${border ? ` strokecolor="#${border}" strokeweight="${bw}pt"` : ' stroked="f"'}><v:textbox><w:txbxContent>${inner}</w:txbxContent></v:textbox></v:shape></w:pict>`;
+      `<v:shape id="Metin Kutusu ${id}" o:spid="_x0000_s${spid}" type="#_x0000_t202" style="${style}"${fill ? ` fillcolor="#${fill}"` : ' filled="f"'}${border ? ` strokecolor="#${border}" strokeweight="${bw}pt"` : ' stroked="f"'}><v:textbox><w:txbxContent>${inner}</w:txbxContent></v:textbox></v:shape></w:pict>`;
     return `<mc:AlternateContent><mc:Choice Requires="wps">${choice}</mc:Choice><mc:Fallback>${vml}</mc:Fallback></mc:AlternateContent>`;
   }
 
@@ -191,9 +371,42 @@ export class PartWriter {
         return bibliographyXml(n);
       case "indexBlock":
         return indexXml(n);
+      case "opaqueBlock":
+        return this.opaqueXml(n.attrs ?? {}) ?? `<w:p>${this.opaqueFallback(n.attrs ?? {}, "")}</w:p>`;
       default:
         return n.content ? this.blocks(n.content, list) : "";
     }
+  }
+
+  /**
+   * Opak öğenin yazılacak XML'i: iyi biçimliyse ilişkileri yeni pakete bağlanır (parçalar kaynak paketten bu öğe
+   * için kopyalanır) ve kimlikleri yeniden numaralanır. Kaynak paket ya da başvurulan parça yoksa null.
+   */
+  private opaqueXml(a: Record<string, unknown>): string | null {
+    const xml = typeof a.xml === "string" ? a.xml : "";
+    if (topElements(xml)?.length !== 1) return null;
+    const ids = explicitRelIds(xml);
+    let out = xml;
+    if (ids.size) {
+      const refs = (Array.isArray(a.refs) ? (a.refs as OpaqueRef[]) : []).filter((r) => r && ids.has(r.id));
+      if (new Set(refs.map((r) => r.id)).size !== ids.size || !this.ctx.carry) return null;
+      const src = typeof a.src === "string" && a.src ? a.src : this.ctx.settings.kaynak;
+      const pkg = src ? getSource(src) : undefined;
+      if (refs.some((r) => !r.external && !pkg?.has(r.target))) return null;
+      const r = reattach(xml, refs, this.ctx.carry.instance(pkg), (rel) => (rel.external ? this.rels.add(rel.type, rel.target, true) : this.rels.add(rel.type, relativeTarget("word/document.xml", rel.target))));
+      if (r.missing.length) return null;
+      out = r.xml;
+    }
+    return renumberIds(out, this.ctx);
+  }
+
+  /** Bağlanamayan opak öğenin yedek görünümü: önizleme resmi, yoksa yer tutucu metin. */
+  private opaqueFallback(a: Record<string, unknown>, rpr: string): string {
+    if (typeof a.preview === "string" && a.preview) {
+      const img = this.image({ type: "image", attrs: { src: a.preview, width: a.width ?? 200, height: a.height ?? 150 } }, rpr);
+      if (img) return img;
+    }
+    return `<w:r>${rpr}<w:t xml:space="preserve">${esc(cleanText(opaquePlaceholder(a)))}</w:t></w:r>`;
   }
 
   list(n: JSONContent, ilvl: number): string {
@@ -214,28 +427,29 @@ export class PartWriter {
     return out;
   }
 
-  pPr(n: JSONContent, list?: { numId: number; ilvl: number }, contIndent?: number, extra = ""): string {
+  pPr(n: JSONContent, list?: { numId: number; ilvl: number }, contIndent?: number): string {
     const a = (n.attrs ?? {}) as Record<string, unknown>;
-    let x = "";
+    // Öğeler şema sırasında; modelin okumadığı özellikler (ooxmlExtra) sıralarına katılır.
+    const parts: [string, string][] = [];
+    const put = (name: string, xml: string) => parts.push([name, xml]);
     let style: string | null = null;
     if (n.type === "heading") style = `Heading${a.level ?? 1}`;
     else if (a.styleId) style = a.styleId as string;
     else if (list || contIndent) style = "ListParagraph";
-    if (style) x += `<w:pStyle w:val="${esc(style)}"/>`;
-    if (a.keepNext) x += "<w:keepNext/>";
-    if (a.keepLines) x += "<w:keepLines/>";
-    if (a.pageBreakBefore) x += "<w:pageBreakBefore/>";
-    if (list) x += `<w:numPr><w:ilvl w:val="${list.ilvl}"/><w:numId w:val="${list.numId}"/></w:numPr>`;
+    if (style) put("pStyle", `<w:pStyle w:val="${esc(style)}"/>`);
+    if (a.keepNext) put("keepNext", "<w:keepNext/>");
+    if (a.keepLines) put("keepLines", "<w:keepLines/>");
+    if (a.pageBreakBefore) put("pageBreakBefore", "<w:pageBreakBefore/>");
+    if (list) put("numPr", `<w:numPr><w:ilvl w:val="${list.ilvl}"/><w:numId w:val="${list.numId}"/></w:numPr>`);
     // Şema sırası: numPr → suppressLineNumbers → pBdr.
-    if (a.suppressLineNumbers) x += "<w:suppressLineNumbers/>";
+    if (a.suppressLineNumbers) put("suppressLineNumbers", "<w:suppressLineNumbers/>");
     const b = a.borders as ParaBorders | null;
     if (b && (b.top || b.left || b.bottom || b.right)) {
-      x += `<w:pBdr>${b.top ? borderXml("top", b.top) : ""}${b.left ? borderXml("left", b.left as BorderSpec) : ""}${b.bottom ? borderXml("bottom", b.bottom) : ""}${b.right ? borderXml("right", b.right as BorderSpec) : ""}</w:pBdr>`;
+      put("pBdr", `<w:pBdr>${b.top ? borderXml("top", b.top) : ""}${b.left ? borderXml("left", b.left as BorderSpec) : ""}${b.bottom ? borderXml("bottom", b.bottom) : ""}${b.right ? borderXml("right", b.right as BorderSpec) : ""}</w:pBdr>`);
     }
-    if (a.shading) x += `<w:shd w:val="clear" w:color="auto" w:fill="${hex6(a.shading as string) ?? "auto"}"/>`;
+    if (a.shading) put("shd", `<w:shd w:val="clear" w:color="auto" w:fill="${hex6(a.shading as string) ?? "auto"}"/>`);
     const tabs = a.tabs as { pos: number; align: string; leader: string }[] | null;
-    if (tabs?.length && !extra.includes("<w:tabs>")) x += `<w:tabs>${tabs.map((t) => `<w:tab w:val="${t.align}"${t.leader !== "none" ? ` w:leader="${t.leader}"` : ""} w:pos="${ptTw(t.pos)}"/>`).join("")}</w:tabs>`;
-    x += extra;
+    if (tabs?.length) put("tabs", `<w:tabs>${tabs.map((t) => `<w:tab w:val="${t.align}"${t.leader !== "none" ? ` w:leader="${t.leader}"` : ""} w:pos="${ptTw(t.pos)}"/>`).join("")}</w:tabs>`);
     const sp: string[] = [];
     if (a.spaceBefore != null) sp.push(`w:before="${ptTw(a.spaceBefore as number)}"`);
     if (a.spaceAfter != null) sp.push(`w:after="${ptTw(a.spaceAfter as number)}"`);
@@ -244,7 +458,7 @@ export class PartWriter {
       if (rule === "auto") sp.push(`w:line="${Math.round((a.lineHeight as number) * 240)}" w:lineRule="auto"`);
       else sp.push(`w:line="${ptTw(a.lineHeight as number)}" w:lineRule="${rule === "exact" ? "exact" : "atLeast"}"`);
     }
-    if (sp.length) x += `<w:spacing ${sp.join(" ")}/>`;
+    if (sp.length) put("spacing", `<w:spacing ${sp.join(" ")}/>`);
     const ind: string[] = [];
     if (contIndent) ind.push(`w:left="${contIndent}"`);
     else if (a.indentLeft != null && !list) ind.push(`w:left="${ptTw(a.indentLeft as number)}"`);
@@ -253,12 +467,13 @@ export class PartWriter {
       const f = a.indentFirst as number;
       ind.push(f >= 0 ? `w:firstLine="${ptTw(f)}"` : `w:hanging="${ptTw(-f)}"`);
     }
-    if (ind.length) x += `<w:ind ${ind.join(" ")}/>`;
+    if (ind.length) put("ind", `<w:ind ${ind.join(" ")}/>`);
     const al = a.textAlign as string | null;
-    if (al) x += `<w:jc w:val="${al === "justify" ? "both" : al === "left" ? "left" : al}"/>`;
-    if (a.outlineLevel && n.type !== "heading") x += `<w:outlineLvl w:val="${(a.outlineLevel as number) - 1}"/>`;
-    if (n === this.sectTarget) x += this.sectXml;
-    return x ? `<w:pPr>${x}</w:pPr>` : "";
+    if (al) put("jc", `<w:jc w:val="${al === "justify" ? "both" : al === "left" ? "left" : al}"/>`);
+    if (a.outlineLevel && n.type !== "heading") put("outlineLvl", `<w:outlineLvl w:val="${(a.outlineLevel as number) - 1}"/>`);
+    if (n === this.sectTarget && this.sectXml) put("sectPr", this.sectXml);
+    const x = mergeOrdered(parts, a.ooxmlExtra, PPR_RANK, PPR_OTHER);
+    return x ? `<w:pPr${ignorableOf(a.ooxmlExtra)}>${x}</w:pPr>` : "";
   }
 
   paragraph(n: JSONContent, list?: { numId: number; ilvl: number }, contIndent?: number): string {
@@ -373,37 +588,39 @@ export class PartWriter {
   }
 
   rPr(marks: Mark[], isLink: boolean): string {
-    let x = "";
+    // Öğeler şema sırasında; modelin okumadığı özellikler (textStyle ooxmlExtra) sıralarına katılır.
+    const parts: [string, string][] = [];
+    const put = (name: string, xml: string) => parts.push([name, xml]);
     const has = (t: string) => marks.find((m) => m.type === t);
     const ts = (has("textStyle")?.attrs ?? {}) as Record<string, unknown>;
     const cs = has("charStyle");
-    if (cs) x += `<w:rStyle w:val="${esc(String(cs.attrs?.styleId))}"/>`;
-    else if (isLink) x += '<w:rStyle w:val="Hyperlink"/>';
-    if (ts.fontFamily) x += fontsXml(String(ts.fontFamily).replace(/["']/g, "").split(",")[0].trim());
-    if (has("bold")) x += "<w:b/><w:bCs/>";
-    if (has("italic")) x += "<w:i/><w:iCs/>";
-    if (ts.caps) x += "<w:caps/>";
-    if (ts.smallCaps) x += "<w:smallCaps/>";
-    if (has("strike")) x += "<w:strike/>";
-    if (ts.doubleStrike) x += "<w:dstrike/>";
-    if (ts.outline) x += "<w:outline/>";
-    if (ts.shadow) x += "<w:shadow/>";
-    if (ts.emboss) x += "<w:emboss/>";
-    if (ts.imprint) x += "<w:imprint/>";
-    if (ts.hidden) x += "<w:vanish/>";
+    if (cs) put("rStyle", `<w:rStyle w:val="${esc(String(cs.attrs?.styleId))}"/>`);
+    else if (isLink) put("rStyle", '<w:rStyle w:val="Hyperlink"/>');
+    if (ts.fontFamily) put("rFonts", fontsXml(String(ts.fontFamily).replace(/["']/g, "").split(",")[0].trim()));
+    if (has("bold")) put("b", "<w:b/><w:bCs/>");
+    if (has("italic")) put("i", "<w:i/><w:iCs/>");
+    if (ts.caps) put("caps", "<w:caps/>");
+    if (ts.smallCaps) put("smallCaps", "<w:smallCaps/>");
+    if (has("strike")) put("strike", "<w:strike/>");
+    if (ts.doubleStrike) put("dstrike", "<w:dstrike/>");
+    if (ts.outline) put("outline", "<w:outline/>");
+    if (ts.shadow) put("shadow", "<w:shadow/>");
+    if (ts.emboss) put("emboss", "<w:emboss/>");
+    if (ts.imprint) put("imprint", "<w:imprint/>");
+    if (ts.hidden) put("vanish", "<w:vanish/>");
     const color = hex6(ts.color as string | undefined);
-    if (color) x += `<w:color w:val="${color}"/>`;
-    if (ts.letterSpacing) x += `<w:spacing w:val="${ptTw(Number(ts.letterSpacing))}"/>`;
+    if (color) put("color", `<w:color w:val="${color}"/>`);
+    if (ts.letterSpacing) put("spacing", `<w:spacing w:val="${ptTw(Number(ts.letterSpacing))}"/>`);
     if (ts.fontSize) {
       const pt = parseFloat(String(ts.fontSize));
-      if (pt > 0) x += `<w:sz w:val="${Math.round(pt * 2)}"/><w:szCs w:val="${Math.round(pt * 2)}"/>`;
+      if (pt > 0) put("sz", `<w:sz w:val="${Math.round(pt * 2)}"/><w:szCs w:val="${Math.round(pt * 2)}"/>`);
     }
     const hl = has("highlight");
     let shdFill: string | null = hex6(ts.backgroundColor as string | undefined);
     if (hl) {
       const c = hex6((hl.attrs?.color as string | undefined) ?? "#FFFF00") ?? "FFFF00";
       const name = highlightName(`#${c}`);
-      if (name) x += `<w:highlight w:val="${name}"/>`;
+      if (name) put("highlight", `<w:highlight w:val="${name}"/>`);
       else shdFill = c;
     }
     const u = has("underline");
@@ -411,11 +628,11 @@ export class PartWriter {
       const t = String(u.attrs?.type ?? "single");
       const val = t === "dashed" ? "dash" : t === "wave" ? "wave" : t;
       const uc = hex6(u.attrs?.color as string | undefined);
-      x += `<w:u w:val="${val}"${uc ? ` w:color="${uc}"` : ""}/>`;
+      put("u", `<w:u w:val="${val}"${uc ? ` w:color="${uc}"` : ""}/>`);
     }
-    if (shdFill) x += `<w:shd w:val="clear" w:color="auto" w:fill="${shdFill}"/>`;
-    if (has("superscript")) x += '<w:vertAlign w:val="superscript"/>';
-    else if (has("subscript")) x += '<w:vertAlign w:val="subscript"/>';
+    if (shdFill) put("shd", `<w:shd w:val="clear" w:color="auto" w:fill="${shdFill}"/>`);
+    if (has("superscript")) put("vertAlign", '<w:vertAlign w:val="superscript"/>');
+    else if (has("subscript")) put("vertAlign", '<w:vertAlign w:val="subscript"/>');
     // İzlenen biçim değişikliği: önceki biçim w:rPrChange içinde (rPr'nin son öğesi).
     const fc = has("formatChange");
     if (fc) {
@@ -426,9 +643,10 @@ export class PartWriter {
         old = [];
       }
       const inner = this.rPr(old, isLink) || "<w:rPr/>";
-      x += `<w:rPrChange w:id="${this.ctx.revId++}" w:author="${esc(String(fc.attrs?.author || "Kullanıcı"))}" w:date="${esc(String(fc.attrs?.date || new Date().toISOString().replace(/\.\d+Z$/, "Z")))}">${inner}</w:rPrChange>`;
+      put("rPrChange", `<w:rPrChange w:id="${this.ctx.revId++}" w:author="${esc(String(fc.attrs?.author || "Kullanıcı"))}" w:date="${esc(String(fc.attrs?.date || new Date().toISOString().replace(/\.\d+Z$/, "Z")))}">${inner}</w:rPrChange>`);
     }
-    return x ? `<w:rPr>${x}</w:rPr>` : "";
+    const x = mergeOrdered(parts, ts.ooxmlExtra, RPR_RANK, RPR_OTHER);
+    return x ? `<w:rPr${ignorableOf(ts.ooxmlExtra)}>${x}</w:rPr>` : "";
   }
 
   run(node: JSONContent, marks: Mark[], isLink: boolean, deleted: boolean): string {
@@ -471,6 +689,12 @@ export class PartWriter {
       case "citation":
       case "mergeField":
         return fieldXml(node, rpr);
+      case "opaqueInline": {
+        const a = node.attrs ?? {};
+        const xml = this.opaqueXml(a);
+        if (xml === null) return this.opaqueFallback(a, rpr);
+        return a.level === "para" ? xml : `<w:r>${rpr}${xml}</w:r>`;
+      }
       case "note": {
         const end = node.attrs?.kind === "endnote";
         const list = end ? this.ctx.endnotes : this.ctx.footnotes;

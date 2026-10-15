@@ -57,6 +57,11 @@ export class LoadWarnings {
     return this.kinds.has(kind);
   }
 
+  /** Türü geri alır (ör. kaybolacağı sanılan gömülü nesneler opak öğe olarak korunabildi). */
+  remove(kind: LossKind): void {
+    this.kinds.delete(kind);
+  }
+
   get size(): number {
     return this.kinds.size + this.extra.length;
   }
@@ -79,6 +84,10 @@ export function lossMessage(kind: LossKind): string {
 /** Kurtarılan taslağın özgün paketi bulunamadı (kaynak deposunda yok): geçiş katmanı olmadan kaydedilir. */
 export const SOURCE_MISSING =
   "Belgenin özgün dosyası kurtarma deposunda bulunamadı. Belge kurtarılan içerikle açıldı; kaydederseniz OfficeHere'in okuyamadığı parçalar (tema, gömülü yazı tipleri, makrolar, desteklenmeyen öğeler) korunamaz.";
+
+/** Opak öğeler (.docx'te korunan desteklenmeyen öğeler) .odt/.rtf/.md'de yer tutucu metne dönüştü. */
+export const OPAQUE_PLACEHOLDERS =
+  "Belgedeki desteklenmeyen öğeler (gömülü nesneler, denetimler, bazı çizimler) bu biçimde saklanamadığı için yerlerine yer tutucu metin yazıldı. Korumak için belgeyi .docx olarak kaydedin.";
 
 /** Makrolu belge makrosuz biçimde kaydedildi. */
 export const MACROS_REMOVED = "Makrolar .docx biçiminde saklanamadığı için bu kayıtta kaldırıldı. Korumak için belgeyi .docm olarak kaydedin.";

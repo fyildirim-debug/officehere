@@ -90,6 +90,8 @@ export function parseRPr(rPr: Element | null, theme: ThemeFonts): RunProps {
   const p: RunProps = {};
   if (!rPr) return p;
   for (const c of kids(rPr)) {
+    // Office uzantıları (w14:shadow, w14:textOutline…) aynı yerel adlı ana öğeler sanılmaz (ek özellik olarak taşınır).
+    if (c.namespaceURI?.startsWith("http://schemas.microsoft.com/office/word/")) continue;
     switch (c.localName) {
       case "b":
         p.bold = onOff(c) ?? undefined;

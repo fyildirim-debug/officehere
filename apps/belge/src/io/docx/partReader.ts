@@ -1,5 +1,11 @@
 // DOCX parça dönüştürücüsü: gövde / üst bilgi / alt bilgi / not içeriğini (paragraflar, koşular,
 // alanlar, çizimler, metin kutuları, tablolar, İçindekiler) ProseMirror JSON'a çevirir.
+//
+// Geçiş katmanı, öğe düzeyi: modelin karşılamadığı öğeler (gömülü nesne, denetim, anlaşılmayan çizim ve
+// mc:AlternateContent, alt belge, içe aktarılan içerik, bilinmeyen blok/satır içi/koşu çocukları) opak düğüm
+// olur (editor/opaque.ts): özgün XML'i, ilişkileri ve kaynak paket kimliğiyle; pPr/rPr'nin okunmayan çocukları
+// paragrafta ve textStyle işaretinde `ooxmlExtra` olarak taşınır. Yazımı partWriter.ts'te.
+import { explicitRelIds } from "@officehere/core/opc";
 import { toLinear } from "../../editor/math/ast";
 import { fromOmml } from "../../editor/math/render";
 import { indexNode, xeNode } from "./indexXml";
@@ -8,13 +14,17 @@ import type { DocSettings } from "../../model/document";
 import { fieldPicture, type TocEntry } from "../../editor/nodes";
 import { pictureOfInstr } from "../../editor/dateFormat";
 import { normalizeDropCap } from "../../editor/dropCap";
+import type { OpaqueAttrs, OpaqueKind, OpaqueRef } from "../../editor/opaque";
 import { attr, attrNum, descendants, kid, kids, path, NS } from "./xml";
 import { parsePPr, parseRPr, stripUndef, type ParaProps, type RunProps } from "./readerStyles";
 import { tableStyleFromId } from "./styleXml";
 import type { ListSig } from "./numbering";
 import type { DocxReader } from "./reader";
 import { readDrawing, readPict } from "./readerDrawing";
+import { CHART_NS } from "./chartXml";
+import { DOC_PREFIXES, OUTPUT_NAMESPACES } from "./partWriter";
 import { extendCommentToWord } from "../common";
+import type { LoadWarnings } from "../warnings";
 
 export type Mark = { type: string; attrs?: Record<string, unknown> };
 
@@ -50,6 +60,261 @@ function dropLetter(n: JSONContent): { node: JSONContent; font: string | null } 
   return { node: { ...n, ...(marks.length ? { marks } : { marks: undefined }) }, font };
 }
 
+/* ------------------------------------------------------------------ */
+/* Opak öğeler ve ek özellikler                                          */
+/* ------------------------------------------------------------------ */
+
+const XMLNS = "http://www.w3.org/2000/xmlns/";
+const PIC_NS = "http://schemas.openxmlformats.org/drawingml/2006/picture";
+/** Yer imleri, izinler, yazım denetimi işaretleri ve özellik öğeleri: içerik değildir, opak olmaz. */
+const MARKERS = new Set([
+  "bookmarkStart", "bookmarkEnd", "commentRangeStart", "commentRangeEnd", "permStart", "permEnd", "proofErr",
+  "moveFromRangeStart", "moveFromRangeEnd", "moveToRangeStart", "moveToRangeEnd",
+  "customXmlInsRangeStart", "customXmlInsRangeEnd", "customXmlDelRangeStart", "customXmlDelRangeEnd",
+  "customXmlMoveFromRangeStart", "customXmlMoveFromRangeEnd", "customXmlMoveToRangeStart", "customXmlMoveToRangeEnd",
+  "pPr", "rPr", "sectPr", "tcPr", "trPr", "tblPr", "tblPrEx", "sdtPr", "sdtEndPr", "customXmlPr", "smartTagPr", "fldData",
+]);
+/** Koşunun okunmayan ama içerik taşımayan çocukları. */
+const RUN_SKIP = new Set(["rPr", "lastRenderedPageBreak", "annotationRef", "separator", "continuationSeparator", "delInstrText", "proofErr"]);
+/** Modelin okuduğu (yazıcının yeniden ürettiği) paragraf özellikleri; geri kalan W öğeleri ek özellik olarak taşınır. */
+const PPR_MODELED = new Set(["pStyle", "keepNext", "keepLines", "pageBreakBefore", "numPr", "suppressLineNumbers", "pBdr", "shd", "tabs", "spacing", "ind", "jc", "outlineLvl", "sectPr", "pPrChange"]);
+/** Modelin okuduğu koşu özellikleri (+ izlenen değişiklik öğeleri). */
+const RPR_MODELED = new Set(["rStyle", "rFonts", "b", "bCs", "i", "iCs", "caps", "smallCaps", "strike", "dstrike", "outline", "shadow", "emboss", "imprint", "vanish", "color", "spacing", "sz", "szCs", "highlight", "u", "shd", "vertAlign", "rPrChange", "ins", "del", "moveFrom", "moveTo"]);
+/** Paragraf işaretinin koşu özelliklerinden atılanlar (izlenen değişiklik; kimlik ve yazar taşır). */
+const MARK_REVISIONS = new Set(["ins", "del", "moveFrom", "moveTo", "rPrChange"]);
+/** Bağlam ad alanı bildirimi gerektiren MCE öznitelikleri (değerlerinde ön ek geçer). */
+const MCE_ATTRS = new Set(["Requires", "Ignorable", "ProcessContent", "MustUnderstand", "PreserveElements", "PreserveAttributes"]);
+/** Bozuk belgede bildirilmemiş ön ekler için okuyucunun yer tutucu ad alanı (xml.ts): opak olarak yazılmaz. */
+const PLACEHOLDER_NS = "urn:officehere:bilinmeyen:";
+/** Tarayıcıda çizilebilen yedek görüntü türleri. */
+const PREVIEWABLE = /^data:image\/(png|jpeg|gif|bmp|webp|svg\+xml)[;,]/;
+
+const escAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;").replace(/\t/g, "&#9;").replace(/\n/g, "&#10;").replace(/\r/g, "&#13;");
+const escText = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+let serializer: XMLSerializer | null = null;
+function serialize(el: Element): string {
+  serializer ??= new XMLSerializer();
+  return serializer.serializeToString(el);
+}
+
+/**
+ * Parça kökünde (DOC_NS) aynı önekle bildirilen ad alanlarındaki öğenin hızlı yazımı (ad alanı bildirimsiz).
+ * Başka ön ek, öneksiz öğe ya da beklenmeyen düğümde null (XMLSerializer'a bırakılır).
+ */
+function quickXml(el: Element): string | null {
+  const p = el.prefix;
+  if (!p || DOC_PREFIXES.get(p) !== el.namespaceURI) return null;
+  let s = `<${p}:${el.localName}`;
+  for (const a of Array.from(el.attributes)) {
+    if (a.prefix === "xmlns" || a.name === "xmlns") continue;
+    if (a.prefix && a.prefix !== "xml" && DOC_PREFIXES.get(a.prefix) !== a.namespaceURI) return null;
+    s += ` ${a.name}="${escAttr(a.value)}"`;
+  }
+  let inner = "";
+  for (let c = el.firstChild; c; c = c.nextSibling) {
+    if (c.nodeType === 1) {
+      const x = quickXml(c as Element);
+      if (x === null) return null;
+      inner += x;
+    } else if (c.nodeType === 3 || c.nodeType === 4) inner += escText(c.nodeValue ?? "");
+  }
+  return inner ? `${s}>${inner}</${p}:${el.localName}>` : `${s}/>`;
+}
+
+/** Ek özellik öğesinin XML'i: kökteki önekle aynı bildirimler atılır (yazıldığı parçanın kökünde var). */
+function extraXml(el: Element): string {
+  const quick = quickXml(el);
+  if (quick !== null) return quick;
+  return serialize(el).replace(/\sxmlns:([\w.-]+)="([^"]*)"/g, (m, p: string, uri: string) => (DOC_PREFIXES.get(p) === uri ? "" : m));
+}
+
+/** pPr/rPr'nin modelde karşılığı olmayan çocukları (W ve w14 ad alanı; sıra korunur). */
+function extrasOf(pr: Element | null, modeled: ReadonlySet<string>, transform?: (el: Element) => Element | null): string | null {
+  if (!pr || pr.namespaceURI !== NS.w) return null;
+  let out = "";
+  for (const c of kids(pr)) {
+    if (c.namespaceURI === NS.w ? modeled.has(c.localName) : c.namespaceURI !== NS.w14) continue;
+    const el = transform ? transform(c) : c;
+    if (el) out += extraXml(el);
+  }
+  return out && !out.includes(PLACEHOLDER_NS) ? out : null;
+}
+
+/** Paragraf işaretinin koşu özellikleri: izlenen değişiklik öğeleri atılır, boş kalırsa yazılmaz. */
+function markRPr(el: Element): Element | null {
+  if (el.localName !== "rPr") return el;
+  if (!el.firstElementChild) return null;
+  if (!kids(el).some((k) => MARK_REVISIONS.has(k.localName))) return el;
+  const clone = el.cloneNode(true) as Element;
+  for (const k of kids(clone)) if (MARK_REVISIONS.has(k.localName)) clone.removeChild(k);
+  return clone.firstElementChild ? clone : null;
+}
+
+/** Öğenin kapsamındaki ad alanı bildirimleri (en yakın geçerli). */
+function scopeOf(el: Element): Map<string, string> {
+  const map = new Map<string, string>();
+  for (let e: Element | null = el; e; e = e.parentElement) {
+    for (const a of Array.from(e.attributes)) if (a.prefix === "xmlns" && !map.has(a.localName)) map.set(a.localName, a.value);
+  }
+  return map;
+}
+
+/** Kapsamdaki mc:Ignorable ad alanları. */
+function ignorableOf(el: Element): Set<string> {
+  const out = new Set<string>();
+  for (let e: Element | null = el; e; e = e.parentElement) {
+    const ig = e.getAttributeNS(NS.mc, "Ignorable");
+    if (!ig) continue;
+    const scope = scopeOf(e);
+    for (const p of ig.split(/\s+/)) if (scope.has(p)) out.add(scope.get(p)!);
+  }
+  return out;
+}
+
+const shapetypeCache = new WeakMap<Document, Map<string, Element>>();
+function shapetypes(doc: Document): Map<string, Element> {
+  let m = shapetypeCache.get(doc);
+  if (!m) {
+    m = new Map();
+    for (const st of descendants(doc.documentElement, "shapetype")) {
+      const id = st.getAttribute("id");
+      if (id && st.namespaceURI === NS.v && !m.has(id)) m.set(id, st);
+    }
+    shapetypeCache.set(doc, m);
+  }
+  return m;
+}
+
+/**
+ * Opak öğenin kendi kendine yeten XML'i: kullanılan (öğe/öznitelik ön ekleri ve MCE değerlerindeki) ad alanları
+ * köke bildirilir, kapsamda yok sayılabilir olanlar köke mc:Ignorable olarak yazılır, başka yerde tanımlanmış
+ * VML şekil türleri (v:shapetype) eklenir. Kök, çıktının bilmediği bir ad alanındaysa mc:AlternateContent ile
+ * sarılır (anlayan okuyucu korur). Yer tutucu ad alanlı (bozuk) öğede null.
+ */
+function opaqueXml(el: Element): string | null {
+  const scope = scopeOf(el);
+  const clone = el.cloneNode(true) as Element;
+  const all = [clone, ...Array.from(clone.getElementsByTagName("*"))];
+  const used = new Set<string>();
+  const ids = new Set<string>();
+  const needTypes: Element[] = [];
+  for (const e of all) {
+    if (e.prefix) used.add(e.prefix);
+    if (e.namespaceURI === NS.v && e.localName === "shapetype" && e.getAttribute("id")) ids.add(e.getAttribute("id")!);
+    for (const a of Array.from(e.attributes)) {
+      if (a.prefix === "xmlns" || a.name === "xmlns") continue;
+      if (a.prefix) used.add(a.prefix);
+      if (a.namespaceURI === NS.mc && MCE_ATTRS.has(a.localName)) for (const tok of a.value.split(/\s+/)) if (tok) used.add(tok.split(":")[0]!);
+    }
+    if (e.namespaceURI === NS.v && e.localName !== "shapetype" && /^#/.test(e.getAttribute("type") ?? "")) needTypes.push(e);
+  }
+  // Başka bir öğede tanımlı şekil türü (Word bir türü belgede bir kez yazar): başvuran şeklin önüne kopyalanır.
+  const types = shapetypes(el.ownerDocument);
+  for (const e of needTypes) {
+    const id = e.getAttribute("type")!.slice(1);
+    const st = !ids.has(id) ? types.get(id) : undefined;
+    if (!st || !e.parentNode) continue;
+    e.parentNode.insertBefore(st.cloneNode(true), e);
+    ids.add(id);
+    for (const s of [st, ...Array.from(st.getElementsByTagName("*"))]) {
+      if (s.prefix) used.add(s.prefix);
+      for (const a of Array.from(s.attributes)) if (a.prefix && a.prefix !== "xmlns") used.add(a.prefix);
+    }
+  }
+  for (const p of used) {
+    const uri = scope.get(p);
+    if (uri && p !== "xml" && !clone.hasAttributeNS(XMLNS, p)) clone.setAttributeNS(XMLNS, `xmlns:${p}`, uri);
+  }
+  // Kapsamda yok sayılabilir ilan edilen ve öğede kullanılan ad alanları.
+  const ign = ignorableOf(el);
+  const prefixes = [...used].filter((p) => scope.has(p) && ign.has(scope.get(p)!));
+  if (prefixes.length) {
+    const mcPrefix = [...scope].find(([, u]) => u === NS.mc)?.[0] ?? "mc";
+    if (!clone.hasAttributeNS(XMLNS, mcPrefix)) clone.setAttributeNS(XMLNS, `xmlns:${mcPrefix}`, NS.mc);
+    const cur = (clone.getAttributeNS(NS.mc, "Ignorable") ?? "").split(/\s+/).filter(Boolean);
+    clone.setAttributeNS(NS.mc, `${mcPrefix}:Ignorable`, [...new Set([...cur, ...prefixes])].join(" "));
+  }
+  let xml = serialize(clone);
+  if (xml.includes(PLACEHOLDER_NS)) return null;
+  if (el.namespaceURI && !OUTPUT_NAMESPACES.has(el.namespaceURI) && el.prefix) {
+    xml = `<mc:AlternateContent xmlns:mc="${NS.mc}" xmlns:${el.prefix}="${escAttr(el.namespaceURI)}"><mc:Choice Requires="${el.prefix}">${xml}</mc:Choice></mc:AlternateContent>`;
+  }
+  return xml;
+}
+
+/** CSS uzunluğu (pt, px, in, cm, mm) → px. */
+function cssPx(style: string, prop: string): number | null {
+  const m = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*(-?[\\d.]+)\\s*(pt|px|in|cm|mm)?`, "i").exec(style);
+  if (!m) return null;
+  const v = parseFloat(m[1]!);
+  const unit = (m[2] ?? "px").toLowerCase(); // yerel-ayar: ascii
+  const f = unit === "pt" ? 4 / 3 : unit === "in" ? 96 : unit === "cm" ? 96 / 2.54 : unit === "mm" ? 96 / 25.4 : 1;
+  return Number.isFinite(v) ? Math.round(v * f) : null;
+}
+
+/** OLE ProgID → okunur tür (marka adı geçmez). */
+function oleKind(progId: string): string {
+  const p = progId.toLowerCase(); // yerel-ayar: ascii
+  if (p.startsWith("excel.")) return "hesap tablosu";
+  if (p.startsWith("word.")) return "belge";
+  if (p.startsWith("powerpoint.")) return "sunu";
+  if (p.includes("equation")) return "denklem";
+  if (p === "package" || p.startsWith("package")) return "ekli dosya";
+  if (p.startsWith("visio.")) return "çizim";
+  if (p.startsWith("acroexch.") || p.includes("pdf")) return "PDF";
+  if (p.startsWith("paint.") || p.startsWith("pbrush")) return "resim";
+  if (p.includes("graph") || p.includes("chart")) return "grafik";
+  return "";
+}
+
+const GRAPHIC_LABEL: [RegExp, string][] = [
+  [/drawingml\/2006\/diagram$/, "Diyagram (SmartArt)"],
+  [/wordprocessingGroup$/, "Çizim grubu"],
+  [/wordprocessingCanvas$/, "Çizim tuvali"],
+  [/wordprocessingShape$/, "Şekil"],
+  [/drawingml\/2006\/chart$|chartex$/, "Grafik"],
+  [/lockedCanvas$/, "Kilitli tuval"],
+  [/ink$/, "Mürekkep çizimi"],
+  [/drawingml\/2006\/picture$/, "Resim"],
+];
+
+/** Opak öğenin türü ve kullanıcıya gösterilen adı. */
+function opaqueLabel(el: Element, rels: Map<string, Rel>): { kind: OpaqueKind; label: string } {
+  const n = el.localName;
+  if (n === "object" || n === "control") {
+    if (n === "control" || descendants(el, "control").length) return { kind: "control", label: "Form denetimi" };
+    const ole = descendants(el, "OLEObject")[0];
+    const k = oleKind(ole?.getAttribute("ProgID") ?? "");
+    const link = ole?.getAttribute("Type") === "Link";
+    return { kind: "ole", label: `${link ? "Bağlantılı" : "Gömülü"} nesne${k ? ` (${k})` : ""}` };
+  }
+  if (n === "drawing" || n === "AlternateContent") {
+    const uri = descendants(el, "graphicData")[0]?.getAttribute("uri") ?? "";
+    const hit = GRAPHIC_LABEL.find(([re]) => re.test(uri));
+    if (hit) return { kind: "drawing", label: hit[1] };
+    if (descendants(el, "OLEObject").length) return { kind: "ole", label: "Gömülü nesne" };
+    return { kind: "drawing", label: "Çizim" };
+  }
+  if (n === "pict") {
+    const hr = Array.from(el.getElementsByTagName("*")).find((e) => e.getAttributeNS(NS.o, "hr") === "t");
+    return hr ? { kind: "hr", label: "Yatay çizgi" } : { kind: "vml", label: "Çizim (VML)" };
+  }
+  if (n === "altChunk") {
+    const rid = el.getAttributeNS(NS.r, "id") ?? attr(el, "id");
+    const ext = /\.([a-z0-9]{1,5})$/i.exec(rid ? (rels.get(rid)?.target ?? "") : "")?.[1];
+    return { kind: "altChunk", label: `İçe aktarılan içerik${ext ? ` (.${ext.toLowerCase()})` : ""}` }; // yerel-ayar: ascii
+  }
+  if (n === "subDoc") return { kind: "subDoc", label: "Alt belge" };
+  if (n === "oMath" || n === "oMathPara") return { kind: "math", label: "Denklem" };
+  if (n === "contentPart") return { kind: "drawing", label: "Mürekkep çizimi" };
+  if (n === "ruby") return { kind: "other", label: "Fonetik kılavuz" };
+  return { kind: "other", label: `${el.prefix ? `${el.prefix}:` : ""}${n}` };
+}
+
+/** Okuma boyunca korunamayan (kaynak paketi olmayan) gömülü nesne uyarısı verilen uyarı kümeleri. */
+const objectLoss = new WeakSet<LoadWarnings>();
+
 /** Sayfa/tarih alanı düğümü; tarih ve saatte \@ biçim resmi korunur (varsayılansa yazılmaz). */
 function pageFieldNode(kw: string, instr: string): JSONContent {
   if (kw !== "DATE" && kw !== "TIME") return { type: "pageField", attrs: { field: kw } };
@@ -79,6 +344,159 @@ export class PartReader {
 
   /** Not metni okunuyor: not stilinin (Dipnot Metni) biçimi doğrudan biçime çevrilmez. */
   noteMode = false;
+
+  /** Opak öğe olarak alınan özgün öğeler. */
+  private captured = new Set<Element>();
+  /** collect() iç içeliği (0: parçanın kökü). */
+  private depth = 0;
+
+  /**
+   * Parçanın sonunda hâlâ bağlanamayan nokta açıklamaları (ardından hiç metin gelmeyen, ör. boş paragraftaki
+   * açıklama başvurusu) son paragrafın son satır içi öğesine, o da yoksa gizli bir yer işareti çapasına bağlanır;
+   * böylece açıklama kaydederken kaybolmaz. Çapa yer işareti ikinci turda yeniden kullanılır (birikmez).
+   */
+  private anchorPoints(items: { node: JSONContent }[]) {
+    const marks = this.pendingPoints.map((id) => ({ type: "comment", attrs: { id } }));
+    for (const id of this.pendingPoints) this.markedComments.add(id);
+    const first = this.pendingPoints[0]!;
+    this.pendingPoints = [];
+    let host = [...items].reverse().find((it) => it.node.type === "paragraph" || it.node.type === "heading")?.node;
+    if (!host) {
+      host = { type: "paragraph" };
+      items.push({ node: host });
+    }
+    const content = host.content ?? [];
+    const last = content[content.length - 1];
+    if (last && last.type !== "text") content[content.length - 1] = { ...last, marks: [...(last.marks ?? []), ...marks] };
+    else content.push({ type: "bookmark", attrs: { name: `_Aciklama_${first}` }, marks });
+    host.content = content;
+  }
+
+  /**
+   * Opak düğüm (blok ya da satır içi). Kurulamazsa null (çağıran bugünkü davranışa döner): bozuk ad alanı,
+   * kaynakta karşılığı olmayan ilişki kimliği ya da özgün paket okunamadığı için iç ilişkilerin taşınamaması.
+   */
+  private opaque(el: Element, level: "block" | "run" | "para"): JSONContent | null {
+    let xml: string | null;
+    try {
+      xml = opaqueXml(el);
+    } catch {
+      return null;
+    }
+    if (!xml) return null;
+    const refs: OpaqueRef[] = [];
+    for (const id of explicitRelIds(xml)) {
+      const rel = this.rels.get(id);
+      // Hedefsiz kimlik yazılırsa yazıcının yeni ilişki kimlikleriyle karışır.
+      if (!rel) return null;
+      refs.push({ id, type: rel.type, external: rel.external, target: rel.external ? rel.target : (this.r.source?.canonicalName(rel.target) ?? rel.target) });
+    }
+    // Kaydederken taşınamayacak (özgün paket okunamadı ya da hedef parça yok) öğe opak olmaz: bugünkü okuma uyarır.
+    if (refs.some((r) => !r.external && !this.r.source?.has(r.target))) return null;
+    const { kind, label } = opaqueLabel(el, this.rels);
+    this.captured.add(el);
+    const attrs: OpaqueAttrs = { xml, refs, src: this.r.kaynak, kind, label, ...this.opaqueView(el), ...(level === "block" ? {} : { level }) };
+    return { type: level === "block" ? "opaqueBlock" : "opaqueInline", attrs };
+  }
+
+  /** Opak öğenin görünümü: tarayıcıda çizilebilen yedek görüntü (VML v:imagedata / a:blip) ve boyutu (px). */
+  private opaqueView(el: Element): { preview: string | null; width: number | null; height: number | null } {
+    const scopes = el.localName === "AlternateContent" ? [kid(el, "Fallback"), kid(el, "Choice")].filter((x): x is Element => !!x) : [el];
+    let preview: string | null = null;
+    for (const s of scopes) {
+      for (const img of [...descendants(s, "imagedata"), ...descendants(s, "blip")]) {
+        const rid = img.getAttributeNS(NS.r, "id") || img.getAttributeNS(NS.r, "embed") || img.getAttributeNS(NS.o, "relid");
+        const target = rid ? this.rels.get(rid)?.target : undefined;
+        const src = target ? this.r.media.get(target) : undefined;
+        if (src && PREVIEWABLE.test(src)) {
+          preview = src;
+          break;
+        }
+      }
+      if (preview) break;
+    }
+    let width: number | null = null;
+    let height: number | null = null;
+    const ext = descendants(el, "extent").find((e) => e.namespaceURI === NS.wp);
+    if (ext) {
+      width = Math.round((attrNum(ext, "cx") ?? 0) / 9525) || null;
+      height = Math.round((attrNum(ext, "cy") ?? 0) / 9525) || null;
+    } else {
+      const shape = Array.from(el.getElementsByTagName("*")).find((e) => e.namespaceURI === NS.v && e.localName !== "shapetype" && /(?:^|;)\s*(width|height)\s*:/.test(e.getAttribute("style") ?? ""));
+      const style = shape?.getAttribute("style") ?? "";
+      width = cssPx(style, "width") || null;
+      height = cssPx(style, "height") || null;
+    }
+    if (el.localName === "object") {
+      width ??= Math.round((attrNum(el, "dxaOrig") ?? 0) / 15) || null;
+      height ??= Math.round((attrNum(el, "dyaOrig") ?? 0) / 15) || null;
+    }
+    return { preview, width, height };
+  }
+
+  /** Opak düğüm; kurulamazsa `legacy` (bugünkü okuma) çalışır. */
+  private opaqueOr(el: Element, level: "run" | "para", push: (n: JSONContent) => void, legacy: () => void) {
+    const node = this.opaque(el, level);
+    if (node) push(node);
+    else legacy();
+  }
+
+  /** Kaydederken korunamayacak gömülü nesne / denetim uyarısı. */
+  private loseObject(detail: string) {
+    this.r.warnings.add("objects", detail);
+    objectLoss.add(this.r.warnings);
+  }
+
+  /**
+   * Gövdedeki bütün gömülü nesneler opak öğe olarak alındıysa okuyucunun "nesneler kaybolur" uyarısı geri alınır
+   * (kaydederken özgün XML ve parçalarıyla korunurlar).
+   */
+  private settleObjectWarning(body: Element) {
+    const w = this.r.warnings;
+    if (!this.r.source || !w.has("objects") || objectLoss.has(w)) return;
+    const inCaptured = (o: Element) => {
+      for (let e: Element | null = o; e && e !== body; e = e.parentElement) if (this.captured.has(e)) return true;
+      return false;
+    };
+    if (descendants(body, "OLEObject").every(inCaptured)) w.remove("objects");
+  }
+
+  /** Çizim modelce okunabiliyor mu (resim, grafik, metin kutusu); değilse opak alınır. */
+  private drawingKnown(d: Element): boolean {
+    const gd = descendants(d, "graphicData")[0];
+    const uri = gd?.getAttribute("uri");
+    const blip = descendants(d, "blip")[0];
+    if (uri === PIC_NS) {
+      const rid = blip ? (blip.getAttributeNS(NS.r, "embed") ?? attr(blip, "embed")) : null;
+      const target = rid ? this.rels.get(rid)?.target : undefined;
+      return !!target && this.r.media.has(target);
+    }
+    if (uri === CHART_NS) {
+      const ref = gd ? descendants(gd, "chart")[0] : undefined;
+      const rid = ref ? (ref.getAttributeNS(NS.r, "id") ?? attr(ref, "id")) : null;
+      const target = rid ? this.rels.get(rid)?.target : undefined;
+      return !!target && this.r.charts.has(target);
+    }
+    if (uri === NS.wps) return !blip && !!descendants(d, "txbxContent")[0];
+    return false;
+  }
+
+  /** VML çizimi modelce okunabiliyor mu (filigran yazısı, resim, metin kutusu). */
+  private pictKnown(pc: Element): boolean {
+    if (descendants(pc, "textpath").some((x) => x.hasAttribute("string"))) return true;
+    const img = descendants(pc, "imagedata")[0];
+    if (img) {
+      const rid = img.getAttributeNS(NS.r, "id") ?? attr(img, "id");
+      const target = rid ? this.rels.get(rid)?.target : undefined;
+      return !!target && this.r.media.has(target);
+    }
+    return !!descendants(pc, "txbxContent")[0];
+  }
+
+  /** VML çiziminde şekil var mı (yalnız şekil türü tanımı ya da boş w:pict içerik sayılmaz). */
+  private static pictEmpty(pc: Element): boolean {
+    return kids(pc).every((k) => k.localName === "shapetype");
+  }
 
   blocks(container: Element): JSONContent[] {
     return this.foldLists(this.collect(container));
@@ -123,10 +541,13 @@ export class PartReader {
             items.push({ node: this.table(c) });
             break;
           case "altChunk":
-          case "subDoc":
-            // Başka biçimde gömülü içerik parçası / alt belge okunamaz.
-            this.r.warnings.add("objects", `w:${c.localName}`);
+          case "subDoc": {
+            // Başka biçimde gömülü içerik parçası / alt belge: opak blok (kaydederken korunur).
+            const node = this.opaque(c, "block");
+            if (node) items.push({ node });
+            else this.loseObject(`w:${c.localName}`);
             break;
+          }
           case "sdt": {
             const pr = kid(c, "sdtPr") ?? c;
             const gallery = attr(descendants(pr, "docPartGallery")[0], "val");
@@ -150,11 +571,27 @@ export class PartReader {
             if (ch) visit(ch);
             break;
           }
+          case "del":
+          case "moveFrom":
+          case "moveTo":
+            break;
+          default: {
+            // Tanınmayan blok öğesi (gövdede denklem, bilinmeyen uzantı…): opak blok.
+            if (MARKERS.has(c.localName)) break;
+            const node = this.opaque(c, "block");
+            if (node) items.push({ node });
+          }
         }
       }
     };
-    visit(container);
+    this.depth++;
+    try {
+      visit(container);
+    } finally {
+      this.depth--;
+    }
     flushDrop();
+    if (!this.depth && this.pendingPoints.length) this.anchorPoints(items);
     // Bağlamsal aralık (w:contextualSpacing): aynı stildeki ardışık paragraflar arasındaki aralık yok sayılır.
     // Modelde karşılığı olmadığından aradaki aralıklar doğrudan sıfırlanır (görünüm ve sayfa düzeni korunur).
     for (let i = 0; i + 1 < items.length; i++) {
@@ -171,6 +608,7 @@ export class PartReader {
   sections(body: Element): { blocks: JSONContent[]; sectPr: Element | null }[] {
     this.sectionEnds = [];
     const items = this.collect(body);
+    this.settleObjectWarning(body);
     const out: { blocks: JSONContent[]; sectPr: Element | null }[] = [];
     let start = 0;
     for (const e of this.sectionEnds) {
@@ -250,6 +688,9 @@ export class PartReader {
     if (direct.keepLines) attrs.keepLines = true;
     if (direct.pageBreakBefore) attrs.pageBreakBefore = true;
     if (direct.suppressLineNumbers) attrs.suppressLineNumbers = true;
+    // Modelin okumadığı paragraf özellikleri (çerçeve, satır bölme, paragraf işaretinin biçimi…) taşınır.
+    const pExtra = extrasOf(pPr, PPR_MODELED, markRPr);
+    if (pExtra) attrs.ooxmlExtra = pExtra;
 
     const extra: JSONContent[] = [];
     const segments: JSONContent[][] = [[]];
@@ -368,6 +809,14 @@ export class PartReader {
           if (ch) this.inline(ch, base, marks, segs, extra);
           break;
         }
+        case "dir":
+        case "bdo":
+          // Yazı yönü kapsayıcıları: içerikleri okunur.
+          this.inline(c, base, marks, segs, extra);
+          break;
+        default:
+          // Paragraf içinde tanınmayan öğe (alt belge, bilinmeyen uzantı…): opak.
+          if (!MARKERS.has(c.localName)) this.opaqueOr(c, "para", (n) => push(marks.length ? { ...n, marks } : n), () => undefined);
       }
     }
   }
@@ -383,6 +832,13 @@ export class PartReader {
     }
     const field = this.fields[this.fields.length - 1];
     let marks = [...outer, ...runMarks(props)];
+    // Modelin okumadığı koşu özellikleri (dil, ölçek, w14 efektleri…) textStyle işaretinde taşınır.
+    const rExtra = extrasOf(rPr, RPR_MODELED);
+    if (rExtra) {
+      const ts = marks.find((m) => m.type === "textStyle");
+      if (ts) marks = marks.map((m) => (m === ts ? { ...m, attrs: { ...m.attrs, ooxmlExtra: rExtra } } : m));
+      else marks.push({ type: "textStyle", attrs: { ooxmlExtra: rExtra } });
+    }
     if (charStyle) marks.push({ type: "charStyle", attrs: { styleId: charStyle } });
     const change = kid(rPr, "rPrChange");
     if (change) marks.push(this.formatChange(change, base));
@@ -494,31 +950,47 @@ export class PartReader {
           break;
         }
         case "drawing":
-          if (!suppress) readDrawing(this, c, push, extra);
+          // Resim, grafik ve metin kutusu modele okunur; şekil, grup, SmartArt, tuval… opak.
+          if (suppress) break;
+          if (this.drawingKnown(c)) readDrawing(this, c, push, extra);
+          else this.opaqueOr(c, "run", push, () => readDrawing(this, c, push, extra));
           break;
         case "object":
-          // Gömülü (OLE) nesne: önizleme resmi okunur, nesnenin kendisi kaydedilmez.
-          if (!suppress) {
-            this.r.warnings.add("objects", "w:object");
-            readPict(this, c, push, extra);
-          }
+          // Gömülü (OLE) nesne / denetim: opak (kaydederken nesnesi ve önizlemesiyle korunur).
+          if (!suppress)
+            this.opaqueOr(c, "run", push, () => {
+              this.loseObject("w:object");
+              readPict(this, c, push, extra);
+            });
           break;
         case "control":
-          this.r.warnings.add("objects", "w:control");
+          if (!suppress) this.opaqueOr(c, "run", push, () => this.loseObject("w:control"));
           break;
         case "pict":
-          if (!suppress) readPict(this, c, push, extra);
+          if (suppress || PartReader.pictEmpty(c)) break;
+          if (this.pictKnown(c)) readPict(this, c, push, extra);
+          else this.opaqueOr(c, "run", push, () => readPict(this, c, push, extra));
           break;
         case "AlternateContent": {
+          if (suppress) break;
           const ch = kid(c, "Choice") ?? kid(c, "Fallback");
           const dr = ch ? descendants(ch, "drawing")[0] : null;
-          if (dr) readDrawing(this, dr, push, extra);
-          else if (ch) {
-            const pc = descendants(ch, "pict")[0];
-            if (pc) readPict(this, pc, push, extra);
-          }
+          const pc = !dr && ch ? descendants(ch, "pict")[0] : undefined;
+          const legacy = () => {
+            if (dr) readDrawing(this, dr, push, extra);
+            else if (pc) readPict(this, pc, push, extra);
+          };
+          // Anlaşılan seçenek (resim, grafik, metin kutusu) okunur; anlaşılmayan bütünüyle opak taşınır.
+          if (dr ? this.drawingKnown(dr) : pc ? this.pictKnown(pc) || PartReader.pictEmpty(pc) : !ch) legacy();
+          else this.opaqueOr(c, "run", push, legacy);
           break;
         }
+        case "pgNum":
+          if (!suppress) push(pageFieldNode("PAGE", "PAGE"));
+          break;
+        default:
+          // Tanınmayan koşu çocuğu (tarih blokları, fonetik kılavuz, mürekkep…): opak.
+          if (!suppress && !RUN_SKIP.has(c.localName)) this.opaqueOr(c, "run", push, () => undefined);
       }
     }
   }

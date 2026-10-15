@@ -2,6 +2,7 @@
 import type { JSONContent } from "@tiptap/core";
 import type { BelgeDocument } from "../../model/document";
 import { fieldNowText } from "../../editor/nodes";
+import { opaquePlaceholder } from "../../editor/opaque";
 import { atomText, isMonoFont, marksToProps, plainBlocks, sectionsOf, textOf, type Mark } from "../common";
 import { CODE_SHADE } from "./reader";
 
@@ -147,7 +148,8 @@ class MdWriter {
       }
       // Markdown'da alan yoktur: tarih/saat o anki değeriyle yazılır, sayfa numarası atlanır.
       if (n.type === "pageField" && n.attrs?.field !== "DATE" && n.attrs?.field !== "TIME") continue;
-      const t = n.type === "pageField" ? fieldNowText(n.attrs?.field, new Date(), n.attrs?.format) : atomText(n);
+      // .docx'e özgü (opak) öğe Markdown'da yazılamaz: yer tutucu metin (kaydederken uyarılır).
+      const t = n.type === "pageField" ? fieldNowText(n.attrs?.field, new Date(), n.attrs?.format) : n.type === "opaqueInline" ? opaquePlaceholder(n.attrs) : atomText(n);
       if (t) {
         setMarks(mdMarks(n.marks), "");
         out += escapeText(t, lineStart());
@@ -210,6 +212,8 @@ class MdWriter {
       case "bibliography":
       case "indexBlock":
         return this.blocks(plainBlocks(n), indent);
+      case "opaqueBlock":
+        return this.inline([{ type: "text", text: opaquePlaceholder(n.attrs) }], indent);
       default:
         return n.content ? this.blocks(n.content, indent) : "";
     }

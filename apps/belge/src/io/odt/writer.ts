@@ -8,6 +8,7 @@ import { samePage } from "../../model/document";
 import type { StyleDef } from "../../model/styles";
 import { fieldNowText, fieldPicture } from "../../editor/nodes";
 import { normalizeDropCap } from "../../editor/dropCap";
+import { opaquePlaceholder } from "../../editor/opaque";
 import { atomText, marksToProps, nodeStyleId, parseDataUrl, plainBlocks, sectionsOf, sniffImage, stylesOf, textOf, type CharProps } from "../common";
 import { cleanText, esc } from "../docx/xml";
 import { ODF_CHAR, ODF_NS, ODF_PARA, StyleBook, XML_DECL, fontDecls, hasContent, metaXml, namedStyles, pageLayout, paraPropsAttrs, type ListLevelDef } from "./writerStyles";
@@ -226,6 +227,9 @@ class OdtWriter {
         const name = String(n.attrs?.name ?? "");
         return name ? `<text:bookmark text:name="${esc(name)}"/>` : "";
       }
+      case "opaqueInline":
+        // .docx'e özgü öğe ODF'de yazılamaz: yer tutucu metin (kaydederken uyarılır).
+        return this.span(odtText(opaquePlaceholder(n.attrs)), p, book);
       default: {
         const t = atomText(n);
         return t ? this.span(odtText(t), p, book) : "";
@@ -330,6 +334,8 @@ class OdtWriter {
       case "bibliography":
       case "indexBlock":
         return this.blocks(plainBlocks(n), book);
+      case "opaqueBlock":
+        return this.paragraph({ type: "paragraph", content: [{ type: "text", text: opaquePlaceholder(n.attrs) }] }, book, { inList });
       default:
         return n.content ? this.blocks(n.content, book) : "";
     }

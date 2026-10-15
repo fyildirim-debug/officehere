@@ -275,7 +275,8 @@ describe("açılış uyarıları", () => {
   it("DOCX: gömülü nesne, makro ve okunamayan şekil uyarılır", async () => {
     const zip = await JSZip.loadAsync(fixture("lo-ornek.docx"));
     const xml = await zip.file("word/document.xml")!.async("string");
-    zip.file("word/document.xml", xml.replace("<w:body>", '<w:body><w:p><w:r><w:object><o:OLEObject xmlns:o="urn:schemas-microsoft-com:office:office" ProgID="Paket"/></w:object></w:r></w:p>'));
+    // Nesnenin ilişkisi pakette yok: korunamaz (korunabilen nesne opak öğe olur ve uyarılmaz: opak-docx.test.ts).
+    zip.file("word/document.xml", xml.replace("<w:body>", '<w:body><w:p><w:r><w:object><o:OLEObject xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ProgID="Paket" r:id="rId999"/></w:object></w:r></w:p>'));
     zip.file("word/vbaProject.bin", new Uint8Array([1, 2, 3]));
     const r = await openDocument("nesne.docm", buf(await zip.generateAsync({ type: "uint8array" })));
     expect(r.warnings).toEqual(expect.arrayContaining([lossMessage("objects"), lossMessage("macros")]));
