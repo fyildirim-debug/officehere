@@ -13,6 +13,7 @@ import { SaveService } from "./saveService";
 import { restorableSession, writeSession, type SessionDoc } from "./session";
 import { desktopSettings, setDesktopSetting } from "./settings";
 import { initSpellcheck } from "./spellcheck";
+import { initTasks, startWindow } from "./tasks";
 import { initUpdates } from "./updates";
 import { planFor, rememberBounds } from "./windowState";
 
@@ -762,7 +763,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", (_e, argv) => {
     const files = filesFromArgv(argv);
     if (files.length) files.forEach(openPath);
-    else createWindow("baslangic");
+    else createWindow(startWindow(argv));
   });
 
   app.on("open-file", (e, filePath) => {
@@ -781,12 +782,13 @@ if (!app.requestSingleInstanceLock()) {
     log.write("bilgi", "ana", `OfficeHere ${app.getVersion()} başlatıldı · ${process.platform} ${os.release()} ${process.arch} · Electron ${process.versions.electron}`);
     if (process.platform === "win32") app.setAppUserModelId("com.officehere.suite");
     buildMenu();
+    initTasks((kind) => createWindow(kind));
     registerIpc();
     initUpdates();
     void backups.prune().catch(() => 0);
     const files = [...filesFromArgv(process.argv), ...pendingPaths];
     if (files.length) files.forEach(openPath);
-    else if (!restoreSession()) createWindow("baslangic");
+    else if (startWindow(process.argv) !== "baslangic" || !restoreSession()) createWindow(startWindow(process.argv));
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow("baslangic");
     });
