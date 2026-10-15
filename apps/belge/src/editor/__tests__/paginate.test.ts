@@ -166,6 +166,13 @@ function run(doc: Doc, prev?: FlowCache | null, touched: number[] = []): FlowRes
 }
 
 const out = (r: FlowResult) => ({ breaks: r.breaks, styles: r.styles, info: r.info });
+/**
+ * Beklenen sonuçtaki sayılar 1e-6 duyarlılıkla karşılaştırılır: artımlı çalışma önceki sonucu eski kaydırmadan
+ * (near() ile kabul edilen eşleşme) sürdürdüğü için toplama sırası son basamakta fark yaratabilir (ör. 340.3000000000011
+ * ile 340.3000000000002). Konumlar ve sayılar tam sayı olduğundan yine birebir karşılaştırılmış olur.
+ */
+const yakin = (v: unknown): unknown =>
+  typeof v === "number" ? expect.closeTo(v, 6) : Array.isArray(v) ? v.map(yakin) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, yakin(x)])) : v;
 
 /* ------------------------------------------------------------------ */
 /* Belge üreticileri                                                     */
@@ -240,7 +247,7 @@ describe("sayfalama düzen birimi", () => {
     // Satır sayısı değişmeden son paragrafa yazma: yalnız düğüm kimliği değişir.
     const typed = replaceBlock(doc, 0, last, { ...blocks[last], key: {} });
     const inc = run(typed, full.cache);
-    expect(out(inc)).toEqual(out(run(typed)));
+    expect(out(inc)).toEqual(yakin(out(run(typed))));
     expect(inc.stats.incremental).toBe(true);
     const lastPage = full.info.pageCount - 1;
     expect(inc.cache.unitPage[inc.stats.from]).toBeGreaterThanOrEqual(lastPage - 1);
@@ -253,7 +260,7 @@ describe("sayfalama düzen birimi", () => {
     const grown = replaceBlock(doc, 0, 2, { ...blocks[2], key: {}, lines: [...blocks[2].lines, 20] });
     const ref = run(grown);
     const inc = run(grown, full.cache);
-    expect(out(inc)).toEqual(out(ref));
+    expect(out(inc)).toEqual(yakin(out(ref)));
     expect(inc.stats.from).toBe(0);
     expect(inc.stats.to).toBeLessThan(inc.n);
     // Kesmelerin kayması bir yerde durur: hesaplanan bölüm tüm belgeden çok daha kısa, ölçüm de az.
@@ -268,7 +275,7 @@ describe("sayfalama düzen birimi", () => {
     // Aynı uzunlukta (aynı yükseklikte) başka kimlikli dipnot: dipnot alanı aynı, liste farklı.
     const swapped = replaceBlock(withNote, 0, 3, { ...blocks[3], key: {}, notes: [{ id: "b", text: "abcd" }] });
     const inc = run(swapped, before.cache);
-    expect(out(inc)).toEqual(out(run(swapped)));
+    expect(out(inc)).toEqual(yakin(out(run(swapped))));
     expect(inc.info.footnotes.flat()).toEqual(["b"]);
     expect(inc.stats.to).toBeLessThan(inc.n);
   });
@@ -279,7 +286,7 @@ describe("sayfalama düzen birimi", () => {
     const land: Doc = { secs: doc.secs.map((s) => ({ ...s, land: true })) };
     const inc = run(land, full.cache);
     expect(inc.stats.incremental).toBe(false);
-    expect(out(inc)).toEqual(out(run(land)));
+    expect(out(inc)).toEqual(yakin(out(run(land))));
   });
 });
 
@@ -413,7 +420,7 @@ describe("artımlı sayfalama = tam sayfalama (rastgele düzenleme dizileri)", (
           doc = applyEdit(doc, e);
           const inc = run(doc, cache, touched);
           const full = run(doc);
-          expect(out(inc)).toEqual(out(full));
+          expect(out(inc)).toEqual(yakin(out(full)));
           seen.steps++;
           if (inc.stats.from > 0) seen.resumed++;
           if (inc.stats.to < inc.n) seen.spliced++;
@@ -436,7 +443,7 @@ describe("artımlı sayfalama = tam sayfalama (rastgele düzenleme dizileri)", (
         for (const e of edits) {
           doc = applyEdit(doc, e);
           const inc = run(doc, cache);
-          expect(out(inc)).toEqual(out(run(doc)));
+          expect(out(inc)).toEqual(yakin(out(run(doc))));
           seen.steps++;
           if (inc.stats.to - inc.stats.from < inc.n / 4) seen.small++;
           cache = inc.cache;
