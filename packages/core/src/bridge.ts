@@ -235,6 +235,8 @@ export interface OfficehereNative {
   spellcheck?: SpellcheckApi;
   /** İnternetten gelen dosyaları salt okunur açma (görüntüleyici kipi). */
   viewer?: ViewerApi;
+  /** PDF'i ayrı görüntüleyici penceresinde açar; yol verilmezse dosya sorar. Açıldıysa true. */
+  openPdf?(path?: string): Promise<boolean>;
 }
 
 declare global {

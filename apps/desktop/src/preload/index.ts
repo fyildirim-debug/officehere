@@ -93,6 +93,7 @@ contextBridge.exposeInMainWorld("officehereNative", {
     check: (path: string) => ipcRenderer.invoke("oh:viewer-check", path),
     allowEditing: (path: string) => ipcRenderer.invoke("oh:viewer-allow", path),
   },
+  openPdf: (path?: string) => ipcRenderer.invoke("oh:open-pdf", typeof path === "string" ? path : undefined),
   spellcheck: {
     getState: () => ipcRenderer.invoke("oh:spellcheck-get"),
     setDownload: (on: boolean) => ipcRenderer.invoke("oh:spellcheck-set", on === true),

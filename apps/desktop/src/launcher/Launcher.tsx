@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bug20Regular, Bug24Regular, FolderOpen24Regular, Home20Regular, DocumentAdd20Regular, FolderOpen20Regular, Settings20Regular } from "@fluentui/react-icons";
+import { Bug20Regular, Bug24Regular, DocumentPdf24Regular, FolderOpen24Regular, Home20Regular, DocumentAdd20Regular, FolderOpen20Regular, Settings20Regular } from "@fluentui/react-icons";
 import { getNative, getRecentFiles, openFile, type AppKind, type DesktopSettings, type RecentFile } from "@officehere/core";
 import { ALL_EXTENSIONS, FORMAT_GROUPS, appForFileName } from "../shared/formats";
 import {
@@ -133,8 +133,10 @@ export function Launcher() {
   }, []);
 
   const browse = async () => {
-    const f = await openFile([{ name: "Tüm desteklenen dosyalar", extensions: ALL_EXTENSIONS }, ...FORMAT_GROUPS.map(({ name, extensions }) => ({ name, extensions }))]);
+    const pdf = native?.openPdf ? [{ name: "PDF belgeleri (yalnız görüntüleme)", extensions: ["pdf"] }] : [];
+    const f = await openFile([{ name: "Tüm desteklenen dosyalar", extensions: ALL_EXTENSIONS }, ...FORMAT_GROUPS.map(({ name, extensions }) => ({ name, extensions })), ...pdf]);
     if (!f) return;
+    if (f.path && /\.pdf$/i.test(f.name) && native?.openPdf) return void native.openPdf(f.path);
     const app = appForFileName(f.name);
     if (app && f.path) launch(app, f.path);
     else if (app) launch(app);
@@ -181,6 +183,9 @@ export function Launcher() {
       <>
         <BackstageHeading>Aç</BackstageHeading>
         <BackstageAction icon={<FolderOpen24Regular />} title="Gözat" description="Belge, çalışma kitabı ya da sunu açın" onClick={browse} />
+        {native?.openPdf && (
+          <BackstageAction icon={<DocumentPdf24Regular />} title="PDF aç" description="PDF dosyasını ayrı pencerede görüntüleyin: arayın, yakınlaştırın, yazdırın" onClick={() => void native.openPdf?.()} />
+        )}
         <BackstageSubheading>Son Kullanılanlar</BackstageSubheading>
         <RecentFileList files={recent} onOpen={(f) => launch(f.app, f.path)} />
       </>

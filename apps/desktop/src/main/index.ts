@@ -8,6 +8,7 @@ import { BackupStore } from "./backups";
 import { saveErrorMessage, saveErrorReason } from "./errors";
 import { internetSource, nodeOriginDeps } from "./fileOrigin";
 import { describePath, LocalLog, type LogLevel } from "./log";
+import { initPdfViewer, isPdfPath, openPdfWindow, pickAndOpenPdf } from "./pdfViewer";
 import { addRecent, pinRecent, readRecent, recentStatus, removeRecent, type RecentFile } from "./recent";
 import { errorCode, pendingWrites, queueKey, hasPendingWrites } from "./safeWrite";
 import { SaveService } from "./saveService";
@@ -439,8 +440,13 @@ function openBugReport() {
   createWindow("baslangic", undefined, { "hata-bildir": "1" });
 }
 
-/** Bir dosyayı uygun uygulamanın yeni penceresinde açar (zaten açıksa o pencere öne gelir). */
+/** Bir dosyayı uygun uygulamanın yeni penceresinde açar (zaten açıksa o pencere öne gelir); PDF görüntüleyicide. */
 function openPath(filePath: string) {
+  if (isPdfPath(filePath)) {
+    // Açılamayan PDF (bozuk, bulunamadı) tek dosyaysa uygulama penceresiz kalmasın.
+    void openPdfWindow(filePath).then((w) => w || BrowserWindow.getAllWindows().length > 0 || createWindow("baslangic"));
+    return;
+  }
   const kind = appForPath(filePath);
   if (!kind) return;
   createWindow(kind, filePath);
@@ -455,7 +461,7 @@ function restoreSession(): boolean {
 }
 
 function filesFromArgv(argv: string[]): string[] {
-  return argv.slice(app.isPackaged ? 1 : 2).filter((a) => !a.startsWith("-") && isSupportedFile(a) && existsSync(a)).map((a) => path.resolve(a));
+  return argv.slice(app.isPackaged ? 1 : 2).filter((a) => !a.startsWith("-") && (isSupportedFile(a) || isPdfPath(a)) && existsSync(a)).map((a) => path.resolve(a));
 }
 
 function senderState(e: IpcMainInvokeEvent | Electron.IpcMainEvent) {
@@ -615,6 +621,12 @@ function registerIpc() {
   });
   ipcMain.handle("oh:viewer-allow", (_e, filePath: unknown) => {
     if (validPath(filePath)) editingAllowed.add(queueKey(filePath));
+  });
+
+  // PDF görüntüleme: yol verilmezse dosya sorulur.
+  ipcMain.handle("oh:open-pdf", async (e, filePath?: unknown) => {
+    if (filePath === undefined || filePath === null) return pickAndOpenPdf(senderState(e).win);
+    return validPath(filePath) && isPdfPath(filePath) ? !!(await openPdfWindow(filePath)) : false;
   });
 
   ipcMain.on("oh:set-document-state", (e, s: { title: string; dirty: boolean; path?: string }) => {
@@ -853,6 +865,7 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform === "win32") app.setAppUserModelId("com.officehere.suite");
     buildMenu();
     initTasks((kind) => createWindow(kind));
+    initPdfViewer({ icon: iconPath(), warn: (message) => log.write("uyari", "pdf", message) });
     registerIpc();
     initUpdates();
     void backups.prune().catch(() => 0);
