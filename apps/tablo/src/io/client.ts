@@ -15,7 +15,7 @@ import { FormatError } from "./bookUtil";
 import { decodeText, detectDelimiter } from "./csv";
 import { openBook, writeBook, type OpenedBook, type SaveFormat } from "./formats";
 import type { IoHandlers, ReadBookResult, ReadOnMain } from "./ioHandlers";
-import { adoptSource, type XlsxWriteReport } from "./xlsx";
+import { adoptSource, storedXlsxWriter, type XlsxWriteReport } from "./xlsx";
 
 function ioClient() {
   return createIoWorker<IoHandlers>(
@@ -115,6 +115,9 @@ export interface WriteIoOptions {
  * .xlsx/.xlsm'de korunamayan öğeler.
  */
 export async function writeBookIo(wb: WorkbookModel, sheet: SheetModel, format: SaveFormat, delimiter?: string, report?: XlsxWriteReport, opts: WriteIoOptions = {}): Promise<Uint8Array<ArrayBuffer> | string> {
+  // Eski .xlsx yazıcısı yedeği (localStorage OH_XLSX_YAZICI=eski, geçiş dönemi): Worker bu ayarı
+  // göremez, kitap ana iş parçacığında yazılır
+  if ((format === "xlsx" || format === "xlsm") && storedXlsxWriter() === "eski") return writeBook(wb, sheet, format, delimiter, report);
   const ir = await snapshotIr(wb, opts.version);
   const src = getSource(wb.kaynak);
   try {

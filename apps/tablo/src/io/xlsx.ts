@@ -686,15 +686,18 @@ export function xlsxWriterChoice(): "eski" | "yeni" | "" {
   } catch {
     v = undefined;
   }
-  if (!v) {
-    try {
-      v = (globalThis as { localStorage?: Storage }).localStorage?.getItem("OH_XLSX_YAZICI");
-    } catch {
-      v = undefined;
-    }
-  }
+  if (!v) v = storedXlsxWriter();
   if (!v) v = import.meta.env?.VITE_OH_XLSX_YAZICI as string | undefined;
   return v === "eski" || v === "yeni" ? v : "";
+}
+
+/** Tarayıcıda localStorage "OH_XLSX_YAZICI" (yalnız ana iş parçacığında; Worker'da yok). */
+export function storedXlsxWriter(): string | undefined {
+  try {
+    return (globalThis as { localStorage?: Storage }).localStorage?.getItem("OH_XLSX_YAZICI") ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function writeXlsx(wb: WorkbookModel, opts: XlsxWriteOptions = {}): Promise<Uint8Array<ArrayBuffer>> {

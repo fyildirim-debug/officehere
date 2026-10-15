@@ -34,6 +34,7 @@
     "derlem:lo": "node scripts/derlem/lo.mjs",
     "derlem:opc": "node scripts/derlem/opc.mjs",
     "derlem:xsd": "python3 scripts/derlem/xsd.py",
+    "derlem:fark": "node scripts/derlem/xlsx_fark.mjs",
     "derlem:temel": "node scripts/derlem/temel.mjs --calistir",
     "derlem:pdfa": "node scripts/derlem/verapdf.mjs",
     "bulanik": "node scripts/bulanik/calistir.mjs"

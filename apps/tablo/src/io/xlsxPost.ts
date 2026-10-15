@@ -1,9 +1,10 @@
 /**
- * exceljs çıktısının son işlenmesi. Çalışma sayfası ve çalışma kitabı
- * XML'ine eklenen tüm öğeler (çizim, sayfa sonları, uzantılar, özet tablo
- * önbellekleri, tanımlı adlar, koruma…) XmlPart üzerinden yerleştirilir ve
- * parçalar yazılırken şemadaki sıraya dizilir (exceljs'in kendi yazdığı
- * öğeler de: ör. legacyDrawing'i extLst'ten sonra yazar).
+ * .xlsx paketinin son işlenmesi (kendi yazıcımızın çerçeveleri ve eski exceljs
+ * yazıcısının çıktısı). Çalışma sayfası ve çalışma kitabı XML'ine eklenen tüm
+ * öğeler (çizim, sayfa sonları, uzantılar, özet tablo önbellekleri, tanımlı
+ * adlar, koruma…) XmlPart üzerinden yerleştirilir ve parçalar yazılırken
+ * şemadaki sıraya dizilir (exceljs'in kendi yazdığı öğeler de: ör.
+ * legacyDrawing'i extLst'ten sonra yazar).
  */
 import JSZip from "jszip";
 import { colToName } from "@officehere/formula";

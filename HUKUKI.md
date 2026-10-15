@@ -19,9 +19,10 @@ sınırlar içinde geliştirildiğini ve katkıcıların uyması gereken kuralla
 ## Dosya biçimleri
 
 - Okuyucu/yazıcıların büyük bölümü projenin kendi kodudur. İstisnalar açıkça
-  şunlardır: **XLSX** okuma/yazma **ExcelJS** (MIT) üzerine kuruludur (ExcelJS'in
-  desteklemediği grafik, filtre, ad ve uzantı parçaları kendi kodumuzla okunup
-  yazılır); Belge, ayrıştıramadığı bir **DOCX** dosyasında yedek dönüşüm için
+  şunlardır: **XLSX** okuma **ExcelJS** (MIT) üzerine kuruludur (ExcelJS'in
+  desteklemediği grafik, filtre, ad ve uzantı parçaları kendi kodumuzla okunur;
+  `.xlsx` yazıcısı projenin kendi kodudur, geçiş döneminde eski ExcelJS yazıcısı
+  yedek olarak seçilebilir); Belge, ayrıştıramadığı bir **DOCX** dosyasında yedek dönüşüm için
   **mammoth** (BSD-2-Clause) kullanır; ZIP paketleri **JSZip** (MIT) ile açılır.
 - `.docx`, `.xlsx`, `.pptx` desteği **Office Open XML** standardına (ECMA-376 /
   ISO/IEC 29500) dayanır. Bu belirtimler ve Microsoft'un uzantı belirtimleri
@@ -158,7 +159,7 @@ bileşen pakete girerse derleme durur. Başlıca bağımlılıklar:
 | React | Arayüz | MIT |
 | Electron | Masaüstü kabuğu | MIT (Chromium: BSD-3-Clause ve diğerleri) |
 | Tiptap, ProseMirror | Belge editörü | MIT |
-| ExcelJS | XLSX okuma/yazma | MIT |
+| ExcelJS | XLSX okuma (yazmada geçiş dönemi yedeği) | MIT |
 | JSZip | OOXML paketleri | MIT (MIT/GPLv3 çift lisanstan MIT seçilir) |
 | pako (JSZip içinde) | ZIP sıkıştırma | MIT ve Zlib |
 | mammoth | DOCX içe aktarma yedeği | BSD-2-Clause |

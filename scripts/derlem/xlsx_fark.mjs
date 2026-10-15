@@ -471,7 +471,8 @@ if (A.lo) {
     } catch (e) {
       lo = { hata: String(e?.message ?? e) };
     } finally {
-      spawnSync("python3", ["-c", `${dene.replace(/\n[^\n]*$/, "")}\nc=l.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver",l).resolve("uno:socket,host=127.0.0.1,port=${port};urp;StarOffice.ComponentContext")\ntry:\n  c.ServiceManager.createInstanceWithContext("com.sun.star.frame.Desktop",c).terminate()\nexcept Exception:\n  pass`], { stdio: "ignore", timeout: 20000 });
+      const kapat = `import uno\nl=uno.getComponentContext()\nc=l.ServiceManager.createInstanceWithContext("com.sun.star.bridge.UnoUrlResolver",l).resolve("uno:socket,host=127.0.0.1,port=${port};urp;StarOffice.ComponentContext")\ntry:\n  c.ServiceManager.createInstanceWithContext("com.sun.star.frame.Desktop",c).terminate()\nexcept Exception:\n  pass`;
+      spawnSync("python3", ["-c", kapat], { stdio: "ignore", timeout: 20000 });
       try {
         process.kill(-proc.pid, "SIGKILL");
       } catch {
