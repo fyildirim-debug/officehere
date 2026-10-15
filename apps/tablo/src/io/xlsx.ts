@@ -1,5 +1,6 @@
 /**
- * XLSX okuma/yazma (exceljs, MIT). Değerler, formüller (önbellek sonuçlarıyla),
+ * XLSX okuma (exceljs, MIT) ve yazma (kendi yazıcımız: xlsxWrite/; geçiş döneminde eski exceljs
+ * yazıcısı OH_XLSX_YAZICI=eski ile seçilebilir). Değerler, formüller (önbellek sonuçlarıyla),
  * stiller, sayı biçimleri, birleştirmeler, boyutlar, gizli satır/sütunlar,
  * bölmeleri dondurma, otomatik filtre, notlar, köprüler, koşullu biçimlendirme,
  * veri doğrulama, adlandırılmış aralıklar, tablolar, resimler ve grafikler.
@@ -9,7 +10,7 @@ import { readPageBreaksFromData } from "./xlsxBreaks";
 import { addr, cellKey, colToName, errorFromCode, formatRange, isError, nameToCol, parseRangeAddress, resolveFunctionName, stripFunctionPrefix, type BulkLoader, type Scalar } from "@officehere/formula";
 import { MAX_COLS, MAX_ROWS } from "../model/rect";
 import { widthCharsToPx, widthPxToChars, ptToPx, pxToPt } from "../model/axis";
-import type { PageSetup, Rect, ValidationRule } from "../model/types";
+import type { Rect, ValidationRule } from "../model/types";
 import { WorkbookModel, type SheetModel } from "../model/workbook";
 import { ColorResolver, fromXStyle, rawNumberFormats, toXStyle } from "./xlsxStyles";
 import { readCharts } from "./xlsxCharts";
@@ -36,6 +37,10 @@ import { parseThemeXml } from "../model/theme";
 import { emptyPassthrough } from "../model/passthrough";
 import { sheetPaths, unescapeXml } from "./ooxmlZip";
 import { activateTheme } from "../model/themeRuntime";
+import { hfToFile, PAPER, PAPER_ID, stripHF } from "./xlsxWrite/pageSetup";
+import { writeXlsxPackage } from "./xlsxWrite/workbook";
+
+export { hfToFile, stripHF };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -44,8 +49,6 @@ async function loadExcelJS(): Promise<any> {
   return mod.default ?? mod;
 }
 
-const PAPER: Record<number, PageSetup["paper"]> = { 1: "Letter", 5: "Legal", 8: "A3", 9: "A4", 11: "A5" };
-const PAPER_ID: Record<string, number> = { Letter: 1, Legal: 5, A3: 8, A4: 9, A5: 11 };
 
 
 function rectsFromSqref(s: string): Rect[] {
@@ -603,27 +606,6 @@ function readSheet(wb: WorkbookModel, sheet: SheetModel, ws: any, cr: ColorResol
   }
 }
 
-/** Üst/alt bilgi kodları: dosya (&P, &N, &A, &F, &D) ↔ arayüz (&[Sayfa] …). */
-const HF_CODES: [string, string][] = [
-  ["&P", "&[Sayfa]"],
-  ["&N", "&[Sayfalar]"],
-  ["&A", "&[Sekme]"],
-  ["&F", "&[Dosya]"],
-  ["&D", "&[Tarih]"],
-];
-
-export function stripHF(s: string): string {
-  let t = s.replace(/&[LCR]/g, "").replace(/&"[^"]*"/g, "").replace(/&\d+/g, "");
-  for (const [file, ui] of HF_CODES) t = t.split(file).join(ui);
-  return t.replace(/&(?!\[)[A-Z]/g, "").replace(/&&/g, "&").trim();
-}
-
-export function hfToFile(s: string): string {
-  let t = s.replace(/&(?!\[)/g, "&&");
-  for (const [file, ui] of HF_CODES) t = t.split(ui).join(file);
-  return "&C" + t;
-}
-
 function bytesToBase64(bytes: Uint8Array): string {
   let s = "";
   for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
@@ -685,9 +667,51 @@ export interface XlsxWriteOptions {
   /** Makrolu çalışma kitabı (.xlsm): makro projesi taşınır, ana parça türü makrolu olur. */
   macro?: boolean;
   report?: XlsxWriteReport;
+  /** Yeni yazıcının evre süreleri (ms; ölçüm betikleri için). */
+  sureler?: Record<string, number>;
+}
+
+/**
+ * Yazıcı seçimi (geçiş dönemi, iki sürüm): "eski" exceljs yazıcısı; "yeni" kendi yazıcımız (hata
+ * olursa eski yola düşmez); boş: kendi yazıcımız, beklenmeyen hatada eski yazıcıyla yeniden denenir.
+ * Kaynaklar sırasıyla: OH_XLSX_YAZICI ortam değişkeni (Node, derlem betikleri), tarayıcıda
+ * localStorage "OH_XLSX_YAZICI" (ana iş parçacığında), derleme bayrağı VITE_OH_XLSX_YAZICI (Worker dahil).
+ */
+export function xlsxWriterChoice(): "eski" | "yeni" | "" {
+  let v: string | null | undefined;
+  try {
+    // Dolaylı erişim: paketleyici "process.env"i derlemede sabitle değiştirmesin (çalışma anında okunur)
+    const proc = Reflect.get(globalThis, "process") as { env?: Record<string, string | undefined> } | undefined;
+    v = proc?.env?.OH_XLSX_YAZICI;
+  } catch {
+    v = undefined;
+  }
+  if (!v) {
+    try {
+      v = (globalThis as { localStorage?: Storage }).localStorage?.getItem("OH_XLSX_YAZICI");
+    } catch {
+      v = undefined;
+    }
+  }
+  if (!v) v = import.meta.env?.VITE_OH_XLSX_YAZICI as string | undefined;
+  return v === "eski" || v === "yeni" ? v : "";
 }
 
 export async function writeXlsx(wb: WorkbookModel, opts: XlsxWriteOptions = {}): Promise<Uint8Array<ArrayBuffer>> {
+  const choice = xlsxWriterChoice();
+  if (choice !== "eski") {
+    try {
+      return await writeXlsxPackage(wb, opts);
+    } catch (e) {
+      if (choice === "yeni" || import.meta.env?.MODE === "test") throw e;
+      console.warn("[tablo] .xlsx yazıcısı başarısız oldu; eski yazıcıyla yeniden deneniyor", e);
+    }
+  }
+  return writeXlsxLegacy(wb, opts);
+}
+
+/** Eski yazıcı (exceljs + sonradan işlem); OH_XLSX_YAZICI=eski ile ya da yeni yazıcı hata verince. */
+async function writeXlsxLegacy(wb: WorkbookModel, opts: XlsxWriteOptions = {}): Promise<Uint8Array<ArrayBuffer>> {
   const ExcelJS = await loadExcelJS();
   const x = new ExcelJS.Workbook();
   x.creator = wb.props.author ?? "OfficeHere Tablo";

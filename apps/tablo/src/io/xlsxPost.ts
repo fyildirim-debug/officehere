@@ -43,12 +43,18 @@ export class PackageParts {
     return p;
   }
 
+  /** Hazır parçayı önbelleğe koyar (yazıcının kurduğu sayfa iskeleti: yeniden ayrıştırılmaz). */
+  seed(path: string, part: XmlPart): void {
+    this.cache.set(path, part);
+  }
+
   workbook(): Promise<XmlPart | null> {
     return this.part("xl/workbook.xml", WORKBOOK_ORDER);
   }
 
-  flush(): void {
-    for (const [path, p] of this.cache) this.zip.file(path, p.toString());
+  /** Önbellekteki parçaları pakete yazar; `skip` verilen parçalar (yazıcının kendisi akıtacakları) atlanır. */
+  flush(skip?: (path: string) => boolean): void {
+    for (const [path, p] of this.cache) if (!skip?.(path)) this.zip.file(path, p.toString());
   }
 }
 
@@ -618,16 +624,27 @@ async function restoreWorkbook(zip: JSZip, wb: WorkbookModel, parts: PackagePart
 
 const unescapeXmlAttr = (s: string) => s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 
-/** exceljs çıktısını son işler: satırlar, çizimler, uzantılar, sayfa sonları, adlar ve şema sırası. */
-export async function postProcess(bytes: Uint8Array, wb: WorkbookModel, ctx?: PassthroughContext): Promise<Uint8Array> {
-  const zip = await JSZip.loadAsync(bytes);
-  const paths = await sheetPaths(zip);
-  const parts = new PackageParts(zip);
+/** Sonradan işlem seçenekleri. */
+export interface PostOptions {
+  /**
+   * Hücre verisi yazıcının kendisinde (yeni yazıcı): satırlar, veri tabloları, dinamik dizi üst verisi
+   * ve onay kutulu biçimler sayfa akıtılırken yazılır; sheetData'ya dokunulmaz.
+   */
+  ownSheetData?: boolean;
+}
+
+/**
+ * Paketi (JSZip; sayfalar PackageParts önbelleğinde) son işler: birleştirmeler, veri çubukları,
+ * grafikler, özet tablolar, uzantılar, sayfa sonları, adlar, geçiş katmanı ve tema. Parçalar
+ * önbellekte kalır; yazmak çağıranın işidir (PackageParts.flush).
+ */
+export async function postProcessParts(zip: JSZip, wb: WorkbookModel, paths: Map<string, string>, parts: PackageParts, ctx?: PassthroughContext, opts: PostOptions = {}): Promise<void> {
+  const own = !!opts.ownSheetData;
   for (const sheet of wb.sheets) {
     const path = paths.get(sheet.name);
     const part = path ? await parts.part(path) : null;
     if (!part) continue;
-    fixRows(part, sheet);
+    if (!own) fixRows(part, sheet);
     fixDataBars(part);
     writeMerges(part, sheet);
   }
@@ -638,16 +655,26 @@ export async function postProcess(bytes: Uint8Array, wb: WorkbookModel, ctx?: Pa
   await writeX14Sparklines(wb, paths, parts);
   await writePageBreaksInto(wb, paths, parts);
   await writeSheetExtras(wb, paths, parts);
-  await writeDataTablesInto(wb, paths, parts);
-  await writeDynamicArrayMeta(zip, wb, paths, parts);
-  await writeCheckboxesInto(zip, wb, paths, parts);
+  if (!own) {
+    await writeDataTablesInto(wb, paths, parts);
+    await writeDynamicArrayMeta(zip, wb, paths, parts);
+    await writeCheckboxesInto(zip, wb, paths, parts);
+  }
   await writeDefinedNamesInto(wb, parts);
   await writeWorkbookExtras(wb, parts);
   if (ctx) await restorePassthrough(zip, wb, paths, parts, ctx);
-  parts.flush();
   // Çalışma kitabı teması (renk ve yazı tipi şemaları)
   const themeFile = zip.file("xl/theme/theme1.xml");
   if (themeFile) zip.file("xl/theme/theme1.xml", patchThemeXml(await themeFile.async("string"), wb.theme));
+}
+
+/** exceljs çıktısını son işler: satırlar, çizimler, uzantılar, sayfa sonları, adlar ve şema sırası. */
+export async function postProcess(bytes: Uint8Array, wb: WorkbookModel, ctx?: PassthroughContext): Promise<Uint8Array> {
+  const zip = await JSZip.loadAsync(bytes);
+  const paths = await sheetPaths(zip);
+  const parts = new PackageParts(zip);
+  await postProcessParts(zip, wb, paths, parts, ctx);
+  parts.flush();
   // Büyük kitaplarda daha hızlı sıkıştırma düzeyi (200 bin satırda: boyut %10 artar, süre yarıya iner)
   return zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: bytes.length > 24 * 1024 * 1024 ? 3 : 6 } });
 }
