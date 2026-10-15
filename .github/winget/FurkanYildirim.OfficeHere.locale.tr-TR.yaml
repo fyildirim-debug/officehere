@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+
+PackageIdentifier: FurkanYildirim.OfficeHere
+PackageVersion: 0.1.6
+PackageLocale: tr-TR
+Publisher: Furkan YILDIRIM
+PublisherUrl: https://github.com/fyildirim-debug
+PublisherSupportUrl: https://github.com/fyildirim-debug/officehere/issues
+PrivacyUrl: https://github.com/fyildirim-debug/officehere#a%C4%9F-eri%C5%9Fimi
+Author: Furkan YILDIRIM
+PackageName: OfficeHere
+PackageUrl: https://github.com/fyildirim-debug/officehere
+License: MIT
+LicenseUrl: https://github.com/fyildirim-debug/officehere/blob/main/LICENSE
+Copyright: Copyright © 2026 Furkan YILDIRIM
+CopyrightUrl: https://github.com/fyildirim-debug/officehere/blob/main/LICENSE
+ShortDescription: "Açık kaynak, Türkçe, çevrimdışı ofis paketi: Belge, Tablo ve Sunum."
+Description: |-
+  OfficeHere; .docx, .xlsx ve .pptx başta olmak üzere OpenDocument (.odt, .ods, .odp), 97-2003 (.doc, .xls, .ppt), RTF, Markdown ve CSV dosyalarını açar, düzenler ve kaydeder.
+  Hesap yok, reklam yok, abonelik yok, telemetri yok, yapay zekâ yok. Belgeleriniz bilgisayarınızda kalır.
+Moniker: officehere
+Tags:
+  - belge
+  - csv
+  - docx
+  - odt
+  - ofis
+  - office-suite
+  - pptx
+  - sunum
+  - tablo
+  - turkce
+  - xlsx
+ReleaseNotesUrl: https://github.com/fyildirim-debug/officehere/releases/tag/v0.1.6
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

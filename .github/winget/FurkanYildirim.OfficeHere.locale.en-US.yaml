@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.10.0.schema.json
+
+PackageIdentifier: FurkanYildirim.OfficeHere
+PackageVersion: 0.1.6
+PackageLocale: en-US
+Publisher: Furkan YILDIRIM
+PublisherUrl: https://github.com/fyildirim-debug
+PublisherSupportUrl: https://github.com/fyildirim-debug/officehere/issues
+Author: Furkan YILDIRIM
+PackageName: OfficeHere
+PackageUrl: https://github.com/fyildirim-debug/officehere
+License: MIT
+LicenseUrl: https://github.com/fyildirim-debug/officehere/blob/main/LICENSE
+Copyright: Copyright © 2026 Furkan YILDIRIM
+ShortDescription: Open-source, offline office suite with a Turkish interface for documents, spreadsheets and presentations.
+Description: |-
+  OfficeHere opens, edits and saves .docx, .xlsx and .pptx files as well as OpenDocument (.odt, .ods, .odp), 97-2003 (.doc, .xls, .ppt), RTF, Markdown and CSV.
+  No account, no ads, no subscription, no telemetry, no AI. Your documents stay on your computer. The user interface is in Turkish.
+Moniker: officehere
+Tags:
+  - csv
+  - docx
+  - odt
+  - office-suite
+  - offline
+  - pptx
+  - presentation
+  - spreadsheet
+  - turkish
+  - word-processor
+  - xlsx
+ReleaseNotesUrl: https://github.com/fyildirim-debug/officehere/releases/tag/v0.1.6
+ManifestType: locale
+ManifestVersion: 1.10.0

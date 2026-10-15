@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+# NSIS kurulumu (electron-builder, oneClick: false, perMachine: false): /S sessiz kurar; kapsam
+# /currentuser (varsayılan, yönetici gerekmez) ya da /allusers ile seçilir. Özetler v0.1.6
+# SHA256SUMS.txt ile aynıdır (cosign imzalı). ProductCode, appId'den türetilen kaldırma anahtarıdır.
+
+PackageIdentifier: FurkanYildirim.OfficeHere
+PackageVersion: 0.1.6
+InstallerType: nullsoft
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+InstallerSwitches:
+  Silent: /S
+  SilentWithProgress: /S
+UpgradeBehavior: install
+ProductCode: 7168b55e-14f0-56fe-8f4b-eea53ac20d07
+ReleaseDate: 2026-10-14
+AppsAndFeaturesEntries:
+  - DisplayName: OfficeHere 0.1.6
+    Publisher: Furkan YILDIRIM
+    DisplayVersion: 0.1.6
+    ProductCode: 7168b55e-14f0-56fe-8f4b-eea53ac20d07
+FileExtensions:
+  - csv
+  - doc
+  - docx
+  - odp
+  - ods
+  - odt
+  - ppsx
+  - ppt
+  - pptx
+  - rtf
+  - tsv
+  - xls
+  - xlsx
+Installers:
+  - Architecture: x64
+    Scope: user
+    InstallerUrl: https://github.com/fyildirim-debug/officehere/releases/download/v0.1.6/OfficeHere-0.1.6-win-x64.exe
+    InstallerSha256: 0E639006718186C3985BE063053376578A3FCBEEE58F36AB4D7FA693D0200DEE
+    InstallerSwitches:
+      Custom: /currentuser
+  - Architecture: x64
+    Scope: machine
+    InstallerUrl: https://github.com/fyildirim-debug/officehere/releases/download/v0.1.6/OfficeHere-0.1.6-win-x64.exe
+    InstallerSha256: 0E639006718186C3985BE063053376578A3FCBEEE58F36AB4D7FA693D0200DEE
+    InstallerSwitches:
+      Custom: /allusers
+  - Architecture: arm64
+    Scope: user
+    InstallerUrl: https://github.com/fyildirim-debug/officehere/releases/download/v0.1.6/OfficeHere-0.1.6-win-arm64.exe
+    InstallerSha256: AA9712726902985A159AA79D0DF0222A35970EDBB2F9D18DD60837B569FC63CA
+    InstallerSwitches:
+      Custom: /currentuser
+  - Architecture: arm64
+    Scope: machine
+    InstallerUrl: https://github.com/fyildirim-debug/officehere/releases/download/v0.1.6/OfficeHere-0.1.6-win-arm64.exe
+    InstallerSha256: AA9712726902985A159AA79D0DF0222A35970EDBB2F9D18DD60837B569FC63CA
+    InstallerSwitches:
+      Custom: /allusers
+ManifestType: installer
+ManifestVersion: 1.10.0

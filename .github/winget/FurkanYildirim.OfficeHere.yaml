@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json
+# winget-pkgs ilk gönderimi için (manifests/f/FurkanYildirim/OfficeHere/<sürüm>/); sonraki sürümleri
+# release.yml'deki "winget" işi komac update ile gönderir. Bkz. docs/dagitim.md.
+
+PackageIdentifier: FurkanYildirim.OfficeHere
+PackageVersion: 0.1.6
+DefaultLocale: tr-TR
+ManifestType: version
+ManifestVersion: 1.10.0

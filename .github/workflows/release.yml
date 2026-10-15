@@ -11,6 +11,14 @@ name: Sürüm
 # latest*.yml hiçbir zaman bir ön sürümden gelmez. Kararlı sürümde latest*.yml'nin kopyası beta*.yml
 # olarak da yüklenir; beta kanalındakiler sonraki kararlıyı da alır. Uygulama içi beta kanalı yalnız
 # "-beta.N" etiketlerini alır; rc/alpha ön sürümleri yalnız Sürümler sayfasından indirilebilir.
+#
+# Dağıtım kanalları (docs/dagitim.md) yayını engellemez:
+# - magaza: Microsoft Store paketi (.appx, imzasız; mağaza yeniden imzalar). Sürüme yüklenmez,
+#   iş artefaktıdır (Partner Center'a elle yüklenir).
+# - pardus: .deb paketi Pardus 23/25'te imzalı (test) depodan kurulur ve açılır (pardus.yml).
+# - winget, apt: yalnız kararlı sürümde, yayından sonra; gizliler tanımlı değilse atlanır.
+# Elle tetiklemede "surum" "v" ile başlamazsa (ör. "deneme") sürüm yayımlanmaz; paketler, mağaza
+# paketi ve Pardus sınaması yine üretilir.
 on:
   push:
     tags: ["v*"]
@@ -84,6 +92,38 @@ jobs:
             apps/desktop/release/beta*.yml
           if-no-files-found: ignore
 
+  # Microsoft Store paketi: OH_STORE=1 güncelleştirme denetimini kapatır (güncelleştirmeyi mağaza
+  # yapar). Kimlik ve yayıncı Partner Center'dan, depo değişkeni olarak gelir (gizli değil); yoksa
+  # electron-builder.yml'deki yer tutucularla deneme paketi üretilir.
+  magaza:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @officehere/desktop dist -- --win appx --x64 --arm64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          OH_STORE: "1"
+          OH_STORE_KIMLIK: ${{ vars.STORE_KIMLIK }}
+          OH_STORE_YAYINCI: ${{ vars.STORE_YAYINCI }}
+      - uses: actions/upload-artifact@v4
+        with:
+          # "officehere-" ile başlamaz: yayin işi bu artefaktı sürüme yüklemez.
+          name: magaza-appx
+          path: apps/desktop/release/*.appx
+          if-no-files-found: error
+
+  pardus:
+    needs: paket
+    uses: ./.github/workflows/pardus.yml
+    with:
+      artefakt: officehere-ubuntu-latest
+
   yayin:
     needs: paket
     if: startsWith(github.ref, 'refs/tags/v') || startsWith(inputs.surum, 'v')
@@ -103,6 +143,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: paketler
+          # Yalnız paket işinin artefaktları (mağaza paketi ve Pardus artefaktı sürüme girmez).
+          pattern: officehere-*
           merge-multiple: true
       # Son kapı: ön sürümde latest*.yml bulunursa (kararlı kullanıcı onu okur) yayın durur.
       - name: Kanal denetimi
@@ -147,3 +189,107 @@ jobs:
           files: paketler/*
           body_path: ${{ steps.notlar.outputs.yol }}
           generate_release_notes: ${{ steps.notlar.outputs.yol == '' }}
+
+  # winget-pkgs'e yeni sürüm PR'ı (komac update). Paket winget-pkgs'te ilk kez .github/winget'teki
+  # manifestlerle elle eklenmiş olmalıdır. WINGET_TOKEN: klasik, yalnız "public_repo" kapsamlı belirteç,
+  # onaylı "winget" ortamının gizlisi. Tanımlı değilse iş başarıyla atlanır.
+  winget:
+    needs: yayin
+    if: ${{ !contains(inputs.surum || github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    environment: winget
+    permissions: {}
+    env:
+      KOMAC: "2.17.1"
+      KOMAC_SHA256: e694e79cd451afabf47bead66ed34586fef4814f7b94e4b61a098f419978d5d7
+    steps:
+      - id: belirtec
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          if [ -n "$WINGET_TOKEN" ]; then
+            echo "var=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=winget::WINGET_TOKEN tanımlı değil; winget-pkgs güncellemesi atlandı."
+          fi
+      - name: komac
+        if: steps.belirtec.outputs.var == '1'
+        run: |
+          curl -fsSL -o komac.tar.gz "https://github.com/russellbanks/Komac/releases/download/v${KOMAC}/komac-${KOMAC}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${KOMAC_SHA256}  komac.tar.gz" | sha256sum -c -
+          tar -xzf komac.tar.gz komac
+      - name: winget-pkgs PR'ı
+        if: steps.belirtec.outputs.var == '1'
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          SURUM: ${{ inputs.surum || github.ref_name }}
+        run: |
+          v="${SURUM#v}"
+          adres="https://github.com/${GITHUB_REPOSITORY}/releases/download/${SURUM}"
+          ./komac update FurkanYildirim.OfficeHere --version "$v" \
+            --urls "${adres}/OfficeHere-${v}-win-x64.exe" "${adres}/OfficeHere-${v}-win-arm64.exe" \
+            --release-notes-url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${SURUM}" \
+            --submit
+
+  # İmzalı apt deposu (Cloudflare R2). Gizliler onaylı "apt" ortamında: APT_GPG_ANAHTARI (yalnız
+  # imzalama alt anahtarı, ASCII zırhlı), R2_ERISIM_ANAHTARI, R2_GIZLI_ANAHTAR; değişkenler:
+  # APT_ANAHTAR (parmak izi), APT_ADRES (https://apt.<alan-adı>), R2_HESAP, R2_KOVA.
+  # Biri eksikse iş başarıyla atlanır.
+  apt:
+    needs: yayin
+    if: ${{ !contains(inputs.surum || github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    environment: apt
+    permissions:
+      contents: read
+    steps:
+      - id: gizli
+        env:
+          APT_GPG_ANAHTARI: ${{ secrets.APT_GPG_ANAHTARI }}
+          R2_ERISIM_ANAHTARI: ${{ secrets.R2_ERISIM_ANAHTARI }}
+          R2_GIZLI_ANAHTAR: ${{ secrets.R2_GIZLI_ANAHTAR }}
+          APT_ANAHTAR: ${{ vars.APT_ANAHTAR }}
+          APT_ADRES: ${{ vars.APT_ADRES }}
+          R2_HESAP: ${{ vars.R2_HESAP }}
+          R2_KOVA: ${{ vars.R2_KOVA }}
+        run: |
+          for ad in APT_GPG_ANAHTARI R2_ERISIM_ANAHTARI R2_GIZLI_ANAHTAR APT_ANAHTAR APT_ADRES R2_HESAP R2_KOVA; do
+            if [ -z "${!ad}" ]; then
+              echo "::notice title=apt::$ad tanımlı değil; apt deposu güncellemesi atlandı."
+              exit 0
+            fi
+          done
+          echo "var=1" >> "$GITHUB_OUTPUT"
+        shell: bash
+      - uses: actions/checkout@v4
+        if: steps.gizli.outputs.var == '1'
+        with:
+          sparse-checkout: scripts/apt
+      - uses: actions/download-artifact@v4
+        if: steps.gizli.outputs.var == '1'
+        with:
+          name: officehere-ubuntu-latest
+          path: paket
+      - name: Depoyu üret ve imzala
+        if: steps.gizli.outputs.var == '1'
+        env:
+          APT_GPG_ANAHTARI: ${{ secrets.APT_GPG_ANAHTARI }}
+          APT_ANAHTAR: ${{ vars.APT_ANAHTAR }}
+          APT_ADRES: ${{ vars.APT_ADRES }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends reprepro
+          GNUPGHOME=$(mktemp -d)
+          export GNUPGHOME
+          printf '%s\n' "$APT_GPG_ANAHTARI" | gpg --batch --import
+          scripts/apt/depo-uret.sh depo paket/*.deb
+          gpgconf --kill all
+          rm -rf "$GNUPGHOME"
+      - name: R2'ye yükle
+        if: steps.gizli.outputs.var == '1'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ERISIM_ANAHTARI }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_GIZLI_ANAHTAR }}
+          R2_HESAP: ${{ vars.R2_HESAP }}
+          R2_KOVA: ${{ vars.R2_KOVA }}
+        run: scripts/apt/yukle.sh depo
