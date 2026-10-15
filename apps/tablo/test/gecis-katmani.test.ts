@@ -202,6 +202,16 @@ describe("Geçiş katmanı: POI dosyaları", () => {
     expect(report.warnings.join(" ")).toMatch(/makrolar/);
   });
 
+  it("workbookPr/calcPr'de yalnız Transitional şema öznitelikleri taşınır", SLOW, async () => {
+    const b = readFileSync(new URL("./fixtures/openpyxl/karmasik_lo.xlsx", import.meta.url));
+    const o = await openBook("karmasik_lo.xlsx", ab(b));
+    const out = (await writeBook(o.wb, o.wb.sheets[0], "xlsx")) as Uint8Array;
+    const wb = await text(out, "xl/workbook.xml");
+    expect(wb).toMatch(/<workbookPr\b[^>]*backupFile="false"/);
+    expect(wb).toMatch(/<calcPr\b[^>]*iterateCount="100"/);
+    expect(wb).not.toContain("dateCompatibility");
+  });
+
   it("dijital imza: açılışta uyarılır (otomatik kayıt bekler), kaydedince kaldırılır", SLOW, async () => {
     const o = await openBook("hello-world-signed.xlsx", poi("hello-world-signed.xlsx"));
     expect(o.notice).toMatch(/imza/);

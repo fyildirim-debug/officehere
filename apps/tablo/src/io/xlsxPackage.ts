@@ -722,6 +722,17 @@ async function readChartsheets(src: PtSource, wbPath: string, sheetsXml: string,
   return out;
 }
 
+// CT_WorkbookPr ve CT_CalcPr (ECMA-376 Transitional); date1904, calcId ve fullCalcOnLoad yazıcınındır
+const WORKBOOK_PR_ATTRS = new Set([
+  "showObjects", "showBorderUnselectedTables", "filterPrivacy", "promptedSolutions", "showInkAnnotation", "backupFile", "saveExternalLinkValues",
+  "updateLinks", "codeName", "hidePivotFieldList", "showPivotChartFilter", "allowRefreshQuery", "publishItems", "checkCompatibility",
+  "autoCompressPictures", "refreshAllConnections", "defaultThemeVersion",
+]);
+const CALC_PR_ATTRS = new Set([
+  "calcMode", "refMode", "iterate", "iterateCount", "iterateDelta", "fullPrecision", "calcCompleted", "calcOnSave", "concurrentCalc",
+  "concurrentManualCount", "forceFullCalc",
+]);
+
 /** workbook.xml'in modelin tanımadığı bölümleri (x15 workbookPr, revisionPtr, absPath, uzantılar…). */
 export async function readWorkbookPassthrough(src: PtSource, wbPath: string): Promise<WorkbookPassthrough | null> {
   const xml = await src.text(wbPath);
@@ -734,7 +745,10 @@ export async function readWorkbookPassthrough(src: PtSource, wbPath: string): Pr
   }
   const root = rootNamespaces(part.open);
   const pt: WorkbookPassthrough = { workbookPr: [], calcPr: [], children: [], exts: [], chartsheets: [], ns: {}, ignorable: [] };
-  const attrs = (x: string, skip: RegExp) => [...openTag(x).matchAll(/\s([\w.:-]+)="([^"]*)"/g)].filter((m) => !/^xmlns/.test(m[1]) && !skip.test(m[1])).map((m): [string, string] => [m[1], m[2]]);
+  // Ön eksiz öznitelikler yalnız Transitional şemadakilerse taşınır (LibreOffice'in yazdığı Strict'e özgü
+  // dateCompatibility gibileri şema hatası olur); ön ekli uzantı öznitelikleri olduğu gibi kalır.
+  const attrs = (x: string, keep: Set<string>) =>
+    [...openTag(x).matchAll(/\s([\w.:-]+)="([^"]*)"/g)].filter((m) => !/^xmlns/.test(m[1]) && (m[1].includes(":") || keep.has(m[1]))).map((m): [string, string] => [m[1], m[2]]);
   // Yazıcının ürettikleri: kitap koruması, görünümler, sayfalar, adlar, özet tablo önbellekleri
   const owned = new Set(["workbookProtection", "bookViews", "sheets", "definedNames", "pivotCaches"]);
   const isOrdered = (n: string) => (WORKBOOK_ORDER as readonly string[]).includes(n);
@@ -742,8 +756,8 @@ export async function readWorkbookPassthrough(src: PtSource, wbPath: string): Pr
   for (const c of part.children) {
     if (c.name === "fileVersion") pt.fileVersion = selfContained(c.xml, root.ns);
     // 1904 tarih sistemi yazılmaz: model değerleri 1900 sistemine çevrilmiş tutar
-    else if (c.name === "workbookPr") pt.workbookPr = attrs(c.xml, /^date1904$/);
-    else if (c.name === "calcPr") pt.calcPr = attrs(c.xml, /^(fullCalcOnLoad|calcId)$/);
+    else if (c.name === "workbookPr") pt.workbookPr = attrs(c.xml, WORKBOOK_PR_ATTRS);
+    else if (c.name === "calcPr") pt.calcPr = attrs(c.xml, CALC_PR_ATTRS);
     else if (c.name === "sheets") pt.chartsheets = await readChartsheets(src, wbPath, c.xml, root.ns);
     else if (c.name === "extLst") {
       for (const e of childElements(c.xml)) {
