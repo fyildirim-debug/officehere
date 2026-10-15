@@ -362,6 +362,11 @@
   width: 30%;
 }
 
+/* Resmî yazışma şablon galerisi: iletişim kutusunda şerit galerisi, sayfa oranlı uzun kutucuklarla. */
+.bl-resmi-galeri .oh-gallery {
+  height: auto;
+}
+
 /* ------------------------------------------------------------------ */
 /* Yazdırma                                                             */
 /* ------------------------------------------------------------------ */

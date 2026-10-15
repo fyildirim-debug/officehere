@@ -9,6 +9,7 @@ import { CompareDialog } from "./CompareDialog";
 import { InsertIndexDialog, MarkEntryDialog } from "./IndexDialogs";
 import { NumberingValueDialog } from "./NumberingValueDialog";
 import { DropCapDialog } from "./DropCapDialog";
+import { DenetimPaneli } from "../denetim/DenetimPaneli";
 
 export function ExtraDialogs({ dialog, onClose }: { dialog: DialogState; onClose: () => void }) {
   switch (dialog.kind) {
@@ -32,6 +33,8 @@ export function ExtraDialogs({ dialog, onClose }: { dialog: DialogState; onClose
       return <NumberingValueDialog onClose={onClose} />;
     case "dropCap":
       return <DropCapDialog onClose={onClose} />;
+    case "resmiDenetim":
+      return <DenetimPaneli onClose={onClose} />;
     default:
       return null;
   }

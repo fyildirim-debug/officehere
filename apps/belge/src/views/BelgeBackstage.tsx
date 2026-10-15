@@ -1,4 +1,5 @@
 // Dosya görünümü (Yeni, Aç, Bilgi, Kaydet, Farklı Kaydet, Yazdır, Dışarı Aktar, Kapat, Seçenekler).
+import { useState } from "react";
 import { DocumentPdf24Regular, Code24Regular, DocumentText24Regular, Document24Regular, DocumentOnePage24Regular, DocumentTextExtract24Regular, Markdown24Regular } from "@fluentui/react-icons";
 import { getNative } from "@officehere/core";
 import { OfficeBackstage, getUserName, type OfficeBackstagePage } from "@officehere/ui";
@@ -9,7 +10,9 @@ import { usePreviewPages } from "../print/usePreviewPages";
 import { useBelge } from "../state/context";
 import { applyPageSetup, sectionInfo } from "../state/pageSetup";
 import type { useFileOps } from "../state/useFileOps";
-import { TEMPLATES } from "../templates/templates";
+import { RESMI_KUME_ID, TEMPLATES } from "../templates/templates";
+import { alanlariBeklet } from "../templates/resmi/alanlar";
+import { ResmiSablonPenceresi } from "../templates/resmi/ResmiSablonPenceresi";
 
 interface Props {
   page: OfficeBackstagePage;
@@ -37,14 +40,17 @@ export function BelgeBackstage({ page, files, settings, pageCount, stats, printO
   const preview = usePreviewPages(ctx.controller, true, settings.pageColor);
   const currentPage = ctx.controller.pageOf(ed.state.selection.from);
   const setProp = (k: "title" | "subject" | "keywords" | "author", v: string) => ctx.updateSettings((s) => ({ ...s, properties: { ...s.properties, [k]: v } }));
-  return (
+  // Resmî yazışma kümesi: Dosya › Yeni'de tek kutucuk; şablon galerisi ve alan formu iletişim kutusunda.
+  const [resmi, setResmi] = useState(false);
+  const sahne = (
     <OfficeBackstage
       app="belge"
       initialPage={page}
       fileName={files.title}
       filePath={files.fileRef?.path}
-      templates={TEMPLATES.map((t) => ({ id: t.id, label: t.label, preview: t.preview }))}
+      templates={TEMPLATES.filter((t) => !t.kume).map((t) => ({ id: t.id, label: t.label, preview: t.preview }))}
       onNew={async (id) => {
+        if (id === RESMI_KUME_ID) return setResmi(true);
         if (await files.newDocument(id)) onClose();
       }}
       onOpen={async () => {
@@ -132,6 +138,21 @@ export function BelgeBackstage({ page, files, settings, pageCount, stats, printO
         </>
       }
     />
+  );
+  return (
+    <>
+      {sahne}
+      {resmi && (
+        <ResmiSablonPenceresi
+          onClose={() => setResmi(false)}
+          onOlustur={async (sablon, alanlar) => {
+            alanlariBeklet(sablon, alanlar);
+            setResmi(false);
+            if (await files.newDocument(sablon)) onClose();
+          }}
+        />
+      )}
+    </>
   );
 }
 

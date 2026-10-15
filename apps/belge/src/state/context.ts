@@ -52,7 +52,8 @@ export type DialogKind =
   | "compare"
   | "protect"
   | "numberingValue"
-  | "dropCap";
+  | "dropCap"
+  | "resmiDenetim";
 
 export interface DialogState {
   kind: DialogKind;

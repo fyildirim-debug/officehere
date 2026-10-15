@@ -17,6 +17,7 @@ import {
   BranchCompare24Regular,
   DocumentLock32Regular,
   ReadAloud24Regular,
+  DocumentCheckmark20Regular,
 } from "@fluentui/react-icons";
 import { Menu, MenuItem, MenuSeparator, RibbonButton, RibbonGroup, RibbonMenuButton, RibbonSplitButton, RibbonStack } from "@officehere/ui";
 import { useBelge } from "../state/context";
@@ -71,6 +72,12 @@ export function ReviewTab({ lang, setLang, deleteComment, deleteAllComments }: {
         <RibbonButton size="large" icon={<TextGrammarCheckmark24Regular />} label="Yazım ve Dil Bilgisi" shortcut="F7" description="Düzenleyici bölmesini açarak belgedeki yazım ve dil bilgisi önerilerini gözden geçirin." onClick={() => ctx.setView({ proofPane: true })} />
         <RibbonStack>
           <RibbonButton icon={<TextWordCount20Regular />} label="Sözcük Sayısı" shortcut="Ctrl+Shift+G" onClick={() => ctx.openDialog("wordCount")} />
+          <RibbonButton
+            icon={<DocumentCheckmark20Regular />}
+            label="Resmî Yazı Denetimi"
+            description="Belgeyi Resmî Yazışma Yönetmeliği'ne göre denetleyin: kenar boşlukları, yazı tipi, konu, sayı ve tarih biçimi, arz/rica uyumu."
+            onClick={() => ctx.openDialog("resmiDenetim")}
+          />
         </RibbonStack>
       </RibbonGroup>
       <RibbonGroup label="Konuşma" icon={<ReadAloud24Regular />}>

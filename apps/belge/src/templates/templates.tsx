@@ -1,6 +1,9 @@
 // Dosya > Yeni şablonları (OfficeHere'in kendi tasarımları, Türkçe içerik).
 import type { JSONContent } from "@tiptap/core";
 import { defaultSettings, type BelgeDocument } from "../model/document";
+import { bekleyenAlanlar } from "./resmi/alanlar";
+import { ONIZLEMELER, RESMI_KUME_ONIZLEME } from "./resmi/onizleme";
+import { RESMI_SABLONLAR, resmiBelge } from "./resmi/sablonlar";
 
 const t = (text: string, marks?: JSONContent["marks"]): JSONContent => ({ type: "text", text, ...(marks ? { marks } : {}) });
 const b = (text: string) => t(text, [{ type: "bold" }]);
@@ -23,7 +26,12 @@ export interface TemplateDef {
   label: string;
   build: () => BelgeDocument;
   preview: React.ReactNode;
+  /** Küme şablonu: Dosya › Yeni'de ayrı kutucuk olarak değil, kümenin galerisinde gösterilir. */
+  kume?: "resmi";
 }
+
+/** Dosya › Yeni'deki "Resmî yazışma" kutucuğu: tıklanınca şablon galerisi ve alan formu açılır. */
+export const RESMI_KUME_ID = "resmi";
 
 function letter(): BelgeDocument {
   const s = defaultSettings();
@@ -210,6 +218,7 @@ const lines = (n: number, cls = "") => Array.from({ length: n }, (_, i) => <i ke
 
 export const TEMPLATES: TemplateDef[] = [
   { id: "blank", label: "Boş belge", build: () => ({ settings: defaultSettings(), content: { type: "doc", content: [{ type: "paragraph" }] } }), preview: <span className="bl-tpl" /> },
+  { id: RESMI_KUME_ID, label: "Resmî yazışma", build: () => resmiBelge("resmi-ust-yazi", bekleyenAlanlar("resmi-ust-yazi")), preview: RESMI_KUME_ONIZLEME },
   {
     id: "letter",
     label: "Mektup",
@@ -278,4 +287,6 @@ export const TEMPLATES: TemplateDef[] = [
       </span>
     ),
   },
+  // Resmî Yazışma (2020) kümesi (templates/resmi): form değerleri bekleyenAlanlar ile bir kez alınır.
+  ...RESMI_SABLONLAR.map((r): TemplateDef => ({ id: r.id, label: r.etiket, kume: "resmi", build: () => resmiBelge(r.id, bekleyenAlanlar(r.id)), preview: ONIZLEMELER[r.id] })),
 ];
