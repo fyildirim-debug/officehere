@@ -222,5 +222,6 @@ export async function save(a: Actions, forceAs = false, as?: SaveFormat): Promis
 export function newFromTemplate(a: Actions, id: string) {
   const t = TEMPLATES.find((x) => x.id === id) ?? TEMPLATES[0];
   const pres = t.build();
-  loadPresentation(a, pres, nextUntitled(), null);
+  // Şablondan yeni sunu şablonun adını alır (Belge ve Tablo gibi); boş sunu Sunu1, Sunu2… diye sürer.
+  loadPresentation(a, pres, t.id === "blank" ? nextUntitled() : t.label, null);
 }
