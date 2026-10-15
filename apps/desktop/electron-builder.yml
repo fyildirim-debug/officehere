@@ -131,6 +131,21 @@ win:
       to: filetypes
       filter: ["*.ico"]
 
+# Microsoft Store paketi (.appx). Kurulum paketlerinden ayrı, yalnız Windows'ta derlenir:
+#   OH_STORE=1 pnpm --filter @officehere/desktop dist -- --win appx --x64 --arm64 --publish never
+# OH_STORE=1 pakete "mağaza sürümü" işaretini koyar (updates.ts: güncelleştirme denetimi yok,
+# güncelleştirmeyi mağaza yapar). Paket imzasız üretilir; mağaza yeniden imzalar. identityName ve
+# publisher, Partner Center'daki "Ürün kimliği" sayfasındaki değerlerle derlemede değiştirilir
+# (OH_STORE_KIMLIK, OH_STORE_YAYINCI; scripts/dist.mjs). Görseller: build/appx (scripts/icons.mjs).
+appx:
+  identityName: OfficeHere
+  applicationId: OfficeHere
+  displayName: OfficeHere
+  publisherDisplayName: Furkan YILDIRIM
+  backgroundColor: transparent
+  languages: [tr-TR]
+  artifactName: ${productName}-${version}-magaza-${arch}.${ext}
+
 nsis:
   oneClick: false
   perMachine: false

@@ -56,11 +56,22 @@ export function acceptsVersion(version: string, current: string, channel: Update
 }
 
 /**
+ * Mağaza (Microsoft Store, MSIX) paketi mi: OH_STORE=1 ile derlenen pakette package.json'a
+ * `"ohDagitim": "store"` yazılır (scripts/dist.mjs); AppX kabında Electron ayrıca
+ * process.windowsStore'u true yapar.
+ */
+export function isStoreBuild(o: { windowsStore?: boolean; dagitim?: unknown }): boolean {
+  return o.windowsStore === true || o.dagitim === "store";
+}
+
+/**
  * Paket türüne göre güncelleştirme kipi: Windows kurulumu (NSIS) ve AppImage kendini
  * günceller; taşınabilir .exe, .deb ve imzasız macOS paketi yalnız yeni sürümü bildirir.
+ * Mağaza paketini mağaza günceller: denetim hiçbir koşulda yapılmaz (OH_UPDATE_MODE da açamaz).
  * Paketlenmemiş geliştirme ortamında denetim kapalıdır (OH_UPDATE_MODE ile zorlanabilir).
  */
-export function updateMode(o: { platform: string; packaged: boolean; env: Record<string, string | undefined> }): UpdateMode {
+export function updateMode(o: { platform: string; packaged: boolean; env: Record<string, string | undefined>; store?: boolean }): UpdateMode {
+  if (o.store) return "off";
   const forced = o.env.OH_UPDATE_MODE;
   if (forced === "auto" || forced === "manual" || forced === "off") return forced;
   if (!o.packaged) return "off";

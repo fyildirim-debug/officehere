@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptsVersion, bindChannel, channelFrom, compareVersions, pickRelease, updateMode, type ChannelUpdater, type UpdateChannel } from "../src/main/updateCore";
+import { acceptsVersion, bindChannel, channelFrom, compareVersions, isStoreBuild, pickRelease, updateMode, type ChannelUpdater, type UpdateChannel } from "../src/main/updateCore";
 
 describe("compareVersions", () => {
   it("sürüm numaralarını sayısal karşılaştırır", () => {
@@ -34,6 +34,24 @@ describe("updateMode", () => {
   it("geliştirme ortamında kapalıdır; ortam değişkeniyle zorlanabilir", () => {
     expect(m("win32", {}, false)).toBe("off");
     expect(m("linux", { OH_UPDATE_MODE: "manual" }, false)).toBe("manual");
+  });
+
+  it("mağaza paketinde denetim hep kapalıdır: güncelleştirmeyi mağaza yapar", () => {
+    expect(updateMode({ platform: "win32", packaged: true, env: {}, store: true })).toBe("off");
+    // Ortam değişkeni de electron-updater'ı mağaza paketinde açamaz.
+    expect(updateMode({ platform: "win32", packaged: true, env: { OH_UPDATE_MODE: "auto" }, store: true })).toBe("off");
+    expect(updateMode({ platform: "win32", packaged: true, env: {}, store: false })).toBe("auto");
+  });
+});
+
+describe("isStoreBuild", () => {
+  it("OH_STORE=1 derlemesinin package.json işareti ya da AppX kabı mağaza paketidir", () => {
+    expect(isStoreBuild({ dagitim: "store" })).toBe(true);
+    expect(isStoreBuild({ windowsStore: true })).toBe(true);
+    expect(isStoreBuild({ windowsStore: false, dagitim: undefined })).toBe(false);
+    expect(isStoreBuild({ dagitim: "STORE" })).toBe(false);
+    expect(isStoreBuild({ dagitim: true })).toBe(false);
+    expect(isStoreBuild({})).toBe(false);
   });
 });
 

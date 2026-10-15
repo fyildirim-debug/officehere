@@ -95,7 +95,12 @@ export function UpdateSection() {
         <div>
           <div className="oh-update-version">Sürüm {s.current}</div>
           <div className={`oh-update-status is-${s.phase}`} role="status">
-            {s.mode === "off" ? "Geliştirme sürümünde güncelleştirme denetimi kapalı." : statusText(s)}
+            {s.mode !== "off"
+              ? statusText(s)
+              : // Mağaza paketinde ana süreç "store: true" gönderir (köprü tipinde yok; eski kabuklar göndermez).
+                "store" in s && s.store === true
+                ? "Bu sürüm uygulama mağazasından güncellenir; OfficeHere kendisi güncelleştirme denetlemez."
+                : "Geliştirme sürümünde güncelleştirme denetimi kapalı."}
           </div>
         </div>
         <div className="oh-update-actions">

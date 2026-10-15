@@ -3,10 +3,13 @@
 // güncelleştirmeyi arka planda indirir ve yeniden başlatınca kurar; diğerlerinde
 // GitHub API ile yeni sürüm bildirilir ve indirme sayfası açılır.
 // Kanal (kararlı/beta) ayarlar.json'daki guncellemeKanali'dır; kurallar updateCore.ts'te.
+// Mağaza (Store) paketinde güncelleştirmeyi mağaza yapar: denetim yok, electron-updater yüklenmez.
 import { app, BrowserWindow, ipcMain, net, shell } from "electron";
 import type { AppUpdater } from "electron-updater";
+import fs from "node:fs";
+import path from "node:path";
 import { readSettings, writeSettings } from "./settings";
-import { acceptsVersion, bindChannel, channelFrom, pickRelease, updateMode, type UpdateChannel } from "./updateCore";
+import { acceptsVersion, bindChannel, channelFrom, isStoreBuild, pickRelease, updateMode, type UpdateChannel } from "./updateCore";
 
 const OWNER = "fyildirim-debug";
 const NAME = "officehere";
@@ -25,6 +28,8 @@ interface UpdateState {
   phase: Phase;
   current: string;
   mode: "auto" | "manual" | "off";
+  /** Mağaza paketi: denetim kapalı, güncelleştirmeyi mağaza yapar (arayüz buna göre açıklar). */
+  store: boolean;
   channel: UpdateChannel;
   version?: string;
   percent?: number;
@@ -146,10 +151,21 @@ function schedule() {
   timer = setInterval(() => void checkForUpdates(), INTERVAL_MS);
 }
 
+/** Paketin package.json'ındaki dağıtım işareti (OH_STORE=1 derlemesinde "store"). */
+function packagedDistribution(): unknown {
+  try {
+    return (JSON.parse(fs.readFileSync(path.join(app.getAppPath(), "package.json"), "utf8")) as { ohDagitim?: unknown }).ohDagitim;
+  } catch {
+    return undefined;
+  }
+}
+
 export function initUpdates() {
-  const mode = updateMode({ platform: process.platform, packaged: app.isPackaged, env: process.env });
+  // OH_STORE=1 ortam değişkeni mağaza paketini yerelde (paketlemeden) denemek içindir.
+  const store = process.env.OH_STORE === "1" || isStoreBuild({ windowsStore: process.windowsStore, dagitim: packagedDistribution() });
+  const mode = updateMode({ platform: process.platform, packaged: app.isPackaged, env: process.env, store });
   const settings = readSettings();
-  state = { phase: "idle", current: app.getVersion(), mode, channel: channelFrom(settings.guncellemeKanali), autoCheck: settings.otomatikGuncellemeDenetimi !== false };
+  state = { phase: "idle", current: app.getVersion(), mode, store, channel: channelFrom(settings.guncellemeKanali), autoCheck: settings.otomatikGuncellemeDenetimi !== false };
 
   ipcMain.handle("oh:update-get", () => state);
   ipcMain.handle("oh:update-check", () => checkForUpdates());

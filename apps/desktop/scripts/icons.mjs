@@ -132,5 +132,25 @@ for (const [name, spec] of Object.entries(FILETYPES)) {
   await writeFile(path.join(build, "icon.icns"), icns(suiteIcns));
 }
 
+// Mağaza (AppX) paketi görselleri: electron-builder build/appx altındakileri kullanır; yoksa
+// kendi örnek görsellerini koyar ve mağaza "varsayılan görsel" diye reddeder. Arka plan saydam.
+{
+  await mkdir(path.join(build, "appx"), { recursive: true });
+  const tile = async (w, h, icon) => {
+    await page.setViewportSize({ width: w, height: h });
+    const svg = SUITE.replace("<svg ", `<svg width="${icon}" height="${icon}" `);
+    await page.setContent(`<html><body style="margin:0;background:transparent;display:flex;align-items:center;justify-content:center;width:${w}px;height:${h}px">${svg}</body></html>`);
+    return page.screenshot({ omitBackground: true, clip: { x: 0, y: 0, width: w, height: h } });
+  };
+  for (const [name, w, h, icon] of [
+    ["StoreLogo", 50, 50, 50],
+    ["Square44x44Logo", 44, 44, 44],
+    ["Square150x150Logo", 150, 150, 96],
+    ["Wide310x150Logo", 310, 150, 96],
+  ]) {
+    await writeFile(path.join(build, "appx", `${name}.png`), await tile(w, h, icon));
+  }
+}
+
 await browser.close();
 console.log("Simgeler üretildi:", build);
