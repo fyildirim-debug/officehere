@@ -164,12 +164,15 @@ bileşen pakete girerse derleme durur. Başlıca bağımlılıklar:
 | mammoth | DOCX içe aktarma yedeği | BSD-2-Clause |
 | @fluentui/react-icons | Simgeler | MIT |
 | electron-updater | Masaüstü güncelleyici | MIT (bağımlılıkları MIT/ISC/BlueOak/Python-2.0) |
+| @cantoo/pdf-lib | PDF belge bilgileri ve PDF/A son işleme (masaüstü ana süreci) | MIT (bakımlı pdf-lib çatalı; bağımlılıkları MIT ve 0BSD) |
 
 Yalnız geliştirme/CI'da kullanılan, dağıtılmayan araçlar: LibreOffice (MPL-2.0;
 derlem üretimi ve PDF denetimi için ayrı süreç olarak çalıştırılır),
 python-docx / openpyxl / python-pptx (MIT), XlsxWriter (BSD-2-Clause), Pillow
 (MIT-CMU), Playwright (Apache-2.0), Vitest/Vite (MIT), cosign (Apache-2.0;
-sürüm imzası).
+sürüm imzası), veraPDF (GPLv3+ ya da MPLv2+; PDF/A doğrulaması, `pnpm derlem:pdfa`
+ile ayrı Java süreci olarak çalıştırılır, sürüm ve SHA-256 betikte sabittir),
+poppler-utils `pdftotext` (GPL-2.0; yalnız metin denetimi).
 
 Denetim notları (2026-10):
 
@@ -180,6 +183,34 @@ Denetim notları (2026-10):
   (`exceljs.min.js`) girmez, dolayısıyla dağıtılmaz. Derleme eklentisi bunu
   pakete giren modüllerden doğrular.
 - Kullanılmayan `docx` bağımlılığı kaldırıldı.
+
+### Veri dosyası istisnası: sRGB renk profili
+
+PDF/A dosyası, renklerin hangi renk uzayına göre yorumlanacağını söyleyen bir ICC renk profilini
+(*OutputIntent*) içermek zorundadır. OfficeHere bunun için International Color Consortium'un (ICC)
+yayımladığı sRGB profilini dağıtır ve PDF/A çıktısına **değiştirmeden** gömer (karar K2):
+
+| | |
+| --- | --- |
+| Dosya | `apps/desktop/build/srgb/sRGB2014.icc` (masaüstü paketinde `dist-electron/main/srgb/`) |
+| Profil | sRGB IEC61966-2-1, ICC v2, 3024 bayt, "Copyright International Color Consortium, 2015" |
+| Kaynak | [registry.color.org/rgb-registry/srgbprofiles](https://registry.color.org/rgb-registry/srgbprofiles) (`profiles/sRGB2014.icc`) |
+| SHA-256 | `384b832de3412066743b52a75ee906b6fb9fb8d9e09e936fc2c43223815c6e0a` |
+| Lisans | ICC profil lisansı ([ICC Profile Library](https://registry.color.org/profile-library/#license)); SPDX listesinde yoktur |
+
+Lisans metni (birebir): *"This profile is made available by the International Color Consortium, and
+may be copied, distributed, embedded, made, used, and sold without restriction. Altered versions of this
+profile shall have the original identification and copyright information removed and shall not be
+misrepresented as the original profile."*
+
+Metin kopyalama, dağıtma ve gömmeye koşulsuz izin verir; karşılıklılık şartı yoktur. Dosya bir npm
+bileşeni olmadığından `IZINLI_LISANSLAR` denetiminin kapsamında değildir ve bu belgede **veri dosyası
+istisnası** olarak kayıtlıdır. Profil değiştirilmez; değiştirilmiş bir sürüm gerekirse ICC'nin şartı
+gereği özgün kimlik ve telif bilgisi çıkarılmalıdır. PDF/A-1b dönüşümünde Chromium'un görsellere gömdüğü
+ICC v4 sRGB profilleri de (birincil renkleri sRGB ile aynıysa) bu profille değiştirilir.
+
+PDF'e gömülen yazı tipleri kullanıcının sisteminde kurulu olanlardır (alt küme olarak); OfficeHere yazı
+tipi dağıtmaz. veraPDF ve pdftotext yalnız doğrulama için kullanılır, pakete girmez.
 
 ## Üçüncü taraf bildirimleri
 

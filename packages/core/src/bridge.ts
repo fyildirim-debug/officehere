@@ -135,6 +135,37 @@ export interface SpellcheckState {
   sizeMb: number;
 }
 
+/** PDF türü: standart PDF ya da arşiv (PDF/A) uyumluluk düzeyi. */
+export type PdfStandard = "pdf" | "pdfa-2b" | "pdfa-1b";
+
+/** Dışa aktarmadan sonra: hiçbir şey, dosyayı varsayılan uygulamada aç ya da klasörünü göster. */
+export type PdfAfterExport = "none" | "open" | "folder";
+
+/** Masaüstünde PDF dışa aktarma seçenekleri (eski kabuklar yalnız landscape/pageSize'ı okur). */
+export interface PdfExportOptions {
+  landscape?: boolean;
+  pageSize?: "A4" | "A3" | "A5" | "Letter" | "Legal" | { width: number; height: number };
+  /** Çıktı sayfaları ("1-3, 5"); boşsa tümü. */
+  pageRanges?: string;
+  standard?: PdfStandard;
+  /** Başlıklardan yer imleri (etiketli PDF gerektirir; açıkken etiket de üretilir). */
+  outline?: boolean;
+  /** Erişilebilirlik için etiketli PDF. */
+  tagged?: boolean;
+  title?: string;
+  author?: string;
+  subject?: string;
+  keywords?: string;
+  /** Oluşturan uygulama (ör. "OfficeHere Belge"). */
+  creator?: string;
+  after?: PdfAfterExport;
+}
+
+/** PDF kaydedildi; standart, saydamlık nedeniyle 1b'den 2b'ye geçildiyse "pdfa-2b"dir. */
+export interface PdfExportResult extends NativeSaveResult {
+  standard?: PdfStandard;
+}
+
 export interface SpellcheckApi {
   getState(): Promise<SpellcheckState>;
   /** true: sözlükleri indir (onay); false: indirme / kaldır. */
@@ -186,8 +217,8 @@ export interface OfficehereNative {
   onBeforeClose(callback: () => boolean | Promise<boolean>): () => void;
   /** Başlık çubuğu üstündeki yerel pencere düğmelerinin renkleri (Windows/Linux). */
   setTitleBarOverlay?(color: string, symbolColor: string): void;
-  /** Geçerli sayfayı yazdırma CSS'iyle PDF olarak kaydeder (konum sorar). */
-  exportPdf?(suggestedName: string, options?: { landscape?: boolean; pageSize?: "A4" | "A3" | "A5" | "Letter" | "Legal" | { width: number; height: number } }): Promise<NativeSaveResult | null>;
+  /** Geçerli sayfayı yazdırma CSS'iyle PDF (ya da PDF/A) olarak kaydeder (konum sorar); iptalde null. */
+  exportPdf?(suggestedName: string, options?: PdfExportOptions): Promise<PdfExportResult | null>;
   /** GitHub Sürümleri üzerinden güncelleştirme denetimi ve kurulumu. */
   updates?: UpdatesApi;
   /** Yazım denetimi sözlüklerinin indirme onayı ve durumu. */

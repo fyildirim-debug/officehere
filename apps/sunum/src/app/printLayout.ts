@@ -3,6 +3,7 @@
  * tam sayfa slaytlar, not sayfaları, ana hat ve dinleyici notları (1, 2, 3, 4, 6, 9).
  * Ölçüler 96 dpi pikseldir; not/dinleyici/ana hat sayfaları A4'tür.
  */
+import type { PdfExportOptions } from "@officehere/core";
 import { bodyShape, paraText, titleShape } from "../model/outline";
 import type { Presentation, PrintSettings, PrintWhat } from "../model/types";
 
@@ -206,4 +207,6 @@ export interface PrintJob {
   settings: PrintSettings;
   indices: number[];
   pdf: boolean;
+  /** Masaüstü PDF seçenekleri (iletişim kutusundan). */
+  pdfOptions?: PdfExportOptions;
 }

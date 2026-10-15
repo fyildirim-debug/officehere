@@ -1,9 +1,11 @@
 // Yazdırma ve PDF olarak dışarı aktarma: ekran düzeninin sayfa kopyalarından yazdırma kökü kurulur.
-// Masaüstünde (getNative().exportPdf) doğrudan .pdf kaydedilir; yoksa tarayıcının yazdırma penceresi açılır.
-// Dosya › Yazdır ayarları (sayfa aralığı, kopya, harmanlama, yaprak başına sayfa, elle iki taraflı) uygulanır.
+// Masaüstünde (getNative().exportPdf) seçenekler sorulup doğrudan .pdf (ya da PDF/A) kaydedilir; yoksa
+// tarayıcının yazdırma penceresi açılır. Dosya › Yazdır ayarları (sayfa aralığı, kopya, harmanlama,
+// yaprak başına sayfa, elle iki taraflı) uygulanır.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { baseName, getNative } from "@officehere/core";
+import { askPdfExport } from "@officehere/ui";
 import { pageSizeId, type DocSettings } from "../model/document";
 import type { PaginationController } from "../editor/pagination";
 import { buildPrintRoot, removePrintRoot } from "../views/printRender";
@@ -53,6 +55,15 @@ export function usePrint({ controller, settings, zoom, fileName, currentPage, le
     async (target: "print" | "pdf", opts: PrintOptions | undefined, pass?: 1 | 2) => {
       const native = getNative();
       if (target === "pdf" && !native?.exportPdf) target = "print";
+      let pdf: Awaited<ReturnType<typeof askPdfExport>> = null;
+      if (target === "pdf") {
+        const p = settings.properties;
+        const pages = opts?.range === "custom" ? opts.pages : opts?.range === "current" ? String(currentPage() + 1) : undefined;
+        pdf = await askPdfExport({ title: p.title || baseName(fileName), author: p.author, subject: p.subject, keywords: p.keywords, pageCount: controller.info.pageCount, pages, headings: true });
+        if (!pdf) return false;
+        // Aralık Belge'nin kendi sayfa seçimiyle uygulanır (bölümler ve yaprak başına sayfa doğru kalır); PDF'te kopya yok.
+        opts = { ...(opts ?? defaultPrintOptions()), copies: 1, duplex: "single", range: pdf.pageRanges ? "custom" : "all", pages: pdf.pageRanges ?? "" };
+      }
       flushSync(leaveModes);
       await frames();
       controller.measureNow?.();
@@ -60,15 +71,15 @@ export function usePrint({ controller, settings, zoom, fileName, currentPage, le
       if (!preparePrint(opts, pass)) return false;
       setPrinting(true);
       try {
-        if (target === "pdf" && native?.exportPdf) {
+        if (target === "pdf" && native?.exportPdf && pdf) {
           // Yönlendirme ve kağıt boyutu ilk yapraktan.
           const first = document.querySelector<HTMLElement>("#bl-print-root > .bl-print-page");
           const w = parseFloat(first?.style.width ?? "794");
           const h = parseFloat(first?.style.height ?? "1123");
           const sizeId = pageSizeId({ ...settings.page, width: Math.round(w * 15), height: Math.round(h * 15) });
           const pageSize = sizeId !== "custom" ? (sizeId as "A4") : { width: w / 96, height: h / 96 };
-          const res = await native.exportPdf(`${baseName(fileName)}.pdf`, { landscape: w > h, pageSize });
-          if (res) notify(`"${res.name}" kaydedildi.`, "success");
+          const res = await native.exportPdf(`${baseName(fileName)}.pdf`, { ...pdf, pageRanges: undefined, landscape: w > h, pageSize, creator: "OfficeHere Belge" });
+          if (res) notify(res.standard && res.standard !== pdf.standard ? `"${res.name}" PDF/A-1b'ye uygun olmadığından PDF/A-2b olarak kaydedildi.` : `"${res.name}" kaydedildi.`, "success");
         } else window.print();
       } catch (err) {
         notify(`PDF oluşturulamadı: ${(err as Error).message}`, "error");
@@ -78,7 +89,7 @@ export function usePrint({ controller, settings, zoom, fileName, currentPage, le
       }
       return true;
     },
-    [controller, leaveModes, preparePrint, finishPrint, settings.page, fileName, notify],
+    [controller, leaveModes, preparePrint, finishPrint, settings.page, settings.properties, fileName, currentPage, notify],
   );
 
   const print = useCallback(

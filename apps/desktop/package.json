@@ -12,7 +12,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "pnpm run build:launcher && pnpm run build:electron",
     "build:launcher": "vite build",
-    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:electron": "tsc -p tsconfig.electron.json && node -e \"require('node:fs').cpSync('build/srgb','dist-electron/main/srgb',{recursive:true})\"",
     "start": "electron .",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.electron.json --noEmit",
     "icons": "node scripts/icons.mjs",
@@ -30,6 +30,7 @@
     "react-dom": "^19.3.0"
   },
   "dependencies": {
+    "@cantoo/pdf-lib": "2.11.1",
     "electron-updater": "6.8.10"
   }
 }

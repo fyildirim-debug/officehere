@@ -1,6 +1,6 @@
 /** Slayt resmi (PNG) dışa aktarma, ana hat metni ve masaüstünde doğrudan PDF. */
 import { createRoot } from "react-dom/client";
-import { downloadBlob, getNative } from "@officehere/core";
+import { downloadBlob, getNative, type PdfExportOptions } from "@officehere/core";
 import { loadIo } from "../io/formats";
 import type { Presentation, Shape } from "../model/types";
 import { SlideView } from "../render/SlideView";
@@ -87,13 +87,13 @@ export function outlineText(pres: Presentation): string {
   return lines.join("\r\n");
 }
 
-/** Masaüstü kabuğunda yazdırma sayfalarını doğrudan PDF'e yazar (size: sayfa boyutu, 96 dpi px). */
-export async function exportPdfNative(size: { w: number; h: number }, baseName: string): Promise<string | null> {
+/** Masaüstü kabuğunda yazdırma sayfalarını doğrudan PDF'e yazar (size: sayfa boyutu, 96 dpi px; options: PDF seçenekleri). */
+export async function exportPdfNative(size: { w: number; h: number }, baseName: string, options?: PdfExportOptions): Promise<string | null> {
   const native = getNative();
   if (!native?.exportPdf) return null;
   const w = size.w / 96;
   const h = size.h / 96;
   // Kâğıt boyutu dikey verilir, yönlendirme "landscape" ile döndürülür; @page boyutu önceliklidir.
-  const r = await native.exportPdf(`${baseName}.pdf`, { landscape: w >= h, pageSize: { width: Math.min(w, h), height: Math.max(w, h) } });
+  const r = await native.exportPdf(`${baseName}.pdf`, { ...options, landscape: w >= h, pageSize: { width: Math.min(w, h), height: Math.max(w, h) } });
   return r?.name ?? null;
 }

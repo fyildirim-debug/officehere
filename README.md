@@ -86,6 +86,27 @@ Arayüz tamamen Türkçedir; Renkli, Beyaz, Koyu Gri ve Siyah temaları vardır.
 - Şekilleri birleştirme, noktaları düzenleme, resimleri sıkıştırma, erişilebilirlik denetleyicisi, damlalık
 - Yazdırma düzenleri: tam sayfa, not sayfaları, ana hat ve dinleyici notları (1–9 slayt); videoya aktarma (WebM)
 
+### PDF ve PDF/A
+
+Masaüstünde **Dosya › Dışarı Aktar › PDF** üç uygulamada da aynı seçenek kutusunu açar:
+
+- **Biçim:** *PDF*, *PDF/A-2b (arşiv)* ya da *PDF/A-1b (e-Yazışma üst yazısı)*. PDF/A dosyalarına XMP
+  meta verisi, sRGB renk profili (OutputIntent) ve dosya kimliği eklenir; yazı tipleri alt küme olarak
+  gömülür, metin seçilip kopyalanabilir (ı, İ, ş, ğ dahil).
+- **Sayfa aralığı** (ör. `1-3, 5`), **başlık ve yazar**, Belge'de **başlıklardan yer imleri**,
+  **etiketli PDF** (erişilebilirlik) ve **dışa aktardıktan sonra** dosyayı açma ya da klasörünü gösterme.
+- **PDF/A-1b** saydamlığa izin vermez. Belgede gölge, yarı saydam dolgu ya da saydam arka planlı resim
+  varsa OfficeHere hangi sayfada ne olduğunu söyler ve PDF/A-2b olarak kaydetmeyi önerir. Görünmeyen
+  çizimler (ör. kenarlıksız tablo hücreleri) engel sayılmaz.
+- Linux/Pardus'ta Times New Roman kurulu değilse yerine ölçüleri aynı Liberation Serif gömülür; kurum
+  yalnız Times New Roman kabul ediyorsa yazı tipinin sistemde kurulu olması gerekir.
+- **e-imza:** OfficeHere belgeyi kendisi imzalamaz. PDF/A olarak kaydedip e-imza uygulamanızla PDF içine
+  gömülü (PAdES) imza atın; imzadan sonra dosyayı değiştirmeyin.
+- Web sürümünde tarayıcının yazdırma penceresi ("PDF olarak kaydet") kullanılır; PDF/A yalnız masaüstündedir.
+
+Derlemdeki belgelerin PDF/A çıktıları CI'da [veraPDF](https://verapdf.org) ile doğrulanır
+(`pnpm derlem:pdfa`; veraPDF yalnız doğrulama aracıdır, pakete girmez).
+
 ## Kurulum
 
 [Sürümler](https://github.com/fyildirim-debug/officehere/releases) sayfasından
@@ -218,6 +239,7 @@ pnpm derlem           # derlem kaydet-aç turu → .derlem/rapor/derlem.md
 pnpm bulanik          # 759 bozuk dosyayla bulanık test → .derlem/rapor/bulanik.md
 pnpm derlem:uret      # büyük derlem dosyaları (LibreOffice + python; isteğe bağlı)
 pnpm derlem:lo        # kaydedilen dosyaları LibreOffice ile PDF'e çevirip denetler
+pnpm derlem:pdfa      # derlemi masaüstünde PDF/A olarak dışa aktarıp veraPDF ile doğrular (--kur: veraPDF'i kurar)
 pnpm derlem:temel     # iyileşmeden sonra temel çizgiyi günceller (scripts/derlem/temel.json)
 ```
 

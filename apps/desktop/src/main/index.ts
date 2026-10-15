@@ -675,29 +675,84 @@ function registerIpc() {
     }
   });
 
-  ipcMain.handle("oh:export-pdf", async (e, suggestedName: string, options?: { landscape?: boolean; pageSize?: Electron.PrintToPDFOptions["pageSize"] }) => {
+  ipcMain.handle("oh:export-pdf", async (e, suggestedName: string, options?: unknown) => {
     const { win } = senderState(e);
     if (!win) return null;
+    // PDF kitaplığı yalnız ilk dışa aktarmada yüklenir (açılışı yavaşlatmaz).
+    const pdfa = await import("./pdfa.js");
+    const o = pdfa.pdfExportRequest(options);
     const r = await dialog.showSaveDialog(win, {
-      defaultPath: path.join(app.getPath("documents"), suggestedName),
-      filters: [{ name: "PDF", extensions: ["pdf"] }],
+      defaultPath: path.join(app.getPath("documents"), typeof suggestedName === "string" ? suggestedName : "Belge.pdf"),
+      filters: [{ name: o.standard === "pdf" ? "PDF" : "PDF/A", extensions: ["pdf"] }],
     });
     if (r.canceled || !r.filePath) return null;
-    const pdf = await win.webContents.printToPDF({
-      landscape: options?.landscape ?? false,
-      pageSize: options?.pageSize ?? "A4",
-      printBackground: true,
-      preferCSSPageSize: true,
-      margins: { top: 0, bottom: 0, left: 0, right: 0 },
-    });
+    // Sayfalar null'u "iptal" sayar: hatanın nedeni burada kullanıcıya gösterilir.
+    const pdfError = (message: string, detail: string, err?: unknown) => {
+      log.write("hata", "pdf", `${message}: ${(err as Error)?.message ?? ""}`, { stack: (err as Error)?.stack });
+      void dialog.showMessageBox(win, { type: "error", title: "OfficeHere", message, detail, buttons: ["Tamam"], noLink: true }).catch(() => undefined);
+      return null;
+    };
+    let pdf: Buffer;
     try {
-      await saver.write(r.filePath, pdf, { session: writeSessionOf(e), snapshot: "never" });
+      pdf = await win.webContents.printToPDF({
+        landscape: o.landscape,
+        pageSize: o.pageSize,
+        printBackground: true,
+        preferCSSPageSize: true,
+        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+        pageRanges: o.pageRanges,
+        // Yer imleri etiket ağacındaki başlıklardan üretilir: etiketsiz PDF'te anahat boş kalır.
+        generateTaggedPDF: o.tagged || o.outline,
+        generateDocumentOutline: o.outline,
+      });
     } catch (err) {
-      // Sayfalar null'u "iptal" sayar: neden burada kullanıcıya gösterilir.
+      const range = !!o.pageRanges && /range|aral/i.test((err as Error)?.message ?? "");
+      return pdfError("PDF oluşturulamadı", range ? `“${o.pageRanges}” sayfa aralığı belgede yok. Belgedeki sayfa numaralarıyla yeniden deneyin.` : "Sayfa PDF'e dönüştürülürken bir sorun oluştu.", err);
+    }
+    let standard = o.standard;
+    let bytes: Uint8Array = pdf;
+    try {
+      const doc = await pdfa.loadPdf(pdf);
+      const icc = standard === "pdf" ? undefined : pdfa.loadSrgbProfile();
+      if (standard === "pdfa-1b" && icc) {
+        // Görünmez çizimler, sRGB v4 profilleri ve büyük ötelemeler dönüştürülür; kalanlar gerçek engeldir.
+        const problems = pdfa.prepareForPdfA1(doc, icc);
+        if (problems.length) {
+          const { response } = await dialog.showMessageBox(win, {
+            type: "warning",
+            title: "OfficeHere",
+            message: "Belge PDF/A-1b olarak kaydedilemiyor",
+            detail: `${problems.join("\n")}\n\nPDF/A-1b saydamlığa ve bu öğelere izin vermez; PDF/A-2b de bir arşiv biçimidir ve hepsini destekler. Kurum yalnız PDF/A-1b istiyorsa saydamlığı kaldırıp (gölge, yarı saydam dolgu, saydam arka planlı resim) yeniden dışa aktarın.`,
+            buttons: ["PDF/A-2b olarak kaydet", "İptal"],
+            defaultId: 0,
+            cancelId: 1,
+            noLink: true,
+          });
+          if (response !== 0) return null;
+          standard = "pdfa-2b";
+        }
+      }
+      const producer = `OfficeHere ${app.getVersion()}; ${doc.getProducer() ?? "Chromium"}`;
+      pdfa.applyPdfStandard(doc, {
+        standard,
+        meta: { title: o.title, author: o.author, subject: o.subject, keywords: o.keywords, creator: o.creator ?? "OfficeHere", producer },
+        icc,
+      });
+      bytes = await pdfa.savePdf(doc);
+    } catch (err) {
+      // Standart PDF'te belge bilgileri yazılamazsa Chromium çıktısı olduğu gibi kaydedilir; PDF/A sözü verilemez.
+      if (standard !== "pdf") return pdfError("PDF/A dosyası oluşturulamadı", "Belge PDF/A biçimine dönüştürülemedi. Standart PDF olarak dışa aktarmayı deneyin.", err);
+      log.write("uyari", "pdf", `Belge bilgileri yazılamadı: ${(err as Error)?.message ?? err}`);
+    }
+    try {
+      await saver.write(r.filePath, bytes, { session: writeSessionOf(e), snapshot: "never" });
+    } catch (err) {
       showSaveError(win, failure(err, r.filePath, "PDF dışa aktarma"), r.filePath);
       return null;
     }
-    return { path: r.filePath, name: path.basename(r.filePath) };
+    if (o.after === "open") void shell.openPath(r.filePath).then((msg) => msg && log.write("uyari", "pdf", `PDF açılamadı: ${msg}`));
+    else if (o.after === "folder") shell.showItemInFolder(r.filePath);
+    return { path: r.filePath, name: path.basename(r.filePath), standard };
   });
 
   /* Hata günlüğü ve "Hata bildir" */

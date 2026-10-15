@@ -1,6 +1,7 @@
 /** Yazdırma: kullanılan alan (ya da yazdırma alanı) HTML tablosu olarak basılır; sayfa sonları hesabı. */
 import { getNative, PAGE_SIZES } from "@officehere/core";
 import { colToName, formatValue } from "@officehere/formula";
+import { askPdfExport } from "@officehere/ui";
 import { styleToCss } from "../model/clipboard";
 import { computeView } from "../model/display";
 import type { Rect } from "../model/types";
@@ -197,8 +198,8 @@ export function printSheet(wb: WorkbookModel, sheet: SheetModel): void {
 }
 
 /**
- * PDF olarak dışarı aktarır: masaüstü kabuğu exportPdf sunuyorsa doğrudan
- * .pdf kaydedilir; yoksa yazdırma iletişim kutusu ("PDF olarak kaydet") açılır.
+ * PDF olarak dışarı aktarır: masaüstü kabuğu exportPdf sunuyorsa seçenekler (PDF/A, sayfa aralığı,
+ * belge bilgileri) sorulup doğrudan .pdf kaydedilir; yoksa yazdırma iletişim kutusu ("PDF olarak kaydet") açılır.
  */
 export async function exportPdf(wb: WorkbookModel, sheet: SheetModel, suggestedName: string): Promise<void> {
   const native = getNative();
@@ -206,9 +207,12 @@ export async function exportPdf(wb: WorkbookModel, sheet: SheetModel, suggestedN
     printSheet(wb, sheet);
     return;
   }
+  // Sayfa sayısı verilmez: sayfalara Chromium böler; aralık belgenin dışındaysa kabuk bildirir.
+  const choice = await askPdfExport({ title: wb.props.title || suggestedName.replace(/\.pdf$/i, ""), author: wb.props.author, subject: wb.props.subject });
+  if (!choice) return;
   const cleanup = preparePrint(wb, sheet);
   try {
-    await native.exportPdf(suggestedName, { landscape: sheet.page.orientation === "landscape", pageSize: sheet.page.paper });
+    await native.exportPdf(suggestedName, { ...choice, landscape: sheet.page.orientation === "landscape", pageSize: sheet.page.paper, creator: "OfficeHere Tablo" });
   } finally {
     cleanup();
   }

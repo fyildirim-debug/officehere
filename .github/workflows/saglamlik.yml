@@ -109,3 +109,51 @@ jobs:
             .derlem/rapor
             .derlem/cikti
           retention-days: 14
+
+  # PDF/A (pnpm derlem:pdfa): derlemdeki belgeler masaüstü uygulamasında (Electron) açılıp kullanıcı yolundan
+  # PDF/A-2b olarak dışa aktarılır ve veraPDF ile doğrulanır; saydamlıksız şablon PDF/A-1b, sayfa aralığı,
+  # yer imi = başlık sayısı ve pdftotext ile Türkçe harfler de denetlenir. veraPDF (GPLv3+/MPLv2+) yalnız bu
+  # işte, ayrı süreç olarak çalışır; pakete girmez. Sürüm ve SHA-256 betikte sabit (scripts/derlem/verapdf.mjs).
+  pdfa:
+    name: PDF/A (veraPDF)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      LC_ALL: C.UTF-8
+      LANG: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node apps/desktop/node_modules/electron/install.js
+      - name: PDF araçları ve yazı tipleri
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils fonts-liberation fonts-crosextra-carlito fonts-crosextra-caladea
+          pnpm exec playwright install-deps chromium
+          java -version
+      - uses: actions/cache@v4
+        with:
+          path: .derlem/verapdf
+          key: verapdf-${{ hashFiles('scripts/derlem/verapdf.mjs') }}
+      - name: veraPDF (önbellekte yoksa indir ve kur)
+        run: node scripts/derlem/verapdf.mjs --kur --yalniz-kur
+      - run: pnpm web
+      - run: pnpm --filter @officehere/desktop build:electron
+      - name: PDF/A turu (pnpm derlem:pdfa)
+        run: xvfb-run -a pnpm derlem:pdfa
+      - name: Özet
+        if: ${{ !cancelled() }}
+        run: if [ -f .derlem/rapor/pdfa.md ]; then cat .derlem/rapor/pdfa.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: pdfa-rapor
+          path: |
+            .derlem/rapor/pdfa.*
+            .derlem/pdfa
+          retention-days: 14

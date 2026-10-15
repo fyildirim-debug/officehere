@@ -509,7 +509,7 @@ export function App() {
             printing.pdf
               ? async () => {
                   try {
-                    const name = await exportPdfNative(paperSize(a.s.pres, printing.settings.what, printing.settings.orientation), a.s.fileName);
+                    const name = await exportPdfNative(paperSize(a.s.pres, printing.settings.what, printing.settings.orientation), a.s.fileName, printing.pdfOptions);
                     if (name) a.message(`PDF olarak kaydedildi: ${name}`, "success");
                   } catch (e) {
                     a.message(`PDF oluşturulamadı: ${(e as Error).message}`, "error");

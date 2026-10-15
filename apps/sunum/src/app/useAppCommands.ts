@@ -1,6 +1,7 @@
 /** Şerit, menü ve kısayolların kullandığı uygulama komutları (App.tsx'ten ayrıldı). */
 import { useMemo, useRef } from "react";
 import { getNative } from "@officehere/core";
+import { askPdfExport } from "@officehere/ui";
 import { makeTextBox } from "../model/factory";
 import { MASTER_SLIDE_ID } from "../model/masterView";
 import { sectionsOf } from "../model/sections";
@@ -18,7 +19,7 @@ import type { ExtraDialog } from "./AppDialogs";
 import { nextPreviewSeq, stageFrame, type ShowState } from "./appState";
 import { insertImageFiles, pasteFromRibbon } from "./clipboard";
 import { importOutline } from "./outlineFile";
-import { printSlideIndices, type PrintJob } from "./printLayout";
+import { buildPrintPages, printSlideIndices, type PrintJob } from "./printLayout";
 import { DEFAULT_PRINT_SETTINGS } from "../io/presProps";
 
 export interface CommandDeps {
@@ -75,6 +76,18 @@ export function useAppCommands(d: CommandDeps): AppCommands {
       fullscreen();
       setShow({ mode: "full", start, opts });
     };
+    const startPrint = (job: PrintJob) => {
+      a.stopEditing();
+      if (a.s.masterBase) closeMasterView(a);
+      setBackstage(false);
+      setPrinting(job);
+    };
+    /** Masaüstü PDF seçenekleri (PDF/A, sayfa aralığı, belge bilgileri); iptalde null. */
+    const askPdf = async (job: PrintJob): Promise<PrintJob | null> => {
+      const p = a.s.pres;
+      const choice = await askPdfExport({ title: p.props.title || a.s.fileName, author: p.props.creator, subject: p.props.subject, pageCount: buildPrintPages(p, job.settings, job.indices).length });
+      return choice ? { ...job, pdfOptions: { ...choice, creator: "OfficeHere Sunum" } } : null;
+    };
     const c: AppCommands = {
       paste: (mode) => {
         if (mode === "text" && store.clipboard?.kind === "shapes") {
@@ -122,19 +135,15 @@ export function useAppCommands(d: CommandDeps): AppCommands {
       },
       printJob: (job) => {
         if (job.pdf && !getNative()?.exportPdf) job = { ...job, pdf: false };
-        a.stopEditing();
-        if (a.s.masterBase) closeMasterView(a);
-        setBackstage(false);
-        setPrinting(job);
+        if (job.pdf) void askPdf(job).then((j) => j && startPrint(j));
+        else startPrint(job);
       },
       exportPdf: () => {
         // Dışarı Aktar › PDF: tam sayfa slaytlar (gizli slaytlar hariç); düzen Yazdır sayfasından seçilir.
         const settings = { ...DEFAULT_PRINT_SETTINGS };
         const job = { settings, indices: printSlideIndices(a.s.pres, settings, { kind: "all" }, a.s.slideIdx, []), pdf: !!getNative()?.exportPdf };
-        a.stopEditing();
-        if (a.s.masterBase) closeMasterView(a);
-        setBackstage(false);
-        setPrinting(job);
+        if (job.pdf) void askPdf(job).then((j) => j && startPrint(j));
+        else startPrint(job);
       },
       previewTransition: () => {
         // Önizleme gecikmeli başlar; bu arada gösteri açıldıysa gösterinin yerine geçmez.
