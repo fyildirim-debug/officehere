@@ -31,7 +31,7 @@ export function startWindow(argv: readonly string[]): WindowKind {
   return newKindFromArgv(argv) ?? "baslangic";
 }
 
-const quote = (s: string) => (/[\s"]/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s);
+const quote = (s: string) => (/\s/.test(s) ? `"${s}"` : s);
 
 export interface TaskEnv {
   /** Çalışan programın yolu (process.execPath). */
@@ -73,8 +73,13 @@ function fileTypeIcon(kind: AppKind): string | undefined {
 /** Atlama listesi görevlerini (Windows) ve Dock menüsünü (macOS) kurar; app hazır olduktan sonra çağrılır. */
 export function initTasks(open: (kind: AppKind) => void): void {
   if (process.platform === "win32") {
+    // Taşınabilir .exe her açılışta geçici bir dizine açılır: görev ve simge özgün .exe'yi göstermeli.
+    const portable = process.env.PORTABLE_EXECUTABLE_FILE;
+    const env: TaskEnv = portable
+      ? { execPath: portable }
+      : { execPath: process.execPath, appPath: app.isPackaged ? undefined : app.getAppPath(), iconFor: fileTypeIcon };
     // Kabuk görevleri reddederse (false; ör. kısıtlı oturum) uygulama yine de açılır.
-    app.setUserTasks(jumpListTasks({ execPath: process.execPath, appPath: app.isPackaged ? undefined : app.getAppPath(), iconFor: fileTypeIcon }));
+    app.setUserTasks(jumpListTasks(env));
   } else if (process.platform === "darwin") {
     app.dock?.setMenu(Menu.buildFromTemplate(dockMenuTemplate(open)));
   }

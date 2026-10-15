@@ -104,6 +104,22 @@ describe("initTasks", () => {
     expect(electron.app.dock.setMenu).not.toHaveBeenCalled();
   });
 
+  it("taşınabilir .exe'de görevler geçici dizini değil özgün .exe'yi gösterir", () => {
+    setPlatform("win32");
+    vi.stubEnv("PORTABLE_EXECUTABLE_FILE", "D:\\Araclar\\OfficeHere-0.2.0-tasinabilir.exe");
+    try {
+      initTasks(vi.fn());
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    const [tasks] = electron.app.setUserTasks.mock.calls[0] as unknown as [Array<{ program: string; iconPath: string; arguments: string }>];
+    for (const t of tasks) {
+      expect(t.program).toBe("D:\\Araclar\\OfficeHere-0.2.0-tasinabilir.exe");
+      expect(t.iconPath).toBe(t.program);
+    }
+    expect(tasks[2].arguments).toBe("--yeni=sunum");
+  });
+
   it("macOS'ta Dock menüsü kurulur ve tıklama pencere açar", () => {
     setPlatform("darwin");
     const open = vi.fn();
