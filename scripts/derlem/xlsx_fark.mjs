@@ -288,6 +288,10 @@ const sayfaA = fc.record({
 });
 const kitapA = fc.record({ sayfalar: fc.array(sayfaA, { minLength: 1, maxLength: 3 }), aktif: fc.nat(2), adlar: fc.array(fc.record({ ad: fc.constantFrom("Oran", "Liste_1", "Toplam"), f: fc.constantFrom("=0,18", "=$A$1:$A$3", "=SUM($B$1:$B$2)"), yerel: fc.boolean() }), { maxLength: 2 }), baslik: fc.option(fc.constantFrom("Rapor", "Ç<ö>"), { nil: undefined }) });
 
+/** Tanımdaki kesme işaretli sayfa adı (ve ona köprü) tipografik kesmeyle: eski yazıcının açılabilir çıktısı için. */
+const kesmesiz = (x) =>
+  typeof x === "string" ? x.replace(/O'+Brien/g, "O’Brien") : Array.isArray(x) ? x.map(kesmesiz) : x && typeof x === "object" ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, kesmesiz(v)])) : x;
+
 /** Rastgele kitap tanımından model kurar (geçerli, uygulamanın da üretebileceği biçimde). */
 function kitapKur(spec) {
   const wb = new T.WorkbookModel(true);
@@ -408,6 +412,14 @@ if (N > 0) {
           rastgeleFark = { spec, ...yerel[0] };
           return false;
         }
+        // Eski çıktı açılamadıysa (kesme işaretli sayfa adı) aynı kitap kesmesiz adla da karşılaştırılır
+        if (k.eskiAcilamadi) {
+          const k2 = await cift(`${ad} (kesmesiz)`, kitapKur(kesmesiz(spec)), yerel);
+          if (k2.fark.length) {
+            rastgeleFark = { spec: kesmesiz(spec), ...yerel[1] };
+            return false;
+          }
+        }
         sonuc.push(...yerel);
         return true;
       }),
@@ -494,6 +506,7 @@ const L = [
   "",
   `- Model farkı olan kitap: **${farkli.length}**`,
   `- Yalnız iyileşme (yeni çıktı özgüne eşit): ${iyi.length} kitap, ${iyi.reduce((a, s) => a + s.iyilesme.length, 0)} yol`,
+  `- Eski çıktısı açılamayan: ${sonuc.filter((s) => s.eskiAcilamadi).length} kitap (kesmesiz eşi karşılaştırılamayan: ${sonuc.filter((s) => s.eskiAcilamadi && s.ad.endsWith("(kesmesiz)")).length})`,
   `- Hata: ${hatalar.length}; açılamayan kaynak (atlandı): ${atlanan.length}`,
   `- Toplam yazma süresi: eski ${sure(top("eskiMs"))}, yeni ${sure(top("yeniMs"))}; toplam boyut eski ${top("eskiKB")} KB, yeni ${top("yeniKB")} KB`,
 ];
