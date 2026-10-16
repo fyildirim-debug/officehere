@@ -211,7 +211,7 @@ test("Hata bildir: sürüm, işletim sistemi ve son günlük satırları göster
   const dlg = win.getByRole("dialog", { name: "Hata bildir" });
   await expect(dlg).toBeVisible();
   const body = dlg.getByRole("textbox", { name: "Rapor" });
-  await expect(body).toHaveValue(/OfficeHere Belge \d+\.\d+\.\d+ \(masaüstü\)/);
+  await expect(body).toHaveValue(/OfficeHere Belge \d+\.\d+\.\d+(-[0-9A-Za-z.]+)? \(masaüstü\)/);
   await expect(body).toHaveValue(/İşletim sistemi: linux/);
   await expect(body).toHaveValue(/deneme hatası 42/);
   // Kullanıcı düzenleyebilir.
