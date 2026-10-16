@@ -1,0 +1,47 @@
+name: Beta geri bildirimi
+description: Beta (ön sürüm) kanalındaki deneyiminiz — sorun olmasa da yazın.
+title: "[Beta] "
+labels: ["beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Beta sürümleri kararlı sürümden önce en az 7 gün denenir. "Sorun yaşamadım" bilgisi de değerlidir.
+        **Gizli ya da kişisel veri içeren belge eklemeyin.**
+  - type: input
+    id: surum
+    attributes:
+      label: Beta sürümü
+      placeholder: "0.2.0-beta.1"
+    validations:
+      required: true
+  - type: input
+    id: sistem
+    attributes:
+      label: İşletim sistemi
+      placeholder: "Pardus 25, Windows 11, macOS 15, Android 14…"
+    validations:
+      required: true
+  - type: checkboxes
+    id: denenen
+    attributes:
+      label: Neleri denediniz?
+      options:
+        - label: Gerçek iş dosyalarımı açıp kaydettim (.docx / .xlsx / .pptx)
+        - label: OpenDocument dosyaları (.odt / .ods / .odp)
+        - label: Büyük dosyalar (yüzlerce sayfa / on binlerce satır)
+        - label: PDF olarak kaydet / PDF/A
+        - label: Resmî yazışma şablonları
+        - label: Makrolu ya da dijital imzalı dosyalar
+  - type: dropdown
+    id: genel
+    attributes:
+      label: Genel izlenim
+      options: ["Sorun yaşamadım", "Küçük sorunlar var", "Kullanmamı engelleyen sorun var"]
+    validations:
+      required: true
+  - type: textarea
+    id: ayrinti
+    attributes:
+      label: Ayrıntılar
+      description: Kaybolan içerik, yanlış görünen sayfa, yavaşlık… Ne kadar somut, o kadar iyi.

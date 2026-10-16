@@ -132,4 +132,12 @@ describe("ODT yazma", () => {
     zip.file("mimetype", "application/vnd.oasis.opendocument.text");
     await expect(readOdt(await zip.generateAsync({ type: "uint8array" }))).rejects.toThrow(/content\.xml/);
   });
+
+  it("parolayla şifrelenmiş .odt anlaşılır hatayla reddedilir", async () => {
+    const zip = new JSZip();
+    zip.file("mimetype", "application/vnd.oasis.opendocument.text");
+    zip.file("content.xml", new Uint8Array([0x8f, 0x12, 0x00, 0xfe]));
+    zip.file("META-INF/manifest.xml", '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"><manifest:file-entry manifest:full-path="content.xml"><manifest:encryption-data/></manifest:file-entry></manifest:manifest>');
+    await expect(readOdt(await zip.generateAsync({ type: "uint8array" }))).rejects.toThrow(/parolayla şifrelenmiş/);
+  });
 });

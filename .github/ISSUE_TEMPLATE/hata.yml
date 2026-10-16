@@ -1,0 +1,56 @@
+name: Hata bildirimi
+description: Bir şey yanlış çalışıyor, dosya bozuk açılıyor ya da uygulama çöküyor.
+title: "[Hata] "
+labels: ["hata"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Teşekkürler! Uygulamada **Yardım › Hata bildir** sürüm, işletim sistemi ve son günlük satırlarını sizin için doldurur.
+        **Gizli ya da kişisel veri içeren belge eklemeyin.** Sorun bir dosyaya bağlıysa, aynı sorunu gösteren kişisel veri içermeyen küçük bir örnek en iyisidir.
+  - type: dropdown
+    id: uygulama
+    attributes:
+      label: Uygulama
+      multiple: true
+      options: ["Belge", "Tablo", "Sunum", "Başlangıç ekranı / kurulum", "Mobil (Android)"]
+    validations:
+      required: true
+  - type: input
+    id: surum
+    attributes:
+      label: OfficeHere sürümü
+      description: Dosya › Hakkında (ör. 0.2.0-beta.1)
+    validations:
+      required: true
+  - type: input
+    id: sistem
+    attributes:
+      label: İşletim sistemi
+      placeholder: "Pardus 25, Windows 11, macOS 15, Android 14…"
+    validations:
+      required: true
+  - type: textarea
+    id: ne-oldu
+    attributes:
+      label: Ne oldu, ne bekliyordunuz?
+    validations:
+      required: true
+  - type: textarea
+    id: adimlar
+    attributes:
+      label: Yeniden üretme adımları
+      placeholder: |
+        1. … dosyasını açın
+        2. … düğmesine basın
+        3. …
+  - type: input
+    id: bicim
+    attributes:
+      label: Dosya biçimi ve nereden geldiği
+      placeholder: ".docx (bir kurumdan gelen), .xlsx (LibreOffice ile kaydedilmiş)…"
+  - type: textarea
+    id: gunluk
+    attributes:
+      label: Hata bildir penceresindeki günlük satırları (isteğe bağlı)
+      render: text

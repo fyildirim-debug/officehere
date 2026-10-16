@@ -171,6 +171,9 @@ export class OdtReader {
     if (!contentFile) throw new Error("Geçerli bir ODT dosyası değil (content.xml yok).");
     const mime = await zip.file("mimetype")?.async("string");
     if (mime && !/opendocument\.text/.test(mime)) throw new Error(notTextMessage(mime));
+    // Parolalı ODF: içerik şifreli (manifest'te encryption-data); ayrıştırma yerine anlaşılır ileti.
+    const manifest = await zip.file("META-INF/manifest.xml")?.async("string");
+    if (manifest && /encryption-data/.test(manifest)) throw new BelgeOpenError(ENCRYPTED_ODT);
     await this.openSource(data);
     for (const name of Object.keys(zip.files)) {
       const f = zip.files[name];
@@ -955,6 +958,9 @@ function notTextMessage(mime: string): string {
  * ODT baytları → belge. `kaynak: false`: özgün paket kaynak kaydına eklenmez (gömülü nesneler yalnız yedek
  * görüntüleriyle açılır, kaydederken ayarlar taşınmaz).
  */
+/** Parolayla şifrelenmiş .odt için ileti (Tablo .ods ve Sunum .odp iletileriyle aynı dilde). */
+export const ENCRYPTED_ODT = "Bu belge parolayla şifrelenmiş. Şifreli belgeler açılamıyor; belgeyi parolasız kaydedip yeniden deneyin.";
+
 export async function readOdt(data: ArrayBuffer | Uint8Array, warnings?: LoadWarnings, opts: { kaynak?: boolean } = {}): Promise<BelgeDocument> {
   const r = new OdtReader();
   if (warnings) r.warnings = warnings;

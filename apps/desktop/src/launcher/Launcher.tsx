@@ -169,6 +169,7 @@ export function Launcher() {
         <BackstageSubheading>Son Kullanılanlar</BackstageSubheading>
         <RecentFileList files={recent.slice(0, 15)} onOpen={(f) => launch(f.app, f.path)} emptyText={native ? "Henüz dosya açmadınız." : "Son kullanılan dosyalar masaüstü uygulamasında listelenir."} />
         <DeveloperCredit variant="footer" />
+        <p className="ohl-vaat">Hesap yok · Reklam yok · Abonelik yok · Telemetri yok · Yapay zekâ yok</p>
       </>
     );
   } else if (page === "new") {

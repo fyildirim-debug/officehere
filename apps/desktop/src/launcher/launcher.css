@@ -87,3 +87,11 @@
   display: flex;
   gap: 8px;
 }
+
+/* Alt bilgideki vaat satırı (README › Ağ erişimi ile aynı söz) */
+.ohl-vaat {
+  margin: -2px 0 8px;
+  color: var(--oh-text-muted);
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+}

@@ -700,6 +700,9 @@ export function storedXlsxWriter(): string | undefined {
   }
 }
 
+/** Yeni yazıcı hata verip eski yazıcıya düşüldüğünde kayıt raporuna eklenen öğe (eski yazıcı bazı öğeleri yazamaz). */
+export const XLSX_LEGACY_FALLBACK = "bazı koşullu biçimler ve yazdırma alanları (kaydetme yolu bir hata verdi, dosya yedek yolla kaydedildi; Yardım › Hata Bildir ile bildirebilirsiniz)";
+
 export async function writeXlsx(wb: WorkbookModel, opts: XlsxWriteOptions = {}): Promise<Uint8Array<ArrayBuffer>> {
   const choice = xlsxWriterChoice();
   if (choice !== "eski") {
@@ -708,6 +711,8 @@ export async function writeXlsx(wb: WorkbookModel, opts: XlsxWriteOptions = {}):
     } catch (e) {
       if (choice === "yeni" || import.meta.env?.MODE === "test") throw e;
       console.warn("[tablo] .xlsx yazıcısı başarısız oldu; eski yazıcıyla yeniden deneniyor", e);
+      // Sessiz kalmasın: kullanıcı ileti çubuğunda görür, kayıt yerel hata günlüğüne de yazılır (fileActions).
+      opts.report?.warnings.push(XLSX_LEGACY_FALLBACK);
     }
   }
   return writeXlsxLegacy(wb, opts);

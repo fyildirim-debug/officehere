@@ -183,6 +183,14 @@ yüklenmez (sayfalar yalnız kendi dosyalarına izin veren bir içerik güvenlik
 Chromium ağ günlüğü (`--log-net-log`) altında açar, belge yazar ve onay verilmemişken dış istek
 sayısının **0** olduğunu doğrular (`e2e-masaustu/agistegi.spec.ts`).
 
+### Geri bildirim
+
+- **Hata ya da istek:** [GitHub'da sorun açın](https://github.com/fyildirim-debug/officehere/issues/new/choose)
+  (hata, istek ve beta geri bildirimi formları var) ya da uygulamada **Yardım › Hata bildir**.
+- **GitHub hesabınız yoksa:** posta@furkanyildirim.com adresine e-posta gönderin.
+- **Güvenlik açığı:** herkese açık sorun yerine [güvenlik ilkesindeki](SECURITY.md) yolu kullanın.
+- Gizli ya da kişisel veri içeren belge eklemeyin; mümkünse sorunu gösteren küçük bir örnek dosya hazırlayın.
+
 ### Yapay zekâ ilkesi
 
 OfficeHere'de üretken yapay zekâ yoktur ve varsayılan kurulumda hiçbir zaman olmayacaktır. İleride

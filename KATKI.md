@@ -27,6 +27,18 @@ Dosya biçimi kodunu değiştirdiyseniz `pnpm derlem` ve `pnpm bulanik` ile
 derlem turunu ve bozuk dosya testini çalıştırın (CI'da "Sağlamlık" işi). Kayıp
 azaldıysa temel çizgiyi `pnpm derlem:temel` ile güncelleyin.
 
+## Beta süreci
+
+- Ön sürümler `vX.Y.Z-beta.N` etiketiyle yayımlanır (`release.yml`, girdi `surum`). Tireli etiket
+  GitHub'da "Pre-release" olur; güncelleme dosyaları `beta*.yml` adını alır ve kararlı kanaldaki
+  kullanıcılar (`latest*.yml`) betayı hiçbir yoldan görmez.
+- Kullanıcı Seçenekler → **Güncelleme kanalı: Beta** ile katılır; mobilde beta APK GitHub sürümünden
+  elle kurulur.
+- Kararlı sürüm, son betadan en az **7 gün** sonra ve beta geri bildirimindeki engelleyici sorunlar
+  kapanınca çıkar. Geri bildirim "Beta geri bildirimi" formuyla ya da e-postayla toplanır.
+- Sürüm notları `docs/surumler/<etiket>.md`; yayımlamadan önce paketlerin `package.json` sürümleri
+  etiketle aynı olmalıdır (iş akışı uyuşmazlıkta durur).
+
 ## Kurallar
 
 - **Hukuk:** [HUKUKI.md](HUKUKI.md) içindeki temiz oda kurallarına uyun. Microsoft

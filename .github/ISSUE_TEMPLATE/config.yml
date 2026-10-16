@@ -1,0 +1,9 @@
+# Boş sorun açık kalır: uygulamadaki "Hata bildir" penceresi hazırladığı metinle boş sorun sayfasını açar.
+blank_issues_enabled: true
+contact_links:
+  - name: GitHub hesabınız yoksa — e-postayla bildirin
+    url: mailto:posta@furkanyildirim.com?subject=OfficeHere%20geri%20bildirim
+    about: Hata, istek ya da beta geri bildirimini e-postayla da gönderebilirsiniz. Gizli belge eklemeyin.
+  - name: Güvenlik açığı
+    url: https://github.com/fyildirim-debug/officehere/security/policy
+    about: Güvenlik açıklarını herkese açık sorun olarak değil, güvenlik ilkesindeki yoldan bildirin.

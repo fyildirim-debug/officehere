@@ -1,0 +1,28 @@
+name: Özellik isteği
+description: Eksik bir özellik ya da iyileştirme önerisi.
+title: "[İstek] "
+labels: ["istek"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        OfficeHere'de hesap, reklam, abonelik, telemetri ve yapay zekâ yoktur; bunları gerektiren istekler kapsam dışıdır (README › Yapay zekâ ilkesi).
+  - type: dropdown
+    id: uygulama
+    attributes:
+      label: Uygulama
+      multiple: true
+      options: ["Belge", "Tablo", "Sunum", "Masaüstü genel", "Mobil (Android)"]
+    validations:
+      required: true
+  - type: textarea
+    id: ihtiyac
+    attributes:
+      label: Neye ihtiyacınız var, neden?
+      description: Hangi işi yapmaya çalışıyorsunuz? (ör. "okulda sınav kâğıdı hazırlıyorum, …")
+    validations:
+      required: true
+  - type: textarea
+    id: bugun
+    attributes:
+      label: Bugün nasıl idare ediyorsunuz?

@@ -44,6 +44,8 @@ test("başlangıç ekranı açılır ve yerel köprü hazırdır", async () => {
   const info = await win.evaluate(() => ({ native: typeof window.officehereNative, cls: document.documentElement.className }));
   expect(info.native).toBe("object");
   for (const name of ["Belge", "Tablo", "Sunum"]) await expect(win.locator(".ohl-app", { hasText: name })).toBeVisible();
+  // Alt bilgideki vaat satırı (README › Ağ erişimi)
+  await expect(win.locator(".ohl-vaat")).toHaveText("Hesap yok · Reklam yok · Abonelik yok · Telemetri yok · Yapay zekâ yok");
   await app.close();
 });
 

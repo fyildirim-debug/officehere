@@ -70,7 +70,7 @@ function appXml(wb: WorkbookModel): string {
   return (
     XML_DECL +
     '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">' +
-    "<Application>Microsoft Excel</Application><DocSecurity>0</DocSecurity><ScaleCrop>false</ScaleCrop>" +
+    "<Application>OfficeHere Tablo</Application><DocSecurity>0</DocSecurity><ScaleCrop>false</ScaleCrop>" +
     `<HeadingPairs><vt:vector size="2" baseType="variant"><vt:variant><vt:lpstr>Worksheets</vt:lpstr></vt:variant><vt:variant><vt:i4>${wb.sheets.length}</vt:i4></vt:variant></vt:vector></HeadingPairs>` +
     `<TitlesOfParts><vt:vector size="${wb.sheets.length}" baseType="lpstr">${names}</vt:vector></TitlesOfParts>` +
     `<Company>${esc(wb.props.company || "")}</Company><Manager></Manager>` +

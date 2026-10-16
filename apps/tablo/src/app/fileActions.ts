@@ -5,7 +5,7 @@
  * kayıtta bir kez sorulur.
  */
 import { useMemo } from "react";
-import { isDirectSave, trackSave } from "@officehere/ui";
+import { isDirectSave, logPageEvent, trackSave } from "@officehere/ui";
 import { addRecentFile, baseName, downloadBlob, getNative, isAbortError, openFile, readPath, saveFile, saveFileAs, type FileRef, type RecentFile } from "@officehere/core";
 import type { Controller } from "../controller";
 import { openBookIo, writeBookIo } from "../io/client";
@@ -13,7 +13,7 @@ import { FILTERS, OPEN_FILTERS, saveFormatOf, writableAs, type SaveFormat } from
 import { writeHtml } from "../io/html";
 import { exportPdf } from "../io/print";
 import { printWithOptions } from "../io/printPages";
-import type { XlsxWriteReport } from "../io/xlsx";
+import { XLSX_LEGACY_FALLBACK, type XlsxWriteReport } from "../io/xlsx";
 import { buildTemplate, TEMPLATES } from "../templates";
 import type { FormatChoice } from "../dialogs/SaveFormatDialog";
 import { fileFormatOf, setFileFormat } from "./fileFormat";
@@ -50,6 +50,7 @@ function textSavedNotice(ctl: Controller, format: SaveFormat): void {
 /** .xlsx/.xlsm kaydında korunamayan öğeler (dosyadan gelen, yapı değişince kaydırılamayan…). */
 function savedWarnings(ctl: Controller, report: XlsxWriteReport): void {
   if (!report.warnings.length) return;
+  if (report.warnings.includes(XLSX_LEGACY_FALLBACK)) logPageEvent({ level: "uyari", message: "Tablo: yeni .xlsx yazıcısı hata verdi; dosya eski yazıcıyla kaydedildi", kind: "xlsx-yedek-yazici" });
   ctl.infoBar = { kind: "warning", text: `Kaydedildi. Şu öğeler bu dosyada korunamadı: ${report.warnings.join(", ")}.` };
   ctl.emit();
 }
