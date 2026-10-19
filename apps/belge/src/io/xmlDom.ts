@@ -88,7 +88,7 @@ export function installXmlDom(opts: { force?: boolean } = {}): void {
     patch();
     installed = true;
   }
-  setBuiltinXml(() => impl.createDocument(null, null, null) as unknown as Document, opts);
+  setBuiltinXml(() => impl.createDocument(null, "", null) as unknown as Document, opts);
   const g = globalThis as { XMLSerializer?: unknown };
   if (typeof g.XMLSerializer === "undefined" || opts.force) g.XMLSerializer = XmldomSerializer;
 }
