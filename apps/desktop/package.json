@@ -24,7 +24,7 @@
     "@officehere/core": "workspace:*",
     "@officehere/ui": "workspace:*",
     "@types/node": "^26.6.5",
-    "electron": "44.7.0",
+    "electron": "44.8.0",
     "electron-builder": "26.15.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
