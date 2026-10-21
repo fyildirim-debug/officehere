@@ -20,7 +20,7 @@ body:
     id: surum
     attributes:
       label: OfficeHere sürümü
-      description: Dosya › Hakkında (ör. 0.2.0-beta.1)
+      description: Dosya › Hakkında (ör. 0.2.0-beta.2)
     validations:
       required: true
   - type: input
