@@ -179,7 +179,8 @@ describe("yan yedeğin temiz kapanışta silinmesi", () => {
     await s.write(f, B("OTO-1"), { session: "7:1", sidecar: true, keepPrevious: true });
     await s.write(f, B("OTO-2"), { session: "7:1", sidecar: true, keepPrevious: true });
     expect(text(sidecarPathFor(f))).toBe("ÖZGÜN");
-    expect(await s.releaseSidecars(7, { clean: true, path: f })).toEqual([sidecarPathFor(realpathSync(f))]);
+    // Yerel realpath: Windows kısa adı (RUNNER~1) uygulamadaki fs.promises.realpath gibi uzun ada çözülür.
+    expect(await s.releaseSidecars(7, { clean: true, path: f })).toEqual([sidecarPathFor(realpathSync.native(f))]);
     expect(existsSync(sidecarPathFor(f))).toBe(false);
     expect(text(f)).toBe("OTO-2");
     expect(await versionTexts(store, f)).toContain("ÖZGÜN");
