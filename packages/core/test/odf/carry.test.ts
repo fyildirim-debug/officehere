@@ -22,13 +22,13 @@ const manifest = (mime: string, extra: string) =>
 const entry = (p: string, t: string, v = "") => `<manifest:file-entry manifest:full-path="${p}"${v ? ` manifest:version="${v}"` : ""} manifest:media-type="${t}"/>`;
 
 /** LibreOffice'in yazdığına benzer kaynak: ayarlar, RDF, küçük resim ve gömülü grafik. */
-async function source(mime = MIME_ODT): Promise<Uint8Array> {
+async function source(mime = MIME_ODT, settingsVersion = "1.3"): Promise<Uint8Array> {
   const chart = `<?xml version="1.0" encoding="UTF-8"?><office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" office:version="1.3"/>`;
   return zip([
     ["mimetype", mime, true],
     ["content.xml", "<x/>"],
     ["styles.xml", "<x/>"],
-    ["settings.xml", `<?xml version="1.0" encoding="UTF-8"?><office:document-settings xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0" xmlns:ooo="http://openoffice.org/2004/office" office:version="1.3"><office:settings><config:config-item-set config:name="ooo:view-settings"><config:config-item config:name="ViewLeft" config:type="int">7</config:config-item></config:config-item-set><config:config-item-set config:name="ooo:configuration-settings"><config:config-item config:name="AddParaTableSpacing" config:type="boolean">false</config:config-item></config:config-item-set></office:settings></office:document-settings>`],
+    ["settings.xml", `<?xml version="1.0" encoding="UTF-8"?><office:document-settings xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0" xmlns:ooo="http://openoffice.org/2004/office" office:version="${settingsVersion}"><office:settings><config:config-item-set config:name="ooo:view-settings"><config:config-item config:name="ViewLeft" config:type="int">7</config:config-item></config:config-item-set><config:config-item-set config:name="ooo:configuration-settings"><config:config-item config:name="AddParaTableSpacing" config:type="boolean">false</config:config-item></config:config-item-set></office:settings></office:document-settings>`],
     ["manifest.rdf", `<?xml version="1.0" encoding="utf-8"?><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"/>`],
     ["Thumbnails/thumbnail.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4, 5, 6, 7, 8])],
     ["Object 1/content.xml", chart],
@@ -135,6 +135,17 @@ describe("OdfCarry", () => {
     expect(out.manifest.find((e) => e.path === "manifest.rdf")?.mediaType).toBe("application/rdf+xml");
     expect(c.report.dropped).toContainEqual({ what: "Thumbnails/", reason: "thumbnail" });
     expect(await out.pkg.text("settings.xml")).toContain("AddParaTableSpacing");
+  });
+
+  it("daha yeni ODF sürümlü kaynağın settings.xml'i paketin sürümüyle (1.3) taşınır", async () => {
+    const reg = new SourceRegistry();
+    const id = reg.register(await OpcPackage.open(await source(MIME_ODT, "1.4")));
+    const out = await entries(await new OdfCarry({ family: "text", source: id, registry: reg }).finish(await written()));
+    const s = (await out.pkg.text("settings.xml"))!;
+    expect(s).toContain('office:version="1.3"');
+    expect(s).not.toContain('office:version="1.4"');
+    expect(s).toContain("AddParaTableSpacing");
+    expect(out.manifest.find((e) => e.path === "settings.xml")?.mediaType).toBe("text/xml");
   });
 
   it("yazıcı settings.xml yazdıysa birleştirilir", async () => {

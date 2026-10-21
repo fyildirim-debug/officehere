@@ -14,7 +14,7 @@ import { packageSources, type SourceRegistry } from "../opc/source";
 import { attrOf, childElements, rebuildElement } from "../opc/xmlPart";
 import { inflateEntry, readZip, ZipWriter, type ZipEntry } from "../opc/zip";
 import { escAttr, guessMediaType, looksOdf, manifestXml, odfInfo, parseManifest, type ManifestEntry, type OdfFamily } from "./manifest";
-import { renameStyle, renameStyleRefs, rootNamespaces, styleIdentity, withNamespaces, XLINK_NS } from "./xml";
+import { renameStyle, renameStyleRefs, rootAttr, rootNamespaces, setRootAttrs, styleIdentity, withNamespaces, XLINK_NS } from "./xml";
 
 /** Modelin taşıdığı opak ODF çizim nesnesi (bayt taşımaz; dosyalar kaynak paketten kopyalanır). */
 export interface OdfObject {
@@ -46,6 +46,8 @@ interface CopyPlan {
 
 const lc = (s: string) => s.toLowerCase(); // yerel-ayar: ascii
 /** Yazıcıların kökte ürettiği ya da ODF'nin ayırdığı adlar: taşınan nesne bunlarla adlandırılmaz. */
+/** Yazılan paketin ODF sürümü (manifest); taşınan settings.xml'in kök sürümü buna eşitlenir. */
+const PACKAGE_VERSION = "1.3";
 const RESERVED = new Set(["mimetype", "content.xml", "styles.xml", "meta.xml", "settings.xml", "manifest.rdf", "meta-inf", "pictures", "media", "thumbnails", "objectreplacements", "configurations2", "basic", "scripts", "dialogs"]);
 const unescXml = (s: string) => s.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 
@@ -217,7 +219,18 @@ export class OdfCarry {
       const man = new Map(info.manifest.map((e) => [e.path, e]));
       if (src.has("settings.xml")) {
         if (!byName.has("settings.xml")) {
-          if (copy(src, src.canonicalName("settings.xml")!, "settings.xml")) addEntry("settings.xml", "text/xml");
+          // Kök sürümü paketinkine eşitlenir: daha yeni ODF yazan bir uygulamadan (ör. office:version="1.4") açılan
+          // dosyada içerik 1.3 iken ayarlar 1.4 kalırsa paket kendi içinde tutarsız ve şemaya aykırı olur.
+          const xml = await src.text("settings.xml").catch(() => null);
+          const version = xml ? rootAttr(xml, "office:version") : undefined;
+          if (xml && version !== undefined && version !== PACKAGE_VERSION) {
+            if (!outNames.has("settings.xml")) {
+              z.add("settings.xml", setRootAttrs(xml, { "office:version": PACKAGE_VERSION }));
+              outNames.add("settings.xml");
+              this.report.carried.push("settings.xml");
+              addEntry("settings.xml", "text/xml");
+            }
+          } else if (copy(src, src.canonicalName("settings.xml")!, "settings.xml")) addEntry("settings.xml", "text/xml");
         } else {
           const merged = mergeSettings((await text(byName.get("settings.xml"))) ?? "", (await src.text("settings.xml").catch(() => null)) ?? "");
           if (merged) z.add("settings.xml", merged);
@@ -251,7 +264,7 @@ export class OdfCarry {
       const d = man.get(prefix);
       addEntry(p.to + "/", d?.mediaType ?? "", d?.version);
     }
-    z.add("META-INF/manifest.xml", manifestXml(entries));
+    z.add("META-INF/manifest.xml", manifestXml(entries, PACKAGE_VERSION));
     return z.finish();
   }
 }
