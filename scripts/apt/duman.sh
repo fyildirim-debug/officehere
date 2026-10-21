@@ -2,7 +2,7 @@
 # Kurulu OfficeHere'ı ekransız (Xvfb) başlatır: başlangıç ekranı sayfası yüklenir ve yerel günlüğe
 # "başlatıldı" yazılırsa başarılıdır. Pardus 23/25 duman testi (.github/workflows/pardus.yml).
 #
-# Kullanım: scripts/apt/duman.sh [program]      (varsayılan: /opt/OfficeHere/officehere)
+# Kullanım: scripts/apt/duman.sh [program]      (varsayılan: /opt/OfficeHere/officehere; AppImage de verilebilir)
 # Gerekenler: xvfb-run (xvfb, xauth), curl.
 # Ortam:
 #   OH_DUMAN_SURE=90         sayfa için beklenecek en uzun süre (sn)

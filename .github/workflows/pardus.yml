@@ -2,10 +2,11 @@ name: Pardus
 
 # Pardus 23 (Debian 12) ve Pardus 25 (Debian 13) kapsayıcılarında .deb paketi imzalı bir apt
 # deposundan kurulur ve ekransız (Xvfb) açılır. Depo geçici bir TEST anahtarıyla imzalanır
-# (scripts/apt/sina.sh); gerçek anahtar ve alan adı burada kullanılmaz.
+# (scripts/apt/sina.sh); gerçek anahtar ve alan adı burada kullanılmaz. AppImage de libfuse2
+# kurulu olmayan Ubuntu 24.04'te (yalnız FUSE3) açılır.
 #
-# Paket: release.yml'den çağrılınca o çalıştırmanın Linux artefaktı; elle "surum" verilirse GitHub
-# Sürümü'ndeki .deb; aksi hâlde bu commit'ten derlenir.
+# Paketler: release.yml'den çağrılınca o çalıştırmanın Linux artefaktı; elle "surum" verilirse GitHub
+# Sürümü'ndeki .deb ve .AppImage; aksi hâlde bu commit'ten derlenir.
 on:
   workflow_call:
     inputs:
@@ -38,7 +39,7 @@ permissions:
 
 jobs:
   deb:
-    name: .deb paketi
+    name: .deb ve AppImage paketleri
     if: inputs.artefakt == ''
     runs-on: ubuntu-latest
     env:
@@ -57,18 +58,20 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Bu commit'ten derle
         if: env.ETIKET == ''
-        run: pnpm --filter @officehere/desktop dist -- --linux deb --publish never
+        run: pnpm --filter @officehere/desktop dist -- --linux deb AppImage --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
       - name: Sürümden indir
         if: env.ETIKET != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "$ETIKET" --repo "$GITHUB_REPOSITORY" --pattern '*.deb' --dir apps/desktop/release
+        run: gh release download "$ETIKET" --repo "$GITHUB_REPOSITORY" --pattern '*.deb' --pattern '*.AppImage' --dir apps/desktop/release
       - uses: actions/upload-artifact@v7
         with:
           name: pardus-deb
-          path: apps/desktop/release/*.deb
+          path: |
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.AppImage
           if-no-files-found: error
           retention-days: 7
 
@@ -132,3 +135,37 @@ jobs:
         env:
           OH_DUMAN_KORUMASIZ: "1"
         run: scripts/apt/duman.sh
+
+  # AppImage'ın çalışma zamanı libfuse2 (libfuse.so.2) istemez: Ubuntu 24.04 ve sonrası, Debian 13 ve
+  # Pardus 25 masaüstlerinde yalnız FUSE3 kuruludur. Koşucuda libfuse2 kaldırılır, AppImage normal
+  # kullanıcıyla doğrudan (FUSE ile bağlanarak) açılır.
+  appimage:
+    name: AppImage (libfuse2 olmadan, Ubuntu 24.04)
+    needs: deb
+    if: ${{ !cancelled() && (needs.deb.result == 'success' || needs.deb.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/apt
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artefakt || 'pardus-deb' }}
+          path: paket
+      - name: Yalnız FUSE3 (libfuse2 yok)
+        run: |
+          sudo apt-get remove -y 'libfuse2*' || true
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fuse3 xvfb xauth curl
+          if ldconfig -p | grep -q 'libfuse\.so\.2'; then
+            echo "::error::libfuse.so.2 kaldırılamadı; test anlamsız olur"
+            exit 1
+          fi
+      - name: Duman testi (Xvfb)
+        shell: bash
+        run: |
+          shopt -s nullglob
+          imajlar=(paket/*.AppImage)
+          if [[ ${#imajlar[@]} -ne 1 ]]; then echo "::error::Tek bir .AppImage bekleniyordu: ${imajlar[*]}"; exit 1; fi
+          chmod +x "${imajlar[0]}"
+          scripts/apt/duman.sh "$(realpath "${imajlar[0]}")"

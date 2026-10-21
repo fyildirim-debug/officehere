@@ -163,6 +163,12 @@ nsis:
 portable:
   artifactName: ${productName}-${version}-tasinabilir.${ext}
 
+# AppImage statik çalışma zamanıyla paketlenir: eski çalışma zamanı libfuse2 (libfuse.so.2) ister ve yalnız
+# FUSE3 bulunan dağıtımlarda (Ubuntu 24.04+, Debian 13, Pardus 25) açılmaz. AppRun, kullanıcı ad alanı
+# kapalıysa --no-sandbox'ı kendisi ekler.
+toolsets:
+  appimage: "1.0.3"
+
 linux:
   icon: icons
   executableName: officehere
