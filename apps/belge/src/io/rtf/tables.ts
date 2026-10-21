@@ -15,6 +15,8 @@ export interface RowDef {
   align?: "center" | "right" | null;
   /** Başlık satırı olarak her sayfada yinelenir (\trhdr). */
   header?: boolean;
+  /** Satır yüksekliği (\trrh, twip): artı en az, eksi tam, 0 otomatik. */
+  height?: number;
 }
 
 interface Row {
@@ -45,6 +47,9 @@ export class RtfTables {
         return true;
       case "trhdr":
         this.def.header = true;
+        return true;
+      case "trrh":
+        this.def.height = param ?? 0;
         return true;
       case "trql":
       case "trqc":
@@ -164,7 +169,7 @@ export class RtfTables {
       return best;
     };
     const total = colW.length;
-    const rows: JSONContent[] = grid.map((row) => {
+    const rows: JSONContent[] = grid.map((row, ri) => {
       const cells: JSONContent[] = [];
       let used = 0;
       for (const c of row) {
@@ -181,7 +186,8 @@ export class RtfTables {
       }
       // Kısa satırlar boş hücreyle tamamlanır.
       for (let k = used; k < total; k++) cells.push({ type: "tableCell", attrs: { colspan: 1, rowspan: 1, colwidth: [colW[k]] }, content: [{ type: "paragraph" }] });
-      return { type: "tableRow", content: cells };
+      const tw = this.rows[ri]?.def.height ?? 0;
+      return tw ? { type: "tableRow", attrs: { height: Math.round((Math.abs(tw) / 15) * 100) / 100, heightRule: tw < 0 ? "exact" : null }, content: cells } : { type: "tableRow", content: cells };
     });
     const align = this.rows[0]?.def.align ?? null;
     const indent = align ? 0 : Math.round(indentTw / 15);

@@ -437,7 +437,10 @@ class OdtWriter {
     const border = n.attrs?.tableStyle === "none" ? "none" : "0.5pt solid #000000";
     const covered: number[] = new Array(cols).fill(0);
     rows.forEach((row, r) => {
-      let rx = "<table:table-row>";
+      // Satır yüksekliği (px → twip): en az (min-row-height) ya da tam (row-height).
+      const h = Number(row.attrs?.height) || 0;
+      const rowStyle = h > 0 ? book.raw("table-row", "Satir", `<style:table-row-properties ${row.attrs?.heightRule === "exact" ? "style:row-height" : "style:min-row-height"}="${twCm(h * 15)}"/>`) : "";
+      let rx = rowStyle ? `<table:table-row table:style-name="${rowStyle}">` : "<table:table-row>";
       let col = 0;
       const cells = row.content ?? [];
       let ci = 0;

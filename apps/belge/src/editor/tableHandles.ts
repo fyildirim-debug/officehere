@@ -1,5 +1,7 @@
 // Tablo tutamaçları (Word'deki gibi): sol üstte taşıma tutamacı (✥; tıklayınca tabloyu seçer, sürükleyince
-// tabloyu taşır) ve sağ altta boyutlandırma tutamacı (sütun genişliklerini orantılı ölçekler).
+// tabloyu taşır), sağ altta boyutlandırma tutamacı (sağa/sola sürükleyince sütun genişliklerini, aşağı/yukarı
+// sürükleyince satır yüksekliklerini orantılı ölçekler) ve satırın alt kenarı (sürükleyince satır uzar/kısalır;
+// son satırın kenarı tabloyu aşağı uzatır).
 // Ortalı ya da sağa yaslı tablo sağ kenarından boyutlandırılınca sol kenarı yerinde kalır; bırakınca
 // tablo sola yaslı olur ve ölçülen sol konum girinti olarak yazılır (tek geri alma adımı).
 import { Extension } from "@tiptap/core";
@@ -8,6 +10,7 @@ import { Plugin, PluginKey, TextSelection, type Transaction } from "@tiptap/pm/s
 import { CellSelection, TableMap, columnResizingPluginKey } from "@tiptap/pm/tables";
 import type { EditorView } from "@tiptap/pm/view";
 import { anchorTableLeft } from "./table";
+import { MIN_ROW_PX, measureRows, rowBorderAt, rowHeightsTr, rowPositions, zoomOf } from "./tableRowHeight";
 
 /** Tabloyu (tüm hücreleriyle) seçer. */
 export function selectTable(view: EditorView, tablePos: number) {
@@ -36,12 +39,6 @@ export function moveTable(view: EditorView, tablePos: number, target: number): b
   tr.setSelection(TextSelection.near(tr.doc.resolve(at + 3)));
   view.dispatch(tr.scrollIntoView());
   return true;
-}
-
-/** Tablonun yakınlaştırma ölçeği (ekran pikseli / CSS pikseli). */
-function zoomOf(el: HTMLElement): number {
-  const r = el.getBoundingClientRect().width;
-  return el.offsetWidth ? r / el.offsetWidth : 1;
 }
 
 /**
@@ -146,6 +143,8 @@ class HandlesView {
   private tablePos = -1;
   private tableEl: HTMLElement | null = null;
   private hideTimer = 0;
+  /** Fare altındaki satır kenarı (satır yüksekliği sürüklemesi için). */
+  private rowHover: { rowPos: number; el: HTMLElement } | null = null;
 
   constructor(private view: EditorView) {
     this.move = document.createElement("div");
@@ -170,7 +169,16 @@ class HandlesView {
     this.resize.addEventListener("mousedown", this.onResizeDown);
   }
 
+  /** Satırın alt kenarına gelince imleç satır boyutlandırma imlecine döner (sütun kenarı öncelikli). */
+  private hoverRowBorder(e: MouseEvent) {
+    if (e.buttons) return;
+    const hit = this.view.editable && !this.view.dom.classList.contains("resize-cursor") ? rowBorderAt(this.view, e.clientX, e.clientY) : null;
+    this.rowHover = hit;
+    this.view.dom.classList.toggle("bl-row-resize-cursor", !!hit);
+  }
+
   private onMove = (e: MouseEvent) => {
+    this.hoverRowBorder(e);
     const t = (e.target as HTMLElement).closest?.("table");
     if (!t || !this.view.dom.contains(t)) return;
     window.clearTimeout(this.hideTimer);
@@ -192,6 +200,8 @@ class HandlesView {
   };
 
   private onLeave = (e: MouseEvent) => {
+    this.rowHover = null;
+    this.view.dom.classList.remove("bl-row-resize-cursor");
     const to = e.relatedTarget as HTMLElement | null;
     if (to && (to === this.move || to === this.resize)) return;
     this.hideTimer = window.setTimeout(() => this.hide(), 600);
@@ -249,11 +259,12 @@ class HandlesView {
     e.preventDefault();
     const pos = this.tablePos;
     if (!this.tableEl || pos < 0) return;
-    // Sürükleme başlayınca sütunlar sabitlenir; böylece yalnız orantılı ölçek değişir.
+    // Yatay sürükleme başlayınca sütunlar sabitlenir; böylece yalnız orantılı ölçek değişir.
     const start = measureColumns(this.view, pos);
     let frozen = false;
     const t = (this.view.nodeDOM(pos) as HTMLElement | null)?.querySelector("table") ?? null;
-    if (!t || !start.length) return;
+    const node = this.view.state.doc.nodeAt(pos);
+    if (!t || !node || !start.length) return;
     this.tableEl = t;
     const cols = Array.from(t.querySelectorAll<HTMLElement>(":scope > colgroup > col"));
     const total = start.reduce((x, y) => x + y, 0);
@@ -262,6 +273,20 @@ class HandlesView {
     const left = floatingTableLeft(this.view, pos, t);
     const sx = e.clientX;
     const factorAt = (x: number) => Math.max(60, total + (x - sx) / zoom) / total;
+    // Dikey: satırlar ölçülen yükseklikleriyle orantılı uzar/kısalır.
+    const rows = measureRows(this.view, pos);
+    const rowEls = rowPositions(node, pos).map((p) => this.view.nodeDOM(p) as HTMLElement | null);
+    const rowCss = rowEls.map((el) => el?.style.height ?? "");
+    const totalH = rows.reduce((x, y) => x + y, 0);
+    const sy = e.clientY;
+    let tall = false;
+    // Yatay sürüklerken birkaç piksellik titreme satırlara yükseklik yazmasın.
+    const vertical = (y: number) => Math.abs(y - sy) >= 6;
+    const factorYAt = (y: number) => (totalH ? Math.max(rows.length * MIN_ROW_PX, totalH + (y - sy) / zoom) / totalH : 1);
+    const showRows = (f: number) =>
+      rowEls.forEach((el, i) => {
+        if (el) el.style.height = f === 1 ? rowCss[i] : `${Math.max(MIN_ROW_PX, Math.round(rows[i] * f))}px`;
+      });
     const show = (f: number) => {
       start.forEach((w, i) => {
         if (cols[i]) cols[i].style.width = `${Math.max(20, Math.round(w * f))}px`;
@@ -271,22 +296,34 @@ class HandlesView {
       this.reposition();
     };
     const onMove = (ev: MouseEvent) => {
-      if (!frozen) {
-        if (Math.abs(ev.clientX - sx) < 2) return;
+      if (!frozen && Math.abs(ev.clientX - sx) >= 2) {
         frozen = true;
         if (left !== null) anchorTableLeft(t, left);
         freezeColumns(this.view, pos);
       }
-      show(factorAt(ev.clientX));
+      if (!tall && vertical(ev.clientY)) tall = true;
+      if (frozen) show(factorAt(ev.clientX));
+      if (tall) {
+        showRows(vertical(ev.clientY) ? factorYAt(ev.clientY) : 1);
+        this.reposition();
+      }
     };
     const onUp = (ev: MouseEvent) => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
-      if (!frozen) return;
+      if (!frozen && !tall) return;
       const f = factorAt(ev.clientX);
-      if (left !== null) anchorTableLeft(t, null);
-      if (Math.abs(f - 1) > 0.005) this.view.dispatch(closeHistory(settleTableLeft(columnWidthsTr(this.view, pos, start.map((w) => w * f)), pos, left)));
-      else show(1);
+      const fy = factorYAt(ev.clientY);
+      if (frozen && left !== null) anchorTableLeft(t, null);
+      const wide = frozen && Math.abs(f - 1) > 0.005;
+      const high = tall && vertical(ev.clientY) && Math.abs(fy - 1) > 0.005;
+      // Genişlik ve yükseklik tek geri alma adımında yazılır.
+      let tr = this.view.state.tr;
+      if (wide) tr = settleTableLeft(columnWidthsTr(this.view, pos, start.map((w) => w * f)), pos, left);
+      else if (frozen) show(1);
+      if (high) rowHeightsTr(tr, pos, rows.map((h) => Math.round(h * fy)));
+      else if (tall) showRows(1);
+      if (tr.docChanged) this.view.dispatch(closeHistory(tr));
       this.reposition();
     };
     window.addEventListener("mousemove", onMove);
@@ -294,11 +331,52 @@ class HandlesView {
   };
 
   /**
+   * Satırın alt kenarını sürükleme (Word'deki gibi): satır yüksekliği değişir, alttaki satırlar kayar; son
+   * satırın kenarı tabloyu aşağı uzatır. Sürüklerken satır yeni yüksekliğinde görünür, bırakınca yazılır.
+   */
+  private startRowDrag(e: MouseEvent, hit: { rowPos: number; el: HTMLElement }) {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = hit.el;
+    const zoom = zoomOf(el) || 1;
+    const start = el.getBoundingClientRect().height / zoom;
+    const prev = el.style.height;
+    const sy = e.clientY;
+    let moved = false;
+    const heightAt = (y: number) => Math.max(MIN_ROW_PX, Math.round(start + (y - sy) / zoom));
+    document.body.classList.add("bl-row-resizing");
+    const onMove = (ev: MouseEvent) => {
+      // Satır ancak gerçekten sürüklenince değişir; tıklayıp bırakmak belgeyi değiştirmez.
+      if (!moved && Math.abs(ev.clientY - sy) < 2) return;
+      moved = true;
+      el.style.height = `${heightAt(ev.clientY)}px`;
+      this.reposition();
+    };
+    const onUp = (ev: MouseEvent) => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.classList.remove("bl-row-resizing");
+      if (!moved) return;
+      const row = this.view.state.doc.nodeAt(hit.rowPos);
+      const h = heightAt(ev.clientY);
+      if (!row || row.type.spec.tableRole !== "row" || row.attrs.height === h) {
+        el.style.height = prev;
+        return;
+      }
+      this.view.dispatch(closeHistory(this.view.state.tr.setNodeMarkup(hit.rowPos, undefined, { ...row.attrs, height: h })));
+      this.reposition();
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  /**
    * Sütun kenarı sürükleme (Word'deki gibi): kenarın iki yanındaki sütunlar birlikte değişir,
    * tablo genişliği korunur; son sütunun sağ kenarı tabloyu genişletir. Tablo eklentisinin
    * kendi sürüklemesi esnek sütunları en küçük genişliğe çöktürdüğü için olay burada alınır.
    */
   private onBorderDown = (e: MouseEvent) => {
+    if (e.button === 0 && this.view.editable && this.rowHover && this.view.dom.classList.contains("bl-row-resize-cursor")) return this.startRowDrag(e, this.rowHover);
     if (e.button !== 0 || !this.view.editable || !this.view.dom.classList.contains("resize-cursor")) return;
     const handle = columnResizingPluginKey.getState(this.view.state)?.activeHandle ?? -1;
     if (handle < 0) return;
@@ -372,6 +450,7 @@ class HandlesView {
     this.view.dom.removeEventListener("mouseleave", this.onLeave);
     this.view.dom.removeEventListener("mousedown", this.onBorderDown, true);
     document.removeEventListener("scroll", this.reposition, true);
+    this.view.dom.classList.remove("bl-row-resize-cursor");
     this.move.remove();
     this.resize.remove();
     window.clearTimeout(this.hideTimer);

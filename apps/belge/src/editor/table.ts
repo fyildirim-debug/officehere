@@ -221,4 +221,62 @@ export const BelgeTableHeader = TableHeader.extend({
   },
 });
 
-export const BelgeTableRow = TableRow;
+/** CSS uzunluğu → px ("22.7pt", "30px", "30"); geçersizse null. */
+function cssPx(v: string | null | undefined): number | null {
+  const m = /^\s*([\d.]+)\s*(px|pt)?\s*$/i.exec(v ?? "");
+  if (!m) return null;
+  const n = parseFloat(m[1]) * (m[2]?.toLowerCase() === "pt" ? 96 / 72 : 1);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
+}
+
+/**
+ * Satır görünümü: yükseklik <tr> öğesinin CSS yüksekliğidir (en az; içerik uzunsa satır uzar). Satır kenarı
+ * sürüklenirken önizleme doğrudan bu öğeye yazılır; düğüm görünümü bu öznitelik değişikliklerini yok sayar.
+ */
+class BelgeTableRowView implements NodeView {
+  dom: HTMLTableRowElement;
+  contentDOM: HTMLTableRowElement;
+
+  constructor(public node: PMNode) {
+    this.dom = this.contentDOM = document.createElement("tr");
+    this.apply();
+  }
+
+  private apply() {
+    const h = this.node.attrs.height as number | null;
+    this.dom.style.height = h ? `${h}px` : "";
+  }
+
+  update(node: PMNode) {
+    if (node.type !== this.node.type) return false;
+    this.node = node;
+    this.apply();
+    return true;
+  }
+
+  ignoreMutation(m: ViewMutationRecord) {
+    return m.type === "attributes" && m.target === this.dom;
+  }
+}
+
+export const BelgeTableRow = TableRow.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      /** Satır yüksekliği (px; trHeight). Varsayılan kural "en az"; "exact" yazılırken korunur. */
+      height: {
+        default: null,
+        parseHTML: (el) => cssPx(el.getAttribute("data-height")) ?? cssPx(el.style.height),
+        renderHTML: (a) => (a.height ? { "data-height": String(a.height), style: `height:${a.height}px` } : {}),
+      },
+      heightRule: {
+        default: null,
+        parseHTML: (el) => (el.getAttribute("data-height-rule") === "exact" ? "exact" : null),
+        renderHTML: (a) => (a.height && a.heightRule === "exact" ? { "data-height-rule": "exact" } : {}),
+      },
+    };
+  },
+  addNodeView() {
+    return ({ node }) => new BelgeTableRowView(node);
+  },
+});

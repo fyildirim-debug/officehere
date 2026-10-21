@@ -587,9 +587,16 @@ export interface RibbonSpinnerProps {
 export function RibbonSpinner({ label, icon, value, onChange, step = 1, min = -Infinity, max = Infinity, unit = "", width = 64, tip, decimals = 1 }: RibbonSpinnerProps) {
   const fmt = (v: number) => `${Number(v.toFixed(decimals)).toLocaleString("tr-TR")}${unit ? ` ${unit}` : ""}`;
   const [text, setText] = useState(fmt(value));
-  useEffect(() => setText(fmt(value)), [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Kullanıcı kutuya yazdı mı: yazmadıysa odak kaybında (başka bir komut değeri değiştirip odağı aldığında) eski metin geri yazılmaz.
+  const edited = useRef(false);
+  useEffect(() => {
+    setText(fmt(value));
+    edited.current = false;
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
   const commit = () => {
+    if (!edited.current) return;
+    edited.current = false;
     const n = parseFloat(text.replace(",", ".").replace(/[^\d.-]/g, ""));
     if (Number.isFinite(n)) onChange(clamp(n));
     else setText(fmt(value));
@@ -601,7 +608,10 @@ export function RibbonSpinner({ label, icon, value, onChange, step = 1, min = -I
       <div className="oh-spinner" style={{ width }}>
         <input
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            edited.current = true;
+            setText(e.target.value);
+          }}
           onBlur={commit}
           onKeyDown={(e) => {
             if (e.key === "Enter") commit();

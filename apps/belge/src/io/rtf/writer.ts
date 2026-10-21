@@ -454,7 +454,10 @@ class RtfWriter {
     const align = n.attrs?.align === "center" ? "\\trqc" : n.attrs?.align === "right" ? "\\trqr" : "\\trql";
     let out = "";
     rows.forEach((row, r) => {
-      let def = `\\trowd\\trgaph108\\trleft${left}${align}${r === 0 && n.attrs?.repeatHeader ? "\\trhdr" : ""}`;
+      // Satır yüksekliği (\trrh, twip): artı en az, eksi tam.
+      const h = Math.round((Number(row.attrs?.height) || 0) * 15);
+      const trrh = h > 0 ? `\\trrh${row.attrs?.heightRule === "exact" ? -h : h}` : "";
+      let def = `\\trowd\\trgaph108\\trleft${left}${align}${trrh}${r === 0 && n.attrs?.repeatHeader ? "\\trhdr" : ""}`;
       let body = "";
       const cells = row.content ?? [];
       let col = 0;

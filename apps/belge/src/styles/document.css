@@ -204,6 +204,11 @@
   cursor: col-resize;
 }
 
+/* Satırın alt kenarı: sürükleyince satır yüksekliği değişir (sütun kenarı öncelikli). */
+.bl-doc .bl-row-resize-cursor {
+  cursor: row-resize;
+}
+
 table[data-table-style="plain"] td,
 table[data-table-style="plain"] th {
   border-color: #bfbfbf;

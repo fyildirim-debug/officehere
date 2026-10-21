@@ -789,7 +789,11 @@ export class PartWriter {
     // rowspan → vMerge: her satırda dolu ızgara sütunlarını izle.
     const pending: { col: number; span: number; left: number; width: number }[] = [];
     rows.forEach((row, ri) => {
-      x += ri === 0 && a.repeatHeader ? "<w:tr><w:trPr><w:tblHeader/></w:trPr>" : "<w:tr>";
+      // Satır özellikleri: yükseklik (px → twip; kural yoksa "en az") ve yinelenen başlık satırı.
+      const ra = (row.attrs ?? {}) as Record<string, unknown>;
+      const rh = Number(ra.height) > 0 ? `<w:trHeight w:val="${Math.round(Number(ra.height) * 15)}"${ra.heightRule === "exact" ? ' w:hRule="exact"' : ""}/>` : "";
+      const trPr = rh + (ri === 0 && a.repeatHeader ? "<w:tblHeader/>" : "");
+      x += trPr ? `<w:tr><w:trPr>${trPr}</w:trPr>` : "<w:tr>";
       let col = 0;
       const cells = row.content ?? [];
       let ci = 0;

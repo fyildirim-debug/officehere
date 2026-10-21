@@ -11,6 +11,7 @@ import {
   TableInsertColumn20Regular,
   TableInsertRow20Regular,
   TableResizeColumn20Regular,
+  TableResizeRow20Regular,
   TableSettings20Regular,
   TableSimple20Regular,
   Grid20Regular,
@@ -22,12 +23,15 @@ import {
   TableSwitch20Regular,
   PaddingLeft20Regular,
 } from "@fluentui/react-icons";
-import { ColorSplitButton, Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonRow, RibbonSplitButton, RibbonStack } from "@officehere/ui";
+import { ColorSplitButton, Menu, MenuItem, RibbonButton, RibbonCheckbox, RibbonGallery, RibbonGroup, RibbonMenuButton, RibbonRow, RibbonSpinner, RibbonSplitButton, RibbonStack } from "@officehere/ui";
 import { useState } from "react";
 import { useBelge } from "../state/context";
 import { TABLE_STYLES } from "../editor/table";
 import { alignCells, autoFitContents, distributeColumns, selectTablePart, tableInfo } from "./tableUtil";
 import { columnWidthAt } from "../state/pageSetup";
+import { currentRowHeight, distributeRows, setRowHeight } from "../editor/tableRowHeight";
+
+const CM = 96 / 2.54;
 
 function TablePreview({ id }: { id: string }) {
   const s = TABLE_STYLES.find((x) => x.id === id)!;
@@ -169,6 +173,27 @@ export function TableLayoutTab() {
           }
         />
         <RibbonStack>
+          <RibbonSpinner
+            icon={<TableResizeRow20Regular />}
+            label="Yükseklik:"
+            tip="Tablo Satırı Yüksekliği"
+            value={(currentRowHeight(editor.view) ?? 0) / CM}
+            step={0.1}
+            min={0.21}
+            max={55}
+            unit="cm"
+            decimals={2}
+            width={78}
+            onChange={(v) => setRowHeight(editor.view, Math.round(v * CM * 100) / 100)}
+          />
+          <RibbonButton
+            icon={<TableResizeRow20Regular />}
+            label="Satırları Dağıt"
+            onClick={() => {
+              distributeRows(editor.view);
+              editor.commands.focus();
+            }}
+          />
           <RibbonButton icon={<TableResizeColumn20Regular />} label="Sütunları Dağıt" onClick={() => distributeColumns(editor, m.contentW)} />
         </RibbonStack>
       </RibbonGroup>

@@ -39,6 +39,8 @@ export interface OdtStyle {
   cell: { bg?: string; valign?: string; border?: boolean };
   table: { width?: number; align?: string; breakBefore?: boolean; marginLeft?: number };
   column: { width?: number; rel?: number };
+  /** Satır yüksekliği (pt): style:row-height tam, style:min-row-height en az. */
+  row: { height?: number; exact?: boolean };
   graphic: { wrap?: string };
 }
 
@@ -299,6 +301,7 @@ export class OdtStyles {
     const cp = kid(s, "table-cell-properties");
     const tbl = kid(s, "table-properties");
     const col = kid(s, "table-column-properties");
+    const rp = kid(s, "table-row-properties");
     const gp = kid(s, "graphic-properties");
     const cell: OdtStyle["cell"] = {};
     if (cp) {
@@ -325,6 +328,13 @@ export class OdtStyles {
       const rel = parseFloat(a(col, "rel-column-width") ?? "");
       if (Number.isFinite(rel)) column.rel = rel;
     }
+    const row: OdtStyle["row"] = {};
+    if (rp) {
+      const exact = lengthPt(a(rp, "row-height"));
+      const min = lengthPt(a(rp, "min-row-height"));
+      if (exact) Object.assign(row, { height: exact, exact: true });
+      else if (min) row.height = min;
+    }
     return {
       name,
       display: a(s, "display-name") ?? decodeName(name),
@@ -338,6 +348,7 @@ export class OdtStyles {
       cell,
       table,
       column,
+      row,
       graphic: { wrap: a(gp, "wrap") ?? undefined },
     };
   }

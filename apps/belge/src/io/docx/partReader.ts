@@ -1051,7 +1051,8 @@ export class PartReader {
     const fitWindow = attr(tblW, "type") === "pct" && (attrNum(tblW, "w") ?? 0) >= 4900;
     // Satırları ve hücre ızgara konumlarını topla.
     type Cell = { el: Element; col: number; span: number; vm: "restart" | "continue" | null };
-    const rows: Cell[][] = kids(tbl, "tr").map((tr) => {
+    const trs = kids(tbl, "tr");
+    const rows: Cell[][] = trs.map((tr) => {
       let col = 0;
       const cells: Cell[] = [];
       const gridBefore = attrNum(path(tr, "trPr", "gridBefore"), "val") ?? 0;
@@ -1067,8 +1068,17 @@ export class PartReader {
       }
       return cells;
     });
+    // Satır yüksekliği (trHeight, twip → px): kural yoksa ya da "atLeast" ise en az, "exact" ise tam; "auto" yok sayılır.
+    const rowHeight = (tr: Element) => {
+      const h = path(tr, "trPr", "trHeight");
+      const tw = attrNum(h, "val") ?? 0;
+      const rule = attr(h, "hRule");
+      return h && tw > 0 && rule !== "auto" ? { height: Math.round((tw / 15) * 100) / 100, heightRule: rule === "exact" ? "exact" : null } : null;
+    };
+    const heights = trs.map(rowHeight);
     const content: JSONContent[] = rows.map((cells, ri) => ({
       type: "tableRow",
+      ...(heights[ri] ? { attrs: heights[ri]! } : {}),
       content: cells
         .filter((c) => c.vm !== "continue")
         .map((c) => {
@@ -1098,7 +1108,7 @@ export class PartReader {
           };
         }),
     }));
-    const firstTr = kids(tbl, "tr")[0];
+    const firstTr = trs[0];
     const hdr = path(firstTr, "trPr", "tblHeader");
     const repeatHeader = !!hdr && !["0", "false", "off"].includes(attr(hdr, "val") ?? "");
     const mar = kid(tblPr, "tblCellMar");

@@ -616,3 +616,10 @@ body.bl-col-resizing * {
   cursor: col-resize !important;
   user-select: none;
 }
+
+/* Satır kenarı sürüklenirken imleç her yerde satır boyutlandırma imleci kalır. */
+body.bl-row-resizing,
+body.bl-row-resizing * {
+  cursor: row-resize !important;
+  user-select: none;
+}

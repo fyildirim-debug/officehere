@@ -809,7 +809,9 @@ export class OdtReader {
           col += 1;
         }
       }
-      if (cells.length) content.push({ type: "tableRow", content: cells });
+      const rs = this.st.get(attr(r, "style-name"), "table-row", this.scope)?.row;
+      const rowAttrs = rs?.height ? { attrs: { height: Math.round(((rs.height * 4) / 3) * 100) / 100, heightRule: rs.exact ? "exact" : null } } : {};
+      if (cells.length) content.push({ type: "tableRow", ...rowAttrs, content: cells });
     }
     if (!content.length) content.push({ type: "tableRow", content: [{ type: "tableCell", attrs: { colspan: 1, rowspan: 1 }, content: [{ type: "paragraph" }] }] });
     const align = tStyle?.table.align;
