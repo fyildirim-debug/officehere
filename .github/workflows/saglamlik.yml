@@ -33,7 +33,9 @@ concurrency:
 jobs:
   saglamlik:
     name: Derlem turu, bulanık test, LibreOffice denetimi
-    runs-on: ubuntu-latest
+    # Sabit imaj: LibreOffice sürümü üretilen derlemi ve piksel temel çizgisini belirler. ubuntu-latest 26.04'e
+    # geçince gelen LibreOffice ODF 1.4 yazıyor ve farklı çiziyor; geçiş yeni temel çizgiyle ayrıca yapılır.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       DERLEM_KIP: ${{ inputs.kip != 'temel' && inputs.kip || '' }}
