@@ -225,7 +225,7 @@ export const BelgeTableHeader = TableHeader.extend({
 function cssPx(v: string | null | undefined): number | null {
   const m = /^\s*([\d.]+)\s*(px|pt)?\s*$/i.exec(v ?? "");
   if (!m) return null;
-  const n = parseFloat(m[1]) * (m[2]?.toLowerCase() === "pt" ? 96 / 72 : 1);
+  const n = parseFloat(m[1]) * (m[2]?.toLowerCase() === "pt" ? 96 / 72 : 1); // yerel-ayar: ascii
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
 }
 
