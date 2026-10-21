@@ -99,7 +99,11 @@ export function useDraftRecovery({ load, setDirty, isPristine, onPrint, notify }
     setDrafts((ds) => ds.filter((x) => x.key !== d.key));
   }, []);
 
-  const close = useCallback(() => setDrafts([]), []);
+  // Kapat (×): çubukta önerilen taslaklar silinir; bir sonraki açılışta yeniden önerilmez (üç uygulamada aynı).
+  const close = useCallback(() => {
+    for (const d of drafts) void removeDraft(d.key);
+    setDrafts([]);
+  }, [drafts]);
 
   return { drafts, restore, discard, close };
 }

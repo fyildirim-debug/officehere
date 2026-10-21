@@ -157,6 +157,7 @@ export function useAutoRecover(a: Actions) {
     <MessageBar
       kind="warning"
       onClose={discard}
+      closeLabel="Taslağı sil ve kapat"
       actions={
         <>
           <button type="button" className="oh-btn is-primary" onClick={restore}>

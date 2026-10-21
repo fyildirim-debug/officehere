@@ -147,13 +147,26 @@ export function SaveChangesDialog({ open, fileName, onChoice }: { open: boolean;
 }
 
 /** Şeridin altında görünen bilgi çubuğu. */
-export function MessageBar({ children, kind = "info", onClose, actions }: { children: ReactNode; kind?: "info" | "warning" | "error" | "success"; onClose?: () => void; actions?: ReactNode }) {
+export function MessageBar({
+  children,
+  kind = "info",
+  onClose,
+  actions,
+  closeLabel = "Kapat",
+}: {
+  children: ReactNode;
+  kind?: "info" | "warning" | "error" | "success";
+  onClose?: () => void;
+  actions?: ReactNode;
+  /** Kapat düğmesinin adı ve ipucu (kapatmanın bir sonucu varsa söylenir, ör. "Taslağı sil ve kapat"). */
+  closeLabel?: string;
+}) {
   return (
     <div className={`oh-messagebar is-${kind}`} role="status">
       <span className="oh-messagebar-text">{children}</span>
       {actions}
       {onClose && (
-        <button type="button" className="oh-messagebar-close" onClick={onClose} aria-label="Kapat">
+        <button type="button" className="oh-messagebar-close" onClick={onClose} aria-label={closeLabel} title={closeLabel}>
           <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
             <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.2" />
           </svg>

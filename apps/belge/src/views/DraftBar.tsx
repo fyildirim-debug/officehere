@@ -1,6 +1,6 @@
 // Kurtarılan taslaklar bildirimi: kapanmış (ya da çökmüş) pencerelerden kalan kaydedilmemiş belgeler.
 // Tek taslakta kısa çubuk; birden çok taslakta her biri ayrı satırda Geri Yükle / Sil ile listelenir.
-// Kapat (×) yalnız çubuğu gizler, taslaklar silinmez (sonraki açılışta yeniden önerilir).
+// Kapat (×) çubuktaki taslakları siler: kapatılan taslak sonraki açılışlarda yeniden önerilmez.
 import { MessageBar } from "@officehere/ui";
 import { draftPreview, type StoredDraft } from "../state/drafts";
 
@@ -21,6 +21,7 @@ export function DraftBar({ drafts, onRestore, onDiscard, onClose }: Props) {
       <MessageBar
         kind="warning"
         onClose={onClose}
+        closeLabel="Taslağı sil ve kapat"
         actions={
           <>
             <button type="button" className="oh-btn is-primary" onClick={() => onRestore(d)}>
@@ -37,7 +38,7 @@ export function DraftBar({ drafts, onRestore, onDiscard, onClose }: Props) {
     );
   }
   return (
-    <MessageBar kind="warning" onClose={onClose}>
+    <MessageBar kind="warning" onClose={onClose} closeLabel="Taslakları sil ve kapat">
       <strong>Belge Kurtarma</strong> — kaydedilmemiş değişiklikleri olan {drafts.length} belge bulundu:
       <ul className="bl-draftlist" aria-label="Kurtarılan belgeler">
         {drafts.map((d) => (

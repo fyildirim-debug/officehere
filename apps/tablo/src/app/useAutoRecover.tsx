@@ -6,7 +6,8 @@
  * açılınca bu pencerenin taslağı silinir. Açılışta sahibi kapanmış
  * pencerelerin taslakları sırayla "Kurtarılan çalışma kitabı" çubuğuyla
  * önerilir; geri yüklenen taslak bu pencereye devredilir (ya da pencere
- * kullanılıyorsa yeni pencerede açılır).
+ * kullanılıyorsa yeni pencerede açılır). Çubuğun Kapat (×) düğmesi önerilen
+ * taslakları siler; kapatılan taslak sonraki açılışlarda yeniden önerilmez.
  */
 import { useCallback, useEffect, useState } from "react";
 import { MessageBar, saveStatus } from "@officehere/ui";
@@ -225,10 +226,17 @@ export function useAutoRecover(ctl: Controller) {
     next();
   }, [offer]);
 
+  // Kapat (×): çubukta anılan taslakların hepsi silinir; sonraki açılışta yeniden önerilmez.
+  const dismiss = useCallback(() => {
+    for (const o of offers) void deleteDraft(o.session);
+    setOffers([]);
+  }, [offers]);
+
   const bar = offer ? (
     <MessageBar
       kind="warning"
-      onClose={() => setOffers([])}
+      onClose={dismiss}
+      closeLabel={offers.length > 1 ? "Taslakları sil ve kapat" : "Taslağı sil ve kapat"}
       actions={
         <span className="tb-recover-actions">
           <button type="button" className="oh-btn is-primary" onClick={() => void restore()}>
