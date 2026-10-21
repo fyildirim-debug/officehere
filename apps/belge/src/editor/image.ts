@@ -152,8 +152,21 @@ export const BelgeImage = Image.extend({
       const orig = nv.update?.bind(nv);
       if (orig)
         nv.update = (...args: unknown[]) => {
+          // Kaydırmalı resimde güncelleme resmin style özniteliğini baştan yazar ve boyutlandırıcının verdiği
+          // genişlik/yükseklik silinir (resim doğal boyutuna döner, tutamaçla verilen boyut görünmez). Boyut
+          // geri yazılır: sürükleme sürerken (bitişteki kayıt dahil) canlı boyut, değilse düğümdeki boyut.
+          const live = img ? { width: img.style.width, height: img.style.height } : null;
           const ok = orig(...args);
-          if (ok) sync(args[0] as PMNode);
+          if (ok) {
+            const n = args[0] as PMNode;
+            sync(n);
+            if (img && live) {
+              const { width, height } = n.attrs as { width?: number | null; height?: number | null };
+              const resizing = nv.dom.dataset.resizeState === "true";
+              img.style.width = resizing ? live.width : width ? `${width}px` : "";
+              img.style.height = resizing ? live.height : height ? `${height}px` : "";
+            }
+          }
           return ok;
         };
       return nv as never;

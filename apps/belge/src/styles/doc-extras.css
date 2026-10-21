@@ -357,6 +357,11 @@ button.bl-styles-item {
   cursor: move;
 }
 
+/* Metnin arkasındaki resim seçiliyken metnin üstüne çıkar: tutamaçları ve sürüklemesi metnin altında kalmaz. */
+.bl-doc [data-resize-container][data-wrap="behind"].ProseMirror-selectednode {
+  z-index: 2 !important;
+}
+
 /* Alanlar: resim yazısı numarası, çapraz başvuru, alıntı, birleştirme alanı */
 .bl-doc .bl-fieldval {
   border-radius: 1px;

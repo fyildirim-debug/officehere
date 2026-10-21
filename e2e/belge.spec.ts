@@ -566,6 +566,49 @@ test.describe("OfficeHere Belge senaryoları", () => {
     expect(kap).toBe("inline-flex");
   });
 
+  test("şekil Konum ve Metni Kaydır sonrası boyutunu korur ve tutamaçla boyutlandırılır", async ({ page }) => {
+    for (let i = 0; i < 4; i++) await page.keyboard.type(`Paragraf ${i}: metin metin metin metin metin metin metin metin.\n`);
+    await tab(page, "Ekle");
+    await button(page, "Şekiller").click();
+    await page.locator('.bl-shapegrid button[title="Dikdörtgen"]').click();
+    const img = body(page).locator("[data-resize-wrapper] img");
+    await expect(img).toBeVisible();
+    const size = async () => (await img.boundingBox())!;
+    const s0 = await size();
+    const dragCorner = async (dx: number, dy: number) => {
+      const h = (await body(page).locator('[data-resize-handle="bottom-right"]').boundingBox())!;
+      await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(h.x + h.width / 2 + dx, h.y + h.height / 2 + dy, { steps: 8 });
+      await page.mouse.up();
+    };
+    // Konum › Orta Üst: şekil üst ve alt kaydırmalı olur, boyutu değişmez.
+    await tab(page, "Düzen");
+    await button(page, "Konum").click();
+    await page.getByRole("menuitemradio", { name: /^Orta Üst,/ }).click();
+    await expect(body(page).locator("[data-resize-container]")).toHaveAttribute("data-wrap", "topBottom");
+    const s1 = await size();
+    expect(Math.round(s1.width)).toBe(Math.round(s0.width));
+    // Tutamaçla büyütülür ve bırakınca yeni boyutta kalır.
+    await dragCorner(60, 40);
+    await expect.poll(async () => Math.round((await size()).width)).toBeGreaterThan(Math.round(s1.width) + 40);
+    const s2 = await size();
+    // Metni Kaydır › Kare: boyut korunur, yine boyutlandırılabilir.
+    await button(page, "Metni Kaydır").click();
+    await menuItem(page, "Kare").click();
+    await expect(body(page).locator("[data-resize-container]")).toHaveAttribute("data-wrap", "square");
+    expect(Math.round((await size()).width)).toBe(Math.round(s2.width));
+    await dragCorner(-50, -30);
+    await expect.poll(async () => Math.round((await size()).width)).toBeLessThan(Math.round(s2.width) - 30);
+    // Metnin Arkasında: seçili şeklin tutamaçları metnin altında kalmaz.
+    const s3 = await size();
+    await button(page, "Metni Kaydır").click();
+    await menuItem(page, "Metnin Arkasında").click();
+    await expect(body(page).locator("[data-resize-container]")).toHaveAttribute("data-wrap", "behind");
+    await dragCorner(40, 30);
+    await expect.poll(async () => Math.round((await size()).width)).toBeGreaterThan(Math.round(s3.width) + 25);
+  });
+
   test("sekme durakları: Paragraf › Sekmeler, ondalık ve noktalı öncü", async ({ page }) => {
     await page.keyboard.type("Ürün\t12,50");
     await page.locator('.oh-ribbon-launcher[data-tip="Paragraf Ayarları"]').first().click();
