@@ -160,7 +160,8 @@ sonraki kararlı sürüm beklenir.
 
 **Otomatik kaydetme:** Masaüstünde diskte kayıtlı `.docx`, `.xlsx` ve `.pptx`
 belgeleri değiştikçe kendiliğinden kaydedilir; ilk otomatik kayıttan önce özgün
-dosyanın yedeği (`<dosya>.bak`) alınır. Seçenekler'den kapatılabilir. Paketler henüz kod imzalı değildir; Windows SmartScreen ilk
+dosyanın yedeği (`<dosya>.bak`) alınır; pencere düzgün kapanınca bu yedek silinir, özgün hâl
+Dosya › Bilgi › Önceki sürümler'de kalır. Seçenekler'den kapatılabilir. Paketler henüz kod imzalı değildir; Windows SmartScreen ilk
 açılışta uyarı gösterebilir ("Ek bilgi" → "Yine de çalıştır").
 
 Tarayıcıda kurulumsuz kullanmak için web sürümünü derleyip herhangi bir statik

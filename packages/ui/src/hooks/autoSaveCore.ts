@@ -4,7 +4,9 @@
 // Güvenlik kuralları:
 // - Yazma ana sürecin güvenli yolundan geçer (geçici dosya + fsync + taşıma, yol başına kuyruk).
 // - İlk otomatik yazmadan önce özgün dosya "<ad>.bak" olarak yedeklenir; .bak yalnız
-//   yoksa oluşturulur, oturumlar arasında ezilmez (ana süreç yapar). Yedek alınamazsa yazılmaz.
+//   yoksa oluşturulur, ezilmez (ana süreç yapar). Yedek alınamazsa yazılmaz. Pencere düzgün
+//   kapanınca .bak, içeriği önceki sürümlerde olduğu doğrulanıp silinir; doğrulaması başarısız
+//   (geri alınan) bir kayıttan sonra ya da çökmede kalır.
 // - Dosya uyarıyla/eksik açıldıysa ilk ELLE kayda kadar otomatik kaydetme yapılmaz.
 // - Dosya salt okunur açıldıysa (görüntüleyici kipi) "Düzenlemeyi etkinleştir"e kadar yazılmaz.
 // - Yazılan dosya uygulamanın kendi okuyucusuyla yeniden açılabiliyor mu denetlenir; açılamazsa

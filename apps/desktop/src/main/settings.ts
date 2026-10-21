@@ -33,7 +33,7 @@ export interface DesktopSettings {
   oturumuGeriYukle: boolean;
   /**
    * Görüntüleyici kipi: İndirilenler ve e-posta eklerinden gelen dosyalar salt okunur açılır. Varsayılan
-   * kapalı: OfficeHere makro çalıştırmaz, otomatik kaydetme .bak yedeği ve doğrulamayla korunur; Linux'ta
+   * kapalı: OfficeHere makro çalıştırmaz, otomatik kaydetme yedekler (.bak, önceki sürümler) ve doğrulamayla korunur; Linux'ta
    * tespit yalnız dizine dayandığından varsayılan açık olsa İndirilenler'deki her dosya kilitli açılırdı.
    */
   indirilenleriSaltOkunurAc: boolean;

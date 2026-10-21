@@ -2,8 +2,10 @@
 //
 // 1. Yan yedek "<ad>.<uzantı>.bak" (dosyanın yanında): OfficeHere'in bir dosyaya
 //    KENDİLİĞİNDEN (otomatik kaydetme) ilk yazmasından önceki özgün içerik.
-//    Yalnız yoksa oluşturulur; sonraki oturumlarda asla ezilmez. Kullanıcının
-//    görebileceği ve kolayca geri adlandırabileceği tek dosya budur.
+//    Yalnız yoksa oluşturulur; asla ezilmez. Pencere düzgün kapanınca (son yazma
+//    başarılı, kaydedilmemiş değişiklik yok) içeriği önceki sürümlerde olduğu
+//    doğrulanıp silinir (saveService.ts); doğrulama başarısız olduysa ya da çökmede
+//    kalır. Kullanıcının görebileceği ve kolayca geri adlandırabileceği dosya budur.
 //
 // 2. Önceki sürümler (kullanıcı veri dizininde, userData/yedekler/<özet>/):
 //    her pencere oturumunda dosyaya ilk yazmadan (Kaydet, otomatik kaydetme ya da
@@ -80,15 +82,36 @@ export class BackupStore {
   }
 
   /** Dosyanın şu anki içeriğini yeni bir "önceki sürüm" olarak saklar; en eskileri siler. */
-  async snapshot(target: string, now = Date.now()): Promise<VersionInfo> {
+  snapshot(target: string, now = Date.now()): Promise<VersionInfo> {
+    return this.addVersion(target, target, now);
+  }
+
+  /** `source` içeriğini `target` dosyasının yeni (en yeni) sürümü olarak saklar; en eskileri siler. */
+  private async addVersion(target: string, source: string, now: number): Promise<VersionInfo> {
     const dir = await this.prepareDir(target);
     const ext = path.extname(target).toLowerCase().replace(/[^.a-z0-9]/g, ""); // yerel-ayar: ascii
     const id = `surum-${String(now).padStart(13, "0")}-${randomBytes(3).toString("hex")}${ext}`;
-    await copyFileAtomic(target, path.join(dir, id), { fs: this.fs });
+    await copyFileAtomic(source, path.join(dir, id), { fs: this.fs });
     const list = await this.list(target);
     for (const old of list.slice(this.maxVersions)) await this.fs.unlink(path.join(dir, old.id)).catch(() => undefined);
     const st = await this.fs.stat(path.join(dir, id));
     return { id, savedAt: now, size: st.size };
+  }
+
+  /**
+   * `source` dosyasının içeriği (ör. silinecek yan yedek) `target` dosyasının önceki sürümleri arasında yoksa
+   * en yeni sürüm olarak eklenir. İçerik sürümlerde duruyorsa true; okunamaz ya da saklanamazsa hata fırlatır.
+   */
+  async ensureVersionOf(target: string, source: string, now = Date.now()): Promise<boolean> {
+    const data = await this.fs.readFile(source);
+    for (const v of await this.list(target)) {
+      if (v.size !== data.length) continue;
+      const b = await this.readVersion(target, v.id);
+      if (b && b.equals(data)) return true;
+    }
+    const added = await this.addVersion(target, source, now);
+    const back = await this.readVersion(target, added.id);
+    return !!back && back.equals(data);
   }
 
   /** Önceki sürümler, en yeni önce. */

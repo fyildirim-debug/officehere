@@ -31,7 +31,10 @@ export interface NativeWriteFailure {
 
 /** Güvenli yazma seçenekleri (otomatik kaydetme). */
 export interface NativeWriteOptions {
-  /** "<ad>.bak" yan yedeği yoksa önce o alınır; alınamazsa dosya yazılmaz (EBACKUP). */
+  /**
+   * "<ad>.bak" yan yedeği yoksa önce o alınır; alınamazsa dosya yazılmaz (EBACKUP). Bu oturumda oluşan
+   * yedeği ana süreç pencere düzgün kapanınca siler (özgün içerik önceki sürümlerde kalır).
+   */
   sidecar?: boolean;
   /** Üzerine yazılan içerik saklanır; yazılan dosya doğrulanamazsa revertFile ile geri gelir. */
   keepPrevious?: boolean;

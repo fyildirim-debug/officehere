@@ -166,3 +166,118 @@ describe("önceki sürümler", () => {
     expect(await store.list(f)).toEqual([]);
   });
 });
+
+describe("yan yedeğin temiz kapanışta silinmesi", () => {
+  /** Önceki sürümlerin içerikleri (en yeni önce). */
+  const versionTexts = async (store: BackupStore, f: string) => Promise.all((await store.list(f)).map(async (v) => (await store.readVersion(f, v.id))!.toString("utf8")));
+
+  it("otomatik kaydedilen dosya: pencere temiz kapanınca .bak silinir, özgün içerik önceki sürümlerde kalır", async () => {
+    const f = path.join(dir, "rapor.xlsx");
+    writeFileSync(f, "ÖZGÜN");
+    const store = new BackupStore(root);
+    const s = new SaveService(store);
+    await s.write(f, B("OTO-1"), { session: "7:1", sidecar: true, keepPrevious: true });
+    await s.write(f, B("OTO-2"), { session: "7:1", sidecar: true, keepPrevious: true });
+    expect(text(sidecarPathFor(f))).toBe("ÖZGÜN");
+    expect(await s.releaseSidecars(7, { clean: true, path: f })).toEqual([sidecarPathFor(realpathSync(f))]);
+    expect(existsSync(sidecarPathFor(f))).toBe(false);
+    expect(text(f)).toBe("OTO-2");
+    expect(await versionTexts(store, f)).toContain("ÖZGÜN");
+    // Sonraki oturum: yeni yedek o anki içerikten alınır ve yine temiz kapanışta silinir.
+    await s.write(f, B("OTO-3"), { session: "8:1", sidecar: true });
+    expect(text(sidecarPathFor(f))).toBe("OTO-2");
+    await s.releaseSidecars("8", { clean: true, path: f });
+    expect(existsSync(sidecarPathFor(f))).toBe(false);
+  });
+
+  it("özgün içerik önceki sürümlerde yoksa (sürüm alınamamıştı) silmeden önce oraya alınır", async () => {
+    const f = path.join(dir, "surumsuz.docx");
+    writeFileSync(f, "ÖZGÜN");
+    const store = new BackupStore(root);
+    const snapshot = store.snapshot.bind(store);
+    store.snapshot = () => Promise.reject(new Error("EACCES"));
+    const s = new SaveService(store);
+    await s.write(f, B("OTO"), { session: 1, sidecar: true });
+    expect(await store.list(f)).toEqual([]);
+    store.snapshot = snapshot;
+    await s.releaseSidecars(1, { clean: true, path: f });
+    expect(existsSync(sidecarPathFor(f))).toBe(false);
+    expect(await versionTexts(store, f)).toEqual(["ÖZGÜN"]);
+  });
+
+  it("kirli kapanış, çökme ya da başka belgedeki yedek: .bak kalır", async () => {
+    const f = path.join(dir, "kirli.pptx");
+    writeFileSync(f, "ÖZGÜN");
+    const s = new SaveService(new BackupStore(root));
+    await s.write(f, B("OTO"), { session: 1, sidecar: true });
+    expect(await s.releaseSidecars(1, { clean: false, path: f })).toEqual([]);
+    expect(text(sidecarPathFor(f))).toBe("ÖZGÜN");
+    // Pencerede artık başka bir belge açık: bu dosyanın kapanış durumu bilinmez.
+    const g = path.join(dir, "onceki.pptx");
+    writeFileSync(g, "ÖZGÜN-G");
+    await s.write(g, B("OTO-G"), { session: 2, sidecar: true });
+    expect(await s.releaseSidecars(2, { clean: true, path: path.join(dir, "baska.pptx") })).toEqual([]);
+    expect(text(sidecarPathFor(g))).toBe("ÖZGÜN-G");
+  });
+
+  it("doğrulaması başarısız (geri alınan) otomatik kayıttan sonra .bak kalır", async () => {
+    const f = path.join(dir, "dogrulanamadi.docx");
+    writeFileSync(f, "ÖZGÜN");
+    const s = new SaveService(new BackupStore(root));
+    await s.write(f, B("BOZUK"), { session: 1, sidecar: true, keepPrevious: true });
+    await s.revertPrevious(f);
+    expect(text(f)).toBe("ÖZGÜN");
+    // Sonra elle kaydedilse bile bu süreçte silinmez.
+    await s.write(f, B("ELLE"), { session: 1 });
+    expect(await s.releaseSidecars(1, { clean: true, path: f })).toEqual([]);
+    expect(text(sidecarPathFor(f))).toBe("ÖZGÜN");
+  });
+
+  it("son yazma başarısızsa .bak kalır; sonraki başarılı yazmadan sonra silinir", async () => {
+    const f = path.join(dir, "basarisiz.xlsx");
+    writeFileSync(f, "ÖZGÜN");
+    const store = new BackupStore(root);
+    const keep = store.keepPrevious.bind(store);
+    store.keepPrevious = () => Promise.reject(Object.assign(new Error("ENOSPC"), { code: "ENOSPC" }));
+    const s = new SaveService(store);
+    await expect(s.write(f, B("OTO"), { session: 1, sidecar: true, keepPrevious: true })).rejects.toMatchObject({ code: "EBACKUP" });
+    expect(text(sidecarPathFor(f))).toBe("ÖZGÜN");
+    expect(await s.releaseSidecars(1, { clean: true, path: f })).toEqual([]);
+    expect(existsSync(sidecarPathFor(f))).toBe(true);
+    // Yeni süreç (yedek önceden var): hiç silinmez.
+    store.keepPrevious = keep;
+    const s2 = new SaveService(store);
+    await s2.write(f, B("OTO-2"), { session: 1, sidecar: true, keepPrevious: true });
+    expect(await s2.releaseSidecars(1, { clean: true, path: f })).toEqual([]);
+    expect(text(sidecarPathFor(f))).toBe("ÖZGÜN");
+  });
+
+  it("önceden var olan ya da sonradan değiştirilen .bak silinmez", async () => {
+    const f = path.join(dir, "kullanici.docx");
+    writeFileSync(f, "ŞİMDİKİ");
+    writeFileSync(sidecarPathFor(f), "KULLANICININ");
+    const s = new SaveService(new BackupStore(root));
+    await s.write(f, B("OTO"), { session: 1, sidecar: true });
+    expect(await s.releaseSidecars(1, { clean: true, path: f })).toEqual([]);
+    expect(text(sidecarPathFor(f))).toBe("KULLANICININ");
+    // Bu süreçte oluşturuldu ama kapanmadan önce başkası değiştirdi.
+    const g = path.join(dir, "degisen.docx");
+    writeFileSync(g, "ÖZGÜN");
+    await s.write(g, B("OTO"), { session: 1, sidecar: true });
+    writeFileSync(sidecarPathFor(g), "ELLE DEĞİŞTİRİLDİ");
+    expect(await s.releaseSidecars(1, { clean: true, path: g })).toEqual([]);
+    expect(text(sidecarPathFor(g))).toBe("ELLE DEĞİŞTİRİLDİ");
+  });
+
+  it("dosya başka pencerede de açıksa yedek o pencere kapanınca silinir", async () => {
+    const f = path.join(dir, "iki-pencere.xlsx");
+    writeFileSync(f, "ÖZGÜN");
+    const s = new SaveService(new BackupStore(root));
+    await s.write(f, B("OTO"), { session: "3:1", sidecar: true });
+    expect(await s.releaseSidecars(3, { clean: true, path: f, stillOpen: () => true })).toEqual([]);
+    expect(existsSync(sidecarPathFor(f))).toBe(true);
+    // Öbür pencere (yedeği oluşturmayan) temiz kapanır.
+    expect(await s.releaseSidecars(4, { clean: true, path: f })).toHaveLength(1);
+    expect(existsSync(sidecarPathFor(f))).toBe(false);
+  });
+});

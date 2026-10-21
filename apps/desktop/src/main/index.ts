@@ -251,6 +251,14 @@ function createWindow(kind: WindowKind, filePath?: string, extra?: Record<string
   win.on("closed", () => {
     const st = states.get(win.id);
     if (st) clearTimeout(st.ackTimer);
+    // Pencere düzgün kapandıysa (kaydedilmemiş değişiklik yok, çökmedi) otomatik kaydetmenin bu oturumda
+    // bıraktığı "<ad>.bak" silinir; yazma kuyruğundan geçtiği için uygulamadan çıkış bitmesini bekler.
+    if (st && st.kind !== "baslangic") {
+      const closedId = win.id;
+      void saver
+        .releaseSidecars(wcId, { clean: !st.dirty && !st.crashed, path: st.path, stillOpen: (p) => !!windowForPath(p, closedId) })
+        .then((removed) => removed.forEach((p) => log.write("bilgi", "kaydet", `Yan yedek silindi: ${describePath(p)}`)));
+    }
     states.delete(win.id);
     saver.forgetSession(wcId);
     // Son pencere kapanınca uygulama da kapanır; oturumda o an açık olan belgeler kalsın.

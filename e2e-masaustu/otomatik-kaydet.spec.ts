@@ -1,12 +1,13 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import type {} from "../packages/core/src/bridge";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 // Otomatik kaydetme (masaüstü): diskteki .docx/.xlsx/.pptx düzenlendikçe Ctrl+S'siz
-// aynı dosyaya yazılır, ilk yazmadan önce özgün dosya <ad>.bak olarak yedeklenir.
+// aynı dosyaya yazılır, ilk yazmadan önce özgün dosya <ad>.bak olarak yedeklenir;
+// pencere düzgün kapanınca .bak silinir, özgün içerik önceki sürümlerde kalır.
 
 const root = path.resolve(__dirname, "..");
 const desktop = path.join(root, "apps/desktop");
@@ -18,8 +19,7 @@ function electronPath(): string {
   return require(path.join(desktop, "node_modules/electron")) as unknown as string;
 }
 
-async function launch(file: string): Promise<{ app: ElectronApplication; win: Page }> {
-  const userData = mkdtempSync(path.join(tmpdir(), "oh-otokayit-"));
+async function launch(file: string, userData = mkdtempSync(path.join(tmpdir(), "oh-otokayit-"))): Promise<{ app: ElectronApplication; win: Page; userData: string }> {
   const app = await electron.launch({
     executablePath: electronPath(),
     args: [desktop, "--no-sandbox", file],
@@ -30,7 +30,26 @@ async function launch(file: string): Promise<{ app: ElectronApplication; win: Pa
   await win.waitForSelector(".oh-ribbon");
   // Dosya ?file= ile eşzamansız yüklenir: düzenlemeden önce yüklendiği görülsün.
   await expect(win.locator(".oh-titlebar-title")).toContainText(path.basename(file).replace(/\.[^.]+$/, ""));
-  return { app, win };
+  return { app, win, userData };
+}
+
+/** Kullanıcı veri dizinindeki önceki sürümlerin içerikleri. */
+function versionContents(userData: string): Buffer[] {
+  const root = path.join(userData, "yedekler");
+  if (!existsSync(root)) return [];
+  return readdirSync(root).flatMap((d) =>
+    readdirSync(path.join(root, d))
+      .filter((n) => n.startsWith("surum-"))
+      .map((n) => readFileSync(path.join(root, d, n))),
+  );
+}
+
+/** Pencereyi kapatır (X); soru gelirse verilen düğmeye basılır. Uygulama son pencereyle kapanır. */
+async function closeWindow(app: ElectronApplication, win: Page, answer?: string) {
+  const closed = new Promise<void>((r) => app.once("close", () => r()));
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close());
+  if (answer) await win.getByRole("dialog").getByRole("button", { name: answer, exact: true }).click();
+  await closed;
 }
 
 /** Testler asıl fixture'ı bozmasın diye geçici kopya. */
@@ -180,11 +199,11 @@ test("Sunum: .pptx kendiliğinden kaydedilir", async () => {
   await app.close();
 });
 
-test("Belge: iki oturum — ikinci açılışta .bak ezilmez, özgün içerik korunur", async () => {
+test("Belge: iki oturum — temiz kapanışta .bak silinir, özgün içerik önceki sürümlerde kalır; sonraki oturum yeni yedek alır", async () => {
   const file = fixture("apps/belge/src/io/__fixtures__/libreoffice-resaved-report.docx");
-  const original = readFileSync(file);
   for (const word of ["BIRINCI-OTURUM ", "IKINCI-OTURUM "]) {
-    const { app, win } = await launch(file);
+    const original = readFileSync(file);
+    const { app, win, userData } = await launch(file);
     await win.waitForSelector(".ProseMirror");
     await win.locator(".ProseMirror").first().click();
     await win.keyboard.press("Control+Home");
@@ -192,8 +211,74 @@ test("Belge: iki oturum — ikinci açılışta .bak ezilmez, özgün içerik ko
     await expect.poll(() => execFileSync("unzip", ["-p", file, "word/document.xml"]).toString("utf8"), { timeout: 20_000 }).toContain(word.trim());
     await expect(badge(win)).toHaveText(SAVED);
     expect(readFileSync(`${file}.bak`).equals(original)).toBe(true);
-    await app.close();
+    await closeWindow(app, win);
+    expect(existsSync(`${file}.bak`)).toBe(false);
+    expect(versionContents(userData).some((b) => b.equals(original))).toBe(true);
   }
+});
+
+test("Tablo: kaydedilmemiş değişiklikle (\"Kaydetme\") kapatılınca .bak kalır; uygulamadan çıkışta temizse silinir", async () => {
+  const file = fixture("apps/tablo/test/fixtures/lo-generated.xlsx");
+  const original = readFileSync(file);
+  const box = (w: Page) => w.getByRole("textbox", { name: "Ad Kutusu" });
+  // 1. oturum: otomatik kaydedilir, sonra yeni değişiklik kaydedilmeden "Kaydetme" ile kapatılır.
+  let { app, win } = await launch(file);
+  await box(win).fill("H40");
+  await box(win).press("Enter");
+  await win.keyboard.type("OTOKAYIT");
+  await win.keyboard.press("Enter");
+  await expect(badge(win)).toHaveText(SAVED);
+  expect(readFileSync(`${file}.bak`).equals(original)).toBe(true);
+  // Sonraki değişiklik kendiliğinden kaydedilmesin (seçenek bu pencerede kapatılır).
+  await win.evaluate(() => {
+    localStorage.setItem("officehere.autoSave", "0");
+    window.dispatchEvent(new Event("officehere:autosave-pref"));
+  });
+  await box(win).fill("H41");
+  await box(win).press("Enter");
+  await win.keyboard.type("KAYDEDILMEDI");
+  await win.keyboard.press("Enter");
+  await expect(badge(win)).toHaveText("Kaydedilmedi");
+  // Kapatırken sorulur, "Kaydetme": kaydedilmemiş değişiklikle kapanış temiz sayılmaz.
+  await closeWindow(app, win, "Kaydetme");
+  expect(zipText(file)).not.toContain("KAYDEDILMEDI");
+  expect(readFileSync(`${file}.bak`).equals(original)).toBe(true);
+  rmSync(`${file}.bak`);
+
+  // 2. oturum: otomatik kaydedilir, uygulamadan çıkılır (pencere temiz): .bak silinir.
+  const beforeSecond = readFileSync(file);
+  ({ app, win } = await launch(file));
+  await box(win).fill("H42");
+  await box(win).press("Enter");
+  await win.keyboard.type("IKINCI");
+  await win.keyboard.press("Enter");
+  await expect(badge(win)).toHaveText(SAVED);
+  expect(readFileSync(`${file}.bak`).equals(beforeSecond)).toBe(true);
+  await app.close();
+  expect(existsSync(`${file}.bak`)).toBe(false);
+});
+
+test("Sunum: kapatırken \"Kaydet\" seçilirse pencere temiz kapanmış sayılır, .bak silinir", async () => {
+  const file = fixture("apps/sunum/src/io/__fixtures__/lo-proje.pptx");
+  const original = readFileSync(file);
+  const { app, win, userData } = await launch(file);
+  await win.locator(".stage .sv [data-shape-id]").first().click();
+  await win.keyboard.type("OTOSUNUM");
+  await win.keyboard.press("Escape");
+  await win.keyboard.press("Escape");
+  await expect(badge(win)).toHaveText(SAVED);
+  expect(readFileSync(`${file}.bak`).equals(original)).toBe(true);
+  // Sonraki değişiklik kendiliğinden kaydedilmez; kapatırken sorulur ve "Kaydet" seçilir.
+  await win.evaluate(() => {
+    localStorage.setItem("officehere.autoSave", "0");
+    window.dispatchEvent(new Event("officehere:autosave-pref"));
+  });
+  await win.locator(".thumb-add").click();
+  await expect(badge(win)).toHaveText("Kaydedilmedi");
+  await closeWindow(app, win, "Kaydet");
+  expect(zipText(file)).toContain("OTOSUNUM");
+  expect(existsSync(`${file}.bak`)).toBe(false);
+  expect(versionContents(userData).some((b) => b.equals(original))).toBe(true);
 });
 
 test("Belge: uyarıyla açılan dosya ilk elle kayda kadar otomatik kaydedilmez; rozet nedenini söyler", async () => {

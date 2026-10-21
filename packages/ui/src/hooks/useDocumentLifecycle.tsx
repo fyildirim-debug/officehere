@@ -61,6 +61,10 @@ export function useDocumentLifecycle({ title, dirty, path, onOpenPath, onSave, o
   const openRef = useRef(onOpenPath);
   const saveRef = useRef(onSave);
   const closeRef = useRef(onClose);
+  /** Son "Değişiklikler kaydedilsin mi?" sorusunda kaydedildi mi. */
+  const savedRef = useRef(false);
+  const stateRef = useRef<DocumentState>({ title, dirty, path });
+  stateRef.current = { title, dirty, path };
   closeRef.current = onClose;
   dirtyRef.current = dirty;
   openRef.current = onOpenPath;
@@ -84,13 +88,15 @@ export function useDocumentLifecycle({ title, dirty, path, onOpenPath, onSave, o
   );
 
   const confirmDiscard = useCallback(async () => {
+    savedRef.current = false;
     if (!dirtyRef.current) return true;
     const choice = await ask();
     if (choice === "cancel") return false;
     if (choice === "save") {
       // Kaydetme başarısızsa (ya da hata verirse) belge açık kalır; neden rozette görünür.
       try {
-        return await saveRef.current();
+        savedRef.current = await saveRef.current();
+        return savedRef.current;
       } catch (err) {
         logPageEvent({ level: "hata", message: `Kapatırken kaydetme: ${(err as Error)?.message ?? String(err)}`, stack: (err as Error)?.stack, kind: "confirm-save" });
         return false;
@@ -110,6 +116,9 @@ export function useDocumentLifecycle({ title, dirty, path, onOpenPath, onSave, o
     const offOpen = native.onOpenPath((p) => openRef.current(p));
     const offClose = native.onBeforeClose(async () => {
       const ok = await confirmDiscard();
+      // Kapatırken kaydedildi: ana süreç pencereyi temiz kapanmış saysın (yeni durum çizimi beklenmez);
+      // yan yedek ("<ad>.bak") yalnız temiz kapanışta silinir.
+      if (ok && savedRef.current) native.setDocumentState({ ...stateRef.current, dirty: false });
       if (ok) {
         try {
           await closeRef.current?.();

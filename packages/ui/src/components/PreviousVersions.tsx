@@ -68,8 +68,8 @@ export function PreviousVersions({ path, fileName }: { path?: string; fileName: 
     <section className="oh-versions" aria-label="Önceki sürümler">
       <h2 className="oh-bs-h2">Önceki sürümler</h2>
       <p className="oh-bs-note">
-        OfficeHere bu dosyanın üzerine her oturumda ilk kez yazmadan önce önceki hâlini bilgisayarınızda saklar (en çok 3 sürüm). Otomatik kaydetmeden önceki özgün dosya ayrıca
-        dosyanın yanında “.bak” uzantısıyla durur.
+        OfficeHere bu dosyanın üzerine her oturumda ilk kez yazmadan önce önceki hâlini bilgisayarınızda saklar (en çok 3 sürüm). Otomatik kaydetme sürerken özgün dosya
+        ayrıca dosyanın yanında “.bak” uzantısıyla durur; pencere düzgün kapanınca bu yedek silinir, özgün hâl burada kalır.
       </p>
       {versions === null ? null : versions.length === 0 ? (
         <p className="oh-versions-empty">Henüz önceki sürüm yok.</p>
