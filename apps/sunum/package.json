@@ -12,7 +12,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@fluentui/react-icons": "^2.0.344",
+    "@fluentui/react-icons": "^2.0.345",
     "@officehere/core": "workspace:*",
     "@officehere/ui": "workspace:*",
     "jszip": "^3.10.2",

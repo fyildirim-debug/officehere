@@ -15,7 +15,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@fluentui/react-icons": "^2.0.344",
+    "@fluentui/react-icons": "^2.0.345",
     "@officehere/core": "workspace:*",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
