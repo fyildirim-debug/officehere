@@ -23,9 +23,9 @@
     "@fluentui/react-icons": "^2.0.344",
     "@officehere/core": "workspace:*",
     "@officehere/ui": "workspace:*",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "electron": "44.8.0",
-    "electron-builder": "26.15.3",
+    "electron-builder": "26.18.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
